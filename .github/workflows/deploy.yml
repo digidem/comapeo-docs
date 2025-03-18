@@ -31,8 +31,10 @@ jobs:
         run: bun i
       
       - name: Build website
+        env:
+          BASE_URL: comapeo-docs
         run: bun run build
-      
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

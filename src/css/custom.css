@@ -1,0 +1,48 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #050F77;
+  --ifm-color-primary-dark: #040D6B;
+  --ifm-color-primary-darker: #040C65;
+  --ifm-color-primary-darkest: #030A53;
+  --ifm-color-primary-light: #061183;
+  --ifm-color-primary-lighter: #061289;
+  --ifm-color-primary-lightest: #07149B;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #3D47C5;
+  --ifm-color-primary-dark: #3540B8;
+  --ifm-color-primary-darker: #323CAD;
+  --ifm-color-primary-darkest: #29328F;
+  --ifm-color-primary-light: #4F58CB;
+  --ifm-color-primary-lighter: #5D65D0;
+  --ifm-color-primary-lightest: #7A80D9;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Custom */
+.navbar__logo {
+  margin-top: -100px;
+}
+.navbar__logo img {
+  height: 135px;
+}
+.sidebar-category-title {
+  font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+  text-transform: uppercase;
+  /* color: var(--ifm-color-primary); */
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
+  margin-left: 1rem;
+}

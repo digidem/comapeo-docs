@@ -13,7 +13,7 @@ function HomepageHeader() {
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <div className="container">
-        <img src="img/256x256-CoMapeo.webp" alt="CoMapeo Logo" />
+        <img src="img/comapeo_logo.png" alt="CoMapeo Logo" />
         <Heading as="h1" className="hero__title">
           {siteConfig.title.split(' ')[1]}
         </Heading>

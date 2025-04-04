@@ -3,6 +3,22 @@ import { notion, DATABASE_ID } from './notionClient.js';
 export async function fetchNotionData() {
   const response = await notion.databases.query({
     database_id: DATABASE_ID,
+    filter: {
+      and: [
+        {
+          property: "Language",
+          rich_text: {
+            equals: "English"
+          }
+        },
+        {
+          property: "Published",
+          checkbox: {
+            equals: true
+          }
+        }
+      ]
+    }
   });
 
   return response.results;

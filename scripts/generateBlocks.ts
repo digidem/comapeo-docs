@@ -38,7 +38,7 @@ async function downloadAndProcessImage(url, blockName, index) {
     const filepath = path.join(IMAGES_PATH, filename);
 
     spinner.text = `Processing image ${index + 1}: Resizing`;
-    const { outputBuffer: resizedBuffer, originalSize, processedSize } = await processImage(buffer, filepath);
+    const { outputBuffer: resizedBuffer, originalSize } = await processImage(buffer, filepath);
 
     spinner.text = `Processing image ${index + 1}: Compressing`;
     const { compressedBuffer, compressedSize } = await compressImage(resizedBuffer, filepath);
@@ -73,9 +73,9 @@ export async function generateBlocks(data, progressCallback) {
 
   for (let i = 0; i < totalPages; i++) {
     const page = data[i];
-    console.log(chalk.blue(`Processing page: ${page.id}, ${page.properties['Name'].title[0].plain_text}`));
+    console.log(chalk.blue(`Processing page: ${page.id}, ${page.properties['Title'].title[0].plain_text}`));
     const pageSpinner = ora(`Processing page ${i + 1}/${totalPages}`).start();
-    const websiteBlock = page.properties['Name'].title[0].plain_text
+    const websiteBlock = page.properties['Title'].title[0].plain_text
       .toLowerCase()
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '');
@@ -85,7 +85,7 @@ export async function generateBlocks(data, progressCallback) {
         const sectionType = page.properties['Section'].select.name.toLowerCase();
         if (sectionType === 'toggle') {
           // A toggle section creates a folder and applies to all subsequent items until a new Section is encountered
-          const sectionName = page.properties['Name'].title[0].plain_text;
+          const sectionTitle = page.properties['Title'].title[0].plain_text;
           const sectionFolder = websiteBlock;
           const sectionFolderPath = path.join(CONTENT_PATH, sectionFolder);
           fs.mkdirSync(sectionFolderPath, { recursive: true });
@@ -101,7 +101,7 @@ export async function generateBlocks(data, progressCallback) {
           }
           // Create _category_.json file
           const categoryContent = {
-            label: sectionName,
+            label: sectionTitle,
             position: i + 1,
             collapsible: true,
             collapsed: true,
@@ -109,7 +109,7 @@ export async function generateBlocks(data, progressCallback) {
               type: "generated-index"
             },
             customProps: {
-              title: sectionName
+              title: sectionTitle
             }
           };
           
@@ -135,7 +135,7 @@ export async function generateBlocks(data, progressCallback) {
           // A title section does not create its own folder. Instead, its name will be used as metadata
           // for the next non-section item.
           currentSectionFolder = null;
-          nextItemTitle = page.properties.Name.title[0].plain_text;
+          nextItemTitle = page.properties.Title.title[0].plain_text;
           // Don't reset the current section folder, keep items in the current toggle folder if applicable
           titleSectionCount++; // Increment title section counter
           pageSpinner.succeed(chalk.green(`Title section detected: ${nextItemTitle}, will be applied to next item`));
@@ -171,7 +171,7 @@ export async function generateBlocks(data, progressCallback) {
         await Promise.all(imgPromises);
         
         // Determine file path based on section folder context
-        let fileName = `${websiteBlock}.md`;
+        const fileName = `${websiteBlock}.md`;
         let filePath;
         
         if (currentSectionFolder) {
@@ -181,13 +181,13 @@ export async function generateBlocks(data, progressCallback) {
         }
 
         // Generate frontmatter
-        const pageTitle = page.properties['Name'].title[0].plain_text;
+        const pageTitle = page.properties['Title'].title[0].plain_text;
 
         // Extract additional properties if available
         let keywords = ['docs', 'comapeo'];
         let tags = ['comapeo'];
         let sidebarPosition = i + 1;
-        let customProps = {};
+        const customProps = {};
 
         // Check for Tags property
         if (page.properties['Tags'] && page.properties['Tags'].multi_select) {

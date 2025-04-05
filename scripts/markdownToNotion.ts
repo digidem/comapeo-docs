@@ -108,9 +108,9 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
         const listNode = node as ListNode;
         const listItems = listNode.children.map(item => getTextFromNode(item));
         const isOrdered = listNode.ordered;
-
-        listItems.forEach(item => {
+        for (const item of listItems) {
           notionBlocks.push({
+            type: isOrdered ? 'numbered_list_item' : 'bulleted_list_item',
             [isOrdered ? 'numbered_list_item' : 'bulleted_list_item']: {
               rich_text: [
                 {
@@ -122,7 +122,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
               ]
             }
           });
-        });
+        }
         break;
       }
 
@@ -217,7 +217,7 @@ function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
   }
 
   const typedNode = node as Record<string, unknown>;
-  
+
   if (typedNode.value && typeof typedNode.value === 'string') {
     return typedNode.value;
   }
@@ -301,19 +301,21 @@ interface NotionPageProperties {
  * @param notion The Notion client
  * @param databaseId The ID of the Notion database
  * @param title The title of the page
- * @param markdownPath Path to the markdown file
+ * @param markdownPath Path to the markdown file or markdown content directly
  * @param properties Additional properties for the page
+ * @param isContent If true, markdownPath is treated as the content itself rather than a file path
  */
 export async function createNotionPageFromMarkdown(
   notion: Client,
   databaseId: string,
   title: string,
   markdownPath: string,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> = {},
+  isContent: boolean = false
 ): Promise<string> {
   try {
     // Read the markdown content
-    const markdownContent = await fs.readFile(markdownPath, 'utf8');
+    const markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
 
     // Convert markdown to Notion blocks
     const blocks = await markdownToNotionBlocks(markdownContent);

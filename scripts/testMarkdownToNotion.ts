@@ -29,14 +29,6 @@ Hey, luandro, since I am an LLM and I don't have a real memory (sad) I'll be usi
 
 async function main() {
   try {
-    // Create a temporary markdown file
-    const tempDir = './temp';
-    await fs.mkdir(tempDir, { recursive: true });
-    const tempFilePath = path.join(tempDir, 'test-markdown.md');
-    await fs.writeFile(tempFilePath, SAMPLE_MARKDOWN, 'utf8');
-    
-    console.log('Created temporary markdown file:', tempFilePath);
-    
     // Define properties for the Notion page
     const properties = {
       Language: {
@@ -49,23 +41,43 @@ async function main() {
         ]
       },
       Published: {
-        checkbox: true
+        checkbox: false
       }
     };
-    
-    // Create a Notion page from the markdown
-    console.log('Creating Notion page from markdown...');
-    const pageId = await createNotionPageFromMarkdown(
+
+    // Method 1: Create a Notion page from markdown content directly
+    console.log('Method 1: Creating Notion page from markdown content directly...');
+    const pageId1 = await createNotionPageFromMarkdown(
       notion,
       DATABASE_ID,
-      'Test Markdown to Notion',
+      'Test Markdown to Notion (Direct Content)',
+      SAMPLE_MARKDOWN,
+      properties,
+      true // Pass content directly
+    );
+
+    console.log('Successfully created Notion page with ID:', pageId1);
+
+    // Method 2: Create a temporary markdown file and use that
+    const tempDir = './temp';
+    await fs.mkdir(tempDir, { recursive: true });
+    const tempFilePath = path.join(tempDir, 'test-markdown.md');
+    await fs.writeFile(tempFilePath, SAMPLE_MARKDOWN, 'utf8');
+
+    console.log('\nMethod 2: Creating Notion page from markdown file...');
+    console.log('Created temporary markdown file:', tempFilePath);
+
+    const pageId2 = await createNotionPageFromMarkdown(
+      notion,
+      DATABASE_ID,
+      'Test Markdown to Notion (From File)',
       tempFilePath,
       properties
     );
-    
-    console.log('Successfully created Notion page with ID:', pageId);
-    console.log('View the page in Notion to see the results');
-    
+
+    console.log('Successfully created Notion page with ID:', pageId2);
+    console.log('View the pages in Notion to see the results');
+
     // Clean up
     await fs.rm(tempDir, { recursive: true, force: true });
     console.log('Cleaned up temporary files');

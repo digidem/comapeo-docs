@@ -1,0 +1,9 @@
+[test]
+# Default test configuration
+# Excludes integration tests
+exclude = ["**/*.integration.test.ts", "**/*.integration.*.test.ts"]
+
+[test.integration]
+# Integration test configuration
+# Includes only integration tests
+include = ["**/*.integration.test.ts", "**/*.integration.*.test.ts"]

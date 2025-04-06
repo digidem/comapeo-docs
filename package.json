@@ -20,8 +20,8 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "gen-pdf": "docusaurus-prince-pdf -u http://localhost:3000/docs",
     "typecheck": "tsc",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test": "bun test tests/unit",
+    "test:watch": "bun test tests/unit --watch"
   },
   "dependencies": {
     "@docusaurus/core": "3.7.0",

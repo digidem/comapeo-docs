@@ -1,0 +1,81 @@
+name: Notion Content Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_type:
+        description: 'Workflow type'
+        required: true
+        type: choice
+        options:
+          - full
+          - fetch-only
+          - translate-only
+        default: 'full'
+      create_pr:
+        description: 'Create a PR with the changes'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  notion-workflow:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run full workflow
+        if: ${{ github.event.inputs.workflow_type == 'full' }}
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bun notion:workflow
+
+      - name: Run fetch only
+        if: ${{ github.event.inputs.workflow_type == 'fetch-only' }}
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+        run: bun notion:fetch
+
+      - name: Run translate only
+        if: ${{ github.event.inputs.workflow_type == 'translate-only' }}
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bun notion:translate
+
+      - name: Create Pull Request
+        if: ${{ github.event.inputs.create_pr == 'true' }}
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'Update content from Notion'
+          title: 'Update content from Notion'
+          body: |
+            This PR contains updated content from Notion.
+
+            Workflow type: ${{ github.event.inputs.workflow_type }}
+
+            Please review the changes before merging.
+          branch: update-notion-content
+          base: main
+          labels: notion, automated-pr
+          draft: true

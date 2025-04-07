@@ -14,10 +14,14 @@ const __dirname = path.dirname(__filename);
 const CONTENT_PATH = path.join(__dirname, "../docs");
 const IMAGES_PATH = path.join(CONTENT_PATH, "../static/images/");
 
-// Ensure directories exist
-fs.rmSync(CONTENT_PATH, { recursive: true, force: true });
-fs.mkdirSync(CONTENT_PATH, { recursive: true });
-fs.mkdirSync(IMAGES_PATH, { recursive: true });
+// Ensure directories exist without deleting existing content
+if (!fs.existsSync(CONTENT_PATH)) {
+  fs.mkdirSync(CONTENT_PATH, { recursive: true });
+}
+
+if (!fs.existsSync(IMAGES_PATH)) {
+  fs.mkdirSync(IMAGES_PATH, { recursive: true });
+}
 
 async function downloadAndProcessImage(url, blockName, index) {
   const spinner = ora(`Processing image ${index + 1}`).start();
@@ -60,15 +64,15 @@ async function downloadAndProcessImage(url, blockName, index) {
 export async function generateBlocks(data, progressCallback) {
   const totalPages = data.length;
   let totalSaved = 0;
-  
+
   // Variables to track section folders and title metadata
   let currentSectionFolder = null;
   let nextItemTitle = null;
-  
+
   // Stats for reporting
   let sectionCount = 0;
   let titleSectionCount = 0;
-  
+
   // Data is already sorted by Order property in fetchNotion.ts
 
   for (let i = 0; i < totalPages; i++) {
@@ -89,11 +93,11 @@ export async function generateBlocks(data, progressCallback) {
           const sectionFolder = websiteBlock;
           const sectionFolderPath = path.join(CONTENT_PATH, sectionFolder);
           fs.mkdirSync(sectionFolderPath, { recursive: true });
-          
+
           // Update the current section folder so that subsequent items are placed here
           currentSectionFolder = sectionFolder;
           sectionCount++; // Increment section counter
-          
+
           // Extract icon if available
           let icon = null;
           if (page.properties['Icon'] && page.properties['Icon'].rich_text && page.properties['Icon'].rich_text.length > 0) {
@@ -112,41 +116,40 @@ export async function generateBlocks(data, progressCallback) {
               title: sectionTitle
             }
           };
-          
+
           // Apply title from a previous title section if available
           if (nextItemTitle) {
             categoryContent.customProps.title = nextItemTitle;
             nextItemTitle = null; // Reset after using it
           }
-          
+
           // Add icon if available
           if (icon) {
             categoryContent.customProps.icon = icon;
           }
-          
+
           const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
           fs.writeFileSync(categoryFilePath, JSON.stringify(categoryContent, null, 2), 'utf8');
           pageSpinner.succeed(chalk.green(`Section folder created: ${sectionFolder} with _category_.json`));
-          progressCallback({ current: i + 1, total: totalPages });
+          progressCallback({ current: i + 1, total: totalPages, id: page.id, title: sectionTitle });
           continue; // Skip creating a markdown file for this section item
         }
-        
+
         if (sectionType === 'title') {
           // A title section does not create its own folder. Instead, its name will be used as metadata
           // for the next non-section item.
-          currentSectionFolder = null;
           nextItemTitle = page.properties.Title.title[0].plain_text;
           // Don't reset the current section folder, keep items in the current toggle folder if applicable
           titleSectionCount++; // Increment title section counter
           pageSpinner.succeed(chalk.green(`Title section detected: ${nextItemTitle}, will be applied to next item`));
-          progressCallback({ current: i + 1, total: totalPages });
+          progressCallback({ current: i + 1, total: totalPages, id: page.id, title: nextItemTitle });
           continue; // Skip creating markdown file for this title section item
         }
-        
+
         // If we encounter any other section type, clear the section folder to place items at root level
         currentSectionFolder = null;
       }
-      
+
       const markdown = await n2m.pageToMarkdown(page.id);
       const markdownString = n2m.toMarkdownString(markdown);
       if (markdownString?.parent) {
@@ -169,11 +172,11 @@ export async function generateBlocks(data, progressCallback) {
           imgIndex++;
         }
         await Promise.all(imgPromises);
-        
+
         // Determine file path based on section folder context
         const fileName = `${websiteBlock}.md`;
         let filePath;
-        
+
         if (currentSectionFolder) {
           filePath = path.join(CONTENT_PATH, currentSectionFolder, fileName);
         } else {
@@ -203,20 +206,20 @@ export async function generateBlocks(data, progressCallback) {
         if (page.properties['Order'] && page.properties['Order'].number) {
           sidebarPosition = page.properties['Order'].number;
         }
-        
+
         // Check for Icon property
         if (page.properties['Icon'] && page.properties['Icon'].rich_text && page.properties['Icon'].rich_text.length > 0) {
           customProps.icon = page.properties['Icon'].rich_text[0].plain_text;
         }
-        
+
         // Apply title from a previous title section if available
         if (nextItemTitle) {
           customProps.title = nextItemTitle;
           nextItemTitle = null; // Reset after using it
         }
-        
+
         // Determine the relative path for the custom_edit_url
-        const relativePath = currentSectionFolder 
+        const relativePath = currentSectionFolder
           ? `${currentSectionFolder}/${fileName}`
           : fileName;
 
@@ -279,12 +282,12 @@ last_update:
 
         pageSpinner.succeed(chalk.green(`Page ${i + 1}/${totalPages} processed: ${filePath}`));
         console.log(chalk.blue(`  ↳ Added frontmatter with id: doc-${websiteBlock}, title: ${pageTitle}`));
-        
+
         // Log information about custom properties
         if (Object.keys(customProps).length > 0) {
           console.log(chalk.yellow(`  ↳ Added custom properties: ${JSON.stringify(customProps)}`));
         }
-        
+
         // Log information about section folder placement
         if (currentSectionFolder) {
           console.log(chalk.cyan(`  ↳ Placed in section folder: ${currentSectionFolder}`));
@@ -297,7 +300,7 @@ last_update:
       console.error(error);
     }
 
-    progressCallback({ current: i + 1, total: totalPages });
+    progressCallback({ current: i + 1, total: totalPages, id: page.id, title: page.properties['Title'].title[0].plain_text });
   }
 
   return { totalSaved, sectionCount, titleSectionCount };

@@ -4,8 +4,6 @@ import path from 'node:path';
 export async function processImage(inputBuffer, outputPath, maxWidth = 1280) {
   try {
     const image = sharp(inputBuffer);
-    const metadata = await image.metadata();
-
     let pipeline = image.resize({ width: maxWidth, fit: 'inside', withoutEnlargement: true });
 
     // Determine output format based on original image

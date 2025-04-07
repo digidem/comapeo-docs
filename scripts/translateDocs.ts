@@ -53,35 +53,35 @@ async function getMarkdownFiles(dir: string): Promise<string[]> {
 async function extractFrontmatter(filePath: string): Promise<Record<string, string | number | boolean>> {
   try {
     const content = await fs.readFile(filePath, 'utf8');
-    
+
     // Look for frontmatter between --- markers
     const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
-    
+
     if (frontmatterMatch && frontmatterMatch[1]) {
       const frontmatterString = frontmatterMatch[1];
       const frontmatter: Record<string, string | number | boolean> = {};
-      
+
       // Extract key-value pairs
       const lines = frontmatterString.split('\n');
       for (const line of lines) {
         const keyValueMatch = line.match(/^(\w+):\s*(.+)$/);
         if (keyValueMatch) {
           const [, key, value] = keyValueMatch;
-          
+
           // Clean up the value (remove quotes if present)
           let cleanValue = value.trim();
-          if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) || 
+          if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
               (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
             cleanValue = cleanValue.substring(1, cleanValue.length - 1);
           }
-          
+
           frontmatter[key] = cleanValue;
         }
       }
-      
+
       return frontmatter;
     }
-    
+
     // If no frontmatter is found, return empty object
     return {};
   } catch (error) {
@@ -94,20 +94,20 @@ async function extractFrontmatter(filePath: string): Promise<Record<string, stri
 async function extractTitleFromFile(filePath: string): Promise<string> {
   try {
     const frontmatter = await extractFrontmatter(filePath);
-    
+
     // Try to get title from frontmatter
     if (frontmatter.title) {
       return frontmatter.title;
     }
-    
+
     // If not in frontmatter, try first heading
     const content = await fs.readFile(filePath, 'utf8');
     const headingMatch = content.match(/^#\s+(.*)/m);
-    
+
     if (headingMatch && headingMatch[1]) {
       return headingMatch[1].trim();
     }
-    
+
     // Fallback to filename without extension
     return path.basename(filePath, '.md');
   } catch (error) {
@@ -134,7 +134,7 @@ async function translateFile(filePath: string, config: TranslationConfig): Promi
   await fs.mkdir(tempOutputDir, { recursive: true });
 
   const outputPath = path.join(TEMP_DIR, relativePath);
-  
+
   // Read the original file's frontmatter to preserve it in the translation
   const originalFrontmatter = await extractFrontmatter(filePath);
 
@@ -163,11 +163,11 @@ async function translateFile(filePath: string, config: TranslationConfig): Promi
           // Preserve original frontmatter in the translated file
           // Read the translated content
           let translatedContent = await fs.readFile(outputPath, 'utf8');
-          
+
           // Handle both cases: the translator might keep frontmatter or remove it
           // Remove any existing frontmatter first
           translatedContent = translatedContent.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, '');
-          
+
           // Recreate frontmatter from original but with updated language field
           let newFrontmatter = '---\n';
           for (const [key, value] of Object.entries(originalFrontmatter)) {
@@ -179,13 +179,13 @@ async function translateFile(filePath: string, config: TranslationConfig): Promi
           // Add the target language
           newFrontmatter += `language: ${config.language}\n`;
           newFrontmatter += '---\n\n';
-          
+
           // Combine frontmatter with translated content
           const finalContent = newFrontmatter + translatedContent;
-          
+
           // Write the final file with preserved frontmatter
           await fs.writeFile(outputPath, finalContent, 'utf8');
-          
+
           spinner.succeed(`Translated ${path.basename(filePath)} to ${config.language}`);
           resolve(outputPath);
         } catch (error) {
@@ -220,7 +220,7 @@ async function needsTranslation(filePath: string, config: TranslationConfig): Pr
           },
           {
             property: "Language",
-            rich_text: {
+            select: {
               equals: config.notionLangCode
             }
           }
@@ -249,12 +249,12 @@ async function needsTranslation(filePath: string, config: TranslationConfig): Pr
 async function createNotionPage(originalPath: string, translatedPath: string, config: TranslationConfig): Promise<void> {
   const spinner = ora(`Creating Notion page for ${path.basename(translatedPath)}`).start();
   let tempNotionFilePath = "";
-  
+
   try {
     // Extract title and frontmatter from original document
     const title = await extractTitleFromFile(originalPath);
     const originalFrontmatter = await extractFrontmatter(originalPath);
-    
+
     // Check if the page already exists to determine if this is a new page or an update
     const existingPages = await notion.databases.query({
       database_id: DATABASE_ID,
@@ -268,43 +268,39 @@ async function createNotionPage(originalPath: string, translatedPath: string, co
           },
           {
             property: "Language",
-            rich_text: {
+            select: {
               equals: config.notionLangCode
             }
           }
         ]
       }
     });
-    
+
     const isNewPage = existingPages.results.length === 0;
-    
+
     // Start with language property
     const properties: Record<string, unknown> = {
       Language: {
-        rich_text: [
-          {
-            text: {
-              content: config.notionLangCode
-            }
-          }
-        ]
+        select: {
+          name: config.notionLangCode
+        }
       },
       // Set Published based on whether this is a new page
       Published: {
         checkbox: !isNewPage // true for existing pages, false for new pages
       }
     };
-    
+
     // Map frontmatter properties to Notion properties
     // This depends on your specific Notion database structure
     // Here's a simple example assuming some common properties
-    
+
     if (originalFrontmatter.sidebar_position) {
       properties["Order"] = {
         number: parseInt(originalFrontmatter.sidebar_position)
       };
     }
-    
+
     if (originalFrontmatter.description) {
       properties["Description"] = {
         rich_text: [
@@ -316,30 +312,30 @@ async function createNotionPage(originalPath: string, translatedPath: string, co
         ]
       };
     }
-    
+
     // You can add more property mappings based on your Notion database structure
     // For example, for tags, categories, etc.
-    
+
     // We need to create a temporary copy without frontmatter for Notion import
     // This ensures we don't modify the original translated file
     tempNotionFilePath = `${translatedPath}.notion.md`;
     let translatedContent = await fs.readFile(translatedPath, 'utf8');
-    
+
     // Remove frontmatter before sending to Notion
     translatedContent = translatedContent.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, '');
-    
+
     // Process markdown to fix potential issues that might cause Notion API errors
     // 1. Replace image paths with valid URLs or remove them
     translatedContent = fixImagePaths(translatedContent);
-    
+
     await fs.writeFile(tempNotionFilePath, translatedContent, 'utf8');
 
     // Use our markdown to Notion converter to create or update the page
     // This handles all the conversion of markdown to Notion blocks
-    spinner.text = isNewPage ? 
-      `Creating new page for ${title} in ${config.notionLangCode}` : 
+    spinner.text = isNewPage ?
+      `Creating new page for ${title} in ${config.notionLangCode}` :
       `Updating existing page for ${title} in ${config.notionLangCode}`;
-    
+
     const pageId = await createNotionPageFromMarkdown(
       notion,
       DATABASE_ID,
@@ -347,7 +343,7 @@ async function createNotionPage(originalPath: string, translatedPath: string, co
       tempNotionFilePath,
       properties
     );
-    
+
     // Clean up the temporary file
     if (tempNotionFilePath) {
       try {
@@ -357,18 +353,18 @@ async function createNotionPage(originalPath: string, translatedPath: string, co
       }
     }
 
-    const status = isNewPage ? 
-      `Created new page (Published: false)` : 
+    const status = isNewPage ?
+      `Created new page (Published: false)` :
       `Updated existing page`;
-    
+
     spinner.succeed(`${status} for ${title} in ${config.notionLangCode} (Page ID: ${pageId})`);
   } catch (error) {
     spinner.fail(`Failed to create Notion page for ${path.basename(translatedPath)}`);
-    
+
     // Detailed error handling for specific API errors
     if (error.name === 'APIResponseError') {
       console.error(`Notion API Error (${path.basename(translatedPath)}): ${error.message}`);
-      
+
       // Check for specific error types
       if (error.message.includes('Invalid image url')) {
         console.error('Error details: Invalid image URLs in the markdown. Images will be skipped.');
@@ -380,7 +376,7 @@ async function createNotionPage(originalPath: string, translatedPath: string, co
     } else {
       console.error(`Error creating Notion page for ${translatedPath}:`, error);
     }
-    
+
     // Always clean up temporary files on error
     if (tempNotionFilePath) {
       try {
@@ -402,7 +398,7 @@ function fixImagePaths(content: string): string {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return match; // Keep valid URLs
     }
-    
+
     // Return just the alt text for invalid paths to avoid Notion API errors
     return `[${altText}]`;
   });
@@ -411,28 +407,28 @@ function fixImagePaths(content: string): string {
 async function main() {
   console.log(chalk.bold.cyan('🚀 Starting documentation translation process\n'));
   let tempDirCreated = false;
-  
+
   try {
     // Create temp directory
     await fs.mkdir(TEMP_DIR, { recursive: true });
     tempDirCreated = true;
-    
+
     // Get all markdown files in docs directory
     const mdFiles = await getMarkdownFiles('./docs');
     console.log(chalk.blue(`Found ${mdFiles.length} markdown files`));
-    
+
     for (const config of LANGUAGES) {
       console.log(chalk.yellow(`\nProcessing ${config.language} translations:`));
-      
+
       // First pass: translate files that need translation
       const translatedFiles = [];
       const failedTranslations = [];
-      
+
       // Create language output directory if it doesn't exist
       await fs.mkdir(config.outputDir, { recursive: true }).catch(err => {
         console.warn(chalk.yellow(`Warning: Could not create output directory ${config.outputDir}:`, err.message));
       });
-      
+
       for (const file of mdFiles) {
         try {
           const needsUpdate = await needsTranslation(file, config);
@@ -455,79 +451,79 @@ async function main() {
           // Continue with other files
         }
       }
-      
+
       // Report translation status
       if (translatedFiles.length === 0 && failedTranslations.length === 0) {
         console.log(chalk.blue(`\nNo files needed translation to ${config.language}`));
         continue; // Skip to next language
       }
-      
+
       if (failedTranslations.length > 0) {
         console.log(chalk.yellow(`\n⚠️ ${failedTranslations.length} files failed translation to ${config.language}`));
       }
-      
+
       if (translatedFiles.length === 0) {
         console.log(chalk.yellow(`\nNo successful translations for ${config.language}, skipping Notion updates`));
         continue; // Skip to next language
       }
-      
+
       // Second pass: create Notion pages for translated files
       console.log(chalk.yellow(`\nCreating ${translatedFiles.length} Notion pages for ${config.language}:`));
-      
+
       const notionSuccesses = [];
       const notionFailures = [];
-      
+
       // Process in batches to avoid rate limiting
       const BATCH_SIZE = 5;
       for (let i = 0; i < translatedFiles.length; i += BATCH_SIZE) {
         const batch = translatedFiles.slice(i, i + BATCH_SIZE);
-        
+
         // Use Promise.allSettled to handle errors for each page individually
         const results = await Promise.allSettled(
           batch.map(({ original, translated }) => createNotionPage(original, translated, config))
         );
-        
+
         results.forEach((result, index) => {
           if (result.status === 'fulfilled') {
             notionSuccesses.push(batch[index].translated);
           } else {
             console.error(chalk.red(`Failed to create Notion page: ${result.reason}`));
-            notionFailures.push({ 
-              path: batch[index].translated, 
+            notionFailures.push({
+              path: batch[index].translated,
               error: result.reason
             });
           }
         });
-        
+
         // Add a small delay between batches to avoid rate limiting
         if (i + BATCH_SIZE < translatedFiles.length) {
           console.log(chalk.blue(`Waiting 2 seconds before next batch...`));
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-      
+
       // Report Notion creation status
       if (notionFailures.length > 0) {
         console.log(chalk.yellow(`\n⚠️ ${notionFailures.length} Notion pages failed to create`));
       }
-      
+
       if (notionSuccesses.length === 0) {
         console.log(chalk.yellow(`\nNo successful Notion page creations for ${config.language}, but will still save translations`));
       }
-      
+
       // Third pass: copy successfully translated files to output directory
       console.log(chalk.yellow(`\nCopying translated files to ${config.outputDir}:`));
-      
+
       let copySuccessCount = 0;
-      
+
       for (const { original, translated } of translatedFiles) {
         try {
           const relativePath = getRelativePath(original);
           const outputPath = path.join(config.outputDir, relativePath);
-          
+
           // Create directory if it doesn't exist
           await fs.mkdir(path.dirname(outputPath), { recursive: true });
-          
+
           // Copy the file
           await fs.copyFile(translated, outputPath);
           copySuccessCount++;
@@ -536,7 +532,7 @@ async function main() {
           console.error(chalk.red(`Failed to copy ${path.basename(translated)}:`, error.message));
         }
       }
-      
+
       console.log(chalk.green(`\n✓ Copied ${copySuccessCount} files to ${config.outputDir}`));
     }
   } catch (error) {
@@ -551,7 +547,7 @@ async function main() {
         console.error(chalk.yellow('\n⚠️ Failed to clean up temporary directory:'), error.message);
       }
     }
-    
+
     console.log(chalk.bold.green('\n✨ Translation process completed!'));
   }
 }

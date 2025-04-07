@@ -26,7 +26,7 @@ async function main() {
     process.exit(1);
   }
 
-  try {    
+  try {
     const fetchSpinner = ora('Fetching data from Notion').start();
     // const data = await fetchNotionData().then(results => results.reverse());
     let data = await fetchNotionData();
@@ -36,7 +36,7 @@ async function main() {
       const orderB = b.properties['Order']?.number ?? Number.MAX_SAFE_INTEGER;
       return orderA - orderB;
     });
-    
+
     data.forEach((item, index) => {
       console.log(`Item ${index + 1}:`, item.url);
     });
@@ -44,7 +44,7 @@ async function main() {
 
     const generateSpinner = ora('Generating blocks').start();
     const { totalSaved, sectionCount, titleSectionCount } = await generateBlocks(data, (progress) => {
-      generateSpinner.text = chalk.blue(`Generating blocks: ${progress.current}/${progress.total}`);
+      generateSpinner.text = chalk.blue(`Generating blocks: ${progress.current}/${progress.total} - ${progress.title}`);
     });
     generateSpinner.succeed(chalk.green('Blocks generated successfully'));
 

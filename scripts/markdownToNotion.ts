@@ -174,20 +174,20 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
       }
 
       case 'image': {
+        // For translations, we'll just convert images to text to avoid Notion API issues
         const imageNode = node as ImageNode;
         const imageUrl = imageNode.url;
         const altText = imageNode.alt || '';
 
+        // Always convert images to text for safety
+        console.warn(`Converting image to text: ${imageUrl}`);
         notionBlocks.push({
-          image: {
-            external: {
-              url: imageUrl
-            },
-            caption: [
+          paragraph: {
+            rich_text: [
               {
                 type: 'text',
                 text: {
-                  content: altText
+                  content: `[Image: ${altText || imageUrl}]`
                 }
               }
             ]
@@ -304,6 +304,7 @@ interface NotionPageProperties {
  * @param markdownPath Path to the markdown file or markdown content directly
  * @param properties Additional properties for the page
  * @param isContent If true, markdownPath is treated as the content itself rather than a file path
+ * @param language Optional language of the page, used to filter existing pages
  */
 export async function createNotionPageFromMarkdown(
   notion: Client,
@@ -311,97 +312,160 @@ export async function createNotionPageFromMarkdown(
   title: string,
   markdownPath: string,
   properties: Record<string, unknown> = {},
-  isContent: boolean = false
+  isContent: boolean = false,
+  language?: string
 ): Promise<string> {
-  try {
-    // Read the markdown content
-    const markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
+  // Maximum number of retries
+  const MAX_RETRIES = 3;
+  let retryCount = 0;
+  let lastError;
 
-    // Convert markdown to Notion blocks
-    const blocks = await markdownToNotionBlocks(markdownContent);
+  while (retryCount < MAX_RETRIES) {
+    try {
+      // Read the markdown content
+      const markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
 
-    // Check if a page with this title already exists
-    const response = await notion.databases.query({
-      database_id: databaseId,
-      filter: {
+      // Convert markdown to Notion blocks
+      const blocks = await markdownToNotionBlocks(markdownContent);
+
+      // CRITICAL SAFETY CHECK: Never modify English pages
+      if (language === 'English') {
+        throw new Error('SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.');
+      }
+
+      // Check if a page with this title and language already exists
+      const filter = language ? {
+        and: [
+          {
+            property: "Title",
+            title: {
+              equals: title
+            }
+          },
+          {
+            property: "Language",
+            select: {
+              equals: language
+            }
+          }
+        ]
+      } : {
         property: "Title",
         title: {
           equals: title
         }
-      }
-    });
-
-    let pageId: string;
-
-    if (response.results.length > 0) {
-      // Update existing page
-      pageId = response.results[0].id;
-
-      // Create properties object with proper typing
-      const pageProperties: NotionPageProperties = {
-        Title: {
-          title: [
-            {
-              text: {
-                content: title
-              }
-            }
-          ]
-        },
-        ...properties as Record<string, unknown>
       };
 
-      // Update page properties
-      await notion.pages.update({
-        page_id: pageId,
-        properties: pageProperties
+      const response = await notion.databases.query({
+        database_id: databaseId,
+        filter: filter
       });
 
-      // Delete existing blocks
-      const existingBlocks = await notion.blocks.children.list({
-        block_id: pageId
+      // If we're not filtering by language, make sure we don't modify English pages
+      const nonEnglishResults = language ? response.results : response.results.filter(page => {
+        // @ts-expect-error - We know the page has properties
+        const pageLanguage = page.properties?.Language?.select?.name;
+        return pageLanguage !== 'English';
       });
 
-      for (const block of existingBlocks.results) {
-        await notion.blocks.delete({
-          block_id: block.id
+      let pageId: string;
+
+      if (nonEnglishResults.length > 0) {
+        // Update existing page
+        pageId = nonEnglishResults[0].id;
+
+        // Create properties object with proper typing
+        const pageProperties: NotionPageProperties = {
+          Title: {
+            title: [
+              {
+                text: {
+                  content: title
+                }
+              }
+            ]
+          },
+          ...properties as Record<string, unknown>
+        };
+
+        // Update page properties
+        await notion.pages.update({
+          page_id: pageId,
+          properties: pageProperties
         });
-      }
-    } else {
-      // Create properties object with proper typing
-      const pageProperties: NotionPageProperties = {
-        Title: {
-          title: [
-            {
-              text: {
-                content: title
+
+        // Delete existing blocks
+        const existingBlocks = await notion.blocks.children.list({
+          block_id: pageId
+        });
+
+        for (const block of existingBlocks.results) {
+          try {
+            await notion.blocks.delete({
+              block_id: block.id
+            });
+          } catch (deleteError) {
+            console.warn(`Warning: Failed to delete block ${block.id}: ${deleteError.message}`);
+            // Continue with other blocks even if one fails
+          }
+        }
+      } else {
+        // Create properties object with proper typing
+        const pageProperties: NotionPageProperties = {
+          Title: {
+            title: [
+              {
+                text: {
+                  content: title
+                }
               }
-            }
-          ]
-        },
-        ...properties as Record<string, unknown>
-      };
+            ]
+          },
+          ...properties as Record<string, unknown>
+        };
 
-      // Create a new page
-      const newPage = await notion.pages.create({
-        parent: {
-          database_id: databaseId,
-        },
-        properties: pageProperties
-      });
+        // Create a new page
+        const newPage = await notion.pages.create({
+          parent: {
+            database_id: databaseId,
+          },
+          properties: pageProperties
+        });
 
-      pageId = newPage.id;
+        pageId = newPage.id;
+      }
+
+      // Add content blocks in chunks to avoid API limits
+      const CHUNK_SIZE = 50; // Notion API has a limit of 100 blocks per request, using 50 to be safe
+      for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+        const blockChunk = blocks.slice(i, i + CHUNK_SIZE);
+        await notion.blocks.children.append({
+          block_id: pageId,
+          children: blockChunk
+        });
+
+        // Add a small delay between chunks to avoid rate limiting
+        if (i + CHUNK_SIZE < blocks.length) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      return pageId;
+    } catch (error) {
+      lastError = error;
+      retryCount++;
+
+      if (retryCount < MAX_RETRIES) {
+        console.warn(`Attempt ${retryCount}/${MAX_RETRIES} failed: ${error.message}. Retrying...`);
+        // Exponential backoff: wait longer between retries
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+      } else {
+        console.error('Error creating Notion page from markdown after multiple retries:', error);
+        throw new Error(`Failed after ${MAX_RETRIES} attempts: ${error.message}`);
+      }
     }
-
-    // Add content blocks
-    await notion.blocks.children.append({
-      block_id: pageId,
-      children: blocks
-    });
-
-    return pageId;
-  } catch (error) {
-    console.error('Error creating Notion page from markdown:', error);
-    throw error;
   }
+
+  // This should never be reached due to the throw in the catch block above
+  throw lastError;
 }

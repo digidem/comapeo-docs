@@ -7,7 +7,7 @@ export async function fetchNotionData() {
       and: [
         {
           property: "Language",
-          rich_text: {
+          select: {
             equals: "English"
           }
         },

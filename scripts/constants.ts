@@ -36,14 +36,14 @@ export const LANGUAGES: TranslationConfig[] = [
   {
     language: 'pt-BR',
     notionLangCode: 'Portuguese',
-    outputDir: './i18n/pt/docusaurus-plugin-content-docs'
+    outputDir: './i18n/pt/docusaurus-plugin-content-docs/current'
   },
   // Add more languages as needed
   // Example:
   // {
   //   language: 'es',
   //   notionLangCode: 'Spanish',
-  //   outputDir: './i18n/es/docusaurus-plugin-content-docs'
+  //   outputDir: './i18n/es/docusaurus-plugin-content-docs/current'
   // },
 ];
 

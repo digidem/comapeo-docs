@@ -11,6 +11,7 @@
     "notion:workflow": "bun scripts/notionWorkflow",
     "notion:fetch": "bun scripts/fetchNotion",
     "notion:translate": "bun scripts/translateNotionPages",
+    "translate:code": "bun scripts/translateCodeJson",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

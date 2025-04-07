@@ -8,7 +8,10 @@
     "lint": "eslint src --ext .js,.ts,.tsx --fix",
     "lint:fix": "eslint src --ext .js,.ts,.tsx --fix --fix-type problem,suggestion,layout",
     "build": "docusaurus build",
-    "notionToMd": "bun scripts/fetchNotion",
+    "notion:workflow": "bun scripts/notionWorkflow",
+    "notion:fetch": "bun scripts/fetchNotion",
+    "notion:translate": "bun scripts/translateNotionPages",
+    "translate:code": "bun scripts/translateCodeJson",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -17,7 +20,9 @@
     "write-translations:all": "docusaurus write-translations --locale pt && docusaurus write-translations --locale es",
     "write-heading-ids": "docusaurus write-heading-ids",
     "gen-pdf": "docusaurus-prince-pdf -u http://localhost:3000/docs",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "bun test tests/unit",
+    "test:watch": "bun test tests/unit --watch"
   },
   "dependencies": {
     "@docusaurus/core": "3.7.0",
@@ -29,6 +34,7 @@
     "@docusaurus/preset-classic": "3.7.0",
     "@mdx-js/react": "^3.1.0",
     "clsx": "^2.1.1",
+    "openai": "^4.91.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -55,8 +61,11 @@
     "lefthook": "^1.11.3",
     "notion-to-md": "^3.1.7",
     "ora": "^8.2.0",
+    "remark-parse": "^11.0.0",
     "typescript": "~5.8.2",
-    "typescript-eslint": "^8.26.1"
+    "typescript-eslint": "^8.26.1",
+    "unified": "^11.0.4",
+    "unist-util-visit": "^5.0.0"
   },
   "browserslist": {
     "production": [

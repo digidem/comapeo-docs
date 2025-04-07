@@ -3,30 +3,14 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { fetchNotionData } from './fetchNotionData.js';
 import { generateBlocks } from './generateBlocks.js';
-// import { updateJson } from '../lib/updateJson.js';
 
 // Load environment variables from .env file
 dotenv.config();
-if (process.env.DEBUG) {
-  console.log('Environment variables:', process.env);
-}
 
 async function main() {
   console.log(chalk.bold.cyan('🚀 Starting Notion data fetch and processing\n'));
 
-  // Check if NOTION_API_KEY is defined
-  if (!process.env.NOTION_API_KEY) {
-    console.error(chalk.bold.red("Error: NOTION_API_KEY is not defined in the environment variables."));
-    process.exit(1);
-  }
-
-  // Check if DATABASE_ID is defined
-  if (!process.env.DATABASE_ID) {
-    console.error(chalk.bold.red("Error: DATABASE_ID is not defined in the environment variables."));
-    process.exit(1);
-  }
-
-  try {    
+  try {
     const fetchSpinner = ora('Fetching data from Notion').start();
     // const data = await fetchNotionData().then(results => results.reverse());
     let data = await fetchNotionData();
@@ -36,7 +20,7 @@ async function main() {
       const orderB = b.properties['Order']?.number ?? Number.MAX_SAFE_INTEGER;
       return orderA - orderB;
     });
-    
+
     data.forEach((item, index) => {
       console.log(`Item ${index + 1}:`, item.url);
     });
@@ -44,7 +28,7 @@ async function main() {
 
     const generateSpinner = ora('Generating blocks').start();
     const { totalSaved, sectionCount, titleSectionCount } = await generateBlocks(data, (progress) => {
-      generateSpinner.text = chalk.blue(`Generating blocks: ${progress.current}/${progress.total}`);
+      generateSpinner.text = chalk.blue(`Generating blocks: ${progress.current}/${progress.total} - ${progress.title}`);
     });
     generateSpinner.succeed(chalk.green('Blocks generated successfully'));
 

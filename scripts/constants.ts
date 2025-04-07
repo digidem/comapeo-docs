@@ -25,7 +25,10 @@ export interface TranslationConfig {
 // Notion page type
 export interface NotionPage {
   id: string;
-  properties: Record<string, unknown>;
+  last_edited_time: string;
+  properties: {
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 

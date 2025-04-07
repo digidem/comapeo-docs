@@ -16,7 +16,7 @@ dotenv.config();
 /**
  * Fetches published English pages from Notion
  */
-async function fetchPublishedEnglishPages() {
+export async function fetchPublishedEnglishPages() {
   const spinner = ora('Fetching published English pages from Notion').start();
 
   try {
@@ -45,7 +45,9 @@ async function fetchPublishedEnglishPages() {
 
     // Sort pages by Order property
     const sortedPages = pages.sort((a, b) => {
+      // @ts-expect-error - We know the property structure
       const orderA = a.properties[NOTION_PROPERTIES.ORDER]?.number ?? Number.MAX_SAFE_INTEGER;
+      // @ts-expect-error - We know the property structure
       const orderB = b.properties[NOTION_PROPERTIES.ORDER]?.number ?? Number.MAX_SAFE_INTEGER;
       return orderA - orderB;
     });
@@ -64,8 +66,9 @@ async function fetchPublishedEnglishPages() {
  * @param targetLanguage The target language code
  * @returns The translation page if it exists, null otherwise
  */
-async function findTranslationPage(englishPage: NotionPage, targetLanguage: string): Promise<NotionPage | null> {
+export async function findTranslationPage(englishPage: NotionPage, targetLanguage: string): Promise<NotionPage | null> {
   try {
+    // @ts-expect-error - We know the property structure
     const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
     const response = await notion.databases.query({
@@ -101,13 +104,15 @@ async function findTranslationPage(englishPage: NotionPage, targetLanguage: stri
  * @param translationPage The translation page
  * @returns True if the translation needs to be updated, false otherwise
  */
-function needsTranslationUpdate(englishPage: NotionPage, translationPage: NotionPage | null) {
+export function needsTranslationUpdate(englishPage: NotionPage, translationPage: NotionPage | null) {
   if (!translationPage) {
     return true; // No translation exists, so it needs to be created
   }
 
   // Compare last edited times
+  // @ts-expect-error - We know the property structure
   const englishLastEdited = new Date(englishPage.last_edited_time);
+  // @ts-expect-error - We know the property structure
   const translationLastEdited = new Date(translationPage.last_edited_time);
 
   // If the English page was edited after the translation, it needs an update
@@ -139,9 +144,10 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  * @param config The translation configuration
  * @returns The path to the saved file
  */
-async function saveTranslatedContent(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
+export async function saveTranslatedContent(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
   try {
     // Create a sanitized filename from the title
+    // @ts-expect-error - We know the property structure
     const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
     const filename = title
       .toLowerCase()
@@ -152,7 +158,9 @@ async function saveTranslatedContent(englishPage: NotionPage, translatedContent:
     const outputPath = path.join(config.outputDir, filename);
 
     // Handle section folders
+    // @ts-expect-error - We know the property structure
     if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
+      // @ts-expect-error - We know the property structure
       const sectionType = englishPage.properties[NOTION_PROPERTIES.SECTION].select.name.toLowerCase();
 
       if (sectionType === 'toggle') {
@@ -168,6 +176,7 @@ async function saveTranslatedContent(englishPage: NotionPage, translatedContent:
         // Create _category_.json file
         const categoryContent = {
           label: title,
+          // @ts-expect-error - We know the property structure
           position: englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
           collapsible: true,
           collapsed: true,
@@ -205,7 +214,7 @@ async function saveTranslatedContent(englishPage: NotionPage, translatedContent:
 /**
  * Main function to run the translation workflow
  */
-async function main() {
+export async function main() {
   console.log(chalk.bold.cyan('🚀 Starting Notion translation workflow\n'));
 
   try {
@@ -234,6 +243,7 @@ async function main() {
 
       // Process each English page
       for (const englishPage of englishPages as NotionPage[]) {
+        // @ts-expect-error - We know the property structure
         const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
         console.log(chalk.blue(`Processing: ${title}`));
 
@@ -269,24 +279,31 @@ async function main() {
           };
 
           // Copy other properties from the English page
+          // @ts-expect-error - We know the property structure
           if (englishPage.properties[NOTION_PROPERTIES.ORDER] && englishPage.properties[NOTION_PROPERTIES.ORDER].number) {
             properties[NOTION_PROPERTIES.ORDER] = {
+              // @ts-expect-error - We know the property structure
               number: englishPage.properties[NOTION_PROPERTIES.ORDER].number
             };
           }
 
+          // @ts-expect-error - We know the property structure
           if (englishPage.properties[NOTION_PROPERTIES.TAGS] && englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select) {
             properties[NOTION_PROPERTIES.TAGS] = {
+              // @ts-expect-error - We know the property structure
               multi_select: englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select.map((tag: { name: string }) => ({ name: tag.name }))
             };
           }
 
+          // @ts-expect-error - We know the property structure
           if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
             properties[NOTION_PROPERTIES.SECTION] = {
+              // @ts-expect-error - We know the property structure
               select: { name: englishPage.properties[NOTION_PROPERTIES.SECTION].select.name }
             };
           }
 
+          // @ts-expect-error - We know the property structure
           const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
           await createNotionPageFromMarkdown(
             notion,
@@ -333,5 +350,7 @@ async function main() {
   }
 }
 
-// Run the main function
-main();
+// Run the main function if this file is executed directly
+if (import.meta.url.endsWith('translateNotionPages.js') || import.meta.url.endsWith('translateNotionPages.ts')) {
+  main();
+}

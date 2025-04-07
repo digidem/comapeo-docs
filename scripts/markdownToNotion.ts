@@ -78,10 +78,12 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
   const notionBlocks: BlockObjectRequest[] = [];
 
   // Process the markdown AST
-  visit(ast, (node: MarkdownNode) => {
-    switch (node.type) {
+  visit(ast, (node) => {
+    // Cast node to our custom type
+    const typedNode = node as MarkdownNode;
+    switch (typedNode.type) {
       case 'heading': {
-        const headingNode = node as HeadingNode;
+        const headingNode = typedNode as HeadingNode;
         const headingLevel = headingNode.depth;
         const headingText = getTextFromNode(headingNode);
 
@@ -90,7 +92,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
       }
 
       case 'paragraph': {
-        const paragraphNode = node as ParagraphNode;
+        const paragraphNode = typedNode as ParagraphNode;
         const paragraphText = getTextFromNode(paragraphNode);
 
         notionBlocks.push({
@@ -109,13 +111,14 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
       }
 
       case 'list': {
-        const listNode = node as ListNode;
+        const listNode = typedNode as ListNode;
         const listItems = listNode.children.map(item => getTextFromNode(item));
         const isOrdered = listNode.ordered;
         for (const item of listItems) {
+          const blockType = isOrdered ? 'numbered_list_item' : 'bulleted_list_item';
           notionBlocks.push({
-            type: isOrdered ? 'numbered_list_item' : 'bulleted_list_item',
-            [isOrdered ? 'numbered_list_item' : 'bulleted_list_item']: {
+            type: blockType,
+            [blockType]: {
               rich_text: [
                 {
                   type: 'text',
@@ -125,34 +128,123 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
                 }
               ]
             }
-          });
+          } as BlockObjectRequest);
         }
         break;
       }
 
       case 'code': {
-        const codeNode = node as CodeNode;
+        const codeNode = typedNode as CodeNode;
         const codeContent = codeNode.value;
         const language = codeNode.lang || 'plain text';
+        const mappedLanguage = mapCodeLanguage(language);
 
-        notionBlocks.push({
-          code: {
-            rich_text: [
-              {
-                type: 'text',
-                text: {
-                  content: codeContent
+        // Notion API has a limit of 2000 characters per text content
+        // Split code blocks that exceed this limit
+        const MAX_CODE_BLOCK_LENGTH = 1900; // Using 1900 to be safe
+
+        if (codeContent.length <= MAX_CODE_BLOCK_LENGTH) {
+          // If code block is small enough, add it as is
+          notionBlocks.push({
+            type: 'code',
+            code: {
+              rich_text: [
+                {
+                  type: 'text',
+                  text: {
+                    content: codeContent
+                  }
                 }
+              ],
+              language: mappedLanguage
+            }
+          });
+        } else {
+          // Split code into multiple blocks
+          const codeChunks = [];
+          let remainingCode = codeContent;
+
+          while (remainingCode.length > 0) {
+            // Find a good place to split (preferably at a newline)
+            let splitIndex = MAX_CODE_BLOCK_LENGTH;
+            if (remainingCode.length > MAX_CODE_BLOCK_LENGTH) {
+              // Try to find a newline to split at
+              const newlineIndex = remainingCode.lastIndexOf('\n', MAX_CODE_BLOCK_LENGTH);
+              if (newlineIndex > 0) {
+                splitIndex = newlineIndex + 1; // Include the newline in the first chunk
               }
-            ],
-            language: mapCodeLanguage(language)
+            } else {
+              splitIndex = remainingCode.length;
+            }
+
+            // Add the chunk
+            const chunk = remainingCode.substring(0, splitIndex);
+            codeChunks.push(chunk);
+
+            // Update remaining code
+            remainingCode = remainingCode.substring(splitIndex);
           }
-        });
+
+          // Add each chunk as a separate code block without visible part indicators
+          for (let i = 0; i < codeChunks.length; i++) {
+            // For the first chunk, add a paragraph with the language info
+            if (i === 0) {
+              notionBlocks.push({
+                type: 'paragraph',
+                paragraph: {
+                  rich_text: [
+                    {
+                      type: 'text',
+                      text: {
+                        content: `\`\`\`${language}`
+                      }
+                    }
+                  ]
+                }
+              });
+            }
+
+            // Add the code content as a paragraph with code formatting
+            notionBlocks.push({
+              type: 'paragraph',
+              paragraph: {
+                rich_text: [
+                  {
+                    type: 'text',
+                    text: {
+                      content: codeChunks[i]
+                    },
+                    annotations: {
+                      code: true
+                    }
+                  }
+                ]
+              }
+            });
+
+            // For the last chunk, add a closing code fence
+            if (i === codeChunks.length - 1) {
+              notionBlocks.push({
+                type: 'paragraph',
+                paragraph: {
+                  rich_text: [
+                    {
+                      type: 'text',
+                      text: {
+                        content: '```'
+                      }
+                    }
+                  ]
+                }
+              });
+            }
+          }
+        }
         break;
       }
 
       case 'blockquote': {
-        const quoteNode = node as BlockquoteNode;
+        const quoteNode = typedNode as BlockquoteNode;
         const quoteText = getTextFromNode(quoteNode);
 
         notionBlocks.push({
@@ -172,6 +264,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
 
       case 'thematicBreak': {
         notionBlocks.push({
+          type: 'divider',
           divider: {}
         });
         break;
@@ -179,7 +272,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
 
       case 'image': {
         // For translations, we'll just convert images to text to avoid Notion API issues
-        const imageNode = node as ImageNode;
+        const imageNode = typedNode as ImageNode;
         const imageUrl = imageNode.url;
         const altText = imageNode.alt || '';
 
@@ -249,6 +342,7 @@ function createHeadingBlock(text: string, level: 1 | 2 | 3): BlockObjectRequest 
   const headingType = `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3';
 
   return {
+    type: headingType,
     [headingType]: {
       rich_text: [
         {
@@ -259,14 +353,28 @@ function createHeadingBlock(text: string, level: 1 | 2 | 3): BlockObjectRequest 
         }
       ]
     }
-  };
+  } as BlockObjectRequest;
 }
+
+/**
+ * Define the valid Notion code block languages
+ */
+type NotionCodeLanguage =
+  'abap' | 'arduino' | 'bash' | 'basic' | 'c' | 'clojure' | 'coffeescript' |
+  'c++' | 'c#' | 'css' | 'dart' | 'diff' | 'docker' | 'elixir' | 'elm' | 'erlang' |
+  'flow' | 'fortran' | 'f#' | 'gherkin' | 'glsl' | 'go' | 'graphql' | 'groovy' |
+  'haskell' | 'html' | 'java' | 'javascript' | 'json' | 'julia' | 'kotlin' | 'latex' |
+  'less' | 'lisp' | 'livescript' | 'lua' | 'makefile' | 'markdown' | 'markup' | 'matlab' |
+  'mermaid' | 'nix' | 'objective-c' | 'ocaml' | 'pascal' | 'perl' | 'php' | 'plain text' |
+  'powershell' | 'prolog' | 'protobuf' | 'python' | 'r' | 'reason' | 'ruby' | 'rust' |
+  'sass' | 'scala' | 'scheme' | 'scss' | 'shell' | 'sql' | 'swift' | 'typescript' |
+  'vb.net' | 'verilog' | 'vhdl' | 'visual basic' | 'webassembly' | 'xml' | 'yaml' | 'java/c/c++/c#';
 
 /**
  * Maps markdown code language to Notion code block language
  */
-function mapCodeLanguage(language: string): string {
-  const languageMap: Record<string, string> = {
+function mapCodeLanguage(language: string): NotionCodeLanguage {
+  const languageMap: Record<string, NotionCodeLanguage> = {
     'js': 'javascript',
     'ts': 'typescript',
     'py': 'python',
@@ -394,6 +502,7 @@ export async function createNotionPageFromMarkdown(
         // Update page properties
         await notion.pages.update({
           page_id: pageId,
+          // @ts-expect-error - Notion API types are not fully compatible with our types
           properties: pageProperties
         });
 
@@ -432,6 +541,7 @@ export async function createNotionPageFromMarkdown(
           parent: {
             database_id: databaseId,
           },
+          // @ts-expect-error - Notion API types are not fully compatible with our types
           properties: pageProperties
         });
 

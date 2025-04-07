@@ -1,64 +1,87 @@
 import { notion, DATABASE_ID } from './notionClient.js';
+import ora from 'ora';
+import chalk from 'chalk';
+import { MAIN_LANGUAGE, NOTION_PROPERTIES } from './constants.js';
 
+/**
+ * Fetches published English pages from Notion
+ * @returns Array of Notion page objects
+ */
 export async function fetchNotionData() {
-  const response = await notion.databases.query({
-    database_id: DATABASE_ID,
-    filter: {
-      and: [
-        {
-          property: "Language",
-          select: {
-            equals: "English"
-          }
-        },
-        {
-          property: "Published",
-          checkbox: {
-            equals: true
-          }
-        }
-      ]
-    }
-  });
+  const spinner = ora('Fetching published English pages from Notion').start();
 
-  return response.results;
-}
-
-  // Example usage:
-  // const pageId = '16d8004e5f6a42a6981151c22ddada12';
-  // await fetchNotionPage(pageId);
-export async function fetchNotionPage() {
   try {
-    const response = await notion.blocks.children.list({
-      block_id: DATABASE_ID,
+    const response = await notion.databases.query({
+      database_id: DATABASE_ID,
+      filter: {
+        and: [
+          {
+            property: NOTION_PROPERTIES.LANGUAGE,
+            select: {
+              equals: MAIN_LANGUAGE
+            }
+          },
+          {
+            property: NOTION_PROPERTIES.PUBLISHED,
+            checkbox: {
+              equals: true
+            }
+          }
+        ]
+      }
     });
-    console.log('Fetched page content:', response);
-    return response;
+
+    spinner.succeed(chalk.green(`Fetched ${response.results.length} published English pages`));
+    return response.results;
   } catch (error) {
-    console.error('Error fetching Notion page:', error);
+    spinner.fail(chalk.red(`Failed to fetch published English pages: ${error.message}`));
     throw error;
   }
 }
 
-export async function fetchNotionBlocks(blockId) {
+/**
+ * Fetches a specific Notion page by ID
+ * @param pageId The ID of the Notion page to fetch
+ * @returns The page content
+ */
+export async function fetchNotionPage(pageId: string) {
+  const spinner = ora(`Fetching Notion page ${pageId}`).start();
+
+  try {
+    const response = await notion.blocks.children.list({
+      block_id: pageId,
+    });
+    spinner.succeed(chalk.green(`Fetched page content for ${pageId}`));
+    return response;
+  } catch (error) {
+    spinner.fail(chalk.red(`Error fetching Notion page: ${error.message}`));
+    throw error;
+  }
+}
+
+/**
+ * Recursively fetches all blocks from a Notion block, including nested blocks
+ * @param blockId The ID of the block to fetch
+ * @returns Array of block objects
+ */
+export async function fetchNotionBlocks(blockId: string) {
   try {
     const response = await notion.blocks.children.list({
       block_id: blockId,
       page_size: 100
     });
 
-    console.log(`Fetched ${response.results.length} blocks for block ID: ${blockId}`);
-
     // Recursively fetch nested blocks
     for (const block of response.results) {
       if (block.has_children) {
+        // @ts-expect-error - Adding children property to block
         block.children = await fetchNotionBlocks(block.id);
       }
     }
 
     return response.results;
   } catch (error) {
-    console.error('Error fetching Notion blocks:', error);
+    console.error(`Error fetching Notion blocks for ${blockId}:`, error);
     throw error;
   }
 }

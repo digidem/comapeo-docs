@@ -8,27 +8,12 @@ import { translateText } from './openaiTranslator.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { createNotionPageFromMarkdown } from './markdownToNotion.js';
+import { LANGUAGES, MAIN_LANGUAGE, NOTION_PROPERTIES, TEMP_DIR } from './constants.js';
 
 // Load environment variables from .env file
 dotenv.config();
 
-interface TranslationConfig {
-  language: string;
-  notionLangCode: string;
-  outputDir: string;
-}
-
-const LANGUAGES: TranslationConfig[] = [
-  {
-    language: 'pt-BR',
-    notionLangCode: 'Portuguese',
-    outputDir: './i18n/pt/docusaurus-plugin-content-docs'
-  },
-  // Add more languages as needed
-];
-
-// Directory for temporary translations
-const TEMP_DIR = './temp_translations';
+// Translation config is imported from constants.js
 
 /**
  * Checks if a translation page exists for the given English page
@@ -38,20 +23,20 @@ const TEMP_DIR = './temp_translations';
  */
 async function findTranslationPage(englishPage, targetLanguage: string) {
   try {
-    const title = englishPage.properties['Title'].title[0].plain_text;
+    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
     const response = await notion.databases.query({
       database_id: DATABASE_ID,
       filter: {
         and: [
           {
-            property: "Title",
+            property: NOTION_PROPERTIES.TITLE,
             title: {
               equals: title
             }
           },
           {
-            property: "Language",
+            property: NOTION_PROPERTIES.LANGUAGE,
             select: {
               equals: targetLanguage
             }
@@ -122,7 +107,7 @@ async function createTranslationPage(englishPage, translatedContent: string, con
     const title = englishPage.properties['Title'].title[0].plain_text;
 
     // SAFETY CHECK: Never modify English pages
-    if (englishPage.properties['Language']?.select?.name === 'English' && config.notionLangCode === 'English') {
+    if (englishPage.properties[NOTION_PROPERTIES.LANGUAGE]?.select?.name === MAIN_LANGUAGE && config.notionLangCode === MAIN_LANGUAGE) {
       spinner.fail(chalk.bold.red(`⛔ SAFETY ERROR: Attempted to modify an English page: ${title}`));
       throw new Error('Safety check failed: Cannot modify English pages');
     }
@@ -144,21 +129,21 @@ async function createTranslationPage(englishPage, translatedContent: string, con
     };
 
     // Copy other properties from the English page
-    if (englishPage.properties['Order'] && englishPage.properties['Order'].number) {
-      properties["Order"] = {
-        number: englishPage.properties['Order'].number
+    if (englishPage.properties[NOTION_PROPERTIES.ORDER] && englishPage.properties[NOTION_PROPERTIES.ORDER].number) {
+      properties[NOTION_PROPERTIES.ORDER] = {
+        number: englishPage.properties[NOTION_PROPERTIES.ORDER].number
       };
     }
 
-    if (englishPage.properties['Tags'] && englishPage.properties['Tags'].multi_select) {
-      properties["Tags"] = {
-        multi_select: englishPage.properties['Tags'].multi_select.map(tag => ({ name: tag.name }))
+    if (englishPage.properties[NOTION_PROPERTIES.TAGS] && englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select) {
+      properties[NOTION_PROPERTIES.TAGS] = {
+        multi_select: englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select.map(tag => ({ name: tag.name }))
       };
     }
 
-    if (englishPage.properties['Section'] && englishPage.properties['Section'].select) {
-      properties["Section"] = {
-        select: { name: englishPage.properties['Section'].select.name }
+    if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
+      properties[NOTION_PROPERTIES.SECTION] = {
+        select: { name: englishPage.properties[NOTION_PROPERTIES.SECTION].select.name }
       };
     }
 
@@ -207,7 +192,7 @@ async function saveTranslatedContent(englishPage, translatedContent: string, con
     }
 
     // Create a sanitized filename from the title
-    const title = englishPage.properties['Title'].title[0].plain_text;
+    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
     const filename = title
       .toLowerCase()
       .replace(/\s+/g, '-')
@@ -217,8 +202,8 @@ async function saveTranslatedContent(englishPage, translatedContent: string, con
     const outputPath = path.join(config.outputDir, filename);
 
     // Handle section folders
-    if (englishPage.properties['Section'] && englishPage.properties['Section'].select) {
-      const sectionType = englishPage.properties['Section'].select.name.toLowerCase();
+    if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
+      const sectionType = englishPage.properties[NOTION_PROPERTIES.SECTION].select.name.toLowerCase();
 
       if (sectionType === 'toggle') {
         // For toggle sections, create a folder with the same name
@@ -233,7 +218,7 @@ async function saveTranslatedContent(englishPage, translatedContent: string, con
         // Create _category_.json file
         const categoryContent = {
           label: title,
-          position: englishPage.properties['Order']?.number || 1,
+          position: englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
           collapsible: true,
           collapsed: true,
           link: {
@@ -414,9 +399,9 @@ async function main() {
     // Step 3: Translate content
     // Filter only English pages that are published
     const englishPages = data.filter(page => {
-      const language = page.properties['Language']?.select?.name || 'English';
-      const isPublished = page.properties['Published']?.checkbox || false;
-      return language === 'English' && isPublished;
+      const language = page.properties[NOTION_PROPERTIES.LANGUAGE]?.select?.name || MAIN_LANGUAGE;
+      const isPublished = page.properties[NOTION_PROPERTIES.PUBLISHED]?.checkbox || false;
+      return language === MAIN_LANGUAGE && isPublished;
     });
 
     if (englishPages.length > 0) {

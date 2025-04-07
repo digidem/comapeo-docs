@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import ora from 'ora';
 import chalk from 'chalk';
+import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE, DEFAULT_OPENAI_MAX_TOKENS } from './constants.js';
 
 // Load environment variables
 dotenv.config();
@@ -13,7 +14,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -115,8 +116,8 @@ export async function translateText(text: string, targetLanguage: string): Promi
         { role: "system", content: prompt },
         { role: "user", content: text }
       ],
-      temperature: 0.3, // Lower temperature for more consistent translations
-      max_tokens: 4096, // Adjust based on your content length
+      temperature: DEFAULT_OPENAI_TEMPERATURE, // Lower temperature for more consistent translations
+      max_tokens: DEFAULT_OPENAI_MAX_TOKENS, // Adjust based on your content length
     });
 
     // Extract the translated text from the response

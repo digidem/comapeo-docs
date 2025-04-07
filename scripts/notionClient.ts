@@ -1,17 +1,25 @@
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
+import dotenv from 'dotenv';
 
-if (!process.env.NOTION_API_KEY) {
-  throw new Error("NOTION_API_KEY is not defined in the environment variables.");
+// Load environment variables
+dotenv.config();
+
+// Validate required environment variables
+function getRequiredEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not defined in the environment variables.`);
+  }
+  return value;
 }
 
-if (!process.env.DATABASE_ID) {
-  throw new Error("DATABASE_ID is not defined in the environment variables.");
-}
+// Get required environment variables
+export const NOTION_API_KEY = getRequiredEnvVar('NOTION_API_KEY');
+export const DATABASE_ID = getRequiredEnvVar('DATABASE_ID');
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
+// Initialize Notion client
+const notion = new Client({ auth: NOTION_API_KEY });
 const n2m = new NotionToMarkdown({ notionClient: notion });
-
-export const DATABASE_ID = process.env.DATABASE_ID;
 
 export { notion, n2m };

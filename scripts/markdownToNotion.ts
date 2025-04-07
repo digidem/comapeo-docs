@@ -4,7 +4,11 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import { visit } from 'unist-util-visit';
 import fs from 'fs/promises';
-import { Root } from 'remark-parse/lib';
+import ora from 'ora';
+import chalk from 'chalk';
+// Define Root type for the AST
+type Root = { type: 'root'; children: unknown[] };
+import { ENGLISH_MODIFICATION_ERROR, MAIN_LANGUAGE, MAX_RETRIES, NOTION_API_CHUNK_SIZE, NOTION_PROPERTIES } from './constants.js';
 
 // Define types for markdown nodes
 interface HeadingNode {
@@ -316,9 +320,8 @@ export async function createNotionPageFromMarkdown(
   language?: string
 ): Promise<string> {
   // Maximum number of retries
-  const MAX_RETRIES = 3;
   let retryCount = 0;
-  let lastError;
+  let lastError: Error | null = null;
 
   while (retryCount < MAX_RETRIES) {
     try {
@@ -328,29 +331,29 @@ export async function createNotionPageFromMarkdown(
       // Convert markdown to Notion blocks
       const blocks = await markdownToNotionBlocks(markdownContent);
 
-      // CRITICAL SAFETY CHECK: Never modify English pages
-      if (language === 'English') {
-        throw new Error('SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.');
+      // CRITICAL SAFETY CHECK: Never modify main language pages
+      if (language === MAIN_LANGUAGE) {
+        throw new Error(ENGLISH_MODIFICATION_ERROR);
       }
 
       // Check if a page with this title and language already exists
       const filter = language ? {
         and: [
           {
-            property: "Title",
+            property: NOTION_PROPERTIES.TITLE,
             title: {
               equals: title
             }
           },
           {
-            property: "Language",
+            property: NOTION_PROPERTIES.LANGUAGE,
             select: {
               equals: language
             }
           }
         ]
       } : {
-        property: "Title",
+        property: NOTION_PROPERTIES.TITLE,
         title: {
           equals: title
         }
@@ -364,8 +367,8 @@ export async function createNotionPageFromMarkdown(
       // If we're not filtering by language, make sure we don't modify English pages
       const nonEnglishResults = language ? response.results : response.results.filter(page => {
         // @ts-expect-error - We know the page has properties
-        const pageLanguage = page.properties?.Language?.select?.name;
-        return pageLanguage !== 'English';
+        const pageLanguage = page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
+        return pageLanguage !== MAIN_LANGUAGE;
       });
 
       let pageId: string;
@@ -436,16 +439,15 @@ export async function createNotionPageFromMarkdown(
       }
 
       // Add content blocks in chunks to avoid API limits
-      const CHUNK_SIZE = 50; // Notion API has a limit of 100 blocks per request, using 50 to be safe
-      for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
-        const blockChunk = blocks.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < blocks.length; i += NOTION_API_CHUNK_SIZE) {
+        const blockChunk = blocks.slice(i, i + NOTION_API_CHUNK_SIZE);
         await notion.blocks.children.append({
           block_id: pageId,
           children: blockChunk
         });
 
         // Add a small delay between chunks to avoid rate limiting
-        if (i + CHUNK_SIZE < blocks.length) {
+        if (i + NOTION_API_CHUNK_SIZE < blocks.length) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
@@ -468,4 +470,51 @@ export async function createNotionPageFromMarkdown(
 
   // This should never be reached due to the throw in the catch block above
   throw lastError;
+}
+
+/**
+ * Creates a new translation page in Notion without modifying any existing pages
+ * This is a wrapper around createNotionPageFromMarkdown with additional safety checks
+ * @param notion The Notion client
+ * @param databaseId The ID of the Notion database
+ * @param title The title of the page
+ * @param translatedContent The translated content
+ * @param properties Additional properties for the page
+ * @param targetLanguage The target language
+ * @returns The ID of the created page
+ */
+export async function createTranslationPage(
+  notion: Client,
+  databaseId: string,
+  title: string,
+  translatedContent: string,
+  properties: Record<string, unknown>,
+  targetLanguage: string
+): Promise<string> {
+  const spinner = ora(`Creating translation page in ${targetLanguage}`).start();
+
+  try {
+    // CRITICAL SAFETY CHECK: Never translate to main language
+    if (targetLanguage === MAIN_LANGUAGE) {
+      spinner.fail(chalk.red(ENGLISH_MODIFICATION_ERROR));
+      throw new Error(ENGLISH_MODIFICATION_ERROR);
+    }
+
+    // Create or update the translation page using the more generic function
+    const pageId = await createNotionPageFromMarkdown(
+      notion,
+      databaseId,
+      title,
+      translatedContent,
+      properties,
+      true, // Pass content directly
+      targetLanguage // Pass the language to ensure we don't modify English pages
+    );
+
+    spinner.succeed(chalk.green(`Translation page created/updated for ${title} in ${targetLanguage}`));
+    return pageId;
+  } catch (error) {
+    spinner.fail(chalk.red(`Failed to create translation page: ${error.message}`));
+    throw error;
+  }
 }

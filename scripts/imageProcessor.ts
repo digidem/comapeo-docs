@@ -1,7 +1,8 @@
 import sharp from 'sharp';
 import path from 'node:path';
+import { IMAGE_MAX_WIDTH, JPEG_QUALITY, PNG_COMPRESSION_LEVEL, WEBP_QUALITY } from './constants.js';
 
-export async function processImage(inputBuffer, outputPath, maxWidth = 1280) {
+export async function processImage(inputBuffer, outputPath, maxWidth = IMAGE_MAX_WIDTH) {
   try {
     const image = sharp(inputBuffer);
     let pipeline = image.resize({ width: maxWidth, fit: 'inside', withoutEnlargement: true });
@@ -11,13 +12,13 @@ export async function processImage(inputBuffer, outputPath, maxWidth = 1280) {
     switch (ext) {
       case '.jpg':
       case '.jpeg':
-        pipeline = pipeline.jpeg({ quality: 80 });
+        pipeline = pipeline.jpeg({ quality: JPEG_QUALITY });
         break;
       case '.png':
-        pipeline = pipeline.png({ compressionLevel: 9 });
+        pipeline = pipeline.png({ compressionLevel: PNG_COMPRESSION_LEVEL });
         break;
       case '.webp':
-        pipeline = pipeline.webp({ quality: 80 });
+        pipeline = pipeline.webp({ quality: WEBP_QUALITY });
         break;
       // SVG doesn't need processing
       case '.svg':

@@ -6,27 +6,12 @@ import path from 'path';
 import { notion, DATABASE_ID, n2m } from './notionClient.js';
 import { translateText } from './openaiTranslator.js';
 import { createNotionPageFromMarkdown } from './markdownToNotion.js';
+import { LANGUAGES, MAIN_LANGUAGE, NOTION_PROPERTIES, NotionPage, TEMP_DIR, TranslationConfig } from './constants.js';
 
 // Load environment variables from .env file
 dotenv.config();
 
-interface TranslationConfig {
-  language: string;
-  notionLangCode: string;
-  outputDir: string;
-}
-
-const LANGUAGES: TranslationConfig[] = [
-  {
-    language: 'pt-BR',
-    notionLangCode: 'Portuguese',
-    outputDir: './i18n/pt/docusaurus-plugin-content-docs'
-  },
-  // Add more languages as needed
-];
-
-// Directory for temporary translations
-const TEMP_DIR = './temp_translations';
+// Translation config is imported from constants.js
 
 /**
  * Fetches published English pages from Notion
@@ -40,13 +25,13 @@ async function fetchPublishedEnglishPages() {
       filter: {
         and: [
           {
-            property: "Language",
+            property: NOTION_PROPERTIES.LANGUAGE,
             select: {
-              equals: "English"
+              equals: MAIN_LANGUAGE
             }
           },
           {
-            property: "Published",
+            property: NOTION_PROPERTIES.PUBLISHED,
             checkbox: {
               equals: true
             }
@@ -55,10 +40,13 @@ async function fetchPublishedEnglishPages() {
       }
     });
 
+    // Cast results to NotionPage type
+    const pages = response.results as unknown as NotionPage[];
+
     // Sort pages by Order property
-    const sortedPages = response.results.sort((a, b) => {
-      const orderA = a.properties['Order']?.number ?? Number.MAX_SAFE_INTEGER;
-      const orderB = b.properties['Order']?.number ?? Number.MAX_SAFE_INTEGER;
+    const sortedPages = pages.sort((a, b) => {
+      const orderA = a.properties[NOTION_PROPERTIES.ORDER]?.number ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.properties[NOTION_PROPERTIES.ORDER]?.number ?? Number.MAX_SAFE_INTEGER;
       return orderA - orderB;
     });
 
@@ -76,9 +64,9 @@ async function fetchPublishedEnglishPages() {
  * @param targetLanguage The target language code
  * @returns The translation page if it exists, null otherwise
  */
-async function findTranslationPage(englishPage, targetLanguage: string) {
+async function findTranslationPage(englishPage: NotionPage, targetLanguage: string): Promise<NotionPage | null> {
   try {
-    const title = englishPage.properties['Title'].title[0].plain_text;
+    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
     const response = await notion.databases.query({
       database_id: DATABASE_ID,
@@ -100,7 +88,7 @@ async function findTranslationPage(englishPage, targetLanguage: string) {
       }
     });
 
-    return response.results.length > 0 ? response.results[0] : null;
+    return response.results.length > 0 ? response.results[0] as unknown as NotionPage : null;
   } catch (error) {
     console.error(`Error finding translation page for ${englishPage.id}:`, error);
     return null;
@@ -113,7 +101,7 @@ async function findTranslationPage(englishPage, targetLanguage: string) {
  * @param translationPage The translation page
  * @returns True if the translation needs to be updated, false otherwise
  */
-function needsTranslationUpdate(englishPage, translationPage) {
+function needsTranslationUpdate(englishPage: NotionPage, translationPage: NotionPage | null) {
   if (!translationPage) {
     return true; // No translation exists, so it needs to be created
   }
@@ -151,10 +139,10 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  * @param config The translation configuration
  * @returns The path to the saved file
  */
-async function saveTranslatedContent(englishPage, translatedContent: string, config: TranslationConfig): Promise<string> {
+async function saveTranslatedContent(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
   try {
     // Create a sanitized filename from the title
-    const title = englishPage.properties['Title'].title[0].plain_text;
+    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
     const filename = title
       .toLowerCase()
       .replace(/\s+/g, '-')
@@ -164,8 +152,8 @@ async function saveTranslatedContent(englishPage, translatedContent: string, con
     const outputPath = path.join(config.outputDir, filename);
 
     // Handle section folders
-    if (englishPage.properties['Section'] && englishPage.properties['Section'].select) {
-      const sectionType = englishPage.properties['Section'].select.name.toLowerCase();
+    if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
+      const sectionType = englishPage.properties[NOTION_PROPERTIES.SECTION].select.name.toLowerCase();
 
       if (sectionType === 'toggle') {
         // For toggle sections, create a folder with the same name
@@ -180,7 +168,7 @@ async function saveTranslatedContent(englishPage, translatedContent: string, con
         // Create _category_.json file
         const categoryContent = {
           label: title,
-          position: englishPage.properties['Order']?.number || 1,
+          position: englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
           collapsible: true,
           collapsed: true,
           link: {
@@ -245,8 +233,8 @@ async function main() {
       let skippedTranslations = 0;
 
       // Process each English page
-      for (const englishPage of englishPages) {
-        const title = englishPage.properties['Title'].title[0].plain_text;
+      for (const englishPage of englishPages as NotionPage[]) {
+        const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
         console.log(chalk.blue(`Processing: ${title}`));
 
         // Find existing translation
@@ -281,25 +269,25 @@ async function main() {
           };
 
           // Copy other properties from the English page
-          if (englishPage.properties['Order'] && englishPage.properties['Order'].number) {
-            properties["Order"] = {
-              number: englishPage.properties['Order'].number
+          if (englishPage.properties[NOTION_PROPERTIES.ORDER] && englishPage.properties[NOTION_PROPERTIES.ORDER].number) {
+            properties[NOTION_PROPERTIES.ORDER] = {
+              number: englishPage.properties[NOTION_PROPERTIES.ORDER].number
             };
           }
 
-          if (englishPage.properties['Tags'] && englishPage.properties['Tags'].multi_select) {
-            properties["Tags"] = {
-              multi_select: englishPage.properties['Tags'].multi_select.map((tag: { name: string }) => ({ name: tag.name }))
+          if (englishPage.properties[NOTION_PROPERTIES.TAGS] && englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select) {
+            properties[NOTION_PROPERTIES.TAGS] = {
+              multi_select: englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select.map((tag: { name: string }) => ({ name: tag.name }))
             };
           }
 
-          if (englishPage.properties['Section'] && englishPage.properties['Section'].select) {
-            properties["Section"] = {
-              select: { name: englishPage.properties['Section'].select.name }
+          if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
+            properties[NOTION_PROPERTIES.SECTION] = {
+              select: { name: englishPage.properties[NOTION_PROPERTIES.SECTION].select.name }
             };
           }
 
-          const title = englishPage.properties['Title'].title[0].plain_text;
+          const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
           await createNotionPageFromMarkdown(
             notion,
             DATABASE_ID,

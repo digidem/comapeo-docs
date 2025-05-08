@@ -4,11 +4,12 @@ import chalk from 'chalk';
 import { MAIN_LANGUAGE, NOTION_PROPERTIES } from './constants.js';
 
 /**
- * Fetches published English pages from Notion
+ * Fetches published pages from Notion for a specific language
+ * @param language The language to fetch pages for (e.g., 'English', 'Portuguese')
  * @returns Array of Notion page objects
  */
-export async function fetchNotionData() {
-  const spinner = ora('Fetching published English pages from Notion').start();
+export async function fetchNotionDataByLanguage(language: string) {
+  const spinner = ora(`Fetching published ${language} pages from Notion`).start();
 
   try {
     const response = await notion.databases.query({
@@ -18,7 +19,7 @@ export async function fetchNotionData() {
           {
             property: NOTION_PROPERTIES.LANGUAGE,
             select: {
-              equals: MAIN_LANGUAGE
+              equals: language
             }
           },
           {
@@ -31,12 +32,20 @@ export async function fetchNotionData() {
       }
     });
 
-    spinner.succeed(chalk.green(`Fetched ${response.results.length} published English pages`));
+    spinner.succeed(chalk.green(`Fetched ${response.results.length} published ${language} pages`));
     return response.results;
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to fetch published English pages: ${error.message}`));
+    spinner.fail(chalk.red(`Failed to fetch published ${language} pages: ${error.message}`));
     throw error;
   }
+}
+
+/**
+ * Fetches published English pages from Notion
+ * @returns Array of Notion page objects
+ */
+export async function fetchNotionData() {
+  return fetchNotionDataByLanguage(MAIN_LANGUAGE);
 }
 
 /**
@@ -73,6 +82,7 @@ export async function fetchNotionBlocks(blockId: string) {
 
     // Recursively fetch nested blocks
     for (const block of response.results) {
+      // @ts-expect-error - We know the property structure
       if (block.has_children) {
         // @ts-expect-error - Adding children property to block
         block.children = await fetchNotionBlocks(block.id);

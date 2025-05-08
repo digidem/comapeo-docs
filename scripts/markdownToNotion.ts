@@ -371,6 +371,17 @@ type NotionCodeLanguage =
   'vb.net' | 'verilog' | 'vhdl' | 'visual basic' | 'webassembly' | 'xml' | 'yaml' | 'java/c/c++/c#';
 
 /**
+ * Removes front-matter from markdown content
+ * @param content The markdown content
+ * @returns The markdown content without front-matter
+ */
+export function removeFrontMatter(content: string): string {
+  // Check if content starts with front-matter (---)
+  const frontMatterRegex = /^---\n[\s\S]*?\n---\n/m;
+  return content.replace(frontMatterRegex, '');
+}
+
+/**
  * Maps markdown code language to Notion code block language
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
@@ -434,7 +445,10 @@ export async function createNotionPageFromMarkdown(
   while (retryCount < MAX_RETRIES) {
     try {
       // Read the markdown content
-      const markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
+      let markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
+
+      // Remove front-matter if present
+      markdownContent = removeFrontMatter(markdownContent);
 
       // Convert markdown to Notion blocks
       const blocks = await markdownToNotionBlocks(markdownContent);

@@ -1,5 +1,5 @@
 import { test, expect, mock, describe, beforeEach } from "bun:test";
-import { markdownToNotionBlocks, createNotionPageFromMarkdown } from "../../scripts/markdownToNotion";
+import { markdownToNotionBlocks, createNotionPageFromMarkdown, removeFrontMatter } from "../../scripts/markdownToNotion";
 import fs from "fs/promises";
 import { Client } from "@notionhq/client";
 
@@ -25,6 +25,25 @@ const mockNotion = {
     delete: mock(async () => ({}))
   }
 } as unknown as Client;
+
+describe("removeFrontMatter", () => {
+  test("removes front-matter from markdown content", () => {
+    const markdownWithFrontMatter = `---
+title: Test Title
+description: Test Description
+---
+
+# Actual Content`;
+    const result = removeFrontMatter(markdownWithFrontMatter);
+    expect(result).toBe("\n# Actual Content");
+  });
+
+  test("returns content unchanged if no front-matter", () => {
+    const markdownWithoutFrontMatter = "# Just Content\nNo front-matter here";
+    const result = removeFrontMatter(markdownWithoutFrontMatter);
+    expect(result).toBe(markdownWithoutFrontMatter);
+  });
+});
 
 describe("markdownToNotionBlocks", () => {
   test("converts heading to Notion heading block", async () => {

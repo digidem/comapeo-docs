@@ -244,25 +244,41 @@ export async function main() {
       // Process each English page
       for (const englishPage of englishPages as NotionPage[]) {
         // @ts-expect-error - We know the property structure
-        const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
-        console.log(chalk.blue(`Processing: ${title}`));
+        const originalTitle = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+        console.log(chalk.blue(`Processing: ${originalTitle}`));
 
         // Find existing translation
         const translationPage = await findTranslationPage(englishPage, config.notionLangCode);
 
         // Check if translation needs update
         if (!needsTranslationUpdate(englishPage, translationPage)) {
-          console.log(chalk.gray(`Skipping ${title} (translation is up-to-date)`));
+          console.log(chalk.gray(`Skipping ${originalTitle} (translation is up-to-date)`));
           skippedTranslations++;
           continue;
         }
 
         try {
+          // @ts-expect-error - We know the property structure
+          const originalTitle = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+
+          // Check if this is a title page
+          // @ts-expect-error - We know the property structure
+          const isTitlePage = englishPage.properties[NOTION_PROPERTIES.SECTION]?.select?.name.toLowerCase() === 'title';
+
           // Convert English page to markdown
           const markdownContent = await convertPageToMarkdown(englishPage.id);
 
           // Translate the content
-          const translatedContent = await translateText(markdownContent, config.language);
+          let translatedContent: string;
+
+          if (isTitlePage) {
+            // For title pages, create a minimal content with just the title
+            // We'll translate the title separately later
+            translatedContent = `# ${originalTitle}`;
+          } else {
+            // For regular pages, translate the full content
+            translatedContent = await translateText(markdownContent, config.language);
+          }
 
           // Create or update translation page in Notion
           // Prepare properties for the translation page
@@ -303,12 +319,27 @@ export async function main() {
             };
           }
 
-          // @ts-expect-error - We know the property structure
-          const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+          // We already have originalTitle and isTitlePage defined above
+
+          let translatedTitle = originalTitle; // Default to original title
+
+          if (isTitlePage) {
+            // For title pages, directly translate the title
+            translatedTitle = await translateText(originalTitle, config.language);
+            console.log(chalk.yellow(`  ↳ Directly translated title page: ${translatedTitle}`));
+          } else {
+            // For regular pages, extract the translated title from the content
+            const h1Match = translatedContent.match(/^\s*#\s+(.+?)\s*$/m);
+            if (h1Match && h1Match[1]) {
+              translatedTitle = h1Match[1].trim();
+              console.log(chalk.yellow(`  ↳ Found translated title: ${translatedTitle}`));
+            }
+          }
+
           await createNotionPageFromMarkdown(
             notion,
             DATABASE_ID,
-            title,
+            translatedTitle, // Use the translated title for the page name
             translatedContent,
             properties,
             true, // Pass content directly
@@ -325,7 +356,7 @@ export async function main() {
             newTranslations++;
           }
         } catch (error) {
-          console.error(chalk.red(`Error processing ${title}:`, error.message));
+          console.error(chalk.red(`Error processing ${originalTitle}:`, error.message));
         }
       }
 

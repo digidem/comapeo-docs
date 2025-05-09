@@ -6,15 +6,9 @@ export async function fetchNotionData() {
     filter: {
       and: [
         {
-          property: "Language",
-          rich_text: {
-            equals: "English"
-          }
-        },
-        {
-          property: "Published",
-          checkbox: {
-            equals: true
+          property: "Status",
+          select: {
+            equals: "Ready to publish"
           }
         }
       ]

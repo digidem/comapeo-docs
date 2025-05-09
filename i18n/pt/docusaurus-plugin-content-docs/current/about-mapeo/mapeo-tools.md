@@ -13,8 +13,6 @@ slug: /mapeo-tools
 last_update:
   date: 5/9/2025
   author: Awana Digital
-sidebar_custom_props:
-  title: "Visão Geral"
 ---
 Mapeo é um conjunto de ferramentas digitais, projetadas para apoiar a coleta de dados colaborativa e o mapeamento em ambientes offline.
 

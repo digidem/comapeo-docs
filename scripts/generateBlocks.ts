@@ -162,6 +162,7 @@ export async function generateBlocks(pages, progressCallback) {
 
         if (nextItemTitle[lang]) {
           categoryContent.customProps.title = nextItemTitle[lang];
+          nextItemTitle[lang] = null
         }
         const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
         fs.writeFileSync(categoryFilePath, JSON.stringify(categoryContent, null, 2), 'utf8');

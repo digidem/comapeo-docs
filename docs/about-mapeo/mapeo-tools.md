@@ -13,8 +13,6 @@ slug: /mapeo-tools
 last_update:
   date: 5/9/2025
   author: Awana Digital
-sidebar_custom_props:
-  title: Overview
 ---
 
 # Mapeo tools

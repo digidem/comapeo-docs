@@ -9,15 +9,21 @@ import {translate} from '@docusaurus/Translate';
 import styles from './index.module.css';
 
 function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
+  // const {siteConfig} = useDocusaurusContext();
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <div className="container">
         <img src="img/comapeo_logo.png" alt="CoMapeo Logo" />
         <Heading as="h1" className="hero__title">
-          {siteConfig.title.split(' ')[1]}
+         {translate({
+            message: "Documentation",
+            description: "Site title"
+          })}
         </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <p className="hero__subtitle">{translate({
+          message:  "Learn how to use the CoMapeo platform",
+          description: "Text for the tagline of the webpage"
+        })}</p>
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"

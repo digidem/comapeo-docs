@@ -1,4 +1,12 @@
 {
+  "Learn how to use the CoMapeo platform": {
+    "message": "Aprende a usar la plataforma de CoMapeo",
+    "description": "Button text for documentation link"
+  },
+   "Documentation": {
+    "message": "Documentación",
+    "description": "Site title"
+  },
   "Explore Documentation": {
     "message": "Explora la Documentación",
     "description": "Button text for documentation link"

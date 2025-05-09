@@ -29,28 +29,18 @@ const config: Config = {
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'pt', 'es'],
-    path: 'i18n',
     localeConfigs: {
       en: {
         label: 'English',
-        direction: 'ltr',
         htmlLang: 'en-US',
-        calendar: 'gregory',
-        path: 'en',
       },
       pt: {
         label: 'Português',
-        direction: 'ltr',
         htmlLang: 'pt-BR',
-        calendar: 'gregory',
-        path: 'pt',
       },
       es: {
         label: 'Español',
-        direction: 'ltr',
         htmlLang: 'es-ES',
-        calendar: 'gregory',
-        path: 'es',
       },
     },
   },

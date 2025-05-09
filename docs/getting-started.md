@@ -2,7 +2,7 @@
 id: doc-getting-started
 title: Getting started
 sidebar_label: Getting started
-sidebar_position: 7
+sidebar_position: 6
 pagination_label: Getting started
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started.md
 keywords:
@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /getting-started
 last_update:
-  date: 3/18/2025
+  date: 5/9/2025
   author: Awana Digital
 sidebar_custom_props:
   title: Quick Start Guide

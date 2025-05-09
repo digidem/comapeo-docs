@@ -5,6 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "dev": "docusaurus start",
+    "dev-pt": "docusaurus start --locale es",
     "lint": "eslint src --ext .js,.ts,.tsx --fix",
     "lint:fix": "eslint src --ext .js,.ts,.tsx --fix --fix-type problem,suggestion,layout",
     "build": "docusaurus build",

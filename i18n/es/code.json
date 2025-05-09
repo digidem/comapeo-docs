@@ -1,14 +1,14 @@
 {
   "Explore Documentation": {
-    "message": "Explore Documentation",
+    "message": "Explora la Documentación",
     "description": "Button text for documentation link"
   },
   "WhatsApp Assistant": {
-    "message": "WhatsApp Assistant",
+    "message": "Asistente de WhatsApp",
     "description": "Button text for WhatsApp support link"
   },
   "Telegram Assistant": {
-    "message": "Telegram Assistant",
+    "message": "Asistente de Telegram",
     "description": "Button text for Telegram support link"
   },
   "Conversational Guidance": {

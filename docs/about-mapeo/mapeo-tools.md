@@ -1,18 +1,20 @@
 ---
-id: doc-comapeo-tools
-title: CoMapeo Tools
-sidebar_label: CoMapeo Tools
+id: doc-mapeo-tools
+title: Mapeo Tools
+sidebar_label: Mapeo Tools
 sidebar_position: 4
-pagination_label: CoMapeo Tools
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/about-comapeo/comapeo-tools.md
+pagination_label: Mapeo Tools
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/about-mapeo/mapeo-tools.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /comapeo-tools
+slug: /mapeo-tools
 last_update:
-  date: 3/18/2025
+  date: 5/9/2025
   author: Awana Digital
+sidebar_custom_props:
+  title: Overview
 ---
 
 # Mapeo tools
@@ -26,7 +28,7 @@ There are two highly-customizable Mapeo apps that can be used together or indivi
 - [**Mapeo Mobile**](https://docs.mapeo.app/overview/about-mapeo/mapeo-tools#mapeo-mobile)
 - [**Mapeo Desktop**](https://docs.mapeo.app/overview/about-mapeo/mapeo-tools#mapeo-desktop)
 
-![image](/images/comapeotools_0.jpg)
+![image](/images/mapeotools_0.jpg)
 
 
 Mapeo Mobile and Desktop are built on top of [**Mapeo Core**](https://docs.mapeo.app/overview/about-mapeo/mapeo-tools#mapeo-core), an embedded peer-to-peer database that allows users to own their own data, directly on their devices, without the need for an internet connection or to share information with a centralized server.
@@ -41,7 +43,7 @@ Mapeo Mobile is a smartphone application (currently for Android only) that allow
 Mapeo Mobile can be translated into local languages, customized to use offline maps, and tailored to collect specific types of information.
 
 
-![image](/images/comapeotools_1.jpg)
+![image](/images/mapeotools_1.jpg)
 
 
 ## Mapeo Desktop
@@ -59,7 +61,7 @@ Like Mapeo Mobile, Mapeo Desktop can be translated into local languages, customi
 Left: Mapeo Desktop is being used to view, manage and export data collected using Mapeo Mobile. Right: Mapeo Desktop is being used to create and export territory information.
 
 
-![image](/images/comapeotools_2.jpg)
+![image](/images/mapeotools_2.jpg)
 
 
 ## Mapeo Core
@@ -70,4 +72,6 @@ Mapeo Mobile and Mapeo Desktop are both built on top of Mapeo Core to securely s
 
 Mapeo Core is built upon [**Hypercore**](https://hypercore-protocol.org/), which is an append-only log of actions (create, edit, delete data). Data is secured by cryptographic proofs -- every record written has a signature that also references the signature of every previous record/row in the log -- so you can never change or edit anything already written to the log. For more on Mapeo Core and data integrity, see [here](https://wp.digital-democracy.org/cooperative-ownership-of-data-without-blockchain/).
 
-> To learn more about additional tools and modules that support use of Mapeo, see [Mapeo repositories](https://docs.mapeo.app/for-developers/mapeo-repositories) in the **FOR DEVELOPERS** section.
+
+To learn more about additional tools and modules that support use of Mapeo, see [Mapeo repositories](https://docs.mapeo.app/for-developers/mapeo-repositories) in the **FOR DEVELOPERS** section.
+

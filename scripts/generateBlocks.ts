@@ -99,7 +99,7 @@ export async function generateBlocks(pages, progressCallback) {
   let totalSaved = 0;
 
   // Variables to track section folders and title metadata
-  const currentSectionFolder = {};
+  let currentSectionFolder = {};
   const nextItemTitle = {};
 
   // Stats for reporting

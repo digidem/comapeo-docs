@@ -10,11 +10,14 @@ export async function fetchNotionData() {
           select: {
             equals: "Ready to publish"
           }
+        },
+        {
+          "property": "Parent item",
+          "relation": { is_empty: true }
         }
       ]
     }
   });
-
   return response.results;
 }
 

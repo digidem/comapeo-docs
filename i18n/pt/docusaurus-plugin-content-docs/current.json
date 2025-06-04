@@ -3,8 +3,12 @@
     "message": "Next",
     "description": "The label for version current"
   },
-  "sidebar.docsSidebar.category.About CoMapeo": {
-    "message": "About CoMapeo",
-    "description": "The label for category About CoMapeo in sidebar docsSidebar"
+  "sidebar.docsSidebar.category.Something": {
+    "message": "Something",
+    "description": "The label for category Something in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.About Mapeo": {
+    "message": "About Mapeo",
+    "description": "The label for category About Mapeo in sidebar docsSidebar"
   }
 }

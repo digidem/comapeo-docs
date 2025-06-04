@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import ora from 'ora';
 import chalk from 'chalk';
+import { notion } from './notionClient.js';
 import { fetchNotionData } from './fetchNotionData.js';
 import { generateBlocks } from './generateBlocks.js';
 // import { updateJson } from '../lib/updateJson.js';
@@ -26,7 +27,7 @@ async function main() {
     process.exit(1);
   }
 
-  try {    
+  try {
     const fetchSpinner = ora('Fetching data from Notion').start();
     // const data = await fetchNotionData().then(results => results.reverse());
     let data = await fetchNotionData();
@@ -36,7 +37,20 @@ async function main() {
       const orderB = b.properties['Order']?.number ?? Number.MAX_SAFE_INTEGER;
       return orderA - orderB;
     });
-    
+
+    // Get every sub-page for every parent page
+    for(const item of data){
+      const relations = item["properties"]["Sub-item"]["relation"]
+      const subpages = await Promise.all(
+        relations.map(async (rel) => {
+          return await notion.pages.retrieve({page_id: rel.id})
+        })
+      )
+      for(const subpage of subpages){
+        data.push(subpage)
+      }
+    }
+
     data.forEach((item, index) => {
       console.log(`Item ${index + 1}:`, item.url);
     });

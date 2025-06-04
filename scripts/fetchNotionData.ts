@@ -6,21 +6,18 @@ export async function fetchNotionData() {
     filter: {
       and: [
         {
-          property: "Language",
-          rich_text: {
-            equals: "English"
+          property: "Status",
+          select: {
+            equals: "Ready to publish"
           }
         },
         {
-          property: "Published",
-          checkbox: {
-            equals: true
-          }
+          "property": "Parent item",
+          "relation": { is_empty: true }
         }
       ]
     }
   });
-
   return response.results;
 }
 

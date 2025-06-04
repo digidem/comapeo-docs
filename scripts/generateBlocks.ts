@@ -92,6 +92,16 @@ const groupPagesByLang = (pages, page) => {
   return obj
 }
 
+function setTranslationString(lang:string, original: string, translated: string){
+  const lPath = path.join(I18N_PATH,lang, "code.json")
+  const file = JSON.parse(fs.readFileSync(lPath, "utf8"))
+  const translationObj = { message: translated }
+  file[original] = translationObj
+  // console.log('adding translation to: ' + lPath)
+  // console.log('with: ', translationObj)
+  fs.writeFileSync(lPath, JSON.stringify(file,null, 4))
+}
+
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
   const totalPages = pages.length;
@@ -99,7 +109,7 @@ export async function generateBlocks(pages, progressCallback) {
 
   // Variables to track section folders and title metadata
   let currentSectionFolder = {};
-  const nextItemTitle = new Map<string,string>();
+  const currentHeading = new Map<string,string>();
 
   // Stats for reporting
   let sectionCount = 0;
@@ -122,7 +132,6 @@ export async function generateBlocks(pages, progressCallback) {
   }
   for(let i = 0; i < pagesByLang.length; i++){
     const pageByLang = pagesByLang[i]
-
     // pages share section type and filename
     const title = pageByLang.mainTitle
     const sectionType = pageByLang.section
@@ -131,12 +140,14 @@ export async function generateBlocks(pages, progressCallback) {
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '');
 
-    // each page has its own version per language
     for(const lang of Object.keys(pageByLang.content)){
       const PATH = lang == 'en' ? CONTENT_PATH : getI18NPath(lang)
       const page = pageByLang.content[lang]
-      console.log(chalk.blue(`Processing page: ${page.id}, ${page.properties['Title'].title[0].plain_text}`));
+      const title = page.properties['Title'].title[0].plain_text
+      console.log(chalk.blue(`Processing page: ${page.id}, ${title}`));
       const pageSpinner = ora(`Processing page ${i + 1}/${totalPages}`).start();
+
+      if(lang !== "en") setTranslationString(lang, pageByLang.mainTitle, title)
 
       // TOGGLE
       if(sectionType === 'Toggle'){
@@ -145,6 +156,7 @@ export async function generateBlocks(pages, progressCallback) {
         const sectionFolderPath = path.join(PATH, sectionFolder)
         fs.mkdirSync(sectionFolderPath, { recursive: true });
         currentSectionFolder[lang] = sectionFolder
+        pageSpinner.succeed(chalk.green(`Section folder created: ${sectionFolder}`));
         sectionCount++
         const categoryContent = {
           label: sectionName,
@@ -154,26 +166,25 @@ export async function generateBlocks(pages, progressCallback) {
           link: {
             type: "generated-index"
           },
-          customProps: {
-            title: null
-          }
+          customProps: { title: null }
         }
-        if (nextItemTitle.get(lang)) {
-          categoryContent.customProps.title = nextItemTitle.get(lang);
-          nextItemTitle.set(lang,null)
+        if (currentHeading.get(lang)) {
+          categoryContent.customProps.title = currentHeading.get(lang);
+          currentHeading.set(lang,null)
         }
-        const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
-        fs.writeFileSync(categoryFilePath, JSON.stringify(categoryContent, null, 2), 'utf8');
-        pageSpinner.succeed(chalk.green(`Section folder created: ${sectionFolder} with _category_.json`));
-
-      // HEADING
+        if(lang === 'en'){
+          const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
+          fs.writeFileSync(categoryFilePath, JSON.stringify(categoryContent, null, 2), 'utf8');
+          pageSpinner.succeed(chalk.green(`added _category_.json to ${sectionFolder}`));
+        }
+        // HEADING
       }else if(sectionType === 'Heading'){
-        currentSectionFolder = {}
-        nextItemTitle.set(lang, page.properties.Title.title[0].plain_text)
+        currentHeading.set(lang, title)
         titleSectionCount++; // Increment title section counter
-        pageSpinner.succeed(chalk.green(`Title section detected: ${nextItemTitle.get(lang)}, will be applied to next item`));
+        currentSectionFolder = {}
+        pageSpinner.succeed(chalk.green(`Title section detected: ${currentHeading.get(lang)}, will be applied to next item`));
 
-      // PAGE
+        // PAGE
       }else if (sectionType === 'Page'){
         const markdown = await n2m.pageToMarkdown(page.id);
         const markdownString = n2m.toMarkdownString(markdown);
@@ -238,9 +249,9 @@ export async function generateBlocks(pages, progressCallback) {
           }
 
           // Apply title from a previous title section if available
-          if (nextItemTitle.get(lang)) {
-            customProps.title = nextItemTitle.get(lang);
-            nextItemTitle.set(lang, null); // Reset after using it
+          if (currentHeading.get(lang)) {
+            customProps.title = currentHeading.get(lang);
+            currentHeading.set(lang, null); // Reset after using it
           }
 
           // Determine the relative path for the custom_edit_url

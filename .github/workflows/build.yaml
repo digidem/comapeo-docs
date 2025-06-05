@@ -2,6 +2,9 @@ name: Sync Notion Docs
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/buildFlow
 
 jobs:
   pull-docs:
@@ -28,11 +31,11 @@ jobs:
           git add docs i18n
 
           # Commit if there are changes
-          git diff --cached --quiet || git commit -m "chore: update docs from Notion"
+        git diff --cached --quiet || git commit -m "chore: update docs from Notion"
 
-          # Push back to the repository
-          git push
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Push back to the repository
+        git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 

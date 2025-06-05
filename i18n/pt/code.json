@@ -403,5 +403,8 @@
     },
     "SOME STUFF": {
         "message": "ao stuffi"
+    },
+    "About CoMapeo": {
+        "message": "Acerca de CoMapeo"
     }
 }

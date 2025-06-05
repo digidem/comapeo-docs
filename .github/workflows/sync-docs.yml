@@ -2,9 +2,8 @@ name: Sync Notion Docs
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/buildFlow
+  repository_dispatch:
+    types: [pull-docs]
 
 
 jobs:

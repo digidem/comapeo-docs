@@ -2,6 +2,10 @@ name: Sync Notion Docs
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
 
 
 jobs:

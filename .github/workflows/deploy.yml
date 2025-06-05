@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows: [Sync Notion Docs]
+    types:
+      - completed
   # push:
   #   branches:
   #     - main

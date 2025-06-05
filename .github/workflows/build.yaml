@@ -21,6 +21,10 @@ jobs:
 
       - name: Notion To Markdown
         run: bun notionToMd
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+
 
       - name: Commit generated docs
         run: |
@@ -35,9 +39,7 @@ jobs:
 
           # Push back to the repository
           git push
-        env:
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          DATABASE_ID: ${{ secrets.DATABASE_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

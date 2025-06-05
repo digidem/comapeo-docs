@@ -9,6 +9,10 @@ on:
 jobs:
   trigger-docs:
     uses: digidem/comapeo-docs/.github/workflows/sync-docs.yml@feat/buildFlow
+    with: {}
+    secrets: inherit
 
   trigger-deploy:
     uses: digidem/comapeo-docs/.github/workflows/deploy.yml@feat/buildFlow
+    with: {}
+    secrets: inherit

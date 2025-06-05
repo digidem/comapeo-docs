@@ -1,7 +1,9 @@
 name: Deploy to GitHub Pages
 
 on:
-  workflow_call:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Sync Notion Docs]
   # push:
   #   branches:
   #     - main

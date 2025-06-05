@@ -2,7 +2,7 @@
 id: doc-getting-started
 title: Getting started
 sidebar_label: Getting started
-sidebar_position: 6
+sidebar_position: 7
 pagination_label: Getting started
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started.md
 keywords:

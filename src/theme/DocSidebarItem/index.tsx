@@ -7,7 +7,12 @@ import {translate} from '@docusaurus/Translate';
 type Props = WrapperProps<typeof DocSidebarItemType>;
 
 export default function DocSidebarItemWrapper(props: Props): ReactNode {
-  props.item.label = translate({message: props.item.label})
+  React.useEffect(() => {
+    props.item.label = translate({message: props.item.label})
+    if(props.item.customProps?.icon){
+      props.item.label = `${props.item.customProps.icon} ${props.item.label}`
+    }
+  }, [])
   return (
     <>
       {props.item.customProps?.title && (

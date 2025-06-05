@@ -76,8 +76,17 @@ const groupPagesByLang = (pages, page) => {
     "Spanish": "es",
     "Portuguese": "pt"
   }
+
+  let icon = null
+  if (page.properties['Icon']
+    && page.properties['Icon'].rich_text
+    && page.properties['Icon'].rich_text.length > 0) {
+    icon = page.properties['Icon'].rich_text[0].text.content
+    console.log("ADDING ICON", icon)
+  }
   const obj = {
     mainTitle: page.properties.Title.title[0].plain_text,
+    icon: icon,
     section: page.properties.Section.select.name,
     content: {}
   }
@@ -134,6 +143,7 @@ export async function generateBlocks(pages, progressCallback) {
     const pageByLang = pagesByLang[i]
     // pages share section type and filename
     const title = pageByLang.mainTitle
+    const icon = pageByLang.icon
     const sectionType = pageByLang.section
     const filename = title
     .toLowerCase()
@@ -244,8 +254,9 @@ export async function generateBlocks(pages, progressCallback) {
           }
 
           // Check for Icon property
-          if (page.properties['Icon'] && page.properties['Icon'].rich_text && page.properties['Icon'].rich_text.length > 0) {
-            customProps.icon = page.properties['Icon'].rich_text[0].plain_text;
+          if (icon !== null) {
+            console.log("ICON", icon)
+            customProps.icon = icon;
           }
 
           // Apply title from a previous title section if available

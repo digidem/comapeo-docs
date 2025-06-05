@@ -1,0 +1,11 @@
+name: Sync, Build and Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trigger-docs:
+    uses: ./.github/workflows/sync-docs.yml
+
+  trigger-deploy:
+    uses: ./.github/workflows/deploy.yml

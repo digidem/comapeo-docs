@@ -1,7 +1,7 @@
 name: Sync Notion Docs
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
 
 jobs:
   pull-docs:

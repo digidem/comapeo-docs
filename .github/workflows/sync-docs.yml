@@ -34,7 +34,7 @@ jobs:
           git add docs i18n
 
           # Commit if there are changes
-          git diff --cached --quiet || git commit -m "chore: update docs from Notion"
+          git diff --cached --quiet || git commit -m "(content-update): update docs from Notion"
 
           # Push back to the repository
           git push

@@ -24,6 +24,8 @@ jobs:
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
       - name: Commit translated docs
         run: |
@@ -34,7 +36,7 @@ jobs:
           git add docs i18n
 
           # Commit if there are changes
-          git diff --cached --quiet || git commit -m "chore: update translations from Notion"
+          git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
           # Push back to the repository
           git push

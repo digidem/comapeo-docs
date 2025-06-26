@@ -6,7 +6,9 @@ on:
     branches:
       - main
 
-
+  repository_dispatch:
+    types:
+      - webhook
 
 jobs:
   pull-docs:

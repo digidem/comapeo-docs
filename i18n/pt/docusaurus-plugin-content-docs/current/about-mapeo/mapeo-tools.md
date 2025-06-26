@@ -2,7 +2,7 @@
 id: doc-mapeo-tools
 title: Ferramentas Mapeo
 sidebar_label: Ferramentas Mapeo
-sidebar_position: 4
+sidebar_position: 5
 pagination_label: Ferramentas Mapeo
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/about-mapeo/mapeo-tools.md
 keywords:
@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /mapeo-tools
 last_update:
-  date: 6/4/2025
+  date: 6/5/2025
   author: Awana Digital
 ---
 Mapeo é um conjunto de ferramentas digitais, projetadas para apoiar a coleta de dados colaborativa e o mapeamento em ambientes offline.

@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows: [Sync Notion Docs]
-    types:
-      - completed
-  # push:
-  #   branches:
-  #     - main
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:

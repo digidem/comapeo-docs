@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import ora from 'ora';
 import chalk from 'chalk';
-import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE, DEFAULT_OPENAI_MAX_TOKENS } from './constants.js';
+import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE } from '../constants.js';
 
 // Load environment variables
 dotenv.config();
@@ -18,37 +18,14 @@ const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 
 // JSON Translation prompt template
 const JSON_TRANSLATION_PROMPT = `
-# Role: JSON Translation Assistant
+You are a JSON translation assistant. Your task is to translate only the "message" values in the provided JSON object from English to {targetLanguage}.
 
-You are a specialized JSON translation assistant, responsible for translating JSON content from English to the specified target language.
+- Do NOT translate any keys or the values of "description" fields.
+- Preserve the original JSON structure, formatting, and all non-"message" values.
+- Output must be valid, parseable JSON.
+- Do not include any explanations, markdown, code blocks, or extra text—return only the translated JSON object.
 
-## Profile
-
-- Source Language: English
-- Translation Language: {targetLanguage}
-- Translation Format: Valid JSON
-
-## Goal
-
-- Translate only the "message" values in the JSON structure to the target language.
-- Preserve all JSON structure, keys, and formatting.
-- Ensure the output is valid, parseable JSON.
-- Do not translate the "description" values.
-
-## Constraints
-
-- Only translate the values of "message" fields.
-- Do not translate keys.
-- Do not translate the values of "description" fields.
-- Preserve all JSON syntax, including quotes, braces, commas, etc.
-- Ensure the output is valid JSON that can be parsed without errors.
-- Maintain any special characters or formatting in the original JSON.
-- Do not include any markdown formatting, code blocks, or backticks in your response.
-- Return ONLY the raw JSON content.
-
-## Example
-
-Input JSON:
+Example input:
 {
   "Welcome": {
     "message": "Welcome to our application",
@@ -56,17 +33,13 @@ Input JSON:
   }
 }
 
-Output JSON (translated to Spanish):
+Example output (Spanish):
 {
   "Welcome": {
     "message": "Bienvenido a nuestra aplicación",
     "description": "Greeting message on homepage"
   }
 }
-
-## Response Format
-
-Respond with only the translated JSON. Do not include any explanations, markdown formatting, or additional text. Do not wrap the JSON in code blocks or backticks.
 `;
 
 /**
@@ -76,70 +49,169 @@ Respond with only the translated JSON. Do not include any explanations, markdown
  * @param retryCount The current retry count
  * @returns The translated JSON content
  */
-export async function translateJsonWithOpenAI(jsonContent: string, targetLanguage: string, retryCount = 0): Promise<string> {
+export async function translateJson(
+  jsonContent: string,
+  targetLanguage: string,
+  retryCount = 0
+): Promise<string> {
   const MAX_RETRIES = 3;
-  const spinner = ora(`Translating to ${targetLanguage}${retryCount > 0 ? ` (Attempt ${retryCount + 1}/${MAX_RETRIES})` : ''}...`).start();
+  const spinner = ora(
+    `Translating to ${targetLanguage}${retryCount > 0 ? ` (Attempt ${retryCount + 1}/${MAX_RETRIES})` : ""
+    }...`
+  ).start();
 
+  const prompt = JSON_TRANSLATION_PROMPT.replace('{targetLanguage}', targetLanguage);
+
+  // Zod schema for code.json: require both message and description as strings
+  // Accept objects with at least a "message" string, and optionally a "description" string
+  // The schema must match the code.json format:
+  // {
+  //   "Some Key": {
+  //     "message": "Some message",
+  //     "description": "Some description"
+  //   },
+  //   ...
+  // }
+  const CodeJsonSchema = {
+    type: "object",
+    properties: {},
+    additionalProperties: {
+      type: "object",
+      properties: {
+        message: { type: "string" },
+        description: { type: "string" }
+      },
+      required: ["message", "description"],
+      additionalProperties: false
+    }
+  };
   try {
-    const prompt = JSON_TRANSLATION_PROMPT.replace('{targetLanguage}', targetLanguage);
-
     const response = await openai.chat.completions.create({
       model,
       messages: [
-        { role: 'system', content: prompt },
-        { role: 'user', content: jsonContent }
+        { role: "system", content: prompt },
+        { role: "user", content: jsonContent },
       ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "translation",
+          schema: CodeJsonSchema,
+          strict: true
+        }
+      },
       temperature: DEFAULT_OPENAI_TEMPERATURE,
-      max_tokens: DEFAULT_OPENAI_MAX_TOKENS,
+    });
+    const translatedJsonObj = JSON.parse(response.choices[0].message.content!);
+    // Remove debug log for production
+    const translatedJsonString = JSON.stringify(translatedJsonObj, null, 2);
+
+    spinner.succeed(
+      chalk.green(`Successfully translated to ${targetLanguage}`)
+    );
+    return translatedJsonString;
+  } catch (error) {
+    spinner.fail(
+      chalk.red(
+        `Translation failed for ${targetLanguage}: ${(error as Error).message || error
+        }`
+      )
+    );
+    if (retryCount < MAX_RETRIES - 1) {
+      spinner.info(
+        chalk.yellow(`Retrying translation for ${targetLanguage}...`)
+      );
+      return translateJson(jsonContent, targetLanguage, retryCount + 1);
+    } else {
+      throw new Error(
+        `Invalid JSON after ${MAX_RETRIES} attempts: ${(error as Error).message || error
+        }`
+      );
+    }
+  }
+}
+
+/**
+ * Extracts translatable text from navbar/footer config and converts to i18n format
+ * @param config The navbar or footer config object
+ * @param type Either 'navbar' or 'footer'
+ * @returns JSON object in i18n format
+ */
+interface NavbarItem {
+  label?: string;
+  type?: string;
+  sidebarId?: string;
+  position?: string;
+  href?: string;
+}
+
+interface FooterLink {
+  label?: string;
+  href?: string;
+}
+
+interface FooterSection {
+  title?: string;
+  items?: FooterLink[];
+}
+
+interface NavbarConfig {
+  items?: NavbarItem[];
+}
+
+interface FooterConfig {
+  links?: FooterSection[];
+  copyright?: string;
+}
+
+export function extractTranslatableText(config: NavbarConfig | FooterConfig, type: 'navbar' | 'footer'): Record<string, { message: string; description: string }> {
+  const result: Record<string, { message: string; description: string }> = {};
+
+  if (type === 'navbar' && config.items) {
+    (config as NavbarConfig).items?.forEach((item: NavbarItem) => {
+      if (item.label) {
+        const key = `item.label.${item.label}`;
+        result[key] = {
+          message: item.label,
+          description: `Navbar item with label ${item.label}`
+        };
+      }
+    });
+  }
+
+  if (type === 'footer' && config.links) {
+    (config as FooterConfig).links?.forEach((section: FooterSection) => {
+      if (section.title) {
+        const titleKey = `links.title.${section.title}`;
+        result[titleKey] = {
+          message: section.title,
+          description: `Footer section title: ${section.title}`
+        };
+      }
+
+      if (section.items) {
+        section.items?.forEach((item: FooterLink) => {
+          if (item.label) {
+            const labelKey = `links.${section.title}.${item.label}`;
+            result[labelKey] = {
+              message: item.label,
+              description: `Footer link label: ${item.label}`
+            };
+          }
+        });
+      }
     });
 
-    const translatedContent = response.choices[0].message.content?.trim() || '';
-
-    // Clean up the response to ensure it's valid JSON
-    let cleanedContent = translatedContent;
-
-    // Remove any markdown code block markers if present
-    cleanedContent = cleanedContent.replace(/```json\s*/g, '');
-    cleanedContent = cleanedContent.replace(/```\s*$/g, '');
-
-    // Validate JSON
-    try {
-      JSON.parse(cleanedContent);
-      spinner.succeed(chalk.green(`Successfully translated to ${targetLanguage}`));
-      return cleanedContent;
-    } catch (error) {
-      spinner.fail(chalk.red(`Translation resulted in invalid JSON for ${targetLanguage}`));
-
-      // Try to fix common JSON issues
-      console.log(chalk.yellow(`Attempting to fix JSON formatting issues...`));
-
-      // Try to extract JSON from the response if it's wrapped in text
-      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const extractedJson = jsonMatch[0];
-          JSON.parse(extractedJson);
-          spinner.succeed(chalk.green(`Successfully fixed JSON formatting for ${targetLanguage}`));
-          return extractedJson;
-        } catch (extractError) {
-          // Still invalid
-          throw new Error(`Invalid JSON after extraction: ${extractError.message}`);
-        }
-      }
-
-      // If we can't fix it, try again if we haven't reached the maximum retries
-      if (retryCount < MAX_RETRIES - 1) {
-        spinner.info(chalk.yellow(`Retrying translation for ${targetLanguage}...`));
-        return translateJsonWithOpenAI(jsonContent, targetLanguage, retryCount + 1);
-      } else {
-        // If we've reached the maximum retries, throw an error
-        throw new Error(`Invalid JSON after ${MAX_RETRIES} attempts: ${error.message}`);
-      }
+    const footerConfig = config as FooterConfig;
+    if (footerConfig.copyright) {
+      result['copyright'] = {
+        message: footerConfig.copyright.replace(/\$\{new Date\(\)\.getFullYear\(\)\}/, new Date().getFullYear().toString()),
+        description: 'Footer copyright text'
+      };
     }
-  } catch (error) {
-    spinner.fail(chalk.red(`Translation failed for ${targetLanguage}: ${error.message}`));
-    throw error;
   }
+
+  return result;
 }
 
 /**
@@ -273,7 +345,7 @@ export async function main() {
 
       try {
         // Translate the English code.json to the target language
-        const translatedJson = await translateJsonWithOpenAI(englishCodeJson, languageName);
+        const translatedJson = await translateJson(englishCodeJson, languageName);
 
         // Write the translated JSON to the target file
         await fs.writeFile(codeJsonPath, translatedJson, 'utf8');

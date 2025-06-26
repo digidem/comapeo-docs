@@ -11,6 +11,7 @@
     "lint:fix": "eslint src --ext .js,.ts,.tsx --fix --fix-type problem,suggestion,layout",
     "build": "docusaurus build",
     "notionToMd": "bun scripts/fetchNotion",
+    "notion:translate": "bun scripts/translateNotionPages",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -31,9 +32,11 @@
     "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.1.0",
     "clsx": "^2.1.1",
+    "openai": "^5.8.0",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@docusaurus/eslint-plugin": "^3.8.1",

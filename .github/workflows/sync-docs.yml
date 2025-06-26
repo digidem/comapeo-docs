@@ -8,8 +8,7 @@ on:
 
   repository_dispatch:
     types:
-      - webhook
-
+      - sync-docs
 jobs:
   pull-docs:
     runs-on: ubuntu-latest

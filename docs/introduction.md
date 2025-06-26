@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /introduction
 last_update:
-  date: 6/5/2025
+  date: 6/26/2025
   author: Awana Digital
 ---
 ## Mapeo is a free, easy-to-use, open source set of tools for collecting and mapping information.

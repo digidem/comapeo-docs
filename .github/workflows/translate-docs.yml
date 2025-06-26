@@ -1,12 +1,13 @@
-name: Sync Notion Docs
+name: Translate Notion Docs
 
 on:
   workflow_dispatch:
   repository_dispatch:
     types:
-      - sync-docs
+      - translate-docs
+
 jobs:
-  pull-docs:
+  translate-docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,14 +19,15 @@ jobs:
       - name: Install dependencies
         run: bun i
 
-      - name: Notion To Markdown
-        run: bun notion:fetch
+      - name: Notion Translate
+        run: bun notion:translate
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
-
-      - name: Commit generated docs
+      - name: Commit translated docs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -34,11 +36,10 @@ jobs:
           git add docs i18n
 
           # Commit if there are changes
-          git diff --cached --quiet || git commit -m "(content-update): update docs from Notion"
+          git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
           # Push back to the repository
           git push
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

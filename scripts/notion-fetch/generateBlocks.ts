@@ -1,20 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from 'node:url';
-import { n2m } from './notionClient.js';
+import { n2m } from '../notionClient.js';
 import axios from 'axios';
 import chalk from 'chalk';
 import ora from 'ora';
-import { processImage } from './imageProcessor.js';
-import { compressImage } from './imageCompressor.js';
-import config from './../docusaurus.config'
+import { processImage } from './imageProcessor';
+import { compressImage } from './imageCompressor';
+import config from '../../docusaurus.config.js'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CONTENT_PATH = path.join(__dirname, "../docs");
-const IMAGES_PATH = path.join(CONTENT_PATH, "../static/images/");
-const I18N_PATH = path.join(__dirname, "../i18n/");
+const CONTENT_PATH = path.join(__dirname, "../../docs");
+const IMAGES_PATH = path.join(CONTENT_PATH, "../../static/images/");
+const I18N_PATH = path.join(__dirname, "../../i18n/");
 const getI18NPath = (locale: string) =>  path.join(I18N_PATH, locale,
   'docusaurus-plugin-content-docs',  'current')
 const locales = config.i18n.locales

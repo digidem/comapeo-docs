@@ -15,7 +15,7 @@ Before proceeding to local development, set up your environment and fetch the la
 2. Fetch the Notion Markdown documentation by running:
 
 ```
-bun notionToMd
+bun notion:fetch
 ```
 
 ### Local Development

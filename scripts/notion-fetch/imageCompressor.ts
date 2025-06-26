@@ -4,7 +4,7 @@ import imageminPngquant from 'imagemin-pngquant';
 import imageminSvgo from 'imagemin-svgo';
 import imageminWebp from 'imagemin-webp';
 
-export async function compressImage(inputBuffer, outputPath) {
+export async function compressImage(inputBuffer) {
   try {
     const plugins = [
       imageminJpegtran(),

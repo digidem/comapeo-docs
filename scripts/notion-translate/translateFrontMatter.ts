@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import ora from 'ora';
 import chalk from 'chalk';
-import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE } from './constants.js';
+import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE } from '../constants.js';
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 

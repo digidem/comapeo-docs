@@ -1,9 +1,9 @@
 import dotenv from 'dotenv';
 import ora from 'ora';
 import chalk from 'chalk';
-import { fetchNotionData, sortAndExpandNotionData } from './fetchNotionData.js';
+import { fetchNotionData, sortAndExpandNotionData } from '../fetchNotionData.js';
 import { generateBlocks } from './generateBlocks.js';
-import { NOTION_PROPERTIES } from './constants.js';
+import { NOTION_PROPERTIES } from '../constants.js';
 // import { updateJson } from '../lib/updateJson.js';
 
 // Load environment variables from .env file

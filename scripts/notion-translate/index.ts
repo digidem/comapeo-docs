@@ -1,13 +1,15 @@
+
+import { pathToFileURL } from 'url';
 import dotenv from 'dotenv';
 import ora from 'ora';
 import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
-import { notion, DATABASE_ID, n2m } from './notionClient.js';
+import { notion, DATABASE_ID, n2m } from '../notionClient.js';
 import { translateText } from './translateFrontMatter.js';
 import { createNotionPageFromMarkdown } from './markdownToNotion.js';
-import { fetchNotionData, sortAndExpandNotionData } from './fetchNotionData.js';
-import { LANGUAGES, MAIN_LANGUAGE, NOTION_PROPERTIES, NotionPage, TEMP_DIR, TranslationConfig } from './constants';
+import { fetchNotionData, sortAndExpandNotionData } from '../fetchNotionData.js';
+import { LANGUAGES, MAIN_LANGUAGE, NOTION_PROPERTIES, NotionPage, TEMP_DIR, TranslationConfig } from '../constants.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -348,6 +350,6 @@ export async function main() {
 }
 
 // Run the main function if this file is executed directly
-if (import.meta.url.endsWith('translateNotionPages.js') || import.meta.url.endsWith('translateNotionPages.ts')) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

@@ -8,7 +8,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 // Define Root type for the AST
 type Root = { type: 'root'; children: unknown[] };
-import { ENGLISH_MODIFICATION_ERROR, MAIN_LANGUAGE, MAX_RETRIES, NOTION_API_CHUNK_SIZE, NOTION_PROPERTIES } from './constants.js';
+import { ENGLISH_MODIFICATION_ERROR, MAIN_LANGUAGE, MAX_RETRIES, NOTION_API_CHUNK_SIZE, NOTION_PROPERTIES } from '../constants.js';
 
 // Define types for markdown nodes
 interface HeadingNode {

@@ -2,10 +2,6 @@ name: Sync Notion Docs
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-
   repository_dispatch:
     types:
       - sync-docs
@@ -23,7 +19,7 @@ jobs:
         run: bun i
 
       - name: Notion To Markdown
-        run: bun notionToMd
+        run: bun notion:fetch
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}

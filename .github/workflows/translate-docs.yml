@@ -1,0 +1,43 @@
+name: Translate Notion Docs
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - translate-docs
+
+jobs:
+  translate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun i
+
+      - name: Notion Translate
+        run: bun notion:translate
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+
+      - name: Commit translated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stage specific paths (adjust to your generated files)
+          git add docs i18n
+
+          # Commit if there are changes
+          git diff --cached --quiet || git commit -m "chore: update translations from Notion"
+
+          # Push back to the repository
+          git push
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

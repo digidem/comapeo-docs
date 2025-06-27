@@ -12,6 +12,7 @@
     "build": "docusaurus build",
     "notion:fetch": "bun scripts/notion-fetch",
     "notion:translate": "bun scripts/notion-translate",
+    "notion:create-template": "bun scripts/notion-create-template",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

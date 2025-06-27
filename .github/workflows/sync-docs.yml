@@ -31,7 +31,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Stage specific paths (adjust to your generated files)
-          git add docs i18n
+          git add i18n
+          if [ -d docs ]; then
+            git add docs
+          fi
 
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(content-update): update docs from Notion"

@@ -31,9 +31,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Stage specific paths (adjust to your generated files)
-          git add i18n
-          if [ -d docs ]; then
-            git add docs
+          git add docs
+          if [ -d i18n ]; then
+            git add i18n
           fi
 
           # Commit if there are changes

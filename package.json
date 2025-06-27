@@ -1,6 +1,6 @@
 {
   "name": "comapeo-docs",
-  "version": "0.0.0",
+  "version": "0.1.1-beta",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
@@ -13,6 +13,9 @@
     "notion:fetch": "bun scripts/notion-fetch",
     "notion:translate": "bun scripts/notion-translate",
     "notion:create-template": "bun scripts/notion-create-template",
+    "notionStatus:translation": "bun scripts/notion-status --workflow translation",
+    "notionStatus:draft": "bun scripts/notion-status --workflow draft",
+    "notionStatus:publish": "bun scripts/notion-status --workflow publish",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

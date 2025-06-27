@@ -27,6 +27,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
+      - name: Update Notion Status → Reviewing Translations
+        run: bun run notionStatus:translation
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+
       - name: Commit translated docs
         run: |
           git config user.name "github-actions[bot]"

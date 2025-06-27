@@ -133,7 +133,7 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  * @param config The translation configuration
  * @returns The path to the saved file
  */
-export async function saveTranslatedContent(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
+export async function saveTranslatedContentToDisk(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
   try {
     // Create a sanitized filename from the title
     // @ts-expect-error - We know the property structure
@@ -416,7 +416,7 @@ async function processSinglePageTranslation({
   );
 
   // Save translated content to output directory
-  await saveTranslatedContent(englishPage, translatedContent, config);
+  await saveTranslatedContentToDisk(englishPage, translatedContent, config);
 
   // Update statistics
   if (translationPage) {

@@ -24,7 +24,7 @@
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
-    "message": "Obtenha assistência de voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
+    "message": "Obtenha assistência por voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
@@ -76,7 +76,7 @@
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
-    "message": "Post mais recente",
+    "message": "Post mais novo",
     "description": "The blog post button label to navigate to the newer/previous post"
   },
   "theme.blog.post.paginator.olderPost": {
@@ -132,15 +132,15 @@
     "description": "The label of the version badge"
   },
   "theme.docs.versions.unreleasedVersionLabel": {
-    "message": "Esta é uma documentação não lançada para a versão {siteTitle} {versionLabel}.",
+    "message": "Esta é uma documentação não lançada para a versão {versionLabel} do {siteTitle}.",
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não é mais mantida ativamente.",
+    "message": "Esta é uma documentação para {versionLabel} do {siteTitle}, que não é mais mantida ativamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "Para documentação atualizada, veja o {latestVersionLink} ({versionLabel}).",
+    "message": "Para documentação atualizada, veja {latestVersionLink} ({versionLabel}).",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
@@ -172,7 +172,7 @@
     "description": "The label for the navbar versions dropdown on mobile view"
   },
   "theme.NotFound.title": {
-    "message": "Página Não Encontrada",
+    "message": "Página não encontrada",
     "description": "The title of the 404 page"
   },
   "theme.tags.tagsListLabel": {
@@ -184,7 +184,7 @@
     "description": "The ARIA label for close button of announcement bar"
   },
   "theme.admonition.caution": {
-    "message": "atenção",
+    "message": "cuidado",
     "description": "The default label used for the Caution admonition (:::caution)"
   },
   "theme.admonition.danger": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que o direcionou para a URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que lhe direcionou ao URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Um minuto de leitura|{readingTime} minutos de leitura",
+    "message": "Um min de leitura|{readingTime} min de leitura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -356,11 +356,11 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página em rascunho",
+    "message": "Página rascunho",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
-    "message": "Esta página é um rascunho. Ela só será visível em desenvolvimento e será excluída da versão de produção.",
+    "message": "Esta página é um rascunho. Ela será visível apenas em desenvolvimento e será excluída da versão de produção.",
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {
@@ -368,7 +368,7 @@
     "description": "The label of the button to try again rendering when the React error boundary captures an error"
   },
   "theme.common.skipToMainContent": {
-    "message": "Ir para o conteúdo principal",
+    "message": "Pular para o conteúdo principal",
     "description": "The skip to content label used for accessibility, allowing to rapidly navigate to main content with keyboard tab/enter navigation"
   },
   "theme.tags.tagsPageTitle": {

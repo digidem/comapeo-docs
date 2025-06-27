@@ -20,7 +20,7 @@
     "description": "Button text for Telegram support link"
   },
   "Conversational Guidance": {
-    "message": "Guía conversacional",
+    "message": "Guía Conversacional",
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
@@ -28,7 +28,7 @@
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
-    "message": "Mapa en cualquier idioma",
+    "message": "Mapa en Cualquier Idioma",
     "description": "Feature title for multi-lingual documentation section"
   },
   "Access CoMapeo documentation in multiple languages, ensuring every team member can learn and contribute regardless of their native tongue.": {
@@ -36,7 +36,7 @@
     "description": "Description for multi-lingual documentation section"
   },
   "Your Mapping Journey Starts Here": {
-    "message": "Tu viaje de mapeo comienza aquí",
+    "message": "Tu Viaje de Mapeo Comienza Aquí",
     "description": "Feature title for comprehensive learning hub section"
   },
   "Everything you need to master the CoMapeo platform, from beginner tutorials to advanced techniques, all in one centralized knowledge center.": {
@@ -44,7 +44,7 @@
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
-    "message": "Esta página se estrelló.",
+    "message": "Esta página falló.",
     "description": "The title of the fallback page when the page crashed"
   },
   "theme.BackToTopButton.buttonAriaLabel": {
@@ -120,7 +120,7 @@
     "description": "The label used to navigate to the next doc"
   },
   "theme.docs.tagDocListPageTitle.nDocsTagged": {
-    "message": "Un documento etiquetado|{count} documentos etiquetados",
+    "message": "Un doc etiquetado|{count} docs etiquetados",
     "description": "Pluralized label for \"{count} docs tagged\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.tagDocListPageTitle": {
@@ -144,7 +144,7 @@
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
-    "message": "última versión",
+    "message": "versión más reciente",
     "description": "The label used for the latest version suggestion link label"
   },
   "theme.common.editThisPage": {
@@ -228,11 +228,11 @@
     "description": "The title attribute for toggle word wrapping button of code block lines"
   },
   "theme.DocSidebarItem.expandCategoryAriaLabel": {
-    "message": "Expandir categoría de la barra lateral '{label}'",
+    "message": "Expandir categoría '{label}'",
     "description": "The ARIA label to expand the sidebar category"
   },
   "theme.DocSidebarItem.collapseCategoryAriaLabel": {
-    "message": "Colapsar categoría de la barra lateral '{label}'",
+    "message": "Colapsar categoría '{label}'",
     "description": "The ARIA label to collapse the sidebar category"
   },
   "theme.NavBar.navAriaLabel": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, contacta al propietario del sitio que te vinculó a la URL original y avísale que su enlace está roto.",
+    "message": "Por favor, contacta al propietario del sitio que te enlazó a la URL original y avísale que su enlace está roto.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Un minuto de lectura|{readingTime} minutos de lectura",
+    "message": "Un min de lectura|{readingTime} min de lectura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor no ha escrito ninguna publicación aún.",
+    "message": "Este autor no ha escrito ninguna publicación todavía.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {

@@ -24,7 +24,7 @@
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
-    "message": "Obtenha assistência de voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
+    "message": "Obtenha assistência por voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
@@ -32,7 +32,7 @@
     "description": "Feature title for multi-lingual documentation section"
   },
   "Access CoMapeo documentation in multiple languages, ensuring every team member can learn and contribute regardless of their native tongue.": {
-    "message": "Acesse a documentação do CoMapeo em vários idiomas, garantindo que todos os membros da equipe possam aprender e contribuir, independentemente de sua língua nativa.",
+    "message": "Acesse a documentação do CoMapeo em vários idiomas, garantindo que cada membro da equipe possa aprender e contribuir, independentemente de sua língua nativa.",
     "description": "Description for multi-lingual documentation section"
   },
   "Your Mapping Journey Starts Here": {
@@ -184,7 +184,7 @@
     "description": "The ARIA label for close button of announcement bar"
   },
   "theme.admonition.caution": {
-    "message": "atenção",
+    "message": "cuidado",
     "description": "The default label used for the Caution admonition (:::caution)"
   },
   "theme.admonition.danger": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que lhe direcionou ao URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que o vinculou ao URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor ainda não escreveu nenhuma postagem.",
+    "message": "Este autor ainda não escreveu nenhum post.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {

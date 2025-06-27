@@ -4,7 +4,7 @@
     "description": "Site title"
   },
   "Learn how to use the CoMapeo platform": {
-    "message": "Aprende cómo usar la plataforma CoMapeo",
+    "message": "Aprende a usar la plataforma CoMapeo",
     "description": "Text for the tagline of the webpage"
   },
   "Explore Documentation": {
@@ -40,7 +40,7 @@
     "description": "Feature title for comprehensive learning hub section"
   },
   "Everything you need to master the CoMapeo platform, from beginner tutorials to advanced techniques, all in one centralized knowledge center.": {
-    "message": "Todo lo que necesitas para dominar la plataforma CoMapeo, desde tutoriales para principiantes hasta técnicas avanzadas, todo en un centro de conocimiento centralizado.",
+    "message": "Todo lo que necesitas para dominar la plataforma CoMapeo, desde tutoriales para principiantes hasta técnicas avanzadas, todo en un centro de conocimientos centralizado.",
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
@@ -64,7 +64,7 @@
     "description": "The ARIA label for the blog pagination"
   },
   "theme.blog.paginator.newerEntries": {
-    "message": "Entradas más nuevas",
+    "message": "Entradas más recientes",
     "description": "The label used to navigate to the newer blog posts page (previous page)"
   },
   "theme.blog.paginator.olderEntries": {
@@ -72,15 +72,15 @@
     "description": "The label used to navigate to the older blog posts page (next page)"
   },
   "theme.blog.post.paginator.navAriaLabel": {
-    "message": "Navegación de página de publicación de blog",
+    "message": "Navegación de publicaciones del blog",
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
-    "message": "Publicación más nueva",
+    "message": "Publicación más reciente",
     "description": "The blog post button label to navigate to the newer/previous post"
   },
   "theme.blog.post.paginator.olderPost": {
-    "message": "Publicación más antigua",
+    "message": "Publicación anterior",
     "description": "The blog post button label to navigate to the older/next post"
   },
   "theme.tags.tagsPageLink": {
@@ -120,7 +120,7 @@
     "description": "The label used to navigate to the next doc"
   },
   "theme.docs.tagDocListPageTitle.nDocsTagged": {
-    "message": "Un doc etiquetado|{count} docs etiquetados",
+    "message": "Un documento etiquetado|{count} documentos etiquetados",
     "description": "Pluralized label for \"{count} docs tagged\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.tagDocListPageTitle": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, contacta al propietario del sitio que te enlazó a la URL original y avísale que su enlace está roto.",
+    "message": "Por favor, contacta al propietario del sitio que te dirigió al URL original y hazle saber que su enlace está roto.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -356,7 +356,7 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página borrador",
+    "message": "Página en borrador",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {

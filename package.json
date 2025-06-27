@@ -13,6 +13,7 @@
     "notion:fetch": "bun scripts/notion-fetch",
     "notion:translate": "bun scripts/notion-translate",
     "notion:create-template": "bun scripts/notion-create-template",
+    "notion:version": "bun scripts/notion-version",
     "notionStatus:translation": "bun scripts/notion-status --workflow translation",
     "notionStatus:draft": "bun scripts/notion-status --workflow draft",
     "notionStatus:publish": "bun scripts/notion-status --workflow publish",

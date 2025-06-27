@@ -24,7 +24,7 @@
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
-    "message": "Obtenha assistência por voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
+    "message": "Obtenha assistência de voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
@@ -60,7 +60,7 @@
     "description": "The page & hero description of the blog archive page"
   },
   "theme.blog.paginator.navAriaLabel": {
-    "message": "Navegação da lista de blogs",
+    "message": "Navegação na lista de blogs",
     "description": "The ARIA label for the blog pagination"
   },
   "theme.blog.paginator.newerEntries": {
@@ -72,11 +72,11 @@
     "description": "The label used to navigate to the older blog posts page (next page)"
   },
   "theme.blog.post.paginator.navAriaLabel": {
-    "message": "Navegação da página do post do blog",
+    "message": "Navegação na página do post do blog",
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
-    "message": "Post mais novo",
+    "message": "Post mais recente",
     "description": "The blog post button label to navigate to the newer/previous post"
   },
   "theme.blog.post.paginator.olderPost": {
@@ -132,11 +132,11 @@
     "description": "The label of the version badge"
   },
   "theme.docs.versions.unreleasedVersionLabel": {
-    "message": "Esta é uma documentação não lançada para a versão {versionLabel} do {siteTitle}.",
+    "message": "Esta é uma documentação não lançada para a versão {siteTitle} {versionLabel}.",
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta é uma documentação para {versionLabel} do {siteTitle}, que não é mais mantida ativamente.",
+    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não é mais mantida ativamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
@@ -172,7 +172,7 @@
     "description": "The label for the navbar versions dropdown on mobile view"
   },
   "theme.NotFound.title": {
-    "message": "Página não encontrada",
+    "message": "Página Não Encontrada",
     "description": "The title of the 404 page"
   },
   "theme.tags.tagsListLabel": {
@@ -184,7 +184,7 @@
     "description": "The ARIA label for close button of announcement bar"
   },
   "theme.admonition.caution": {
-    "message": "cuidado",
+    "message": "atenção",
     "description": "The default label used for the Caution admonition (:::caution)"
   },
   "theme.admonition.danger": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Um min de leitura|{readingTime} min de leitura",
+    "message": "Um min leitura|{readingTime} min leitura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -280,7 +280,7 @@
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.navAriaLabel": {
-    "message": "Barra lateral de Documentos",
+    "message": "Barra lateral de documentos",
     "description": "The ARIA label for the sidebar navigation"
   },
   "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
@@ -356,11 +356,11 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página rascunho",
+    "message": "Página de rascunho",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
-    "message": "Esta página é um rascunho. Ela será visível apenas em desenvolvimento e será excluída da versão de produção.",
+    "message": "Esta página é um rascunho. Ela só será visível em desenvolvimento e será excluída da versão de produção.",
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {

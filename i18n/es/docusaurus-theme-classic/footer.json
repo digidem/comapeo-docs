@@ -28,11 +28,11 @@
     "description": "Footer link label: Website"
   },
   "links.CoMapeo.CoMapeo Mobile GitHub": {
-    "message": "GitHub de CoMapeo Móvil",
+    "message": "CoMapeo Mobile GitHub",
     "description": "Footer link label: CoMapeo Mobile GitHub"
   },
   "links.CoMapeo.CoMapeo Desktop GitHub": {
-    "message": "GitHub de CoMapeo de escritorio",
+    "message": "CoMapeo Desktop GitHub",
     "description": "Footer link label: CoMapeo Desktop GitHub"
   },
   "links.title.More": {

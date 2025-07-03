@@ -4,7 +4,7 @@
     "description": "Site title"
   },
   "Learn how to use the CoMapeo platform": {
-    "message": "Aprenda como usar a plataforma CoMapeo",
+    "message": "Aprenda a usar a plataforma CoMapeo",
     "description": "Text for the tagline of the webpage"
   },
   "Explore Documentation": {
@@ -24,7 +24,7 @@
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
-    "message": "Obtenha assistência vocal instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
+    "message": "Obtenha assistência de voz instantânea através dos nossos bots de documentação que ouvem suas perguntas e respondem com respostas precisas em tempo real.",
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
@@ -60,7 +60,7 @@
     "description": "The page & hero description of the blog archive page"
   },
   "theme.blog.paginator.navAriaLabel": {
-    "message": "Navegação na lista de blogs",
+    "message": "Navegação da lista de blogs",
     "description": "The ARIA label for the blog pagination"
   },
   "theme.blog.paginator.newerEntries": {
@@ -72,7 +72,7 @@
     "description": "The label used to navigate to the older blog posts page (next page)"
   },
   "theme.blog.post.paginator.navAriaLabel": {
-    "message": "Navegação na página do post do blog",
+    "message": "Navegação da página do post do blog",
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
@@ -100,7 +100,7 @@
     "description": "The name for the light color mode"
   },
   "theme.docs.breadcrumbs.navAriaLabel": {
-    "message": "Migalhas de pão",
+    "message": "Navegação de trilhas",
     "description": "The ARIA label for the breadcrumbs"
   },
   "theme.docs.DocCard.categoryDescription.plurals": {
@@ -132,7 +132,7 @@
     "description": "The label of the version badge"
   },
   "theme.docs.versions.unreleasedVersionLabel": {
-    "message": "Esta é uma documentação não lançada para a versão {siteTitle} {versionLabel}.",
+    "message": "Esta é uma documentação não lançada para a versão {versionLabel} do {siteTitle}.",
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
@@ -140,7 +140,7 @@
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "Para documentação atualizada, veja a {latestVersionLink} ({versionLabel}).",
+    "message": "Para documentação atualizada, veja {latestVersionLink} ({versionLabel}).",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
@@ -172,7 +172,7 @@
     "description": "The label for the navbar versions dropdown on mobile view"
   },
   "theme.NotFound.title": {
-    "message": "Página Não Encontrada",
+    "message": "Página não encontrada",
     "description": "The title of the 404 page"
   },
   "theme.tags.tagsListLabel": {
@@ -232,7 +232,7 @@
     "description": "The ARIA label to expand the sidebar category"
   },
   "theme.DocSidebarItem.collapseCategoryAriaLabel": {
-    "message": "Colapsar categoria '{label}'",
+    "message": "Recolher categoria '{label}'",
     "description": "The ARIA label to collapse the sidebar category"
   },
   "theme.NavBar.navAriaLabel": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que lhe direcionou ao URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que o direcionou para o URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Um min leitura|{readingTime} min leitura",
+    "message": "Um min de leitura|{readingTime} min de leitura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -272,15 +272,15 @@
     "description": "The ARIA label for the home page in the breadcrumbs"
   },
   "theme.docs.sidebar.collapseButtonTitle": {
-    "message": "Colapsar barra lateral",
+    "message": "Recolher barra lateral",
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.collapseButtonAriaLabel": {
-    "message": "Colapsar barra lateral",
+    "message": "Recolher barra lateral",
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.navAriaLabel": {
-    "message": "Barra lateral de documentos",
+    "message": "Barra lateral de Documentos",
     "description": "The ARIA label for the sidebar navigation"
   },
   "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
@@ -356,11 +356,11 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página em rascunho",
+    "message": "Página de rascunho",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
-    "message": "Esta página é um rascunho. Ela só será visível em desenvolvimento e será excluída da versão de produção.",
+    "message": "Esta página é um rascunho. Ela será visível apenas no desenvolvimento e será excluída da versão de produção.",
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {

@@ -32,7 +32,7 @@
     "description": "Feature title for multi-lingual documentation section"
   },
   "Access CoMapeo documentation in multiple languages, ensuring every team member can learn and contribute regardless of their native tongue.": {
-    "message": "Accede a la documentación de CoMapeo en varios idiomas, asegurando que cada miembro del equipo pueda aprender y contribuir independientemente de su lengua materna.",
+    "message": "Accede a la documentación de CoMapeo en múltiples idiomas, asegurando que cada miembro del equipo pueda aprender y contribuir independientemente de su lengua materna.",
     "description": "Description for multi-lingual documentation section"
   },
   "Your Mapping Journey Starts Here": {
@@ -44,7 +44,7 @@
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
-    "message": "Esta página se estrelló.",
+    "message": "Esta página falló.",
     "description": "The title of the fallback page when the page crashed"
   },
   "theme.BackToTopButton.buttonAriaLabel": {
@@ -144,7 +144,7 @@
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
-    "message": "última versión",
+    "message": "versión más reciente",
     "description": "The label used for the latest version suggestion link label"
   },
   "theme.common.editThisPage": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Un minuto de lectura|{readingTime} minutos de lectura",
+    "message": "Un min de lectura|{readingTime} min de lectura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -312,7 +312,7 @@
     "description": "To prompt users to load the full image. sizeMessage is a parenthesized size figure."
   },
   "theme.IdealImageMessage.offline": {
-    "message": "Tu navegador está desconectado. Imagen no cargada",
+    "message": "Tu navegador está offline. Imagen no cargada",
     "description": "When the user is viewing an offline document"
   },
   "theme.IdealImageMessage.404error": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor no ha escrito ninguna publicación aún.",
+    "message": "Este autor aún no ha escrito publicaciones.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {
@@ -352,11 +352,11 @@
     "description": "The unlisted content banner title"
   },
   "theme.contentVisibility.unlistedBanner.message": {
-    "message": "Esta página no está listada. Los motores de búsqueda no la indexarán, y solo los usuarios con un enlace directo pueden acceder a ella.",
+    "message": "Esta página no está listada. Los motores de búsqueda no la indexarán, y solo los usuarios con un enlace directo podrán acceder a ella.",
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página en borrador",
+    "message": "Página borrador",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
@@ -364,7 +364,7 @@
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {
-    "message": "Inténtalo de nuevo",
+    "message": "Intentar de nuevo",
     "description": "The label of the button to try again rendering when the React error boundary captures an error"
   },
   "theme.common.skipToMainContent": {

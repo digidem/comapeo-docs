@@ -4,7 +4,7 @@
     "description": "Site title"
   },
   "Learn how to use the CoMapeo platform": {
-    "message": "Aprende a usar la plataforma CoMapeo",
+    "message": "Aprende cómo usar la plataforma CoMapeo",
     "description": "Text for the tagline of the webpage"
   },
   "Explore Documentation": {
@@ -68,11 +68,11 @@
     "description": "The label used to navigate to the newer blog posts page (previous page)"
   },
   "theme.blog.paginator.olderEntries": {
-    "message": "Entradas anteriores",
+    "message": "Entradas más antiguas",
     "description": "The label used to navigate to the older blog posts page (next page)"
   },
   "theme.blog.post.paginator.navAriaLabel": {
-    "message": "Navegación de la página del blog",
+    "message": "Navegación de la página de publicaciones del blog",
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
@@ -136,15 +136,15 @@
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta es documentación para {versionLabel} de {siteTitle}, que ya no se mantiene activamente.",
+    "message": "Esta es documentación para {siteTitle} {versionLabel}, que ya no se mantiene activamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "Para documentación actualizada, consulte {latestVersionLink} ({versionLabel}).",
+    "message": "Para documentación actualizada, vea {latestVersionLink} ({versionLabel}).",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
-    "message": "última versión",
+    "message": "versión más reciente",
     "description": "The label used for the latest version suggestion link label"
   },
   "theme.common.editThisPage": {
@@ -228,11 +228,11 @@
     "description": "The title attribute for toggle word wrapping button of code block lines"
   },
   "theme.DocSidebarItem.expandCategoryAriaLabel": {
-    "message": "Expandir categoría '{label}'",
+    "message": "Expandir categoría de la barra lateral '{label}'",
     "description": "The ARIA label to expand the sidebar category"
   },
   "theme.DocSidebarItem.collapseCategoryAriaLabel": {
-    "message": "Colapsar categoría '{label}'",
+    "message": "Colapsar categoría de la barra lateral '{label}'",
     "description": "The ARIA label to collapse the sidebar category"
   },
   "theme.NavBar.navAriaLabel": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor no ha escrito ninguna publicación aún.",
+    "message": "Este autor no ha escrito ninguna publicación todavía.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {
@@ -364,7 +364,7 @@
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {
-    "message": "Intentar de nuevo",
+    "message": "Inténtalo de nuevo",
     "description": "The label of the button to try again rendering when the React error boundary captures an error"
   },
   "theme.common.skipToMainContent": {

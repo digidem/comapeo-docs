@@ -63,7 +63,7 @@ export const WEBP_QUALITY = 80;
 export const PNG_QUALITY_RANGE = [0.6, 0.8];
 
 // OpenAI constants
-export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-nano";
+export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
 

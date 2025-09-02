@@ -4,7 +4,7 @@
     "description": "Site title"
   },
   "Learn how to use the CoMapeo platform": {
-    "message": "Aprenda como usar a plataforma CoMapeo",
+    "message": "Aprenda a usar a plataforma CoMapeo",
     "description": "Text for the tagline of the webpage"
   },
   "Explore Documentation": {
@@ -64,7 +64,7 @@
     "description": "The ARIA label for the blog pagination"
   },
   "theme.blog.paginator.newerEntries": {
-    "message": "Entradas mais novas",
+    "message": "Entradas mais recentes",
     "description": "The label used to navigate to the newer blog posts page (previous page)"
   },
   "theme.blog.paginator.olderEntries": {
@@ -100,7 +100,7 @@
     "description": "The name for the light color mode"
   },
   "theme.docs.breadcrumbs.navAriaLabel": {
-    "message": "Migalhas de pão",
+    "message": "Trilhas de navegação",
     "description": "The ARIA label for the breadcrumbs"
   },
   "theme.docs.DocCard.categoryDescription.plurals": {
@@ -108,7 +108,7 @@
     "description": "The default description for a category card in the generated index about how many items this category includes"
   },
   "theme.docs.paginator.navAriaLabel": {
-    "message": "Páginas de documentos",
+    "message": "Páginas de documentação",
     "description": "The ARIA label for the docs pagination"
   },
   "theme.docs.paginator.previous": {
@@ -136,7 +136,7 @@
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não é mais mantida ativamente.",
+    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não está mais sendo mantida ativamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
@@ -184,7 +184,7 @@
     "description": "The ARIA label for close button of announcement bar"
   },
   "theme.admonition.caution": {
-    "message": "atenção",
+    "message": "cuidado",
     "description": "The default label used for the Caution admonition (:::caution)"
   },
   "theme.admonition.danger": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que lhe enviou para o URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que o direcionou ao URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -264,7 +264,7 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Um min de leitura|{readingTime} min de leitura",
+    "message": "Um min leitura|{readingTime} min leitura",
     "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
@@ -356,7 +356,7 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página rascunho",
+    "message": "Página em rascunho",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {

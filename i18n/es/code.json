@@ -20,7 +20,7 @@
     "description": "Button text for Telegram support link"
   },
   "Conversational Guidance": {
-    "message": "Guía conversacional",
+    "message": "Guía Conversacional",
     "description": "Feature title for voice-enabled QA bots section"
   },
   "Get instant voice assistance through our documentation bots that listen to your questions and respond with precise answers in real-time.": {
@@ -28,7 +28,7 @@
     "description": "Description for voice-enabled QA bots section"
   },
   "Map in Any Language": {
-    "message": "Mapa en cualquier idioma",
+    "message": "Mapa en Cualquier Idioma",
     "description": "Feature title for multi-lingual documentation section"
   },
   "Access CoMapeo documentation in multiple languages, ensuring every team member can learn and contribute regardless of their native tongue.": {
@@ -36,11 +36,11 @@
     "description": "Description for multi-lingual documentation section"
   },
   "Your Mapping Journey Starts Here": {
-    "message": "Tu viaje de mapeo comienza aquí",
+    "message": "Tu Viaje de Mapeo Comienza Aquí",
     "description": "Feature title for comprehensive learning hub section"
   },
   "Everything you need to master the CoMapeo platform, from beginner tutorials to advanced techniques, all in one centralized knowledge center.": {
-    "message": "Todo lo que necesitas para dominar la plataforma CoMapeo, desde tutoriales para principiantes hasta técnicas avanzadas, todo en un centro de conocimientos centralizado.",
+    "message": "Todo lo que necesitas para dominar la plataforma CoMapeo, desde tutoriales para principiantes hasta técnicas avanzadas, todo en un centro de conocimiento centralizado.",
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
@@ -60,7 +60,7 @@
     "description": "The page & hero description of the blog archive page"
   },
   "theme.blog.paginator.navAriaLabel": {
-    "message": "Navegación de la lista de blogs",
+    "message": "Navegación de lista de blogs",
     "description": "The ARIA label for the blog pagination"
   },
   "theme.blog.paginator.newerEntries": {
@@ -68,11 +68,11 @@
     "description": "The label used to navigate to the newer blog posts page (previous page)"
   },
   "theme.blog.paginator.olderEntries": {
-    "message": "Entradas anteriores",
+    "message": "Entradas más antiguas",
     "description": "The label used to navigate to the older blog posts page (next page)"
   },
   "theme.blog.post.paginator.navAriaLabel": {
-    "message": "Navegación de la página del blog",
+    "message": "Navegación de publicaciones del blog",
     "description": "The ARIA label for the blog posts pagination"
   },
   "theme.blog.post.paginator.newerPost": {
@@ -136,7 +136,7 @@
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta es documentación para {siteTitle} {versionLabel}, que ya no se mantiene activamente.",
+    "message": "Esta es documentación para {versionLabel} de {siteTitle}, que ya no se mantiene activamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
@@ -144,7 +144,7 @@
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
-    "message": "versión más reciente",
+    "message": "última versión",
     "description": "The label used for the latest version suggestion link label"
   },
   "theme.common.editThisPage": {
@@ -228,11 +228,11 @@
     "description": "The title attribute for toggle word wrapping button of code block lines"
   },
   "theme.DocSidebarItem.expandCategoryAriaLabel": {
-    "message": "Expandir categoría '{label}'",
+    "message": "Expandir categoría de la barra lateral '{label}'",
     "description": "The ARIA label to expand the sidebar category"
   },
   "theme.DocSidebarItem.collapseCategoryAriaLabel": {
-    "message": "Colapsar categoría '{label}'",
+    "message": "Colapsar categoría de la barra lateral '{label}'",
     "description": "The ARIA label to collapse the sidebar category"
   },
   "theme.NavBar.navAriaLabel": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, contacta al propietario del sitio que te enlazó a la URL original y hazle saber que su enlace está roto.",
+    "message": "Por favor, contacta al propietario del sitio que te enlazó a la URL original y avísale que su enlace está roto.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -280,7 +280,7 @@
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.navAriaLabel": {
-    "message": "Barra lateral de documentación",
+    "message": "Barra lateral de Documentos",
     "description": "The ARIA label for the sidebar navigation"
   },
   "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
@@ -324,7 +324,7 @@
     "description": "When the image fails to load for unknown error"
   },
   "theme.blog.post.plurals": {
-    "message": "Una publicación|{count} publicaciones",
+    "message": "Un publicación|{count} publicaciones",
     "description": "Pluralized label for \"{count} posts\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.blog.tagTitle": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor no ha escrito ninguna publicación aún.",
+    "message": "Este autor no ha escrito ninguna publicación todavía.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {
@@ -352,7 +352,7 @@
     "description": "The unlisted content banner title"
   },
   "theme.contentVisibility.unlistedBanner.message": {
-    "message": "Esta página no está listada. Los motores de búsqueda no la indexarán, y solo los usuarios con enlace directo pueden acceder a ella.",
+    "message": "Esta página no está listada. Los motores de búsqueda no la indexarán, y solo los usuarios con un enlace directo pueden acceder a ella.",
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
@@ -360,11 +360,11 @@
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
-    "message": "Esta página es un borrador. Solo será visible en desarrollo y será excluida de la compilación de producción.",
+    "message": "Esta página es un borrador. Solo será visible en desarrollo y se excluirá de la compilación de producción.",
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {
-    "message": "Intentar de nuevo",
+    "message": "Inténtalo de nuevo",
     "description": "The label of the button to try again rendering when the React error boundary captures an error"
   },
   "theme.common.skipToMainContent": {

@@ -32,7 +32,7 @@
     "description": "Feature title for multi-lingual documentation section"
   },
   "Access CoMapeo documentation in multiple languages, ensuring every team member can learn and contribute regardless of their native tongue.": {
-    "message": "Acesse a documentação do CoMapeo em vários idiomas, garantindo que cada membro da equipe possa aprender e contribuir, independentemente de sua língua nativa.",
+    "message": "Acesse a documentação do CoMapeo em vários idiomas, garantindo que todos os membros da equipe possam aprender e contribuir, independentemente de sua língua nativa.",
     "description": "Description for multi-lingual documentation section"
   },
   "Your Mapping Journey Starts Here": {
@@ -40,7 +40,7 @@
     "description": "Feature title for comprehensive learning hub section"
   },
   "Everything you need to master the CoMapeo platform, from beginner tutorials to advanced techniques, all in one centralized knowledge center.": {
-    "message": "Tudo o que você precisa para dominar a plataforma CoMapeo, desde tutoriais para iniciantes até técnicas avançadas, tudo em um centro de conhecimento centralizado.",
+    "message": "Tudo que você precisa para dominar a plataforma CoMapeo, desde tutoriais para iniciantes até técnicas avançadas, tudo em um centro de conhecimento centralizado.",
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
@@ -100,7 +100,7 @@
     "description": "The name for the light color mode"
   },
   "theme.docs.breadcrumbs.navAriaLabel": {
-    "message": "Breadcrumbs",
+    "message": "Migalhas de pão",
     "description": "The ARIA label for the breadcrumbs"
   },
   "theme.docs.DocCard.categoryDescription.plurals": {
@@ -140,7 +140,7 @@
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "Para documentação atualizada, veja {latestVersionLink} ({versionLabel}).",
+    "message": "Para uma documentação atualizada, veja {latestVersionLink} ({versionLabel}).",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
@@ -172,7 +172,7 @@
     "description": "The label for the navbar versions dropdown on mobile view"
   },
   "theme.NotFound.title": {
-    "message": "Página não encontrada",
+    "message": "Página Não Encontrada",
     "description": "The title of the 404 page"
   },
   "theme.tags.tagsListLabel": {
@@ -184,7 +184,7 @@
     "description": "The ARIA label for close button of announcement bar"
   },
   "theme.admonition.caution": {
-    "message": "atenção",
+    "message": "cuidado",
     "description": "The default label used for the Caution admonition (:::caution)"
   },
   "theme.admonition.danger": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que vinculou você ao URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que o direcionou ao URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -280,7 +280,7 @@
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.navAriaLabel": {
-    "message": "Barra lateral de documentos",
+    "message": "Barra lateral de Documentos",
     "description": "The ARIA label for the sidebar navigation"
   },
   "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
@@ -344,7 +344,7 @@
     "description": "The label of the link targeting the blog authors page"
   },
   "theme.blog.author.noPosts": {
-    "message": "Este autor ainda não escreveu nenhuma postagem.",
+    "message": "Este autor ainda não escreveu nenhum post.",
     "description": "The text for authors with 0 blog post"
   },
   "theme.contentVisibility.unlistedBanner.title": {
@@ -360,7 +360,7 @@
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {
-    "message": "Esta página é um rascunho. Ela será visível apenas no modo de desenvolvimento e será excluída da versão de produção.",
+    "message": "Esta página é um rascunho. Ela só será visível no desenvolvimento e será excluída da versão de produção.",
     "description": "The draft content banner message"
   },
   "theme.ErrorPageContent.tryAgain": {

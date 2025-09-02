@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { processImage } from './imageProcessor';
 import { compressImage } from './imageCompressor';
+import { sanitizeMarkdownContent } from './contentSanitizer';
 import config from '../../docusaurus.config.js'
 
 const __filename = fileURLToPath(import.meta.url);
@@ -101,6 +102,7 @@ function setTranslationString(lang:string, original: string, translated: string)
   // console.log('with: ', translationObj)
   fs.writeFileSync(lPath, JSON.stringify(file,null, 4))
 }
+
 
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
@@ -208,6 +210,9 @@ export async function generateBlocks(pages, progressCallback) {
             imgIndex++;
           }
           await Promise.all(imgPromises);
+
+          // Sanitize content to fix malformed HTML/JSX tags
+          markdownString.parent = sanitizeMarkdownContent(markdownString.parent);
 
           // Determine file path based on section folder context
           const fileName = `${filename}.md`;

@@ -6,15 +6,22 @@ import axios from 'axios';
 import chalk from 'chalk';
 import ora from 'ora';
 import { processImage } from './imageProcessor';
-import { compressImage } from './imageCompressor';
-import { sanitizeMarkdownContent } from './contentSanitizer';
+import { sanitizeMarkdownContent } from './utils';
+import {
+  compressImageToFileWithFallback,
+  detectFormatFromBuffer,
+  formatFromContentType,
+  chooseFormat,
+  extForFormat,
+  isResizableFormat
+} from './utils';
 import config from '../../docusaurus.config.js'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CONTENT_PATH = path.join(__dirname, "../../docs");
-const IMAGES_PATH = path.join(CONTENT_PATH, "../../static/images/");
+const IMAGES_PATH = path.join(__dirname, "../../static/images/");
 const I18N_PATH = path.join(__dirname, "../../i18n/");
 const getI18NPath = (locale: string) =>  path.join(I18N_PATH, locale,
   'docusaurus-plugin-content-docs',  'current')
@@ -31,41 +38,78 @@ for(const locale of locales.filter(l => l !== DEFAULT_LOCALE)){
   fs.mkdirSync(getI18NPath(locale), { recursive: true })
 }
 
+// (moved to utils) Format detection helpers
+
+
+
 async function downloadAndProcessImage(url:string, blockName:string, index:number) {
   const spinner = ora(`Processing image ${index + 1}`).start();
+  // 1) Download: let network errors propagate. We do not catch axios failures here.
+  const response = await axios.get(url, { responseType: 'arraybuffer' });
+  const originalBuffer = Buffer.from(response.data, 'binary');
+
+  // Remove query parameters from the URL
+  const cleanUrl = url.split('?')[0];
+
+  // Detect true format from buffer and Content-Type, and save with the right extension
+  const headerCT = (response.headers as Record<string, string | string[]>)?.['content-type'] as string | undefined;
+  const headerFmt = formatFromContentType(headerCT);
+  const bufferFmt = detectFormatFromBuffer(originalBuffer);
+  const chosenFmt = chooseFormat(bufferFmt, headerFmt);
+
+  // Compute extension. If unknown, fall back to URL extension or .jpg
+  const urlExt = (path.extname(cleanUrl) || '').toLowerCase();
+  let extension = extForFormat(chosenFmt);
+  if (!extension) {
+    extension = urlExt || '.jpg';
+  }
+
+  // Create a short, sanitized filename using the chosen extension
+  const sanitizedBlockName = blockName.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20);
+  const filename = `${sanitizedBlockName}_${index}${extension}`;
+
+  const filepath = path.join(IMAGES_PATH, filename);
+
   try {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    const buffer = Buffer.from(response.data, 'binary');
+    let resizedBuffer = originalBuffer;
+    let originalSize = originalBuffer.length;
 
-    // Remove query parameters from the URL
-    const cleanUrl = url.split('?')[0];
+    // 2) Resize only for formats sharp supports without conversion (jpeg/png/webp)
+    if (isResizableFormat(chosenFmt)) {
+      spinner.text = `Processing image ${index + 1}: Resizing`;
+      // processImage uses the outputPath extension to choose encoder; since we computed
+      // "extension" from detected format, sharp will keep that format.
+      const processed = await processImage(originalBuffer, filepath);
+      resizedBuffer = processed.outputBuffer;
+      originalSize = processed.originalSize;
+    } else {
+      spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || 'unknown'} format`;
+      // Keep original buffer as candidate for optimization
+      resizedBuffer = originalBuffer;
+      originalSize = originalBuffer.length;
+    }
 
-    // Get the file extension, defaulting to .jpg if not present
-    const extension = path.extname(cleanUrl).toLowerCase() || '.jpg';
-
-    // Create a short, sanitized filename
-    const sanitizedBlockName = blockName.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20);
-    const filename = `${sanitizedBlockName}_${index}${extension}`;
-
-    const filepath = path.join(IMAGES_PATH, filename);
-
-    spinner.text = `Processing image ${index + 1}: Resizing`;
-    const { outputBuffer: resizedBuffer, originalSize } = await processImage(buffer, filepath);
-
+    // 3) Compression/Optimization with fail-open. On any optimizer error, keep original unmodified.
     spinner.text = `Processing image ${index + 1}: Compressing`;
-    const { compressedBuffer, compressedSize } = await compressImage(resizedBuffer, filepath);
+    // Streaming-like safe write: only replace final file on success; else keep original
+    const { finalSize, usedFallback } = await compressImageToFileWithFallback(originalBuffer, resizedBuffer, filepath, url);
 
-    // Save the processed and compressed image
-    fs.writeFileSync(filepath, compressedBuffer);
-    spinner.succeed(chalk.green(`Image ${index + 1} processed and saved: ${filepath}`));
+    spinner.succeed(
+      usedFallback
+        ? chalk.green(`Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`)
+        : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
+    );
 
-    const savedBytes = originalSize - compressedSize;
+    const savedBytes = usedFallback ? 0 : Math.max(0, originalSize - finalSize);
     const imagePath = `/images/${filename.replace(/\\/g, '/')}`;
     return { newPath: imagePath, savedBytes };
   } catch (error) {
+    // If we are here, it is either a download (handled above), resize error, or hard-fail (SOFT_FAIL=false).
     spinner.fail(chalk.red(`Error processing image ${index + 1} from ${url}`));
     console.error(error);
-    return { newPath: url, savedBytes: 0 };
+    // Per requirement: network failures should propagate; resizing failures should propagate.
+    // We rethrow to abort the page/process. No partial file was written unless optimizer succeeded.
+    throw error;
   }
 }
 
@@ -231,7 +275,7 @@ export async function generateBlocks(pages, progressCallback) {
           let keywords = ['docs', 'comapeo'];
           let tags = ['comapeo'];
           let sidebarPosition = i + 1;
-          const customProps = {};
+          const customProps: Record<string, unknown> = {};
 
           // Check for Tags property
           if (page.properties['Tags'] && page.properties['Tags'].multi_select) {

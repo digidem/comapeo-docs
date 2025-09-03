@@ -1,7 +1,7 @@
-import { notion, DATABASE_ID } from './notionClient.js';
+import { enhancedNotion, DATABASE_ID } from './notionClient.js';
 
 export async function fetchNotionData(filter) {
-  const response = await notion.databases.query({
+  const response = await enhancedNotion.databasesQuery({
     database_id: DATABASE_ID,
     filter: filter
   });
@@ -29,7 +29,7 @@ export async function sortAndExpandNotionData(
     const relations = item?.properties?.["Sub-item"]?.relation ?? [];
     const subpages = await Promise.all(
       relations.map(async (rel: { id: string }) => {
-        return await notion.pages.retrieve({ page_id: rel.id });
+        return await enhancedNotion.pagesRetrieve({ page_id: rel.id });
       })
     );
     for (const subpage of subpages) {
@@ -50,7 +50,7 @@ export async function sortAndExpandNotionData(
 // await fetchNotionPage(pageId);
 export async function fetchNotionPage() {
   try {
-    const response = await notion.blocks.children.list({
+    const response = await enhancedNotion.blocksChildrenList({
       block_id: DATABASE_ID,
     });
     console.log('Fetched page content:', response);
@@ -63,7 +63,7 @@ export async function fetchNotionPage() {
 
 export async function fetchNotionBlocks(blockId) {
   try {
-    const response = await notion.blocks.children.list({
+    const response = await enhancedNotion.blocksChildrenList({
       block_id: blockId,
       page_size: 100
     });

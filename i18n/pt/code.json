@@ -40,7 +40,7 @@
     "description": "Feature title for comprehensive learning hub section"
   },
   "Everything you need to master the CoMapeo platform, from beginner tutorials to advanced techniques, all in one centralized knowledge center.": {
-    "message": "Tudo que você precisa para dominar a plataforma CoMapeo, desde tutoriais para iniciantes até técnicas avançadas, tudo em um centro de conhecimento centralizado.",
+    "message": "Tudo o que você precisa para dominar a plataforma CoMapeo, desde tutoriais para iniciantes até técnicas avançadas, tudo em um centro de conhecimento centralizado.",
     "description": "Description for comprehensive learning hub section"
   },
   "theme.ErrorPageContent.title": {
@@ -100,7 +100,7 @@
     "description": "The name for the light color mode"
   },
   "theme.docs.breadcrumbs.navAriaLabel": {
-    "message": "Navegação de trilhas",
+    "message": "Migalhas de pão",
     "description": "The ARIA label for the breadcrumbs"
   },
   "theme.docs.DocCard.categoryDescription.plurals": {
@@ -132,15 +132,15 @@
     "description": "The label of the version badge"
   },
   "theme.docs.versions.unreleasedVersionLabel": {
-    "message": "Esta é uma documentação não lançada para a versão {versionLabel} do {siteTitle}.",
+    "message": "Esta é uma documentação não lançada para a versão {siteTitle} {versionLabel}.",
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não é mais mantida ativamente.",
+    "message": "Esta é uma documentação para {siteTitle} {versionLabel}, que não está mais sendo mantida ativamente.",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "Para documentação atualizada, consulte o {latestVersionLink} ({versionLabel}).",
+    "message": "Para documentação atualizada, veja a {latestVersionLink} ({versionLabel}).",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
@@ -172,7 +172,7 @@
     "description": "The label for the navbar versions dropdown on mobile view"
   },
   "theme.NotFound.title": {
-    "message": "Página não encontrada",
+    "message": "Página Não Encontrada",
     "description": "The title of the 404 page"
   },
   "theme.tags.tagsListLabel": {
@@ -248,7 +248,7 @@
     "description": "The first paragraph of the 404 page"
   },
   "theme.NotFound.p2": {
-    "message": "Por favor, entre em contato com o proprietário do site que vinculou você ao URL original e informe que o link está quebrado.",
+    "message": "Por favor, entre em contato com o proprietário do site que lhe enviou ao URL original e informe que o link está quebrado.",
     "description": "The 2nd paragraph of the 404 page"
   },
   "theme.TOCCollapsible.toggleButtonLabel": {
@@ -264,8 +264,8 @@
     "description": "The ARIA label for the link to full blog posts from excerpts"
   },
   "theme.blog.post.readingTime.plurals": {
-    "message": "Um min. de leitura|{readingTime} min. de leitura",
-    "description": "Pluralized label for \"{readingTime} min. de leitura\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
+    "message": "Um minuto de leitura|{readingTime} minutos de leitura",
+    "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.docs.breadcrumbs.home": {
     "message": "Página inicial",
@@ -280,7 +280,7 @@
     "description": "The title attribute for collapse button of doc sidebar"
   },
   "theme.docs.sidebar.navAriaLabel": {
-    "message": "Barra lateral de documentos",
+    "message": "Barra lateral de documentação",
     "description": "The ARIA label for the sidebar navigation"
   },
   "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
@@ -328,7 +328,7 @@
     "description": "Pluralized label for \"{count} posts\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
   },
   "theme.blog.tagTitle": {
-    "message": "{nPosts} marcados com \"{tagName}\"",
+    "message": "{nPosts} marcado com \"{tagName}\"",
     "description": "The title of the page for a blog tag"
   },
   "theme.blog.author.pageTitle": {
@@ -356,7 +356,7 @@
     "description": "The unlisted content banner message"
   },
   "theme.contentVisibility.draftBanner.title": {
-    "message": "Página de rascunho",
+    "message": "Página em rascunho",
     "description": "The draft content banner title"
   },
   "theme.contentVisibility.draftBanner.message": {

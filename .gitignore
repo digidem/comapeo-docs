@@ -22,3 +22,6 @@ yarn-error.log*
 # Custom
 .env
 CLAUDE.md
+test-results.json
+test-results.html
+coverage/

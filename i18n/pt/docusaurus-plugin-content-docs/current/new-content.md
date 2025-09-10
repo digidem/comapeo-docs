@@ -1,1 +1,0 @@
-Esta é uma documentação para o CoMapeo

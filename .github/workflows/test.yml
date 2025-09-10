@@ -1,13 +1,17 @@
 name: Test (Bun + Vitest)
 
 on:
+  # Avoid double-running on feature branches by only running push on main.
   push:
-    branches: [ main, feat/**, fix/** ]
+    branches: [ main ]
   pull_request:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Provide dummy key so OpenAI client construction doesn't fail in tests.
+      OPENAI_API_KEY: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0

@@ -1,0 +1,200 @@
+name: Release Documentation
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        default: 'minor'
+        type: choice
+        options: [patch, minor, major]
+      release_type:
+        description: 'Release type'
+        required: false
+        default: 'release'
+        type: choice
+        options: [release, prerelease]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+env:
+  NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+  NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only allow manual releases from main; skip otherwise
+    if: ${{ github.ref_name == 'main' }}
+    concurrency:
+      group: release-docs-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      # A. Setup (3 steps)
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js and Bun
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '18'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      # B. Version Management (2 steps)
+      - name: Configure Git
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Bump version and capture output
+        id: version_bump
+        run: |
+          npm version ${{ github.event.inputs.bump_type }} --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_number=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: v$NEW_VERSION"
+
+      # C. Build & Generate Assets (3 steps)
+      - name: Build Docusaurus
+        run: bun run build
+
+      - name: Start local server for PDF generation
+        run: |
+          bun run serve --port 3000 --host 0.0.0.0 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          # Wait for server to start
+          echo "Waiting for server to start..."
+          timeout 120 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done' || {
+            echo "Server failed to start within timeout";
+            exit 1;
+          }
+          echo "Server is ready"
+
+      - name: Generate PDF documentation
+        run: |
+          set -e
+          # Install Prince XML for PDF generation (match runner Ubuntu version)
+          if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            UBU_VER=${VERSION_ID:-"22.04"}
+          else
+            UBU_VER="22.04"
+          fi
+          case "$UBU_VER" in
+            24.*) DEB_URL="https://www.princexml.com/download/prince_15.4-1_ubuntu24.04_amd64.deb" ;;
+            22.*) DEB_URL="https://www.princexml.com/download/prince_15.4-1_ubuntu22.04_amd64.deb" ;;
+            20.*) DEB_URL="https://www.princexml.com/download/prince_15.4-1_ubuntu20.04_amd64.deb" ;;
+            *)    DEB_URL="https://www.princexml.com/download/prince_15.4-1_ubuntu22.04_amd64.deb" ;;
+          esac
+          echo "Installing PrinceXML from $DEB_URL"
+          curl -fSL -o prince.deb "$DEB_URL"
+          sudo dpkg -i prince.deb || sudo apt-get install -f -y
+
+          # Generate PDF using the existing script
+          bun run gen-pdf
+
+          # Rename PDF to include version
+          if [ -f "pdf/docs.pdf" ]; then
+            mv pdf/docs.pdf comapeo-docs-english-${{ steps.version_bump.outputs.version_number }}.pdf
+          elif [ -f "docs.pdf" ]; then
+            mv docs.pdf comapeo-docs-english-${{ steps.version_bump.outputs.version_number }}.pdf
+          else
+            echo "PDF file not found, checking current directory..."
+            ls -la
+            # Try to find any PDF files
+            find . -name "*.pdf" -type f
+          fi
+
+          # Stop the server
+          kill $SERVER_PID || true
+
+      # D. Docusaurus & Notion Updates (2 steps)
+      - name: Create Docusaurus version
+        run: |
+          bun run docusaurus docs:version ${{ steps.version_bump.outputs.version_number }}
+          echo "Created Docusaurus version: ${{ steps.version_bump.outputs.version_number }}"
+
+      - name: Update Notion database
+        run: |
+          if [ -n "${{ secrets.NOTION_TOKEN }}" ] && [ -n "${{ secrets.NOTION_DATABASE_ID }}" ]; then
+            bun run notion:version
+            echo "Updated Notion database with new version"
+          else
+            echo "Notion credentials not available, skipping Notion update"
+          fi
+        continue-on-error: true
+
+      # E. Git & Release (3 steps)
+      - name: Commit changes
+        id: git_commit
+        run: |
+          # Add all changes
+          git add .
+
+          # Check if there are changes to commit
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: release v${{ steps.version_bump.outputs.version_number }}" \
+              -m "Bump version to ${{ steps.version_bump.outputs.version_number }}" \
+              -m "Create Docusaurus version" \
+              -m "Update documentation" \
+              -m "Generated by Awana Digital 🤖"
+            echo "committed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes to commit"
+            echo "committed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tag and push
+        if: ${{ steps.git_commit.outputs.committed == 'true' && github.ref_name == 'main' }}
+        run: |
+          git tag ${{ steps.version_bump.outputs.new_version }}
+          git push origin main
+          git push origin ${{ steps.version_bump.outputs.new_version }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: ${{ steps.version_bump.outputs.new_version }}
+          name: Release ${{ steps.version_bump.outputs.new_version }}
+          generate_release_notes: true
+          prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
+          files: |
+            comapeo-docs-english-${{ steps.version_bump.outputs.version_number }}.pdf
+          body: |
+            ## 📚 Documentation Release ${{ steps.version_bump.outputs.new_version }}
+
+            This release includes:
+            - 📄 Updated documentation (PDF attached)
+            - 🔄 New Docusaurus version created
+            - 🗄️ Notion database updated
+
+            ### 📥 Downloads
+            - [📄 Documentation PDF](./comapeo-docs-english-${{ steps.version_bump.outputs.version_number }}.pdf)
+
+            ---
+            🤖 *This release was created automatically by the release workflow*
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Clean up any background processes
+          if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" || true; fi
+          # Clean up temporary files
+          rm -f prince*.deb || true

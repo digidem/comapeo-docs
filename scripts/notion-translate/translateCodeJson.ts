@@ -113,8 +113,7 @@ export async function translateJson(
   } catch (error) {
     spinner.fail(
       chalk.red(
-        `Translation failed for ${targetLanguage}: ${(error as Error).message || error
-        }`
+        `Translation failed for ${targetLanguage}: ${(error as Error).message || error}`
       )
     );
     if (retryCount < MAX_RETRIES - 1) {
@@ -124,8 +123,7 @@ export async function translateJson(
       return translateJson(jsonContent, targetLanguage, retryCount + 1);
     } else {
       throw new Error(
-        `Invalid JSON after ${MAX_RETRIES} attempts: ${(error as Error).message || error
-        }`
+        `Invalid JSON after ${MAX_RETRIES} attempts: ${(error as Error).message || error}`
       );
     }
   }
@@ -167,45 +165,50 @@ interface FooterConfig {
 export function extractTranslatableText(config: NavbarConfig | FooterConfig, type: 'navbar' | 'footer'): Record<string, { message: string; description: string }> {
   const result: Record<string, { message: string; description: string }> = {};
 
-  if (type === 'navbar' && config.items) {
-    (config as NavbarConfig).items?.forEach((item: NavbarItem) => {
-      if (item.label) {
-        const key = `item.label.${item.label}`;
-        result[key] = {
-          message: item.label,
-          description: `Navbar item with label ${item.label}`
-        };
-      }
-    });
+  if (type === 'navbar') {
+    const nav = config as NavbarConfig;
+    if (nav.items) {
+      nav.items.forEach((item: NavbarItem) => {
+        if (item.label) {
+          const key = `item.label.${item.label}`;
+          result[key] = {
+            message: item.label,
+            description: `Navbar item with label ${item.label}`
+          };
+        }
+      });
+    }
   }
 
-  if (type === 'footer' && config.links) {
-    (config as FooterConfig).links?.forEach((section: FooterSection) => {
-      if (section.title) {
-        const titleKey = `links.title.${section.title}`;
-        result[titleKey] = {
-          message: section.title,
-          description: `Footer section title: ${section.title}`
-        };
-      }
+  if (type === 'footer') {
+    const footer = config as FooterConfig;
+    if (footer.links) {
+      footer.links.forEach((section: FooterSection) => {
+        if (section.title) {
+          const titleKey = `links.title.${section.title}`;
+          result[titleKey] = {
+            message: section.title,
+            description: `Footer section title: ${section.title}`
+          };
+        }
 
-      if (section.items) {
-        section.items?.forEach((item: FooterLink) => {
-          if (item.label) {
-            const labelKey = `links.${section.title}.${item.label}`;
-            result[labelKey] = {
-              message: item.label,
-              description: `Footer link label: ${item.label}`
-            };
-          }
-        });
-      }
-    });
+        if (section.items) {
+          section.items.forEach((item: FooterLink) => {
+            if (item.label) {
+              const labelKey = `links.${section.title}.${item.label}`;
+              result[labelKey] = {
+                message: item.label,
+                description: `Footer link label: ${item.label}`
+              };
+            }
+          });
+        }
+      });
+    }
 
-    const footerConfig = config as FooterConfig;
-    if (footerConfig.copyright) {
+    if (footer.copyright) {
       result['copyright'] = {
-        message: footerConfig.copyright.replace(/\$\{new Date\(\)\.getFullYear\(\)\}/, new Date().getFullYear().toString()),
+        message: footer.copyright.replace(/\$\{new Date\(\)\.getFullYear\(\)\}/, new Date().getFullYear().toString()),
         description: 'Footer copyright text'
       };
     }
@@ -362,7 +365,10 @@ export async function main() {
   }
 }
 
-// Run the main function if this file is executed directly
-if (import.meta.url.endsWith('translateCodeJson.js') || import.meta.url.endsWith('translateCodeJson.ts')) {
-  main();
+// Run the main function only when executed directly outside of tests
+if (
+  process.env.NODE_ENV !== 'test' &&
+  (import.meta.url.endsWith('translateCodeJson.js') || import.meta.url.endsWith('translateCodeJson.ts'))
+) {
+  void main();
 }

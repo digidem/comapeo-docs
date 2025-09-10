@@ -1,9 +1,11 @@
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
-import chalk from 'chalk';
+import chalk from "chalk";
 
 if (!process.env.NOTION_API_KEY) {
-  throw new Error("NOTION_API_KEY is not defined in the environment variables.");
+  throw new Error(
+    "NOTION_API_KEY is not defined in the environment variables."
+  );
 }
 
 if (!process.env.DATABASE_ID) {
@@ -32,7 +34,7 @@ export const DATABASE_ID = process.env.DATABASE_ID;
  * Sleep utility for retry delays
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -53,7 +55,12 @@ function isRetryableError(error: unknown): boolean {
   if (err.status === 429) return true;
 
   // Network errors
-  if (err.code === 'ECONNABORTED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') return true;
+  if (
+    err.code === "ECONNABORTED" ||
+    err.code === "ENOTFOUND" ||
+    err.code === "ETIMEDOUT"
+  )
+    return true;
 
   // Server errors (5xx)
   if (err.status && err.status >= 500) return true;
@@ -83,7 +90,10 @@ async function executeWithRetry<T>(
       // Check if error is retryable
       if (!isRetryableError(error)) {
         const err = error as { message?: string };
-        console.error(chalk.red(`Non-retryable error in ${operationName}:`), err.message || String(error));
+        console.error(
+          chalk.red(`Non-retryable error in ${operationName}:`),
+          err.message || String(error)
+        );
         throw error;
       }
 
@@ -99,7 +109,9 @@ async function executeWithRetry<T>(
     }
   }
 
-  console.error(chalk.red(`❌ ${operationName} failed after ${maxRetries + 1} attempts`));
+  console.error(
+    chalk.red(`❌ ${operationName} failed after ${maxRetries + 1} attempts`)
+  );
   throw lastError;
 }
 
@@ -115,22 +127,31 @@ class EnhancedNotionClient {
 
   async databasesQuery(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.databases.query(params as Parameters<typeof this.client.databases.query>[0]),
-      'databases.query'
+      () =>
+        this.client.databases.query(
+          params as Parameters<typeof this.client.databases.query>[0]
+        ),
+      "databases.query"
     );
   }
 
   async pagesRetrieve(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.pages.retrieve(params as Parameters<typeof this.client.pages.retrieve>[0]),
-      'pages.retrieve'
+      () =>
+        this.client.pages.retrieve(
+          params as Parameters<typeof this.client.pages.retrieve>[0]
+        ),
+      "pages.retrieve"
     );
   }
 
   async blocksChildrenList(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.blocks.children.list(params as Parameters<typeof this.client.blocks.children.list>[0]),
-      'blocks.children.list'
+      () =>
+        this.client.blocks.children.list(
+          params as Parameters<typeof this.client.blocks.children.list>[0]
+        ),
+      "blocks.children.list"
     );
   }
 }

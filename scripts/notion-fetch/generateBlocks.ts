@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { n2m } from '../notionClient.js';
 import axios from 'axios';
 import chalk from 'chalk';
-import ora from 'ora';
 import { processImage } from './imageProcessor';
 import { sanitizeMarkdownContent } from './utils';
 import {

@@ -46,15 +46,17 @@ function calculateDelay(attempt: number): number {
 /**
  * Check if error is retryable
  */
-function isRetryableError(error: any): boolean {
+function isRetryableError(error: unknown): boolean {
+  const err = error as { status?: number; code?: string };
+
   // Rate limit errors (429)
-  if (error.status === 429) return true;
+  if (err.status === 429) return true;
 
   // Network errors
-  if (error.code === 'ECONNABORTED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') return true;
+  if (err.code === 'ECONNABORTED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') return true;
 
   // Server errors (5xx)
-  if (error.status && error.status >= 500) return true;
+  if (err.status && err.status >= 500) return true;
 
   return false;
 }
@@ -67,12 +69,12 @@ async function executeWithRetry<T>(
   operationName: string,
   maxRetries: number = RETRY_CONFIG.maxRetries
 ): Promise<T> {
-  let lastError: any;
+  let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
 
       // Don't retry on the last attempt
@@ -80,13 +82,18 @@ async function executeWithRetry<T>(
 
       // Check if error is retryable
       if (!isRetryableError(error)) {
-        console.error(chalk.red(`Non-retryable error in ${operationName}:`), error.message);
+        const err = error as { message?: string };
+        console.error(chalk.red(`Non-retryable error in ${operationName}:`), err.message || String(error));
         throw error;
       }
 
+      const err = error as { message?: string };
       const delay = calculateDelay(attempt);
-      console.warn(chalk.yellow(`⚠️  ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message}`));
-      console.warn(chalk.yellow(`   Retrying in ${delay}ms...`));
+      console.warn(
+        chalk.yellow(
+          `⚠️  ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${err.message || String(error)} — Retrying in ${delay}ms...`
+        )
+      );
 
       await sleep(delay);
     }
@@ -106,23 +113,23 @@ class EnhancedNotionClient {
     this.client = client;
   }
 
-  async databasesQuery(params: any) {
+  async databasesQuery(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.databases.query(params),
+      () => this.client.databases.query(params as Parameters<typeof this.client.databases.query>[0]),
       'databases.query'
     );
   }
 
-  async pagesRetrieve(params: any) {
+  async pagesRetrieve(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.pages.retrieve(params),
+      () => this.client.pages.retrieve(params as Parameters<typeof this.client.pages.retrieve>[0]),
       'pages.retrieve'
     );
   }
 
-  async blocksChildrenList(params: any) {
+  async blocksChildrenList(params: Record<string, unknown>) {
     return executeWithRetry(
-      () => this.client.blocks.children.list(params),
+      () => this.client.blocks.children.list(params as Parameters<typeof this.client.blocks.children.list>[0]),
       'blocks.children.list'
     );
   }

@@ -158,7 +158,7 @@ const groupPagesByLang = (pages, page) => {
     Portuguese: "pt",
   };
   const obj = {
-    mainTitle: page.properties.Title.title[0].plain_text,
+    mainTitle: page.properties["Content elements"].title[0].plain_text,
     section: page.properties.Section.select.name,
     content: {},
   };
@@ -231,7 +231,7 @@ export async function generateBlocks(pages, progressCallback) {
       for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
-        const pageTitle = page.properties["Title"].title[0].plain_text;
+        const pageTitle = page.properties["Content elements"].title[0].plain_text;
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(

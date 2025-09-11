@@ -28,13 +28,11 @@ const getI18NPath = (locale: string) =>
 const locales = config.i18n.locales;
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
 
-// Ensure directories exist
-fs.rmSync(CONTENT_PATH, { recursive: true, force: true });
+// Ensure directories exist (preserve existing content)
 fs.mkdirSync(CONTENT_PATH, { recursive: true });
 fs.mkdirSync(IMAGES_PATH, { recursive: true });
 // fs.mkdirSync(I18N_PATH, { recursive: true });
 for (const locale of locales.filter((l) => l !== DEFAULT_LOCALE)) {
-  fs.rmSync(getI18NPath(locale), { recursive: true, force: true });
   fs.mkdirSync(getI18NPath(locale), { recursive: true });
 }
 

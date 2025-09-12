@@ -24,12 +24,6 @@ jobs:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
 
-      - name: Update Notion Status → Draft published
-        run: bun run notionStatus:draft
-        env:
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          DATABASE_ID: ${{ secrets.DATABASE_ID }}
-
       - name: Commit generated docs
         run: |
           git config user.name "github-actions[bot]"

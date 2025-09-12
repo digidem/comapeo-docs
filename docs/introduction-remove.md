@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /introduction-remove
 last_update:
-  date: 9/11/2025
+  date: 9/12/2025
   author: Awana Digital
 ---
 ## Mapeo is a free, easy-to-use, open source set of tools for collecting and mapping information.
@@ -23,7 +23,7 @@ Mapeo was built by [Digital Democracy](https://www.digital-democracy.org/) with 
 Mapeo used to document illegal activities in Northern Ecuador, supported by Alianza Ceibo and Amazon Frontlines.
 
 
-![image](/images/introductionremove_0.jpg)
+![image](images/introductionremove_0.jpg)
 
 
 ## About this Guide

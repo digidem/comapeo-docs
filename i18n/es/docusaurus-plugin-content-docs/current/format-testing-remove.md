@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /format-testing-remove
 last_update:
-  date: 9/11/2025
+  date: 9/12/2025
   author: Awana Digital
 ---
 Step 1: (salto de línea)

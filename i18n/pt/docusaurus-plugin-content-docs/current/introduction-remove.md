@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /introduction-remove
 last_update:
-  date: 9/11/2025
+  date: 9/12/2025
   author: Awana Digital
 ---
 ## Mapeo é um conjunto de ferramentas gratuito, fácil de usar e de código aberto para coleta e mapeamento de informações.

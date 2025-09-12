@@ -23,7 +23,7 @@ Mapeo was built by [Digital Democracy](https://www.digital-democracy.org/) with 
 Mapeo used to document illegal activities in Northern Ecuador, supported by Alianza Ceibo and Amazon Frontlines.
 
 
-![image](images/introductionremove_0.jpg)
+![image](/images/introductionremove_0.jpg)
 
 
 ## About this Guide

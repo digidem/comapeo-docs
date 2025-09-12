@@ -1,12 +1,12 @@
-// Minimal remark plugin to rewrite markdown image URLs
-// from `images/...` (relative to doc) to `/images/...` (served from static)
-// Also rewrites HTML <img src="images/..."> occurrences.
+// Remark plugin (TypeScript) to rewrite markdown image URLs
+// from `images/...` (relative to the doc) to `/images/...` (served from static)
+// Also rewrites raw HTML <img src="images/..."> occurrences.
 
 export default function remarkFixImagePaths() {
-  function transformNode(node) {
+  function transformNode(node: any): void {
     if (!node || typeof node !== 'object') return;
 
-    // MDX/Markdown image nodes
+    // Markdown image nodes
     if (node.type === 'image' && typeof node.url === 'string') {
       if (node.url.startsWith('images/')) {
         node.url = `/${node.url}`;
@@ -15,7 +15,7 @@ export default function remarkFixImagePaths() {
 
     // Raw HTML nodes possibly containing <img>
     if (node.type === 'html' && typeof node.value === 'string') {
-      node.value = node.value.replace(/src=(['"])images\//g, 'src=$1/images/');
+      node.value = node.value.replace(/src=(["'])images\//g, 'src=$1/images/');
     }
 
     // Recurse into children
@@ -24,7 +24,7 @@ export default function remarkFixImagePaths() {
     }
   }
 
-  return (tree) => {
+  return (tree: any): void => {
     transformNode(tree);
   };
 }

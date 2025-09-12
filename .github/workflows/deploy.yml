@@ -37,6 +37,7 @@ jobs:
       - name: Build website
         env:
           BASE_URL: comapeo-docs
+          DEFAULT_DOCS_PAGE: ${{ secrets.DEFAULT_DOCS_PAGE }}
         run: bun run build
 
       - name: Upload artifact

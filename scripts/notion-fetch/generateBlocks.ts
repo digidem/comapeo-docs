@@ -123,7 +123,7 @@ async function downloadAndProcessImage(
     );
 
     const savedBytes = usedFallback ? 0 : Math.max(0, originalSize - finalSize);
-    const imagePath = `/images/${filename.replace(/\\/g, "/")}`;
+    const imagePath = `images/${filename.replace(/\\/g, "/")}`;
     return { newPath: imagePath, savedBytes };
   } catch (error) {
     // Enhanced error handling with specific error types

@@ -1,6 +1,10 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -8,6 +12,11 @@ const config: Config = {
   title: 'Comapeo Documentation',
   tagline: 'Learn how to use the CoMapeo platform',
   favicon: 'img/favicon.ico',
+  
+  // Custom fields to pass environment variables to client-side code
+  customFields: {
+    defaultDocsPage: process.env.DEFAULT_DOCS_PAGE || 'introduction',
+  },
 
   // Set the production url of your site here
   url: 'https://docs.comapeo.app',
@@ -49,9 +58,9 @@ const config: Config = {
       '@docusaurus/plugin-client-redirects',
       {
         redirects: [
-          // Redirect `/docs` and `/docs/` to `/docs/introduction`
+          // Redirect `/docs` and `/docs/` to default docs page (configurable via DEFAULT_DOCS_PAGE env var)
           {
-            to: '/docs/introduction',
+            to: `/docs/${process.env.DEFAULT_DOCS_PAGE || 'introduction'}`,
             from: '/docs',
           },
         ],

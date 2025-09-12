@@ -2,6 +2,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import dotenv from 'dotenv';
+import remarkFixImagePaths from './scripts/remark-fix-image-paths.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -138,6 +139,7 @@ const config: Config = {
         docs: {
           path: 'docs',
           sidebarPath: './src/components/sidebars.ts',
+          remarkPlugins: [remarkFixImagePaths],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:

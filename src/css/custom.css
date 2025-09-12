@@ -46,3 +46,38 @@
   margin-top: 0.5rem;
   margin-left: 1rem;
 }
+
+/* Docs content image sizing and layout */
+.theme-doc-markdown img:not(.no-doc-image-style) {
+  max-width: 100%;
+  height: auto;
+  max-height: 50vh; /* cap image height to half of viewport */
+  object-fit: contain;
+  display: block;
+  margin: 1rem auto; /* center images and add spacing */
+}
+
+/* Optional helpers for images used via MDX with className */
+.theme-doc-markdown img.full-width {
+  width: 100%;
+  max-height: none;
+}
+.theme-doc-markdown img.with-border {
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 6px;
+}
+.theme-doc-markdown img.with-shadow {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+}
+
+/* Figure + caption styling if authors use <figure> in MDX */
+.theme-doc-markdown figure {
+  margin: 1.25rem auto;
+  text-align: center;
+}
+.theme-doc-markdown figcaption {
+  margin-top: 0.5rem;
+  color: var(--ifm-color-content-secondary);
+  font-size: 0.9rem;
+}

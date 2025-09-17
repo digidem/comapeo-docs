@@ -55,6 +55,86 @@
   object-fit: contain;
   display: block;
   margin: 1rem auto; /* center images and add spacing */
+  cursor: zoom-in;
+}
+
+/* When image zoom is active, remove caps so medium-zoom can preserve
+   the image's natural aspect ratio without layout constraints. */
+img.medium-zoom-image--opened {
+  /* Ensure no distortion by removing any imposed sizing caps */
+  max-width: none !important;
+  max-height: none !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  cursor: zoom-out;
+}
+
+/* Subtle close button shown during zoom */
+.zoom-close-btn {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10001;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  line-height: 1;
+  font-size: 14px;
+  display: none;
+  backdrop-filter: saturate(120%) blur(2px);
+}
+body.zoom-open .zoom-close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Hide navbar and prevent page scroll while an image is zoomed */
+/* Hide navbar as soon as zoom is initiated; maintain during open */
+body.zooming .navbar,
+body.zoom-open .navbar,
+body:has(img.medium-zoom-image--opened) .navbar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-100%);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+body.zooming,
+body.zoom-open,
+body:has(img.medium-zoom-image--opened) {
+  overflow: hidden;
+}
+
+/* Remove all layout offsets during zoom to prevent top gap */
+body.zooming,
+body.zoom-open,
+body:has(img.medium-zoom-image--opened) {
+  /* Override Docusaurus navbar height variable */
+  --ifm-navbar-height: 0 !important;
+}
+
+body.zooming .main-wrapper,
+body.zoom-open .main-wrapper,
+body:has(img.medium-zoom-image--opened) .main-wrapper {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Remove padding from all potential containers during zoom */
+body.zooming .container,
+body.zoom-open .container,
+body:has(img.medium-zoom-image--opened) .container {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+body.zooming .row,
+body.zoom-open .row,
+body:has(img.medium-zoom-image--opened) .row {
+  margin-top: 0 !important;
 }
 
 /* Optional helpers for images used via MDX with className */
@@ -69,6 +149,28 @@
 .theme-doc-markdown img.with-shadow {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   border-radius: 6px;
+}
+
+/* Optional checker background helper for transparent PNGs */
+.theme-doc-markdown img.checker-bg {
+  background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+    linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+    linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+}
+
+/* Simple grid for side-by-side images in MDX */
+.theme-doc-markdown .image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+.theme-doc-markdown .image-grid img {
+  width: 100%;
+  height: auto;
 }
 
 /* Figure + caption styling if authors use <figure> in MDX */

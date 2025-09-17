@@ -3,6 +3,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import dotenv from 'dotenv';
 import remarkFixImagePaths from './scripts/remark-fix-image-paths';
+import rehypeImageFigure from './scripts/rehype-image-figure';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -95,6 +96,7 @@ const config: Config = {
         ],
       },
     ],
+    'docusaurus-plugin-image-zoom',
     // [
     //   '@docusaurus/preset-classic',
     //   {
@@ -140,6 +142,7 @@ const config: Config = {
           path: 'docs',
           sidebarPath: './src/components/sidebars.ts',
           remarkPlugins: [remarkFixImagePaths],
+          rehypePlugins: [rehypeImageFigure],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
@@ -161,6 +164,18 @@ const config: Config = {
   themeConfig: {
     // Replace with your project's social card
     image: 'img/comapeo-social-card.jpg',
+    zoom: {
+      selector: '.theme-doc-markdown img:not(.no-zoom)',
+      background: {
+        light: 'rgba(255, 255, 255, 0.9)',
+        dark: 'rgba(20, 20, 20, 0.9)',
+      },
+      config: {
+        margin: 0,
+        scrollOffset: 0,
+        // No container override - let plugin use full viewport
+      },
+    },
     navbar: {
       // title: 'CoMapeo',
       logo: {

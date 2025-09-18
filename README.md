@@ -11,12 +11,28 @@ bun i
 ```
 
 Before proceeding to local development, set up your environment and fetch the latest Notion Markdown files:
+
 1. Rename (or copy) .env.example to .env and update it with your Notion API key and Database ID.
 2. Fetch the Notion Markdown documentation by running:
 
 ```
 bun notion:fetch
 ```
+
+### Notion Fetch Workflow
+
+The `bun notion:fetch` script pulls structured content from Notion and rewrites local docs. Keep these rules in mind so the output matches your expectations:
+
+- **Filter criteria**: Only pages where `Status` equals `Ready to publish` _and_ the `Parent item` relation is empty are treated as parent records. Pages that fail either check are skipped.
+- **Sub-page grouping**: Parents must link their language variants through the `Sub-item` relation. Each linked child should set `Language` to `English`, `Spanish`, or `Portuguese`. Any other language values are ignored.
+- **Section field drives layout**:
+  - `Section = Page` exports markdown, regenerates frontmatter, rewrites remote images under `static/images/`, and tracks compression savings for the summary.
+  - `Section = Toggle` creates a folder (plus `_category_.json` for English) and increments the “section folders” counter.
+  - `Section = Heading` stores the heading for the next `Page` entry’s sidebar metadata and increments the “title sections applied” counter.
+- **Summary counters**: The totals printed at the end reflect the actions above. Zeros mean no matching work occurred (for example, no toggles, no headings, or no images to optimize).
+- **Translations**: When a non-English child page is processed, its title is written to `i18n/<locale>/code.json` using the parent’s English title as the key. Ensure those files exist before running the script.
+- **Slug and edit URL**: Markdown frontmatter derives the slug and `custom_edit_url` from the parent title. Adjust the Notion title to change the generated path.
+- **Safety checks**: Missing `NOTION_API_KEY` or `DATABASE_ID` cause the script to exit early after logging an error. Other runtime failures (such as image download issues) are logged and processing continues for remaining pages.
 
 ### Local Development
 

@@ -13,11 +13,13 @@ if (!process.env.DATABASE_ID) {
 }
 
 // Configuration for retry logic
+const IS_TEST_ENV = process.env.NODE_ENV === "test";
+
 const RETRY_CONFIG = {
-  maxRetries: 3,
-  baseDelay: 1000, // 1 second
-  maxDelay: 30000, // 30 seconds
-  timeout: 10000, // 10 seconds per request
+  maxRetries: 4,
+  baseDelay: IS_TEST_ENV ? 50 : 1000, // faster retries in tests
+  maxDelay: IS_TEST_ENV ? 1000 : 45000,
+  timeout: IS_TEST_ENV ? 5000 : 15000,
 };
 
 // Create Notion client with timeout
@@ -58,9 +60,12 @@ function isRetryableError(error: unknown): boolean {
   if (
     err.code === "ECONNABORTED" ||
     err.code === "ENOTFOUND" ||
-    err.code === "ETIMEDOUT"
+    err.code === "ETIMEDOUT" ||
+    err.code === "notionhq_client_request_timeout"
   )
     return true;
+
+  if ((error as { name?: string }).name === "RequestTimeoutError") return true;
 
   // Server errors (5xx)
   if (err.status && err.status >= 500) return true;

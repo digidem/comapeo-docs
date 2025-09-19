@@ -14,7 +14,7 @@ This is a temporary checklist covering open Issues #15–19. Work through them s
 
 - [ ] **#18** `refactor: rename Section property to Element Type`
   - Branch: `refactor/notion-element-type`
-  - PR: _link once opened_
+  - PR: https://github.com/digidem/comapeo-docs/pull/20
 - [ ] **#15** `feat: import empty sections from Notion`
   - Branch: `feat/notion-empty-sections`
   - PR: _link once opened_
@@ -29,4 +29,3 @@ This is a temporary checklist covering open Issues #15–19. Work through them s
   - PR: _link once opened_
 
 > Update this file after each merge: check off the completed item, add the PR URL, and remove the file entirely once all tasks are done.
-

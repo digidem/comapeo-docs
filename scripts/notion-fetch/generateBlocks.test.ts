@@ -60,9 +60,6 @@ describe("generateBlocks", () => {
         "Content elements": {
           title: [{ plain_text: "Sample Section" }],
         },
-        Title: {
-          title: [{ plain_text: "Sample Section" }],
-        },
         [NOTION_PROPERTIES.ELEMENT_TYPE]: {
           select: {
             name: "Toggle",

@@ -152,6 +152,7 @@ async function downloadAndProcessImage(
 }
 
 const LEGACY_SECTION_PROPERTY = "Section";
+const SECTION_TITLE_PROPERTY = "Content elements";
 
 const getElementTypeProperty = (page: Record<string, any>) =>
   page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
@@ -182,7 +183,8 @@ const groupPagesByLang = (pages, page) => {
       if (lang) {
         obj.content[lang] = subpage;
         const subpageTitle =
-          subpage.properties?.Title?.title?.[0]?.plain_text ?? null;
+          subpage.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]
+            ?.plain_text ?? null;
         if (subpageTitle) {
           obj.sectionTitles[lang] = subpageTitle;
         }
@@ -190,7 +192,8 @@ const groupPagesByLang = (pages, page) => {
     }
   }
   const mainSectionTitle =
-    page.properties?.Title?.title?.[0]?.plain_text ?? obj.mainTitle;
+    page.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]?.plain_text ??
+    obj.mainTitle;
   obj.sectionTitles.default = mainSectionTitle;
   return obj;
 };
@@ -283,7 +286,8 @@ export async function generateBlocks(pages, progressCallback) {
           // TOGGLE
           if (sectionType === "Toggle") {
             const sectionName =
-              page.properties?.Title?.title?.[0]?.plain_text ??
+              page.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]
+                ?.plain_text ??
               pageByLang.sectionTitles[lang] ??
               pageByLang.sectionTitles.default ??
               pageByLang.mainTitle;

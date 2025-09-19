@@ -17,6 +17,7 @@
     "notionStatus:translation": "bun scripts/notion-status --workflow translation",
     "notionStatus:draft": "bun scripts/notion-status --workflow draft",
     "notionStatus:publish": "bun scripts/notion-status --workflow publish",
+    "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "scaffold:test": "bun run scripts/test-scaffold/index.ts",
     "scaffold:test:all": "bun run scripts/test-scaffold/index.ts --all",
     "ai:suggest-tests": "bun run scripts/ai-test-suggest/index.ts",

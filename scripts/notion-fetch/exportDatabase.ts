@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
 import { enhancedNotion, DATABASE_ID } from "../notionClient.js";
+import { fetchNotionBlocks } from "../fetchNotionData.js";
 import { NOTION_PROPERTIES } from "../constants.js";
 
 dotenv.config();
@@ -52,19 +53,53 @@ export async function exportNotionDatabase(): Promise<void> {
   const allPages = await fetchAllPages();
   const readyToPublish = allPages.filter(isReadyToPublish);
 
+  console.log(
+    chalk.cyan(
+      `📦 Fetching blocks for ${allPages.length} pages to capture full content...`
+    )
+  );
+
+  const pagesWithBlocks: Array<{
+    page: Record<string, unknown>;
+    blocks: Array<Record<string, unknown>>;
+  }> = [];
+
+  for (const page of allPages) {
+    const pageId = page.id as string | undefined;
+    if (!pageId) {
+      pagesWithBlocks.push({ page, blocks: [] });
+      continue;
+    }
+
+    try {
+      const blocks = await fetchNotionBlocks(pageId);
+      pagesWithBlocks.push({ page, blocks });
+    } catch (error) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Failed to fetch blocks for page ${pageId}: ${
+            (error as Error)?.message ?? error
+          }`
+        )
+      );
+      pagesWithBlocks.push({ page, blocks: [] });
+    }
+  }
+
   const payload = {
     generatedAt: new Date().toISOString(),
     total: allPages.length,
     readyToPublishTotal: readyToPublish.length,
     readyToPublishIds: readyToPublish.map((page) => page.id ?? null),
     results: allPages,
+    pages: pagesWithBlocks,
   };
 
   await writeFile(OUTPUT_PATH, JSON.stringify(payload, null, 2), "utf8");
 
   console.log(
     chalk.green(
-      `✅ Exported ${allPages.length} pages to ${path.relative(
+      `✅ Exported ${allPages.length} pages (with blocks) to ${path.relative(
         process.cwd(),
         OUTPUT_PATH
       )}`

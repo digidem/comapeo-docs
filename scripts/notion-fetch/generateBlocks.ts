@@ -171,15 +171,27 @@ const groupPagesByLang = (pages, page) => {
     mainTitle: page.properties["Content elements"].title[0].plain_text,
     section: sectionName,
     content: {},
+    mainPage: page,
+    sectionTitles: {},
   };
   const subpagesId = page.properties["Sub-item"].relation.map((obj) => obj.id);
   for (const subpageId of subpagesId) {
     const subpage = pages.find((page) => page.id == subpageId);
     if (subpage) {
       const lang = langMap[subpage.properties["Language"].select?.name];
-      obj.content[lang] = subpage;
+      if (lang) {
+        obj.content[lang] = subpage;
+        const subpageTitle =
+          subpage.properties?.Title?.title?.[0]?.plain_text ?? null;
+        if (subpageTitle) {
+          obj.sectionTitles[lang] = subpageTitle;
+        }
+      }
     }
   }
+  const mainSectionTitle =
+    page.properties?.Title?.title?.[0]?.plain_text ?? obj.mainTitle;
+  obj.sectionTitles.default = mainSectionTitle;
   return obj;
 };
 
@@ -223,8 +235,11 @@ export async function generateBlocks(pages, progressCallback) {
      * }
      */
     for (const page of pages) {
-      if (page.properties["Sub-item"].relation.length !== 0) {
-        pagesByLang.push(groupPagesByLang(pages, page));
+      const grouped = groupPagesByLang(pages, page);
+      const hasContent = Object.keys(grouped.content).length > 0;
+
+      if (hasContent || grouped.section === "Toggle") {
+        pagesByLang.push(grouped);
       }
     }
 
@@ -238,9 +253,20 @@ export async function generateBlocks(pages, progressCallback) {
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-]/g, "");
 
-      for (const lang of Object.keys(pageByLang.content)) {
+      const languages = Object.keys(pageByLang.content);
+      if (pageByLang.section === "Toggle" && languages.length === 0) {
+        languages.push(DEFAULT_LOCALE);
+      }
+
+      for (const lang of languages) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
-        const page = pageByLang.content[lang];
+        const page =
+          pageByLang.content[lang] ??
+          (lang === DEFAULT_LOCALE ? pageByLang.mainPage : undefined);
+
+        if (!page) {
+          continue;
+        }
         const pageTitle =
           page.properties["Content elements"].title[0].plain_text;
 
@@ -251,12 +277,16 @@ export async function generateBlocks(pages, progressCallback) {
         ); // 2 minute timeout per page
 
         try {
-          if (lang !== "en")
+          if (lang !== "en" && pageByLang.content[lang])
             setTranslationString(lang, pageByLang.mainTitle, pageTitle);
 
           // TOGGLE
           if (sectionType === "Toggle") {
-            const sectionName = page.properties["Title"].title[0].plain_text;
+            const sectionName =
+              page.properties?.Title?.title?.[0]?.plain_text ??
+              pageByLang.sectionTitles[lang] ??
+              pageByLang.sectionTitles.default ??
+              pageByLang.mainTitle;
             const sectionFolder = filename;
             const sectionFolderPath = path.join(PATH, sectionFolder);
             fs.mkdirSync(sectionFolderPath, { recursive: true });

@@ -1,71 +1,94 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as scriptModule from "./generateBlocks";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NOTION_PROPERTIES } from "../constants";
 
-// Mock external dependencies
-vi.mock("../notionClient", () => ({
+const mkdirSyncMock = vi.fn();
+const writeFileSyncMock = vi.fn();
+const readFileSyncMock = vi.fn(() => "{}");
+
+vi.mock("node:fs", () => ({
   default: {
-    pages: {
-      retrieve: vi.fn(),
-      update: vi.fn(),
-    },
-    blocks: {
-      children: {
-        list: vi.fn(),
-      },
-    },
+    mkdirSync: mkdirSyncMock,
+    writeFileSync: writeFileSyncMock,
+    readFileSync: readFileSyncMock,
+  },
+  mkdirSync: mkdirSyncMock,
+  writeFileSync: writeFileSyncMock,
+  readFileSync: readFileSyncMock,
+}));
+
+vi.mock("../notionClient.js", () => ({
+  n2m: {
+    pageToMarkdown: vi.fn(),
+    toMarkdownString: vi.fn(),
   },
 }));
 
-vi.mock("fs/promises", () => ({
-  readFile: vi.fn(),
-  writeFile: vi.fn(),
-  mkdir: vi.fn(),
-  access: vi.fn(),
+vi.mock("./spinnerManager.js", () => ({
+  default: {
+    create: vi.fn(() => ({
+      text: "",
+      succeed: vi.fn(),
+      fail: vi.fn(),
+    })),
+    stopAll: vi.fn(),
+    remove: vi.fn(),
+  },
 }));
 
 describe("generateBlocks", () => {
   beforeEach(() => {
-    // Reset mocks before each test
     vi.clearAllMocks();
+    vi.resetModules();
   });
 
-  afterEach(() => {
-    // Clean up after each test
-    vi.restoreAllMocks();
+  const importModule = () => import("./generateBlocks");
+
+  it("exposes generateBlocks", async () => {
+    const module = await importModule();
+    expect(typeof module.generateBlocks).toBe("function");
   });
 
-  it("should run without errors", () => {
-    // This basic test ensures the module can be imported
-    expect(scriptModule).toBeDefined();
+  it("creates toggle folders even when no subpages exist", async () => {
+    const { generateBlocks } = await importModule();
+
+    // Clear directory creation during module import
+    vi.clearAllMocks();
+
+    const togglePage = {
+      id: "toggle-page-id",
+      properties: {
+        "Content elements": {
+          title: [{ plain_text: "Sample Section" }],
+        },
+        Title: {
+          title: [{ plain_text: "Sample Section" }],
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: {
+            name: "Toggle",
+          },
+        },
+        "Sub-item": {
+          relation: [],
+        },
+      },
+    };
+
+    await generateBlocks([togglePage], vi.fn());
+
+    const mkdirCall = mkdirSyncMock.mock.calls.find(([dir]) =>
+      /docs[\\/]sample-section$/.test(dir)
+    );
+
+    expect(mkdirCall).toBeDefined();
+    expect(mkdirCall?.[1]).toEqual({ recursive: true });
+
+    const categoryCall = writeFileSyncMock.mock.calls.find(([filePath]) =>
+      /_category_\.json$/.test(filePath)
+    );
+
+    expect(categoryCall).toBeDefined();
+    expect(categoryCall?.[1]).toContain('"label": "Sample Section"');
+    expect(categoryCall?.[2]).toBe("utf8");
   });
-
-  /**
-   * TODO: Implement the following test cases
-   *
-   * AI-Generated Test Case Suggestions:
-   * (Run `bun run ai:suggest-tests ./generateBlocks.ts` to generate)
-   *
-   * 1. Test with valid input parameters
-   * 2. Test error handling for invalid inputs
-   * 3. Test edge cases and boundary conditions
-   * 4. Test async operations and promise handling
-   * 5. Test integration with external dependencies
-   */
-
-  it.todo("should test downloadAndProcessImage function with valid inputs");
-  it.todo("should test downloadAndProcessImage function with invalid inputs");
-  it.todo("should test setTranslationString function with valid inputs");
-  it.todo("should test setTranslationString function with invalid inputs");
-  it.todo("should test generateBlocks function with valid inputs");
-  it.todo("should test generateBlocks function with invalid inputs");
-  it.todo("should test getI18NPath function with valid inputs");
-  it.todo("should test getI18NPath function with invalid inputs");
-  it.todo("should test groupPagesByLang function with valid inputs");
-  it.todo("should test groupPagesByLang function with invalid inputs");
-  it.todo("should handle async operations correctly");
-  it.todo("should handle promise rejections");
-  it.todo("should handle file read/write operations");
-  it.todo("should handle file system errors");
-  it.todo("should handle network requests");
-  it.todo("should handle network failures");
 });

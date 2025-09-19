@@ -11,6 +11,7 @@ Short, high-signal rules for AI agents working in this repo. Keep changes small 
 - name React components in PascalCase; docs filenames in kebab-case
 - store images under `static/images` and reference as `/images/...`
 - keep i18n in mind: add/translate UI strings and update `i18n/*/code.json` when relevant
+- spin up a fresh git worktree per issue, copy `.env` into that worktree, and run `bun i` before making changes
 
 ### Don't
 

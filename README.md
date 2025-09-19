@@ -25,10 +25,10 @@ The `bun notion:fetch` script pulls structured content from Notion and rewrites 
 
 - **Filter criteria**: Only pages where `Status` equals `Ready to publish` _and_ the `Parent item` relation is empty are treated as parent records. Pages that fail either check are skipped.
 - **Sub-page grouping**: Parents must link their language variants through the `Sub-item` relation. Each linked child should set `Language` to `English`, `Spanish`, or `Portuguese`. Any other language values are ignored.
-- **Section field drives layout**:
-  - `Section = Page` exports markdown, regenerates frontmatter, rewrites remote images under `static/images/`, and tracks compression savings for the summary.
-  - `Section = Toggle` creates a folder (plus `_category_.json` for English) and increments the “section folders” counter.
-  - `Section = Heading` stores the heading for the next `Page` entry’s sidebar metadata and increments the “title sections applied” counter.
+- **Element Type field drives layout**:
+  - `Element Type = Page` exports markdown, regenerates frontmatter, rewrites remote images under `static/images/`, and tracks compression savings for the summary.
+  - `Element Type = Toggle` creates a folder (plus `_category_.json` for English) and increments the “section folders” counter.
+  - `Element Type = Heading` stores the heading for the next `Page` entry’s sidebar metadata and increments the “title sections applied” counter.
 - **Summary counters**: The totals printed at the end reflect the actions above. Zeros mean no matching work occurred (for example, no toggles, no headings, or no images to optimize).
 - **Translations**: When a non-English child page is processed, its title is written to `i18n/<locale>/code.json` using the parent’s English title as the key. Ensure those files exist before running the script.
 - **Slug and edit URL**: Markdown frontmatter derives the slug and `custom_edit_url` from the parent title. Adjust the Notion title to change the generated path.

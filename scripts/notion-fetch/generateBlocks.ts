@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { n2m } from "../notionClient.js";
+import { NOTION_PROPERTIES } from "../constants.js";
 import axios from "axios";
 import chalk from "chalk";
 import { processImage } from "./imageProcessor";
@@ -150,15 +151,25 @@ async function downloadAndProcessImage(
   }
 }
 
+const LEGACY_SECTION_PROPERTY = "Section";
+
+const getElementTypeProperty = (page: Record<string, any>) =>
+  page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
+  page?.properties?.[LEGACY_SECTION_PROPERTY];
+
 const groupPagesByLang = (pages, page) => {
   const langMap = {
     English: "en",
     Spanish: "es",
     Portuguese: "pt",
   };
+  const elementType = getElementTypeProperty(page);
+  const sectionName =
+    elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
+
   const obj = {
     mainTitle: page.properties["Content elements"].title[0].plain_text,
-    section: page.properties.Section.select.name,
+    section: sectionName,
     content: {},
   };
   const subpagesId = page.properties["Sub-item"].relation.map((obj) => obj.id);
@@ -230,7 +241,8 @@ export async function generateBlocks(pages, progressCallback) {
       for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
-        const pageTitle = page.properties["Content elements"].title[0].plain_text;
+        const pageTitle =
+          page.properties["Content elements"].title[0].plain_text;
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(

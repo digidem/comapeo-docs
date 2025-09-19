@@ -1,8 +1,8 @@
 import { Client } from "@notionhq/client";
-import dotenv from 'dotenv';
-import ora from 'ora';
-import chalk from 'chalk';
-import { NOTION_PROPERTIES, MAIN_LANGUAGE } from '../constants.js';
+import dotenv from "dotenv";
+import ora from "ora";
+import chalk from "chalk";
+import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +20,12 @@ interface NotionPageProperties {
       name: string;
     };
   };
+  "Element Type"?: {
+    select: {
+      name: string;
+    };
+  };
+  // Legacy support while migrating the Notion database
   Section?: {
     select: {
       name: string;
@@ -44,16 +50,19 @@ interface NotionPageProperties {
 /**
  * Gets the highest order number from the database
  */
-async function getHighestOrder(notion: Client, databaseId: string): Promise<number> {
+async function getHighestOrder(
+  notion: Client,
+  databaseId: string
+): Promise<number> {
   const response = await notion.databases.query({
     database_id: databaseId,
     sorts: [
       {
         property: NOTION_PROPERTIES.ORDER,
-        direction: 'descending'
-      }
+        direction: "descending",
+      },
     ],
-    page_size: 1
+    page_size: 1,
   });
 
   if (response.results.length === 0) {
@@ -64,7 +73,11 @@ async function getHighestOrder(notion: Client, databaseId: string): Promise<numb
   // @ts-expect-error - We know the page has properties
   const orderProperty = page.properties?.[NOTION_PROPERTIES.ORDER];
 
-  if (orderProperty && 'number' in orderProperty && typeof orderProperty.number === 'number') {
+  if (
+    orderProperty &&
+    "number" in orderProperty &&
+    typeof orderProperty.number === "number"
+  ) {
     return orderProperty.number;
   }
 
@@ -78,30 +91,30 @@ async function createTemplatePage(
   notion: Client,
   databaseId: string,
   title: string,
-  order: number,
+  order: number
 ): Promise<string> {
   const pageProperties: NotionPageProperties = {
     Title: {
       title: [
         {
           text: {
-            content: title
-          }
-        }
-      ]
+            content: title,
+          },
+        },
+      ],
     },
     Status: {
       select: {
-        name: "Not started"
-      }
+        name: "Not started",
+      },
     },
-    Section: {
+    "Element Type": {
       select: {
-        name: "Page"
-      }
+        name: "Page",
+      },
     },
     Order: {
-      number: order
+      number: order,
     },
   };
 
@@ -111,7 +124,7 @@ async function createTemplatePage(
       database_id: databaseId,
     },
     // @ts-expect-error - Notion API types are not fully compatible with our types
-    properties: pageProperties
+    properties: pageProperties,
   });
 
   return newPage.id;
@@ -132,21 +145,19 @@ async function createChildPage(
       title: [
         {
           text: {
-            content: title
-          }
-        }
-      ]
+            content: title,
+          },
+        },
+      ],
     },
     Language: {
       select: {
-        name: language
-      }
+        name: language,
+      },
     },
     "Parent item": {
-      relation: [
-        { id: parentPageId }
-      ]
-    }
+      relation: [{ id: parentPageId }],
+    },
   };
 
   const newPage = await notion.pages.create({
@@ -155,7 +166,7 @@ async function createChildPage(
       database_id: databaseId,
     },
     // @ts-expect-error - Notion API types are not fully compatible with our types
-    properties: pageProperties
+    properties: pageProperties,
   });
 
   return newPage.id;
@@ -165,7 +176,7 @@ async function createChildPage(
  * Main function to create content template
  */
 export async function createContentTemplate(title: string): Promise<void> {
-  const spinner = ora('Creating new content template').start();
+  const spinner = ora("Creating new content template").start();
 
   try {
     // Initialize Notion client
@@ -176,11 +187,11 @@ export async function createContentTemplate(title: string): Promise<void> {
     const databaseId = process.env.DATABASE_ID;
 
     if (!databaseId) {
-      throw new Error('DATABASE_ID environment variable is required');
+      throw new Error("DATABASE_ID environment variable is required");
     }
 
     // Get the highest order number
-    spinner.text = 'Getting current order numbers...';
+    spinner.text = "Getting current order numbers...";
     const highestOrder = await getHighestOrder(notion, databaseId);
     const newOrder = highestOrder + 1;
 
@@ -190,7 +201,7 @@ export async function createContentTemplate(title: string): Promise<void> {
       notion,
       databaseId,
       title,
-      newOrder,
+      newOrder
     );
 
     // Create the English child page
@@ -203,18 +214,27 @@ export async function createContentTemplate(title: string): Promise<void> {
       MAIN_LANGUAGE
     );
 
-    spinner.succeed(chalk.green(`✅ Content template created successfully!
+    spinner.succeed(
+      chalk.green(`✅ Content template created successfully!
 📄 Main page: "${title}" (Order: ${newOrder})
 📄 English page: "${title} (English)" (Order: ${newOrder})
 🔗 Parent-child relationship established
-📊 Status: "Not started" for both pages`));
+📊 Status: "Not started" for both pages`)
+    );
 
     console.log(chalk.blue(`\n🔗 Notion URLs:`));
-    console.log(chalk.blue(`Main page: https://notion.so/${mainPageId.replace(/-/g, '')}`));
-    console.log(chalk.blue(`English page: https://notion.so/${childPageId.replace(/-/g, '')}`));
-
+    console.log(
+      chalk.blue(`Main page: https://notion.so/${mainPageId.replace(/-/g, "")}`)
+    );
+    console.log(
+      chalk.blue(
+        `English page: https://notion.so/${childPageId.replace(/-/g, "")}`
+      )
+    );
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to create content template: ${error.message}`));
+    spinner.fail(
+      chalk.red(`Failed to create content template: ${error.message}`)
+    );
     throw error;
   }
 }
@@ -224,8 +244,14 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error(chalk.red('❌ Error: Please provide a title for the content template'));
-    console.log(chalk.yellow('Usage: bun scripts/notion-create-template/createTemplate.ts "Your Content Title"'));
+    console.error(
+      chalk.red("❌ Error: Please provide a title for the content template")
+    );
+    console.log(
+      chalk.yellow(
+        'Usage: bun scripts/notion-create-template/createTemplate.ts "Your Content Title"'
+      )
+    );
     process.exit(1);
   }
 
@@ -233,7 +259,7 @@ if (import.meta.main) {
 
   createContentTemplate(title)
     .then(() => {
-      console.log(chalk.green('\n🎉 Content template creation completed!'));
+      console.log(chalk.green("\n🎉 Content template creation completed!"));
     })
     .catch((error) => {
       console.error(chalk.red(`\n💥 Error: ${error.message}`));

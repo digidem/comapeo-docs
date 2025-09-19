@@ -1,16 +1,34 @@
+import { pathToFileURL } from "url";
+import dotenv from "dotenv";
+import ora from "ora";
+import chalk from "chalk";
+import fs from "fs/promises";
+import path from "path";
+import { notion, DATABASE_ID, n2m } from "../notionClient.js";
+import { translateText } from "./translateFrontMatter.js";
+import {
+  translateJson,
+  extractTranslatableText,
+  getLanguageName,
+} from "./translateCodeJson.js";
+import { createNotionPageFromMarkdown } from "./markdownToNotion.js";
+import {
+  fetchNotionData,
+  sortAndExpandNotionData,
+} from "../fetchNotionData.js";
+import {
+  LANGUAGES,
+  MAIN_LANGUAGE,
+  NOTION_PROPERTIES,
+  NotionPage,
+  TranslationConfig,
+} from "../constants.js";
 
-import { pathToFileURL } from 'url';
-import dotenv from 'dotenv';
-import ora from 'ora';
-import chalk from 'chalk';
-import fs from 'fs/promises';
-import path from 'path';
-import { notion, DATABASE_ID, n2m } from '../notionClient.js';
-import { translateText } from './translateFrontMatter.js';
-import { translateJson, extractTranslatableText, getLanguageName } from './translateCodeJson.js';
-import { createNotionPageFromMarkdown } from './markdownToNotion.js';
-import { fetchNotionData, sortAndExpandNotionData } from '../fetchNotionData.js';
-import { LANGUAGES, MAIN_LANGUAGE, NOTION_PROPERTIES, NotionPage, TranslationConfig } from '../constants.js';
+const LEGACY_SECTION_PROPERTY = "Section";
+
+const getElementTypeProperty = (page: NotionPage) =>
+  page.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
+  (page.properties as Record<string, any>)?.[LEGACY_SECTION_PROPERTY];
 
 // Load environment variables from .env file
 dotenv.config();
@@ -21,7 +39,7 @@ dotenv.config();
  * Fetches published English pages from Notion
  */
 export async function fetchPublishedEnglishPages() {
-  const spinner = ora('Fetching published English pages from Notion').start();
+  const spinner = ora("Fetching published English pages from Notion").start();
 
   try {
     const filter = {
@@ -29,25 +47,29 @@ export async function fetchPublishedEnglishPages() {
         {
           property: NOTION_PROPERTIES.STATUS,
           select: {
-            equals: NOTION_PROPERTIES.READY_FOR_TRANSLATION
-          }
-        }
-      ]
+            equals: NOTION_PROPERTIES.READY_FOR_TRANSLATION,
+          },
+        },
+      ],
     };
 
-    const pages = await fetchNotionData(filter) as NotionPage[];
+    const pages = (await fetchNotionData(filter)) as NotionPage[];
 
     const sortedPages = await sortAndExpandNotionData(pages);
     // Filter sortedPages according to language
-    const filteredPages = sortedPages.filter(page => {
+    const filteredPages = sortedPages.filter((page) => {
       const langProp = page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select;
       return langProp && langProp.name === MAIN_LANGUAGE;
     });
 
-    spinner.succeed(chalk.green(`Fetched ${filteredPages.length} published English pages`));
+    spinner.succeed(
+      chalk.green(`Fetched ${filteredPages.length} published English pages`)
+    );
     return filteredPages;
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to fetch published English pages: ${error.message}`));
+    spinner.fail(
+      chalk.red(`Failed to fetch published English pages: ${error.message}`)
+    );
     throw error;
   }
 }
@@ -57,32 +79,39 @@ export async function fetchPublishedEnglishPages() {
  * @param targetLanguage The target language code
  * @returns The translation page if it exists, null otherwise
  */
-export async function findTranslationPage(englishPage: NotionPage, targetLanguage: string): Promise<NotionPage | null> {
+export async function findTranslationPage(
+  englishPage: NotionPage,
+  targetLanguage: string
+): Promise<NotionPage | null> {
   try {
     // @ts-expect-error - We know the property structure
-    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const title =
+      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
     const filter = {
       and: [
         {
           property: NOTION_PROPERTIES.TITLE,
           title: {
-            equals: title
-          }
+            equals: title,
+          },
         },
         {
           property: NOTION_PROPERTIES.LANGUAGE,
           select: {
-            equals: targetLanguage
-          }
-        }
-      ]
+            equals: targetLanguage,
+          },
+        },
+      ],
     };
 
-    const results = await fetchNotionData(filter) as NotionPage[];
+    const results = (await fetchNotionData(filter)) as NotionPage[];
     return results.length > 0 ? results[0] : null;
   } catch (error) {
-    console.error(`Error finding translation page for ${englishPage.id}:`, error);
+    console.error(
+      `Error finding translation page for ${englishPage.id}:`,
+      error
+    );
     return null;
   }
 }
@@ -93,7 +122,10 @@ export async function findTranslationPage(englishPage: NotionPage, targetLanguag
  * @param translationPage The translation page
  * @returns True if the translation needs to be updated, false otherwise
  */
-export function needsTranslationUpdate(englishPage: NotionPage, translationPage: NotionPage | null) {
+export function needsTranslationUpdate(
+  englishPage: NotionPage,
+  translationPage: NotionPage | null
+) {
   if (!translationPage) {
     return true; // No translation exists, so it needs to be created
   }
@@ -124,8 +156,6 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
   }
 }
 
-
-
 /**
  * Saves translated content to the output directory
  * @param englishPage The English page
@@ -133,31 +163,36 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  * @param config The translation configuration
  * @returns The path to the saved file
  */
-export async function saveTranslatedContentToDisk(englishPage: NotionPage, translatedContent: string, config: TranslationConfig): Promise<string> {
+export async function saveTranslatedContentToDisk(
+  englishPage: NotionPage,
+  translatedContent: string,
+  config: TranslationConfig
+): Promise<string> {
   try {
     // Create a sanitized filename from the title
     // @ts-expect-error - We know the property structure
-    const title = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
-    const filename = title
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '') + '.md';
+    const title =
+      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const filename =
+      title
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "") + ".md";
 
     // Determine the output path
     const outputPath = path.join(config.outputDir, filename);
 
     // Handle section folders
-    // @ts-expect-error - We know the property structure
-    if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
-      // @ts-expect-error - We know the property structure
-      const sectionType = englishPage.properties[NOTION_PROPERTIES.SECTION].select.name.toLowerCase();
+    const elementType = getElementTypeProperty(englishPage);
+    const sectionType = elementType?.select?.name?.toLowerCase();
 
-      if (sectionType === 'toggle') {
+    if (sectionType) {
+      if (sectionType === "toggle") {
         // For toggle sections, create a folder with the same name
         const sectionFolder = title
           .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '');
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "");
 
         const sectionPath = path.join(config.outputDir, sectionFolder);
         await fs.mkdir(sectionPath, { recursive: true });
@@ -166,19 +201,24 @@ export async function saveTranslatedContentToDisk(englishPage: NotionPage, trans
         const categoryContent = {
           label: title,
           // @ts-expect-error - We know the property structure
-          position: englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
+          position:
+            englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
           collapsible: true,
           collapsed: true,
           link: {
-            type: "generated-index"
+            type: "generated-index",
           },
           customProps: {
-            title: title
-          }
+            title: title,
+          },
         };
 
         const categoryFilePath = path.join(sectionPath, "_category_.json");
-        await fs.writeFile(categoryFilePath, JSON.stringify(categoryContent, null, 2), 'utf8');
+        await fs.writeFile(
+          categoryFilePath,
+          JSON.stringify(categoryContent, null, 2),
+          "utf8"
+        );
 
         // Skip creating a markdown file for toggle sections
         return categoryFilePath;
@@ -191,11 +231,14 @@ export async function saveTranslatedContentToDisk(englishPage: NotionPage, trans
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
     // Write the translated content to the output file
-    await fs.writeFile(outputPath, translatedContent, 'utf8');
+    await fs.writeFile(outputPath, translatedContent, "utf8");
 
     return outputPath;
   } catch (error) {
-    console.error(`Error saving translated content for ${englishPage.id}:`, error);
+    console.error(
+      `Error saving translated content for ${englishPage.id}:`,
+      error
+    );
     throw error;
   }
 }
@@ -208,15 +251,28 @@ async function translateAllCodeJsons(englishCodeJson: string) {
     if (config.language === "en") continue; // skip English
     const codeJsonPath = path.join(
       process.cwd(),
-      config.outputDir.split('docusaurus-plugin-content-docs/current')[0].replace(/\/+$/, ''),
-      'code.json'
+      config.outputDir
+        .split("docusaurus-plugin-content-docs/current")[0]
+        .replace(/\/+$/, ""),
+      "code.json"
     );
     try {
-      const translatedJson = await translateJson(englishCodeJson, config.notionLangCode);
-      await fs.writeFile(codeJsonPath, translatedJson, 'utf8');
-      console.log(chalk.green(`✓ Successfully saved translated code.json for ${config.language}`));
+      const translatedJson = await translateJson(
+        englishCodeJson,
+        config.notionLangCode
+      );
+      await fs.writeFile(codeJsonPath, translatedJson, "utf8");
+      console.log(
+        chalk.green(
+          `✓ Successfully saved translated code.json for ${config.language}`
+        )
+      );
     } catch (error) {
-      console.error(chalk.red(`✗ Error translating code.json for ${config.language}: ${error.message}`));
+      console.error(
+        chalk.red(
+          `✗ Error translating code.json for ${config.language}: ${error.message}`
+        )
+      );
     }
   }
 }
@@ -226,7 +282,7 @@ async function translateAllCodeJsons(englishCodeJson: string) {
  */
 async function translateThemeConfig() {
   // Import docusaurus config
-  const configPath = path.join(process.cwd(), 'docusaurus.config.ts');
+  const configPath = path.join(process.cwd(), "docusaurus.config.ts");
   const configModule = await import(configPath);
   const config = configModule.default;
 
@@ -235,22 +291,22 @@ async function translateThemeConfig() {
   const footerConfig = config.themeConfig.footer;
 
   // Convert to i18n format
-  const navbarTranslations = extractTranslatableText(navbarConfig, 'navbar');
-  const footerTranslations = extractTranslatableText(footerConfig, 'footer');
+  const navbarTranslations = extractTranslatableText(navbarConfig, "navbar");
+  const footerTranslations = extractTranslatableText(footerConfig, "footer");
 
   // Get language directories
-  const i18nDir = path.join(process.cwd(), 'i18n');
+  const i18nDir = path.join(process.cwd(), "i18n");
   const langDirs = await fs.readdir(i18nDir);
 
   for (const langDir of langDirs) {
-    if (langDir === 'en') continue; // Skip English
+    if (langDir === "en") continue; // Skip English
 
     const langPath = path.join(i18nDir, langDir);
     const langStat = await fs.stat(langPath);
 
     if (!langStat.isDirectory()) continue;
 
-    const themeClassicDir = path.join(langPath, 'docusaurus-theme-classic');
+    const themeClassicDir = path.join(langPath, "docusaurus-theme-classic");
     await fs.mkdir(themeClassicDir, { recursive: true });
 
     const languageName = getLanguageName(langDir);
@@ -262,11 +318,19 @@ async function translateThemeConfig() {
           JSON.stringify(navbarTranslations, null, 2),
           languageName
         );
-        const navbarPath = path.join(themeClassicDir, 'navbar.json');
-        await fs.writeFile(navbarPath, translatedNavbar, 'utf8');
-        console.log(chalk.green(`✓ Successfully saved translated navbar.json for ${languageName}`));
+        const navbarPath = path.join(themeClassicDir, "navbar.json");
+        await fs.writeFile(navbarPath, translatedNavbar, "utf8");
+        console.log(
+          chalk.green(
+            `✓ Successfully saved translated navbar.json for ${languageName}`
+          )
+        );
       } catch (error) {
-        console.error(chalk.red(`✗ Error translating navbar for ${languageName}: ${error.message}`));
+        console.error(
+          chalk.red(
+            `✗ Error translating navbar for ${languageName}: ${error.message}`
+          )
+        );
       }
     }
 
@@ -277,11 +341,19 @@ async function translateThemeConfig() {
           JSON.stringify(footerTranslations, null, 2),
           languageName
         );
-        const footerPath = path.join(themeClassicDir, 'footer.json');
-        await fs.writeFile(footerPath, translatedFooter, 'utf8');
-        console.log(chalk.green(`✓ Successfully saved translated footer.json for ${languageName}`));
+        const footerPath = path.join(themeClassicDir, "footer.json");
+        await fs.writeFile(footerPath, translatedFooter, "utf8");
+        console.log(
+          chalk.green(
+            `✓ Successfully saved translated footer.json for ${languageName}`
+          )
+        );
       } catch (error) {
-        console.error(chalk.red(`✗ Error translating footer for ${languageName}: ${error.message}`));
+        console.error(
+          chalk.red(
+            `✗ Error translating footer for ${languageName}: ${error.message}`
+          )
+        );
       }
     }
   }
@@ -289,7 +361,10 @@ async function translateThemeConfig() {
 /**
  * Process all translations for a single language.
  */
-async function processLanguageTranslations(config: TranslationConfig, englishPages: NotionPage[]) {
+async function processLanguageTranslations(
+  config: TranslationConfig,
+  englishPages: NotionPage[]
+) {
   console.log(chalk.yellow(`\nProcessing ${config.language} translations:`));
 
   let newTranslations = 0;
@@ -298,15 +373,21 @@ async function processLanguageTranslations(config: TranslationConfig, englishPag
 
   for (const englishPage of englishPages) {
     // @ts-expect-error - We know the property structure
-    const originalTitle = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const originalTitle =
+      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
     console.log(chalk.blue(`Processing: ${originalTitle}`));
 
     // Find existing translation
-    const translationPage = await findTranslationPage(englishPage, config.notionLangCode);
+    const translationPage = await findTranslationPage(
+      englishPage,
+      config.notionLangCode
+    );
 
     // Check if translation needs update
     if (!needsTranslationUpdate(englishPage, translationPage)) {
-      console.log(chalk.gray(`Skipping ${originalTitle} (translation is up-to-date)`));
+      console.log(
+        chalk.gray(`Skipping ${originalTitle} (translation is up-to-date)`)
+      );
       skippedTranslations++;
       continue;
     }
@@ -320,7 +401,9 @@ async function processLanguageTranslations(config: TranslationConfig, englishPag
         onUpdate: () => updatedTranslations++,
       });
     } catch (error) {
-      console.error(chalk.red(`Error processing ${originalTitle}:`, error.message));
+      console.error(
+        chalk.red(`Error processing ${originalTitle}:`, error.message)
+      );
     }
   }
 
@@ -341,18 +424,20 @@ async function processSinglePageTranslation({
   onNew,
   onUpdate,
 }: {
-  englishPage: NotionPage,
-  config: TranslationConfig,
-  translationPage: NotionPage | null,
-  onNew: () => void,
-  onUpdate: () => void,
+  englishPage: NotionPage;
+  config: TranslationConfig;
+  translationPage: NotionPage | null;
+  onNew: () => void;
+  onUpdate: () => void;
 }) {
   // @ts-expect-error - We know the property structure
-  const originalTitle = englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+  const originalTitle =
+    englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
   // Check if this is a title page
   // @ts-expect-error - We know the property structure
-  const isTitlePage = englishPage.properties[NOTION_PROPERTIES.SECTION]?.select?.name.toLowerCase() === 'title';
+  const elementType = getElementTypeProperty(englishPage);
+  const isTitlePage = elementType?.select?.name?.toLowerCase() === "title";
 
   // Convert English page to markdown
   const markdownContent = await convertPageToMarkdown(englishPage.id);
@@ -367,7 +452,11 @@ async function processSinglePageTranslation({
     translatedTitle = originalTitle;
   } else {
     // For regular pages, translate the full content
-    const translated = await translateText(markdownContent, originalTitle, config.language);
+    const translated = await translateText(
+      markdownContent,
+      originalTitle,
+      config.language
+    );
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
   }
@@ -376,33 +465,42 @@ async function processSinglePageTranslation({
   const properties: Record<string, unknown> = {
     Language: {
       select: {
-        name: config.notionLangCode
-      }
+        name: config.notionLangCode,
+      },
     },
   };
 
   // Copy other properties from the English page
   // @ts-expect-error - We know the property structure
-  if (englishPage.properties[NOTION_PROPERTIES.ORDER] && englishPage.properties[NOTION_PROPERTIES.ORDER].number) {
+  if (
+    englishPage.properties[NOTION_PROPERTIES.ORDER] &&
+    englishPage.properties[NOTION_PROPERTIES.ORDER].number
+  ) {
     properties[NOTION_PROPERTIES.ORDER] = {
-      number: englishPage.properties[NOTION_PROPERTIES.ORDER].number
+      number: englishPage.properties[NOTION_PROPERTIES.ORDER].number,
     };
   }
   // @ts-expect-error - We know the property structure
-  if (englishPage.properties[NOTION_PROPERTIES.TAGS] && englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select) {
+  if (
+    englishPage.properties[NOTION_PROPERTIES.TAGS] &&
+    englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select
+  ) {
     properties[NOTION_PROPERTIES.TAGS] = {
-      multi_select: englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select.map((tag: { name: string }) => ({ name: tag.name }))
+      multi_select: englishPage.properties[
+        NOTION_PROPERTIES.TAGS
+      ].multi_select.map((tag: { name: string }) => ({ name: tag.name })),
     };
   }
   // @ts-expect-error - We know the property structure
-  if (englishPage.properties[NOTION_PROPERTIES.SECTION] && englishPage.properties[NOTION_PROPERTIES.SECTION].select) {
-    properties[NOTION_PROPERTIES.SECTION] = {
-      select: { name: englishPage.properties[NOTION_PROPERTIES.SECTION].select.name }
+  const englishElementType = getElementTypeProperty(englishPage);
+  if (englishElementType?.select?.name) {
+    properties[NOTION_PROPERTIES.ELEMENT_TYPE] = {
+      select: { name: englishElementType.select.name },
     };
   }
 
   // Find the parent of the English page to nest the translation as a sibling
-  const parentInfo = englishPage.properties['Parent item'].relation[0].id;
+  const parentInfo = englishPage.properties["Parent item"].relation[0].id;
   // Create or update translation page in Notion as a sibling (child of the same parent)
   await createNotionPageFromMarkdown(
     notion,
@@ -430,25 +528,34 @@ async function processSinglePageTranslation({
  * Main function to run the translation workflow
  */
 export async function main() {
-  console.log(chalk.bold.cyan('🚀 Starting Notion translation workflow\n'));
+  console.log(chalk.bold.cyan("🚀 Starting Notion translation workflow\n"));
 
   try {
     // Fetch published English pages
     const englishPages = await fetchPublishedEnglishPages();
 
     if (englishPages.length === 0) {
-      console.log(chalk.yellow('No published English pages found. Exiting.'));
+      console.log(chalk.yellow("No published English pages found. Exiting."));
       return;
     }
 
     // Translate code.json for each language
-    const englishCodeJsonPath = path.join(process.cwd(), 'i18n', 'en', 'code.json');
+    const englishCodeJsonPath = path.join(
+      process.cwd(),
+      "i18n",
+      "en",
+      "code.json"
+    );
     let englishCodeJson: string;
     try {
-      englishCodeJson = await fs.readFile(englishCodeJsonPath, 'utf8');
+      englishCodeJson = await fs.readFile(englishCodeJsonPath, "utf8");
       JSON.parse(englishCodeJson);
     } catch (error) {
-      console.error(chalk.red(`Error reading or parsing English code.json: ${error.message}`));
+      console.error(
+        chalk.red(
+          `Error reading or parsing English code.json: ${error.message}`
+        )
+      );
       process.exit(1);
     }
 
@@ -462,16 +569,22 @@ export async function main() {
       await processLanguageTranslations(config, englishPages as NotionPage[]);
     }
   } catch (error) {
-    console.error(chalk.bold.red('\n❌ Fatal error during translation process:'), error);
+    console.error(
+      chalk.bold.red("\n❌ Fatal error during translation process:"),
+      error
+    );
   } finally {
     // Clean up temp directory
     try {
-      console.log(chalk.blue('\nCleaned up temporary files'));
+      console.log(chalk.blue("\nCleaned up temporary files"));
     } catch (error) {
-      console.error(chalk.yellow('\n⚠️ Failed to clean up temporary directory:'), error.message);
+      console.error(
+        chalk.yellow("\n⚠️ Failed to clean up temporary directory:"),
+        error.message
+      );
     }
 
-    console.log(chalk.bold.green('\n✨ Translation workflow completed!'));
+    console.log(chalk.bold.green("\n✨ Translation workflow completed!"));
   }
 }
 

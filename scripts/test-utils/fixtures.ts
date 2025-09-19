@@ -18,7 +18,7 @@ export const mockNotionPage = {
     Language: {
       select: { name: "English" },
     },
-    Section: {
+    "Element Type": {
       select: { name: "Getting Started" },
     },
   },

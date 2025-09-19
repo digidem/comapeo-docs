@@ -3,18 +3,18 @@
  */
 
 // Main language configuration
-export const MAIN_LANGUAGE = 'English';
+export const MAIN_LANGUAGE = "English";
 
 // Notion property names
 export const NOTION_PROPERTIES = {
-  TITLE: 'Title',
-  LANGUAGE: 'Language',
-  STATUS: 'Status',
-  ORDER: 'Order',
-  TAGS: 'Tags',
-  SECTION: 'Section',
-  READY_FOR_TRANSLATION: 'Ready for translation',
-  READY_TO_PUBLISH: 'Ready to publish'
+  TITLE: "Title",
+  LANGUAGE: "Language",
+  STATUS: "Status",
+  ORDER: "Order",
+  TAGS: "Tags",
+  ELEMENT_TYPE: "Element Type",
+  READY_FOR_TRANSLATION: "Ready for translation",
+  READY_TO_PUBLISH: "Ready to publish",
 };
 
 // Translation language configurations
@@ -36,16 +36,16 @@ export interface NotionPage {
 
 export const LANGUAGES: TranslationConfig[] = [
   {
-    language: 'pt-BR',
-    notionLangCode: 'Portuguese',
-    outputDir: './i18n/pt/docusaurus-plugin-content-docs/current'
+    language: "pt-BR",
+    notionLangCode: "Portuguese",
+    outputDir: "./i18n/pt/docusaurus-plugin-content-docs/current",
   },
   // Add more languages as needed
   // Example:
   {
-    language: 'es',
-    notionLangCode: 'Spanish',
-    outputDir: './i18n/es/docusaurus-plugin-content-docs/current'
+    language: "es",
+    notionLangCode: "Spanish",
+    outputDir: "./i18n/es/docusaurus-plugin-content-docs/current",
   },
 ];
 
@@ -68,5 +68,7 @@ export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
 
 // Safety messages
-export const ENGLISH_MODIFICATION_ERROR = 'SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.';
-export const ENGLISH_DIR_SAVE_ERROR = 'Safety check failed: Cannot save translated content to English docs directory';
+export const ENGLISH_MODIFICATION_ERROR =
+  "SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.";
+export const ENGLISH_DIR_SAVE_ERROR =
+  "Safety check failed: Cannot save translated content to English docs directory";

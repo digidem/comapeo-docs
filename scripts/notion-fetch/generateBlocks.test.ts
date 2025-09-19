@@ -4,6 +4,8 @@ import { NOTION_PROPERTIES } from "../constants";
 const mkdirSyncMock = vi.fn();
 const writeFileSyncMock = vi.fn();
 const readFileSyncMock = vi.fn(() => "{}");
+const pageToMarkdownMock = vi.fn();
+const toMarkdownStringMock = vi.fn();
 
 vi.mock("node:fs", () => ({
   default: {
@@ -18,8 +20,8 @@ vi.mock("node:fs", () => ({
 
 vi.mock("../notionClient.js", () => ({
   n2m: {
-    pageToMarkdown: vi.fn(),
-    toMarkdownString: vi.fn(),
+    pageToMarkdown: pageToMarkdownMock,
+    toMarkdownString: toMarkdownStringMock,
   },
 }));
 
@@ -39,6 +41,8 @@ describe("generateBlocks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    pageToMarkdownMock.mockReset();
+    toMarkdownStringMock.mockReset();
   });
 
   const importModule = () => import("./generateBlocks");
@@ -87,5 +91,56 @@ describe("generateBlocks", () => {
     expect(categoryCall).toBeDefined();
     expect(categoryCall?.[1]).toContain('"label": "Sample Section"');
     expect(categoryCall?.[2]).toBe("utf8");
+  });
+
+  it("writes placeholder content when website blocks are missing", async () => {
+    const { generateBlocks } = await importModule();
+
+    vi.clearAllMocks();
+
+    pageToMarkdownMock.mockResolvedValue([]);
+    toMarkdownStringMock.mockReturnValue({ parent: "" });
+
+    const mainPage = {
+      id: "main-page-id",
+      properties: {
+        "Content elements": {
+          title: [{ plain_text: "Empty Section" }],
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: {
+            name: "Page",
+          },
+        },
+        "Sub-item": {
+          relation: [{ id: "child-en" }],
+        },
+      },
+    };
+
+    const childPage = {
+      id: "child-en",
+      properties: {
+        Language: {
+          select: { name: "English" },
+        },
+        "Content elements": {
+          title: [{ plain_text: "Empty page" }],
+        },
+        "Sub-item": {
+          relation: [],
+        },
+      },
+    };
+
+    await generateBlocks([mainPage, childPage], vi.fn());
+
+    const placeholderCall = writeFileSyncMock.mock.calls.find(
+      ([, content]) =>
+        typeof content === "string" &&
+        content.includes("This page is under construction.")
+    );
+
+    expect(placeholderCall).toBeDefined();
   });
 });

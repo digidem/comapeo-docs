@@ -257,12 +257,16 @@ if (import.meta.main) {
 
   const title = args[0];
 
-  createContentTemplate(title)
-    .then(() => {
+  const run = async () => {
+    try {
+      await createContentTemplate(title);
       console.log(chalk.green("\n🎉 Content template creation completed!"));
-    })
-    .catch((error) => {
-      console.error(chalk.red(`\n💥 Error: ${error.message}`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`\n💥 Error: ${message}`));
       process.exit(1);
-    });
+    }
+  };
+
+  run();
 }

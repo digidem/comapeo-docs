@@ -23,6 +23,8 @@ Short, high-signal rules for AI agents working in this repo. Keep changes small 
 
 # prefer file-scoped checks; run only what you touched
 
+# use the GitHub CLI (`gh`) for PRs, issues, and other GitHub operations
+
 # lint a single file
 
 bunx eslint path/to/file.{ts,tsx,js} --fix

@@ -423,6 +423,26 @@ async function downloadAndProcessImageWithCache(
   };
 }
 
+/**
+ * Extracts published date from Notion page properties
+ * Falls back to current date if no published date is set
+ */
+function getPublishedDate(page: any): string {
+  // Try to get the new Published date field
+  const publishedDateProp = page.properties?.[NOTION_PROPERTIES.PUBLISHED_DATE];
+  if (publishedDateProp?.date?.start) {
+    return new Date(publishedDateProp.date.start).toLocaleDateString("en-US");
+  }
+  
+  // Fall back to last_edited_time if Published date is not available
+  if (page.last_edited_time) {
+    return new Date(page.last_edited_time).toLocaleDateString("en-US");
+  }
+  
+  // Final fallback to current date
+  return new Date().toLocaleDateString("en-US");
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -904,7 +924,8 @@ const buildFrontmatter = (
   keywords: string[],
   customProps: Record<string, unknown>,
   relativePath: string,
-  safeSlug: string
+  safeSlug: string,
+  page: any
 ) => {
   let frontmatter = `---
 id: doc-${safeSlug}
@@ -918,7 +939,7 @@ ${keywords.map((k) => `  - ${k}`).join("\n")}
 tags: [${tags.join(", ")}]
 slug: /${safeSlug}
 last_update:
-  date: ${new Date().toLocaleDateString("en-US")}
+  date: ${getPublishedDate(page)}
   author: Awana Digital`;
 
   if (Object.keys(customProps).length > 0) {
@@ -1119,7 +1140,8 @@ export async function generateBlocks(pages, progressCallback) {
           keywords,
           customProps,
           relativePath,
-          safeFilename
+          safeFilename,
+          page
         );
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
@@ -1448,7 +1470,6 @@ export async function generateBlocks(pages, progressCallback) {
               markdownString.parent = sanitizeMarkdownContent(
                 markdownString.parent
               );
-
               // Remove duplicate title heading if it exists
               // The first H1 heading often duplicates the title in Notion exports
               let contentBody = markdownString.parent;

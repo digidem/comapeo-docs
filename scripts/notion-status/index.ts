@@ -9,6 +9,7 @@ interface UpdateStatusOptions {
   fromStatus: string;
   toStatus: string;
   setPublishedCheckbox?: boolean;
+  setPublishedDate?: boolean;
 }
 
 /**
@@ -16,7 +17,7 @@ interface UpdateStatusOptions {
  * @param options Configuration options for the status update
  */
 export async function updateNotionPageStatus(options: UpdateStatusOptions): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedCheckbox } = options;
+  const { token, databaseId, fromStatus, toStatus, setPublishedCheckbox, setPublishedDate } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(`Updating pages from "${fromStatus}" to "${toStatus}"`).start();
@@ -56,16 +57,25 @@ export async function updateNotionPageStatus(options: UpdateStatusOptions): Prom
           }
         };
 
-        // Add Published checkbox if requested
+        // Add Published checkbox if requested (legacy support)
         if (setPublishedCheckbox) {
-          properties['Published'] = {
+          properties[NOTION_PROPERTIES.PUBLISHED_CHECKBOX] = {
             checkbox: true
+          };
+        }
+
+        // Add Published date if requested
+        if (setPublishedDate) {
+          properties[NOTION_PROPERTIES.PUBLISHED_DATE] = {
+            date: {
+              start: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+            }
           };
         }
 
         await notion.pages.update({
           page_id: page.id,
-          properties
+          properties: properties as any
         });
         successCount++;
       } catch (error) {
@@ -93,17 +103,20 @@ const WORKFLOWS = {
   translation: {
     from: 'Ready for translation',
     to: 'Reviewing translations',
-    setPublishedCheckbox: false
+    setPublishedCheckbox: false,
+    setPublishedDate: false
   },
   draft: {
     from: 'Ready to publish',
     to: 'Draft published',
-    setPublishedCheckbox: false
+    setPublishedCheckbox: false,
+    setPublishedDate: false
   },
   publish: {
     from: 'Draft published',
     to: 'Published',
-    setPublishedCheckbox: true
+    setPublishedCheckbox: true, // Keep for backward compatibility
+    setPublishedDate: true // New: set the published date
   }
 } as const;
 
@@ -153,12 +166,14 @@ async function main() {
   let toStatus: string;
 
   let setPublishedCheckbox = false;
+  let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
     setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
+    setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
     toStatus = options.toStatus;
@@ -188,7 +203,8 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedCheckbox
+      setPublishedCheckbox,
+      setPublishedDate
     });
   } catch (error) {
     console.error(chalk.red('Status update failed:', error.message));

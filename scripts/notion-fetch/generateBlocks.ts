@@ -24,6 +24,7 @@ import config from "../../docusaurus.config";
 import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
+import { EmojiProcessor } from "./emojiProcessor";
 
 // Enhanced image handling utilities for robust processing
 interface ImageProcessingResult {
@@ -1057,6 +1058,7 @@ export async function generateBlocks(pages, progressCallback) {
   // Stats for reporting
   let sectionCount = 0;
   let titleSectionCount = 0;
+  let emojiCount = 0;
 
   const pagesByLang = [];
 
@@ -1254,6 +1256,14 @@ export async function generateBlocks(pages, progressCallback) {
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {
+              // Process custom emojis first
+              const emojiResult = await EmojiProcessor.processPageEmojis(page.id, markdownString.parent);
+              markdownString.parent = emojiResult.content;
+              totalSaved += emojiResult.totalSaved;
+              if (emojiResult.totalSaved > 0) {
+                emojiCount++;
+              }
+
               // Fetch raw block data for callout processing
               let rawBlocks: any[] = [];
               try {
@@ -1617,6 +1627,7 @@ export async function generateBlocks(pages, progressCallback) {
     );
     console.info(chalk.blue(`   📄 Sections created: ${sectionCount}`));
     console.info(chalk.blue(`   📝 Title sections: ${titleSectionCount}`));
+    console.info(chalk.blue(`   🎨 Emojis processed: ${emojiCount}`));
 
     if (cacheStats.validEntries > 0) {
       console.info(
@@ -1626,7 +1637,7 @@ export async function generateBlocks(pages, progressCallback) {
       );
     }
 
-    return { totalSaved, sectionCount, titleSectionCount };
+    return { totalSaved, sectionCount, titleSectionCount, emojiCount };
   } catch (error) {
     console.error(chalk.red("Critical error in generateBlocks:"), error);
 

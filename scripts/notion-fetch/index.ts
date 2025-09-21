@@ -78,6 +78,7 @@ async function main(): Promise<number> {
       const totalSavedKb = Number(metrics.totalSaved) / 1024;
       const sectionCount = Number(metrics.sectionCount);
       const titleSectionCount = Number(metrics.titleSectionCount);
+      const emojiCount = Number(metrics.emojiCount);
 
       console.log(
         chalk.bold.cyan(
@@ -92,6 +93,11 @@ async function main(): Promise<number> {
       console.log(
         chalk.bold.magenta(
           `Applied ${isFinite(titleSectionCount) ? titleSectionCount : 0} title sections to content items.`
+        )
+      );
+      console.log(
+        chalk.bold.blue(
+          `Processed ${isFinite(emojiCount) ? emojiCount : 0} custom emojis from Notion pages.`
         )
       );
     } else {

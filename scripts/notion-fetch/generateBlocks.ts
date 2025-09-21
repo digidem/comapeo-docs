@@ -17,6 +17,7 @@ import {
 } from "./utils";
 import config from "../../docusaurus.config.js";
 import SpinnerManager from "./spinnerManager.js";
+import { EmojiProcessor } from "./emojiProcessor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -210,6 +211,7 @@ export async function generateBlocks(pages, progressCallback) {
   // Stats for reporting
   let sectionCount = 0;
   let titleSectionCount = 0;
+  let emojiCount = 0;
 
   const pagesByLang = [];
 
@@ -241,8 +243,16 @@ export async function generateBlocks(pages, progressCallback) {
       for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
-        const pageTitle =
+        let pageTitle =
           page.properties["Content elements"].title[0].plain_text;
+        
+        // Process emojis in page title if any
+        const titleEmojiResult = await EmojiProcessor.processPageEmojis(`${page.id}-title`, pageTitle);
+        pageTitle = titleEmojiResult.content;
+        totalSaved += titleEmojiResult.totalSaved;
+        if (titleEmojiResult.totalSaved > 0) {
+          emojiCount++;
+        }
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(
@@ -310,6 +320,13 @@ export async function generateBlocks(pages, progressCallback) {
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {
+              // Process custom emojis first
+              const emojiResult = await EmojiProcessor.processPageEmojis(page.id, markdownString.parent);
+              markdownString.parent = emojiResult.content;
+              totalSaved += emojiResult.totalSaved;
+              if (emojiResult.totalSaved > 0) {
+                emojiCount++;
+              }
               // Process images with Promise.allSettled for better error handling
               const imgRegex = /!\[.*?\]\((.*?)\)/g;
               const imgPromises = [];
@@ -561,7 +578,7 @@ last_update:
       }
     }
 
-    return { totalSaved, sectionCount, titleSectionCount };
+    return { totalSaved, sectionCount, titleSectionCount, emojiCount };
   } catch (error) {
     console.error(chalk.red("Critical error in generateBlocks:"), error);
     throw error;

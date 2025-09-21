@@ -171,6 +171,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(
@@ -309,6 +310,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 2048, // 2 KB
         sectionCount: 3,
         titleSectionCount: 2,
+        emojiCount: 1,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(
@@ -353,6 +355,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(
@@ -390,6 +393,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(
@@ -487,6 +491,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(
@@ -542,6 +547,7 @@ describe("notion-fetch integration", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       const { fetchNotionData, sortAndExpandNotionData } = await import(

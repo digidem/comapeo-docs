@@ -1,16 +1,17 @@
 # Published Date Property Migration
 
-This document describes the implementation of a `Published date` field in Notion for better publication date tracking.
+This document describes the migration from the boolean `Published` checkbox to a `Published date` field in Notion for better publication date tracking.
 
 ## Changes Made
 
 ### 1. Constants Update (`scripts/constants.ts`)
 - Added `PUBLISHED_DATE` property: "Published date"
+- Added `PUBLISHED_CHECKBOX` property: "Published" (for backward compatibility)
 
 ### 2. Notion Status Script (`scripts/notion-status/index.ts`)
 - Added `setPublishedDate` option to `UpdateStatusOptions` interface
 - Updated `updateNotionPageStatus` function to set the Published date field when moving to "Published" status
-- Modified "publish" workflow to set the published date field
+- Modified "publish" workflow to set both checkbox (legacy) and date field
 - Sets current date in YYYY-MM-DD format when publishing
 
 ### 3. Frontmatter Generation (`scripts/notion-fetch/generateBlocks.ts`)
@@ -24,18 +25,24 @@ This document describes the implementation of a `Published date` field in Notion
 
 ### For Notion Database Setup
 1. Create a new "Published date" property in your Notion database with type "Date"
+2. The existing "Published" checkbox can remain for backward compatibility
 
 ### For Deployment
 1. Deploy these code changes
 2. Existing pages will continue to work (using fallback dates)
 3. New pages published through the workflow will get proper published dates
+4. The "Published" checkbox will still be set for backward compatibility
 
-### Future Considerations
-This implementation provides a clean foundation for publication date tracking without dependencies on checkbox fields.
+### Future Cleanup (Optional)
+After all pages have been republished with proper dates:
+1. Remove `setPublishedCheckbox` from the publish workflow
+2. Remove the `PUBLISHED_CHECKBOX` constant
+3. Update any remaining references to use the date field
 
 ## Backward Compatibility
 
 - ✅ Existing pages without Published date will use `last_edited_time` or current date
+- ✅ The Published checkbox is still set during the publish workflow
 - ✅ All existing functionality continues to work
 - ✅ Scripts gracefully handle missing Published date properties
 
@@ -44,13 +51,14 @@ This implementation provides a clean foundation for publication date tracking wi
 The changes have been designed to be backward compatible and non-breaking. You can test by:
 
 1. Running the publish workflow: `bun run notionStatus:publish`
-2. Checking that the Published date is set
+2. Checking that both Published checkbox and Published date are set
 3. Verifying frontmatter generation uses the correct date
 
 ## Expected Notion Configuration
 
 Once ready, your Notion database should have:
-- `Published date` property (type: Date) - field for publication dates
+- `Published date` property (type: Date) - primary field for publication dates
+- `Published` property (type: Checkbox) - optional, for legacy compatibility
 
 ## Rollback Procedure (if needed)
 
@@ -63,15 +71,16 @@ If you need to revert these changes:
    ```
 
 2. **Workflow Adjustment**:
-   - The workflows will revert to previous behavior
+   - The workflows will automatically revert to using only the checkbox
    - No manual configuration changes needed
 
 3. **Notion Database**:
    - The "Published date" field can remain in Notion (it will be unused)
-   - **No data loss occurs**
+   - The "Published" checkbox continues to work as before
+   - **No data loss occurs** as checkbox values are preserved
 
 4. **Frontmatter Behavior**:
-   - Will revert to using `last_edited_time` or current date
+   - Will revert to using `new Date().toLocaleDateString("en-US")` for all pages
    - Existing generated files are not automatically updated
 
 ## Troubleshooting
@@ -114,7 +123,7 @@ If you need to revert these changes:
 
 After deployment, verify:
 
-- [ ] ✅ **Publish workflow works**: `bun run notionStatus:publish` sets the published date
+- [ ] ✅ **Publish workflow works**: `bun run notionStatus:publish` sets both checkbox and date
 - [ ] ✅ **Frontmatter generation**: New pages use the published date from Notion
 - [ ] ✅ **Fallback behavior**: Pages without published date use `last_edited_time`
 - [ ] ✅ **Error handling**: Invalid dates don't break the system

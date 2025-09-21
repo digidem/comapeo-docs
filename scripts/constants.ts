@@ -16,6 +16,8 @@ export const NOTION_PROPERTIES = {
   READY_FOR_TRANSLATION: "Ready for translation",
   READY_TO_PUBLISH: "Ready to publish",
   PUBLISHED_DATE: "Published date",
+  // Legacy property for backward compatibility
+  PUBLISHED_CHECKBOX: "Published",
 };
 
 // Translation language configurations

@@ -79,7 +79,7 @@ export async function updateNotionPageStatus(options: UpdateStatusOptions): Prom
 
         await notion.pages.update({
           page_id: page.id,
-          properties: properties as any
+          properties
         });
         successCount++;
       } catch (error) {

@@ -133,7 +133,7 @@ async function main() {
     const generateSpinner = ora('Generating blocks').start();
     activeSpinners.push(generateSpinner);
 
-    const { totalSaved, sectionCount, titleSectionCount } = await generateBlocks(data, (progress) => {
+    const { totalSaved, sectionCount, titleSectionCount, emojiCount } = await generateBlocks(data, (progress) => {
       generateSpinner.text = chalk.blue(`Generating blocks: ${progress.current}/${progress.total}`);
     });
     generateSpinner.succeed(chalk.green('Blocks generated successfully'));
@@ -144,6 +144,7 @@ async function main() {
     console.log(chalk.bold.cyan(`A total of ${(totalSaved / 1024).toFixed(2)} KB was saved on image compression.`));
     console.log(chalk.bold.yellow(`Created ${sectionCount} section folders with _category_.json files.`));
     console.log(chalk.bold.magenta(`Applied ${titleSectionCount} title sections to content items.`));
+    console.log(chalk.bold.blue(`Processed ${emojiCount} custom emojis from Notion pages.`));
     // Clean exit after successful completion (in tests this throws to allow assertions)
     await gracefulShutdown(0);
   } catch (error) {

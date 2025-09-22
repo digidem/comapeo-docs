@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import axios from 'axios';
 
 // Mock dependencies before importing
 vi.mock('axios', () => ({
@@ -21,24 +22,33 @@ vi.mock('./spinnerManager.js', () => ({
 }));
 
 vi.mock('./utils.js', () => ({
-  compressImageToFileWithFallback: vi.fn(),
-  isResizableFormat: vi.fn(),
-  detectFormatFromBuffer: vi.fn(),
-  extForFormat: vi.fn()
+  compressImageToFileWithFallback: vi.fn(() => Promise.resolve({ finalSize: 1024, usedFallback: false })),
+  isResizableFormat: vi.fn(() => true),
+  detectFormatFromBuffer: vi.fn(() => 'png'),
+  extForFormat: vi.fn(() => '.png')
 }));
 
 import { EmojiProcessor } from './emojiProcessor.js';
 
 describe('EmojiProcessor', () => {
   const testEmojiDir = path.join(process.cwd(), 'static/images/emojis-test/');
-  const originalEmojiPath = EmojiProcessor['EMOJI_PATH'];
+  const testCacheFile = path.join(testEmojiDir, '.emoji-cache.json');
   
   beforeEach(() => {
-    // Override the emoji path for testing
-    (EmojiProcessor as any).EMOJI_PATH = testEmojiDir;
-    (EmojiProcessor as any).EMOJI_CACHE_FILE = path.join(testEmojiDir, '.emoji-cache.json');
-    (EmojiProcessor as any).initialized = false;
-    (EmojiProcessor as any).emojiCache.clear();
+    // Configure with test paths
+    EmojiProcessor.configure({
+      emojiPath: testEmojiDir,
+      cacheFile: testCacheFile,
+      maxEmojiSize: 1024 * 1024, // 1MB for testing
+      maxConcurrentDownloads: 2,
+      downloadTimeout: 5000,
+      maxEmojisPerPage: 10,
+      enableProcessing: true,
+      allowedHosts: ['amazonaws.com', 'notion.site', 'test.com'] // Add test.com for testing
+    });
+    
+    // Reset the processor
+    EmojiProcessor.reset();
     
     // Ensure test directory exists
     fs.mkdirSync(testEmojiDir, { recursive: true });
@@ -50,8 +60,8 @@ describe('EmojiProcessor', () => {
       fs.rmSync(testEmojiDir, { recursive: true, force: true });
     }
     
-    // Restore original path
-    (EmojiProcessor as any).EMOJI_PATH = originalEmojiPath;
+    // Reset processor
+    EmojiProcessor.reset();
   });
 
   describe('processPageEmojis', () => {
@@ -80,6 +90,33 @@ describe('EmojiProcessor', () => {
       expect(result.totalSaved).toBe(2048); // 1024 * 2
     });
 
+    it('should return content unchanged when processing is disabled', async () => {
+      EmojiProcessor.configure({ enableProcessing: false });
+      const content = `Check out this emoji: https://amazonaws.com/emoji/smile.png`;
+      
+      const result = await EmojiProcessor.processPageEmojis('test-page', content);
+      
+      expect(result.content).toBe(content);
+      expect(result.totalSaved).toBe(0);
+    });
+
+    it('should respect maxEmojisPerPage limit', async () => {
+      EmojiProcessor.configure({ maxEmojisPerPage: 1 });
+      const content = `First: https://amazonaws.com/emoji/smile.png Second: https://notion.site/emoji/heart.svg`;
+      
+      vi.spyOn(EmojiProcessor, 'processEmoji').mockResolvedValue({
+        newPath: '/images/emojis/test-emoji.png',
+        savedBytes: 512,
+        reused: false
+      });
+      
+      const result = await EmojiProcessor.processPageEmojis('test-page', content);
+      
+      // Should only process the first emoji due to limit
+      expect(EmojiProcessor.processEmoji).toHaveBeenCalledTimes(1);
+      expect(result.totalSaved).toBe(512);
+    });
+
     it('should handle emoji processing failures gracefully', async () => {
       const content = `Check out this emoji: https://amazonaws.com/emoji/broken.png`;
       
@@ -91,6 +128,164 @@ describe('EmojiProcessor', () => {
       
       expect(result.content).toBe(content); // Content unchanged on failure
       expect(result.totalSaved).toBe(0);
+    });
+  });
+
+  describe('URL validation', () => {
+    it('should reject non-HTTPS URLs', async () => {
+      const url = 'http://amazonaws.com/emoji/test.png';
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback to original URL
+      expect(result.reused).toBe(false);
+    });
+
+    it('should reject URLs from disallowed hosts', async () => {
+      const url = 'https://malicious.com/emoji/test.png';
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback to original URL
+      expect(result.reused).toBe(false);
+    });
+
+    it('should reject URLs without emoji in path', async () => {
+      const url = 'https://amazonaws.com/images/test.png';
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback to original URL
+      expect(result.reused).toBe(false);
+    });
+
+    it('should reject URLs without image extensions', async () => {
+      const url = 'https://amazonaws.com/emoji/test.txt';
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback to original URL
+      expect(result.reused).toBe(false);
+    });
+
+    it('should accept valid emoji URLs', async () => {
+      const url = 'https://amazonaws.com/emoji/test.png';
+      
+      // Mock successful download and processing
+      const mockAxiosGet = vi.mocked(axios.get);
+      const pngMagicBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      
+      mockAxiosGet.mockResolvedValueOnce({
+        data: pngMagicBytes,
+        headers: { 'content-type': 'image/png' }
+      });
+      
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toMatch(/^\/images\/emojis\/.+\.png$/);
+      expect(result.reused).toBe(false);
+    });
+  });
+
+  describe('content validation', () => {
+    it('should reject files that are too large', async () => {
+      EmojiProcessor.configure({ maxEmojiSize: 100 }); // 100 bytes limit
+      const url = 'https://amazonaws.com/emoji/large.png';
+      
+      const mockAxiosGet = vi.mocked(axios.get);
+      const largeBuffer = Buffer.alloc(200); // 200 bytes, exceeds limit
+      
+      mockAxiosGet.mockResolvedValueOnce({
+        data: largeBuffer,
+        headers: { 'content-type': 'image/png' }
+      });
+      
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback due to size limit
+    });
+
+    it('should reject files with invalid magic numbers', async () => {
+      const url = 'https://amazonaws.com/emoji/fake.png';
+      
+      const mockAxiosGet = vi.mocked(axios.get);
+      const invalidBuffer = Buffer.from([0x00, 0x00, 0x00, 0x00]); // Invalid magic numbers
+      
+      mockAxiosGet.mockResolvedValueOnce({
+        data: invalidBuffer,
+        headers: { 'content-type': 'image/png' }
+      });
+      
+      const result = await EmojiProcessor.processEmoji(url, 'test-page');
+      
+      expect(result.newPath).toBe(url); // Should fallback due to content validation failure
+    });
+  });
+
+  describe('configuration', () => {
+    it('should use default configuration initially', () => {
+      EmojiProcessor.reset();
+      const config = EmojiProcessor.getConfig();
+      
+      expect(config.maxEmojiSize).toBe(5 * 1024 * 1024);
+      expect(config.maxConcurrentDownloads).toBe(3);
+      expect(config.enableProcessing).toBe(true);
+      expect(config.allowedHosts).toEqual(['amazonaws.com', 'notion.site']);
+    });
+
+    it('should allow configuration changes', () => {
+      const customConfig = {
+        maxEmojiSize: 1000,
+        maxConcurrentDownloads: 1,
+        enableProcessing: false,
+        allowedHosts: ['custom.com']
+      };
+      
+      EmojiProcessor.configure(customConfig);
+      const config = EmojiProcessor.getConfig();
+      
+      expect(config.maxEmojiSize).toBe(1000);
+      expect(config.maxConcurrentDownloads).toBe(1);
+      expect(config.enableProcessing).toBe(false);
+      expect(config.allowedHosts).toEqual(['custom.com']);
+    });
+  });
+
+  describe('cache management', () => {
+    it('should load and validate cache entries', async () => {
+      // Create a valid cache file
+      const cacheData = {
+        'https://test.com/emoji/valid.png': {
+          url: 'https://test.com/emoji/valid.png',
+          filename: 'valid.png',
+          localPath: path.join(testEmojiDir, 'valid.png'),
+          hash: 'validhash',
+          size: 1024
+        }
+      };
+      
+      fs.writeFileSync(testCacheFile, JSON.stringify(cacheData, null, 2));
+      fs.writeFileSync(path.join(testEmojiDir, 'valid.png'), 'fake image data');
+      
+      await EmojiProcessor.initialize();
+      const stats = EmojiProcessor.getCacheStats();
+      
+      expect(stats.totalEmojis).toBe(1);
+      expect(stats.totalSize).toBe(1024);
+    });
+
+    it('should skip invalid cache entries', async () => {
+      // Create cache with invalid entry
+      const cacheData = {
+        'https://test.com/emoji/invalid.png': {
+          url: 'https://test.com/emoji/invalid.png',
+          filename: 'invalid.png'
+          // Missing required fields
+        }
+      };
+      
+      fs.writeFileSync(testCacheFile, JSON.stringify(cacheData, null, 2));
+      
+      await EmojiProcessor.initialize();
+      const stats = EmojiProcessor.getCacheStats();
+      
+      expect(stats.totalEmojis).toBe(0);
     });
   });
 

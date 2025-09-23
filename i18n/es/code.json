@@ -386,5 +386,92 @@
     },
     "Introduction  [remove]": {
         "message": "Introducción"
+    },
+    "Preparing to Use CoMapeo": {
+        "message": "Preparación para el uso de "
+    },
+    "Installing & Uninstalling CoMapeo": {
+        "message": "Instalación y desinstalación de CoMapeo"
+    },
+    "Installing CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "Uninstalling CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "Gathering Observations": {
+        "message": "Recopilación de observaciones"
+    },
+    "Reviewing Observations": {
+        "message": "Revisión de observaciones"
+    },
+    "Managing Projects": {
+        "message": "Gestión de proyectos"
+    },
+    "Managing Data & Privacy": {
+        "message": "Gestión de datos y privacidad"
+    },
+    "Ending a Project": {
+        "message": "Finalizar un proyecto"
+    },
+    "Miscellaneous": {
+        "message": "Misceláneas"
+    },
+    "Troubleshooting": {
+        "message": "Solución de problemas"
+    },
+    "Instalación y desinstalación de CoMapeo": {
+        "message": "Instalación y desinstalación de CoMapeo"
+    },
+    "Glosario": {
+        "message": "Glosario"
+    },
+    "Preguntas frecuentes": {
+        "message": "Preguntas frecuentes"
+    },
+    "Misceláneas": {
+        "message": "Misceláneas"
+    },
+    "Finalizar un proyecto": {
+        "message": "Finalizar un proyecto"
+    },
+    "Solución de problemas": {
+        "message": "Solución de problemas"
+    },
+    "Compartir observaciones fuera de CoMapeo": {
+        "message": "Compartir observaciones fuera de CoMapeo"
+    },
+    "Recopilación de observaciones": {
+        "message": "Recopilación de observaciones"
+    },
+    "Gestión de datos y privacidad": {
+        "message": "Gestión de datos y privacidad"
+    },
+    "Gestión de proyectos": {
+        "message": "Gestión de proyectos"
+    },
+    "Elementos de contenido de prueba": {
+        "message": "Elementos de contenido de prueba"
+    },
+    "Reunir el Equipo Adecuado para CoMapeo": {
+        "message": "Reunir el Equipo Adecuado para CoMapeo"
+    },
+    "Comprendiendo cómo funciona el intercambio": {
+        "message": "Comprendiendo cómo funciona el intercambio"
+    },
+    "Entendiendo Cómo Funciona el Intercambio": {
+        "message": "Entendiendo Cómo Funciona el Intercambio"
+    },
+    "Tracar Observao…": {
+        "message": "Tracar Observao…"
+    },
+    "Revisión de observaciones": {
+        "message": "Revisión de observaciones"
+    },
+    "Preparación para el uso de ": {
+        "message": "Preparación para el uso de "
+    },
+    "Introducción": {
+        "message": "Introducción"
     }
 }

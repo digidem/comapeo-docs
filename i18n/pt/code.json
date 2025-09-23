@@ -386,5 +386,107 @@
     },
     "Introduction  [remove]": {
         "message": "Introdução"
+    },
+    "Preparing to Use CoMapeo": {
+        "message": "Preparando para usar do CoMapeo (Mobile)"
+    },
+    "Installing & Uninstalling CoMapeo": {
+        "message": "Instalando e desinstalando o CoMapeo"
+    },
+    "Installing CoMapeo": {
+        "message": "Nova Página"
+    },
+    "Uninstalling CoMapeo": {
+        "message": "Nova Página"
+    },
+    "Gathering Observations": {
+        "message": "Coletando Observações"
+    },
+    "Reviewing Observations": {
+        "message": "Revisando Observações"
+    },
+    "Managing Projects": {
+        "message": "Gerenciando Projetos"
+    },
+    "Managing Data & Privacy": {
+        "message": "Gerenciamento de dados e privacidade"
+    },
+    "Ending a Project": {
+        "message": "Encerrando um Projeto"
+    },
+    "Miscellaneous": {
+        "message": "Variado"
+    },
+    "Troubleshooting": {
+        "message": "Solução de problemas"
+    },
+    "Instalando e desinstalando o CoMapeo": {
+        "message": "Instalando e desinstalando o CoMapeo"
+    },
+    "Glossário": {
+        "message": "Glossário"
+    },
+    "Perguntas frequentes": {
+        "message": "Perguntas frequentes"
+    },
+    "Variado": {
+        "message": "Variado"
+    },
+    "Encerrando um Projeto": {
+        "message": "Encerrando um Projeto"
+    },
+    "Solução de problemas": {
+        "message": "Solução de problemas"
+    },
+    "Compartilhando observações fora do CoMapeo": {
+        "message": "Compartilhando observações fora do CoMapeo"
+    },
+    "Coletando Observações": {
+        "message": "Coletando Observações"
+    },
+    "Gerenciamento de dados e privacidade": {
+        "message": "Gerenciamento de dados e privacidade"
+    },
+    "Gerenciando Projetos": {
+        "message": "Gerenciando Projetos"
+    },
+    "Elementos de Conteúdo de Teste": {
+        "message": "Elementos de Conteúdo de Teste"
+    },
+    "Reunindo o Equipamento Certo para o CoMapeo": {
+        "message": "Reunindo o Equipamento Certo para o CoMapeo"
+    },
+    "Entendendo Como Funciona a Troca": {
+        "message": "Entendendo Como Funciona a Troca"
+    },
+    "Compreendendo Como Funciona a Troca": {
+        "message": "Compreendendo Como Funciona a Troca"
+    },
+    "Intercambiar Observaciones": {
+        "message": "Intercambiar Observaciones"
+    },
+    "Revisando Observações": {
+        "message": "Revisando Observações"
+    },
+    "Preparando para usar do CoMapeo (Mobile)": {
+        "message": "Preparando para usar do CoMapeo (Mobile)"
+    },
+    "Introdução": {
+        "message": "Introdução"
+    },
+    "Visão Geral": {
+        "message": "Visão Geral"
+    },
+    "Guia Rápido": {
+        "message": "Guia Rápido"
+    },
+    "Começando": {
+        "message": "Começando"
+    },
+    "Sobre o Mapeo": {
+        "message": "Sobre o Mapeo"
+    },
+    "Ferramentas Mapeo": {
+        "message": "Ferramentas Mapeo"
     }
 }

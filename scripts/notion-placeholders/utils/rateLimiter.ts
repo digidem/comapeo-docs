@@ -16,21 +16,23 @@ export class RateLimiter {
    */
   async waitIfNeeded(): Promise<void> {
     const now = Date.now();
-    
+
     // Remove requests outside the time window
-    this.requests = this.requests.filter(timestamp => now - timestamp < this.timeWindow);
-    
+    this.requests = this.requests.filter(
+      (timestamp) => now - timestamp < this.timeWindow
+    );
+
     // If we're at the limit, wait until we can make another request
     if (this.requests.length >= this.maxRequests) {
       const oldestRequest = Math.min(...this.requests);
       const waitTime = this.timeWindow - (now - oldestRequest);
-      
+
       if (waitTime > 0) {
         console.log(`Rate limit reached, waiting ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
-    
+
     // Record this request
     this.requests.push(now);
   }
@@ -55,7 +57,9 @@ export class RateLimiter {
    */
   getCurrentCount(): number {
     const now = Date.now();
-    this.requests = this.requests.filter(timestamp => now - timestamp < this.timeWindow);
+    this.requests = this.requests.filter(
+      (timestamp) => now - timestamp < this.timeWindow
+    );
     return this.requests.length;
   }
 }

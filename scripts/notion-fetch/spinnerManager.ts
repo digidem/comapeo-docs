@@ -1,5 +1,5 @@
-import ora, { Ora } from 'ora';
-import chalk from 'chalk';
+import ora, { Ora } from "ora";
+import chalk from "chalk";
 
 /**
  * SpinnerManager - Centralized spinner lifecycle management
@@ -19,7 +19,9 @@ class SpinnerManager {
     // Auto-stop spinner after timeout to prevent indefinite hanging
     const timeout = setTimeout(() => {
       if (spinner.isSpinning) {
-        spinner.warn(chalk.yellow(`Spinner timed out after ${timeoutMs}ms: ${text}`));
+        spinner.warn(
+          chalk.yellow(`Spinner timed out after ${timeoutMs}ms: ${text}`)
+        );
         this.remove(spinner);
       }
     }, timeoutMs);
@@ -48,7 +50,7 @@ class SpinnerManager {
    * Stop all active spinners
    */
   static stopAll(): void {
-    this.spinners.forEach(spinner => {
+    this.spinners.forEach((spinner) => {
       if (this.timeouts.has(spinner)) {
         clearTimeout(this.timeouts.get(spinner)!);
         this.timeouts.delete(spinner);

@@ -1,5 +1,5 @@
-import { PageWithStatus } from './fetchAll.js';
-import { enhancedNotion } from '../notionClient.js';
+import { PageWithStatus } from "./fetchAll.js";
+import { enhancedNotion } from "../notionClient.js";
 
 export interface PreviewPage {
   id: string;
@@ -49,7 +49,7 @@ export class PreviewGenerator {
     groupByStatus: false,
     includeMetadata: true,
     generateMarkdown: true,
-    showContentStats: true
+    showContentStats: true,
   };
 
   /**
@@ -73,7 +73,7 @@ export class PreviewGenerator {
   }> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
 
-    console.log('📊 Generating documentation preview...');
+    console.log("📊 Generating documentation preview...");
 
     // Transform pages to preview format
     const previewPages = await this.transformToPreviewPages(pages);
@@ -90,19 +90,23 @@ export class PreviewGenerator {
       markdown = this.generateMarkdownPreview(sections, stats, opts);
     }
 
-    console.log(`✅ Preview generated: ${stats.sections} sections, ${stats.totalPages} pages`);
+    console.log(
+      `✅ Preview generated: ${stats.sections} sections, ${stats.totalPages} pages`
+    );
 
     return {
       sections,
       markdown,
-      stats
+      stats,
     };
   }
 
   /**
    * Transform pages to preview format with content analysis
    */
-  private static async transformToPreviewPages(pages: PageWithStatus[]): Promise<PreviewPage[]> {
+  private static async transformToPreviewPages(
+    pages: PageWithStatus[]
+  ): Promise<PreviewPage[]> {
     const previewPages: PreviewPage[] = [];
 
     for (const page of pages) {
@@ -121,7 +125,7 @@ export class PreviewGenerator {
         hasContent,
         url: page.url,
         lastEdited: page.lastEdited,
-        createdTime: page.createdTime
+        createdTime: page.createdTime,
       });
     }
 
@@ -135,29 +139,52 @@ export class PreviewGenerator {
     try {
       const response = await enhancedNotion.blocksChildrenList({
         block_id: pageId,
-        page_size: 10 // Just check first few blocks
+        page_size: 10, // Just check first few blocks
       });
 
       const blocks = response.results;
-      
+
       // Page has content if it has any blocks with text
-      return blocks.some(block => {
-        if (block.type === 'paragraph' && block.paragraph?.rich_text?.length > 0) {
-          return block.paragraph.rich_text.some(text => text.plain_text.trim().length > 0);
+      return blocks.some((block) => {
+        if (
+          block.type === "paragraph" &&
+          block.paragraph?.rich_text?.length > 0
+        ) {
+          return block.paragraph.rich_text.some(
+            (text) => text.plain_text.trim().length > 0
+          );
         }
-        if (block.type === 'heading_1' && block.heading_1?.rich_text?.length > 0) {
-          return block.heading_1.rich_text.some(text => text.plain_text.trim().length > 0);
+        if (
+          block.type === "heading_1" &&
+          block.heading_1?.rich_text?.length > 0
+        ) {
+          return block.heading_1.rich_text.some(
+            (text) => text.plain_text.trim().length > 0
+          );
         }
-        if (block.type === 'heading_2' && block.heading_2?.rich_text?.length > 0) {
-          return block.heading_2.rich_text.some(text => text.plain_text.trim().length > 0);
+        if (
+          block.type === "heading_2" &&
+          block.heading_2?.rich_text?.length > 0
+        ) {
+          return block.heading_2.rich_text.some(
+            (text) => text.plain_text.trim().length > 0
+          );
         }
-        if (block.type === 'heading_3' && block.heading_3?.rich_text?.length > 0) {
-          return block.heading_3.rich_text.some(text => text.plain_text.trim().length > 0);
+        if (
+          block.type === "heading_3" &&
+          block.heading_3?.rich_text?.length > 0
+        ) {
+          return block.heading_3.rich_text.some(
+            (text) => text.plain_text.trim().length > 0
+          );
         }
         return false;
       });
     } catch (error) {
-      console.warn(`Failed to analyze content for page ${pageId}:`, error.message);
+      console.warn(
+        `Failed to analyze content for page ${pageId}:`,
+        error.message
+      );
       return false; // Assume empty if we can't check
     }
   }
@@ -165,9 +192,11 @@ export class PreviewGenerator {
   /**
    * Build hierarchical structure from flat page list
    */
-  private static buildHierarchicalStructure(pages: PreviewPage[]): PreviewSection[] {
+  private static buildHierarchicalStructure(
+    pages: PreviewPage[]
+  ): PreviewSection[] {
     // Group pages by element type and parent relationships
-    const topLevelPages = pages.filter(page => !page.parentItem);
+    const topLevelPages = pages.filter((page) => !page.parentItem);
     const sections: PreviewSection[] = [];
 
     // Sort top-level pages by order
@@ -184,22 +213,27 @@ export class PreviewGenerator {
   /**
    * Build a section with its subsections and pages
    */
-  private static buildSection(rootPage: PreviewPage, allPages: PreviewPage[]): PreviewSection {
+  private static buildSection(
+    rootPage: PreviewPage,
+    allPages: PreviewPage[]
+  ): PreviewSection {
     // Find all child pages
-    const childPages = allPages.filter(page => page.parentItem === rootPage.id);
-    
-    // Separate sections from regular pages
-    const subSectionPages = childPages.filter(page => 
-      page.elementType === 'Section' || page.subItems.length > 0
+    const childPages = allPages.filter(
+      (page) => page.parentItem === rootPage.id
     );
-    const regularPages = childPages.filter(page => 
-      page.elementType !== 'Section' && page.subItems.length === 0
+
+    // Separate sections from regular pages
+    const subSectionPages = childPages.filter(
+      (page) => page.elementType === "Section" || page.subItems.length > 0
+    );
+    const regularPages = childPages.filter(
+      (page) => page.elementType !== "Section" && page.subItems.length === 0
     );
 
     // Build subsections recursively
     const subSections = subSectionPages
       .sort((a, b) => a.order - b.order)
-      .map(page => this.buildSection(page, allPages));
+      .map((page) => this.buildSection(page, allPages));
 
     // Sort regular pages by order
     regularPages.sort((a, b) => a.order - b.order);
@@ -215,21 +249,26 @@ export class PreviewGenerator {
       order: rootPage.order,
       pages: regularPages,
       subSections,
-      contentStats
+      contentStats,
     };
   }
 
   /**
    * Get all pages within a section (including subsections)
    */
-  private static getAllPagesInSection(rootPage: PreviewPage, allPages: PreviewPage[]): PreviewPage[] {
+  private static getAllPagesInSection(
+    rootPage: PreviewPage,
+    allPages: PreviewPage[]
+  ): PreviewPage[] {
     const result: PreviewPage[] = [rootPage];
-    
-    const childPages = allPages.filter(page => page.parentItem === rootPage.id);
+
+    const childPages = allPages.filter(
+      (page) => page.parentItem === rootPage.id
+    );
     for (const child of childPages) {
       result.push(...this.getAllPagesInSection(child, allPages));
     }
-    
+
     return result;
   }
 
@@ -238,33 +277,47 @@ export class PreviewGenerator {
    */
   private static calculateSectionStats(pages: PreviewPage[]) {
     const totalPages = pages.length;
-    const readyPages = pages.filter(p => p.status === 'Ready to publish').length;
-    const draftPages = pages.filter(p => p.status === 'Draft').length;
-    const emptyPages = pages.filter(p => !p.hasContent).length;
-    const completionPercentage = totalPages > 0 ? Math.round((readyPages / totalPages) * 100) : 0;
+    const readyPages = pages.filter(
+      (p) => p.status === "Ready to publish"
+    ).length;
+    const draftPages = pages.filter((p) => p.status === "Draft").length;
+    const emptyPages = pages.filter((p) => !p.hasContent).length;
+    const completionPercentage =
+      totalPages > 0 ? Math.round((readyPages / totalPages) * 100) : 0;
 
     return {
       totalPages,
       readyPages,
       draftPages,
       emptyPages,
-      completionPercentage
+      completionPercentage,
     };
   }
 
   /**
    * Calculate overall statistics
    */
-  private static calculateStats(pages: PreviewPage[], sections: PreviewSection[]) {
+  private static calculateStats(
+    pages: PreviewPage[],
+    sections: PreviewSection[]
+  ) {
     const totalPages = pages.length;
-    const readyPages = pages.filter(p => p.status === 'Ready to publish').length;
-    const draftPages = pages.filter(p => p.status === 'Draft').length;
-    const emptyPages = pages.filter(p => !p.hasContent).length;
-    const languages = [...new Set(pages.map(p => p.language).filter(Boolean))];
-    
-    const averageCompletionRate = sections.length > 0 
-      ? sections.reduce((sum, section) => sum + section.contentStats.completionPercentage, 0) / sections.length
-      : 0;
+    const readyPages = pages.filter(
+      (p) => p.status === "Ready to publish"
+    ).length;
+    const draftPages = pages.filter((p) => p.status === "Draft").length;
+    const emptyPages = pages.filter((p) => !p.hasContent).length;
+    const languages = [
+      ...new Set(pages.map((p) => p.language).filter(Boolean)),
+    ];
+
+    const averageCompletionRate =
+      sections.length > 0
+        ? sections.reduce(
+            (sum, section) => sum + section.contentStats.completionPercentage,
+            0
+          ) / sections.length
+        : 0;
 
     return {
       totalPages,
@@ -273,7 +326,7 @@ export class PreviewGenerator {
       emptyPages,
       sections: sections.length,
       languages,
-      averageCompletionRate: Math.round(averageCompletionRate)
+      averageCompletionRate: Math.round(averageCompletionRate),
     };
   }
 
@@ -281,31 +334,31 @@ export class PreviewGenerator {
    * Generate markdown documentation preview
    */
   private static generateMarkdownPreview(
-    sections: PreviewSection[], 
-    stats: any, 
+    sections: PreviewSection[],
+    stats: any,
     options: Required<PreviewOptions>
   ): string {
-    let markdown = '# CoMapeo Documentation Preview\n\n';
+    let markdown = "# CoMapeo Documentation Preview\n\n";
 
     // Add overview statistics
     if (options.showContentStats) {
-      markdown += '## 📊 Overview Statistics\n\n';
+      markdown += "## 📊 Overview Statistics\n\n";
       markdown += `- **Total Pages**: ${stats.totalPages}\n`;
       markdown += `- **Ready to Publish**: ${stats.readyPages} (${Math.round((stats.readyPages / stats.totalPages) * 100)}%)\n`;
       markdown += `- **Draft Pages**: ${stats.draftPages}\n`;
       markdown += `- **Empty Pages**: ${stats.emptyPages}\n`;
       markdown += `- **Sections**: ${stats.sections}\n`;
-      markdown += `- **Languages**: ${stats.languages.join(', ')}\n`;
+      markdown += `- **Languages**: ${stats.languages.join(", ")}\n`;
       markdown += `- **Average Completion**: ${stats.averageCompletionRate}%\n\n`;
     }
 
     // Add table of contents
-    markdown += '## 📑 Table of Contents\n\n';
+    markdown += "## 📑 Table of Contents\n\n";
     markdown += this.generateTableOfContents(sections);
-    markdown += '\n';
+    markdown += "\n";
 
     // Add detailed structure
-    markdown += '## 📖 Detailed Structure\n\n';
+    markdown += "## 📖 Detailed Structure\n\n";
     markdown += this.generateDetailedStructure(sections, options, 0);
 
     return markdown;
@@ -314,25 +367,28 @@ export class PreviewGenerator {
   /**
    * Generate table of contents
    */
-  private static generateTableOfContents(sections: PreviewSection[], level: number = 0): string {
-    let toc = '';
-    const indent = '  '.repeat(level);
+  private static generateTableOfContents(
+    sections: PreviewSection[],
+    level: number = 0
+  ): string {
+    let toc = "";
+    const indent = "  ".repeat(level);
 
     for (const section of sections) {
       const statusIcon = this.getStatusIcon(section.status);
-      const completionBadge = options.showContentStats 
-        ? ` (${section.contentStats.completionPercentage}%)` 
-        : '';
-      
+      const completionBadge = options.showContentStats
+        ? ` (${section.contentStats.completionPercentage}%)`
+        : "";
+
       toc += `${indent}- ${statusIcon} ${section.title}${completionBadge}\n`;
-      
+
       // Add pages
       for (const page of section.pages) {
         const pageIcon = this.getStatusIcon(page.status);
-        const contentIcon = page.hasContent ? '📄' : '📋';
+        const contentIcon = page.hasContent ? "📄" : "📋";
         toc += `${indent}  - ${pageIcon}${contentIcon} ${page.title}\n`;
       }
-      
+
       // Add subsections recursively
       if (section.subSections.length > 0) {
         toc += this.generateTableOfContents(section.subSections, level + 1);
@@ -346,18 +402,18 @@ export class PreviewGenerator {
    * Generate detailed structure with metadata
    */
   private static generateDetailedStructure(
-    sections: PreviewSection[], 
+    sections: PreviewSection[],
     options: Required<PreviewOptions>,
     level: number
   ): string {
-    let structure = '';
-    
+    let structure = "";
+
     for (const section of sections) {
-      const heading = '#'.repeat(Math.min(level + 3, 6));
+      const heading = "#".repeat(Math.min(level + 3, 6));
       const statusIcon = this.getStatusIcon(section.status);
-      
+
       structure += `${heading} ${statusIcon} ${section.title}\n\n`;
-      
+
       // Add section metadata
       if (options.includeMetadata) {
         structure += `**Status**: ${section.status}  \n`;
@@ -365,37 +421,41 @@ export class PreviewGenerator {
         if (options.showContentStats) {
           structure += `**Progress**: ${section.contentStats.readyPages}/${section.contentStats.totalPages} pages (${section.contentStats.completionPercentage}%)  \n`;
         }
-        structure += '\n';
+        structure += "\n";
       }
-      
+
       // Add pages in this section
       if (section.pages.length > 0) {
-        structure += '**Pages:**\n\n';
+        structure += "**Pages:**\n\n";
         for (const page of section.pages) {
           if (!options.includeEmptyPages && !page.hasContent) continue;
-          
+
           const statusIcon = this.getStatusIcon(page.status);
-          const contentIcon = page.hasContent ? '📄' : '📋';
-          
+          const contentIcon = page.hasContent ? "📄" : "📋";
+
           structure += `- ${statusIcon}${contentIcon} **${page.title}**`;
-          
+
           if (options.includeMetadata) {
             structure += ` (${page.status}`;
             if (page.language) structure += `, ${page.language}`;
-            structure += ')';
+            structure += ")";
           }
-          
-          structure += '\n';
+
+          structure += "\n";
         }
-        structure += '\n';
+        structure += "\n";
       }
-      
+
       // Add subsections recursively
       if (section.subSections.length > 0) {
-        structure += this.generateDetailedStructure(section.subSections, options, level + 1);
+        structure += this.generateDetailedStructure(
+          section.subSections,
+          options,
+          level + 1
+        );
       }
     }
-    
+
     return structure;
   }
 
@@ -404,18 +464,18 @@ export class PreviewGenerator {
    */
   private static getStatusIcon(status: string): string {
     switch (status) {
-      case 'Ready to publish':
-        return '✅';
-      case 'Draft':
-        return '📝';
-      case 'In progress':
-        return '🔄';
-      case 'Not started':
-        return '⭕';
-      case 'Archived':
-        return '📦';
+      case "Ready to publish":
+        return "✅";
+      case "Draft":
+        return "📝";
+      case "In progress":
+        return "🔄";
+      case "Not started":
+        return "⭕";
+      case "Archived":
+        return "📦";
       default:
-        return '❓';
+        return "❓";
     }
   }
 
@@ -425,43 +485,55 @@ export class PreviewGenerator {
   static async exportPreview(
     sections: PreviewSection[],
     stats: any,
-    format: 'markdown' | 'json' | 'html',
+    format: "markdown" | "json" | "html",
     outputPath?: string
   ): Promise<string> {
     let content: string;
     let extension: string;
 
     switch (format) {
-      case 'markdown':
-        content = this.generateMarkdownPreview(sections, stats, this.DEFAULT_OPTIONS);
-        extension = '.md';
+      case "markdown":
+        content = this.generateMarkdownPreview(
+          sections,
+          stats,
+          this.DEFAULT_OPTIONS
+        );
+        extension = ".md";
         break;
-      case 'json':
+      case "json":
         content = JSON.stringify({ sections, stats }, null, 2);
-        extension = '.json';
+        extension = ".json";
         break;
-      case 'html':
+      case "html":
         content = this.generateHTMLPreview(sections, stats);
-        extension = '.html';
+        extension = ".html";
         break;
       default:
         throw new Error(`Unsupported format: ${format}`);
     }
 
-    const filename = outputPath || `comapeo-docs-preview-${Date.now()}${extension}`;
-    
+    const filename =
+      outputPath || `comapeo-docs-preview-${Date.now()}${extension}`;
+
     // In a real implementation, you'd write to file system here
     console.log(`📁 Preview exported to: ${filename}`);
-    
+
     return filename;
   }
 
   /**
    * Generate HTML preview (basic implementation)
    */
-  private static generateHTMLPreview(sections: PreviewSection[], stats: any): string {
-    const markdown = this.generateMarkdownPreview(sections, stats, this.DEFAULT_OPTIONS);
-    
+  private static generateHTMLPreview(
+    sections: PreviewSection[],
+    stats: any
+  ): string {
+    const markdown = this.generateMarkdownPreview(
+      sections,
+      stats,
+      this.DEFAULT_OPTIONS
+    );
+
     // Basic HTML wrapper (in production, you'd use a proper markdown-to-HTML converter)
     return `
 <!DOCTYPE html>

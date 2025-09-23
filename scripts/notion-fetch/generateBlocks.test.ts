@@ -84,7 +84,7 @@ describe("generateBlocks", () => {
         "Content elements": {
           title: [{ plain_text: "Sample Section" }],
         },
-        "Title": {
+        Title: {
           title: [{ plain_text: "Sample Section" }],
         },
         "Sub-item": {
@@ -154,11 +154,10 @@ describe("generateBlocks", () => {
     await generateBlocks([mainPage, childPage], vi.fn());
 
     // Should not create any markdown file when content is empty
-    const markdownCall = writeFileSyncMock.mock.calls.find(
-      ([filePath]) => filePath.includes("empty-section.md")
+    const markdownCall = writeFileSyncMock.mock.calls.find(([filePath]) =>
+      filePath.includes("empty-section.md")
     );
 
     expect(markdownCall).toBeUndefined();
   });
-
 });

@@ -1,5 +1,5 @@
-import { enhancedNotion, DATABASE_ID } from '../notionClient.js';
-import { NOTION_PROPERTIES } from '../constants.js';
+import { enhancedNotion, DATABASE_ID } from "../notionClient.js";
+import { NOTION_PROPERTIES } from "../constants.js";
 
 export interface PageWithStatus {
   id: string;
@@ -20,52 +20,56 @@ export interface PageWithStatus {
 export interface FetchAllOptions {
   includeArchived?: boolean;
   includeRemoved?: boolean;
-  sortBy?: 'order' | 'created' | 'modified' | 'title';
-  sortDirection?: 'asc' | 'desc';
+  sortBy?: "order" | "created" | "modified" | "title";
+  sortDirection?: "asc" | "desc";
   includeSubPages?: boolean;
 }
 
 /**
  * Fetches ALL pages from Notion database (excludes archived and removed items by default)
  */
-export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise<PageWithStatus[]> {
+export async function fetchAllNotionData(
+  options: FetchAllOptions = {}
+): Promise<PageWithStatus[]> {
   const {
     includeArchived = false,
     includeRemoved = false,
-    sortBy = 'order',
-    sortDirection = 'asc',
-    includeSubPages = true
+    sortBy = "order",
+    sortDirection = "asc",
+    includeSubPages = true,
   } = options;
 
-  console.log('🌍 Fetching ALL pages from Notion (excluding removed items by default)...');
+  console.log(
+    "🌍 Fetching ALL pages from Notion (excluding removed items by default)..."
+  );
 
   try {
     // Build filter - exclude archived and removed items by default
     let filter: any = undefined;
-    
+
     try {
       const filters: any[] = [];
-      
+
       if (!includeArchived) {
         filters.push({
-          property: 'Archived',
-          checkbox: { equals: false }
+          property: "Archived",
+          checkbox: { equals: false },
         });
       }
-      
+
       if (!includeRemoved) {
         // Handle null status values properly - most pages have null status
         filters.push({
           or: [
             {
               property: NOTION_PROPERTIES.STATUS,
-              select: { is_empty: true }
+              select: { is_empty: true },
             },
             {
               property: NOTION_PROPERTIES.STATUS,
-              select: { does_not_equal: 'Remove' }
-            }
-          ]
+              select: { does_not_equal: "Remove" },
+            },
+          ],
         });
       }
 
@@ -74,11 +78,14 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
         filter = filters[0];
       } else if (filters.length > 1) {
         filter = {
-          and: filters
+          and: filters,
         };
       }
     } catch (filterError) {
-      console.warn('⚠️  Could not create filter, fetching all pages...', filterError.message);
+      console.warn(
+        "⚠️  Could not create filter, fetching all pages...",
+        filterError.message
+      );
       filter = undefined; // Fallback to no filter
     }
 
@@ -88,19 +95,22 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
       response = await enhancedNotion.databasesQuery({
         database_id: DATABASE_ID,
         filter: filter,
-        page_size: 100
+        page_size: 100,
       });
     } catch (queryError) {
       // If filtering fails, try without any filter
       if (filter) {
-        console.warn('⚠️  Filter failed, trying without filter...', queryError.message);
+        console.warn(
+          "⚠️  Filter failed, trying without filter...",
+          queryError.message
+        );
         try {
           response = await enhancedNotion.databasesQuery({
             database_id: DATABASE_ID,
-            page_size: 100
+            page_size: 100,
           });
         } catch (fallbackError) {
-          console.error('❌ Failed to fetch pages even without filter');
+          console.error("❌ Failed to fetch pages even without filter");
           throw fallbackError;
         }
       } else {
@@ -119,7 +129,7 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
         database_id: DATABASE_ID,
         filter: filter,
         start_cursor: nextCursor,
-        page_size: 100
+        page_size: 100,
       });
 
       allPages = allPages.concat(nextResponse.results);
@@ -130,29 +140,37 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
     console.log(`📥 Fetched ${allPages.length} total pages from Notion`);
 
     // Transform to structured format
-    const structuredPages: PageWithStatus[] = allPages.map(page => transformPage(page));
+    const structuredPages: PageWithStatus[] = allPages.map((page) =>
+      transformPage(page)
+    );
 
     // Include sub-pages if requested
     if (includeSubPages) {
       const subPagePromises = structuredPages
-        .filter(page => page.subItems.length > 0)
-        .flatMap(page => 
+        .filter((page) => page.subItems.length > 0)
+        .flatMap((page) =>
           page.subItems.map(async (subPageId) => {
             try {
-              const subPage = await enhancedNotion.pagesRetrieve({ page_id: subPageId });
+              const subPage = await enhancedNotion.pagesRetrieve({
+                page_id: subPageId,
+              });
               return transformPage(subPage);
             } catch (error) {
-              console.warn(`Failed to fetch sub-page ${subPageId}:`, error.message);
+              console.warn(
+                `Failed to fetch sub-page ${subPageId}:`,
+                error.message
+              );
               return null;
             }
           })
         );
 
       const subPages = (await Promise.allSettled(subPagePromises))
-        .filter((result): result is PromiseFulfilledResult<PageWithStatus> => 
-          result.status === 'fulfilled' && result.value !== null
+        .filter(
+          (result): result is PromiseFulfilledResult<PageWithStatus> =>
+            result.status === "fulfilled" && result.value !== null
         )
-        .map(result => result.value);
+        .map((result) => result.value);
 
       structuredPages.push(...subPages);
       console.log(`📈 After sub-pages: ${structuredPages.length} total pages`);
@@ -162,29 +180,31 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
     const sortedPages = sortPages(structuredPages, sortBy, sortDirection);
 
     // Log each page with its status for visibility
-    console.log('\n📋 Page Inventory:');
+    console.log("\n📋 Page Inventory:");
     const statusCounts = new Map<string, number>();
-    
+
     sortedPages.forEach((page, index) => {
       const count = statusCounts.get(page.status) || 0;
       statusCounts.set(page.status, count + 1);
-      
-      if (index < 10 || page.status !== 'Ready to publish') { // Show first 10 or non-published
-        console.log(`  ${index + 1}. [${page.status}] ${page.title} (${page.elementType})`);
+
+      if (index < 10 || page.status !== "Ready to publish") {
+        // Show first 10 or non-published
+        console.log(
+          `  ${index + 1}. [${page.status}] ${page.title} (${page.elementType})`
+        );
       }
     });
 
-    console.log('\n📊 Status Summary:');
+    console.log("\n📊 Status Summary:");
     Array.from(statusCounts.entries())
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .forEach(([status, count]) => {
         console.log(`  ${status}: ${count} pages`);
       });
 
     return sortedPages;
-
   } catch (error) {
-    console.error('❌ Error fetching all pages:', error);
+    console.error("❌ Error fetching all pages:", error);
     throw error;
   }
 }
@@ -194,63 +214,68 @@ export async function fetchAllNotionData(options: FetchAllOptions = {}): Promise
  */
 function transformPage(page: any): PageWithStatus {
   const properties = page.properties || {};
-  
+
   // Extract title safely
-  let title = 'Untitled';
-  const titleProperty = properties[NOTION_PROPERTIES.TITLE] || properties['Title'];
+  let title = "Untitled";
+  const titleProperty =
+    properties[NOTION_PROPERTIES.TITLE] || properties["Title"];
   if (titleProperty?.title?.[0]?.plain_text) {
     title = titleProperty.title[0].plain_text;
   }
 
   // Extract status - handle null values properly
-  let status = 'No Status';
-  const statusProperty = properties[NOTION_PROPERTIES.STATUS] || properties['Status'];
+  let status = "No Status";
+  const statusProperty =
+    properties[NOTION_PROPERTIES.STATUS] || properties["Status"];
   if (statusProperty?.select?.name) {
     status = statusProperty.select.name;
   } else if (statusProperty?.select === null) {
-    status = 'No Status'; // Explicitly handle null select values
+    status = "No Status"; // Explicitly handle null select values
   }
 
   // Extract element type - handle null values properly
-  let elementType = 'Unknown';
-  const elementTypeProperty = properties[NOTION_PROPERTIES.ELEMENT_TYPE] || properties['Section'] || properties['Element Type'];
+  let elementType = "Unknown";
+  const elementTypeProperty =
+    properties[NOTION_PROPERTIES.ELEMENT_TYPE] ||
+    properties["Section"] ||
+    properties["Element Type"];
   if (elementTypeProperty?.select?.name) {
     elementType = elementTypeProperty.select.name;
   } else if (elementTypeProperty?.select === null) {
-    elementType = 'Unknown'; // Explicitly handle null select values
+    elementType = "Unknown"; // Explicitly handle null select values
   }
 
   // Extract order
   let order = 0;
-  const orderProperty = properties['Order'];
+  const orderProperty = properties["Order"];
   if (orderProperty?.number !== undefined) {
     order = orderProperty.number;
   }
 
   // Extract language (for sub-pages)
   let language: string | undefined;
-  const languageProperty = properties['Language'];
+  const languageProperty = properties["Language"];
   if (languageProperty?.select?.name) {
     language = languageProperty.select.name;
   }
 
   // Extract parent item
   let parentItem: string | undefined;
-  const parentProperty = properties['Parent item'];
+  const parentProperty = properties["Parent item"];
   if (parentProperty?.relation?.[0]?.id) {
     parentItem = parentProperty.relation[0].id;
   }
 
   // Extract sub-items
   const subItems: string[] = [];
-  const subItemsProperty = properties['Sub-item'];
+  const subItemsProperty = properties["Sub-item"];
   if (subItemsProperty?.relation) {
     subItems.push(...subItemsProperty.relation.map((item: any) => item.id));
   }
 
   return {
     id: page.id,
-    url: page.url || `https://notion.so/${page.id.replace(/-/g, '')}`,
+    url: page.url || `https://notion.so/${page.id.replace(/-/g, "")}`,
     title,
     status,
     elementType,
@@ -261,7 +286,7 @@ function transformPage(page: any): PageWithStatus {
     lastEdited: new Date(page.last_edited_time),
     createdTime: new Date(page.created_time),
     properties,
-    rawPage: page
+    rawPage: page,
   };
 }
 
@@ -269,26 +294,26 @@ function transformPage(page: any): PageWithStatus {
  * Sort pages by specified criteria
  */
 function sortPages(
-  pages: PageWithStatus[], 
-  sortBy: FetchAllOptions['sortBy'], 
-  direction: FetchAllOptions['sortDirection']
+  pages: PageWithStatus[],
+  sortBy: FetchAllOptions["sortBy"],
+  direction: FetchAllOptions["sortDirection"]
 ): PageWithStatus[] {
-  const multiplier = direction === 'desc' ? -1 : 1;
+  const multiplier = direction === "desc" ? -1 : 1;
 
   return pages.sort((a, b) => {
     let comparison = 0;
 
     switch (sortBy) {
-      case 'order':
+      case "order":
         comparison = a.order - b.order;
         break;
-      case 'created':
+      case "created":
         comparison = a.createdTime.getTime() - b.createdTime.getTime();
         break;
-      case 'modified':
+      case "modified":
         comparison = a.lastEdited.getTime() - b.lastEdited.getTime();
         break;
-      case 'title':
+      case "title":
         comparison = a.title.localeCompare(b.title);
         break;
       default:
@@ -302,34 +327,38 @@ function sortPages(
 /**
  * Get pages grouped by status
  */
-export function groupPagesByStatus(pages: PageWithStatus[]): Map<string, PageWithStatus[]> {
+export function groupPagesByStatus(
+  pages: PageWithStatus[]
+): Map<string, PageWithStatus[]> {
   const groups = new Map<string, PageWithStatus[]>();
-  
+
   for (const page of pages) {
-    const status = page.status || 'No Status';
+    const status = page.status || "No Status";
     if (!groups.has(status)) {
       groups.set(status, []);
     }
     groups.get(status)!.push(page);
   }
-  
+
   return groups;
 }
 
 /**
  * Get pages grouped by element type
  */
-export function groupPagesByElementType(pages: PageWithStatus[]): Map<string, PageWithStatus[]> {
+export function groupPagesByElementType(
+  pages: PageWithStatus[]
+): Map<string, PageWithStatus[]> {
   const groups = new Map<string, PageWithStatus[]>();
-  
+
   for (const page of pages) {
-    const elementType = page.elementType || 'Unknown';
+    const elementType = page.elementType || "Unknown";
     if (!groups.has(elementType)) {
       groups.set(elementType, []);
     }
     groups.get(elementType)!.push(page);
   }
-  
+
   return groups;
 }
 
@@ -374,19 +403,26 @@ export function filterPages(
     modifiedBefore?: Date;
   }
 ): PageWithStatus[] {
-  return pages.filter(page => {
+  return pages.filter((page) => {
     // Status filter
     if (filters.statuses && !filters.statuses.includes(page.status)) {
       return false;
     }
 
     // Element type filter
-    if (filters.elementTypes && !filters.elementTypes.includes(page.elementType)) {
+    if (
+      filters.elementTypes &&
+      !filters.elementTypes.includes(page.elementType)
+    ) {
       return false;
     }
 
     // Language filter
-    if (filters.languages && page.language && !filters.languages.includes(page.language)) {
+    if (
+      filters.languages &&
+      page.language &&
+      !filters.languages.includes(page.language)
+    ) {
       return false;
     }
 

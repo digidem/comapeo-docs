@@ -1,26 +1,26 @@
-import { enhancedNotion, DATABASE_ID } from './notionClient.js';
+import { enhancedNotion, DATABASE_ID } from "./notionClient.js";
 
 export async function fetchNotionData(filter) {
   const response = await enhancedNotion.databasesQuery({
     database_id: DATABASE_ID,
-    filter: filter
+    filter: filter,
   });
   return response.results;
 }
 
 /**
-     * Sorts Notion data by the "Order" property, fetches sub-pages for each parent page,
-     * and logs each item's URL. Returns the updated data array.
-     * @param {any[]} data - Array of Notion page objects
-     * @returns {Promise<any[]>} - The updated data array including sub-pages
-     */
+ * Sorts Notion data by the "Order" property, fetches sub-pages for each parent page,
+ * and logs each item's URL. Returns the updated data array.
+ * @param {any[]} data - Array of Notion page objects
+ * @returns {Promise<any[]>} - The updated data array including sub-pages
+ */
 export async function sortAndExpandNotionData(
   data: Array<Record<string, unknown>>
 ): Promise<Array<Record<string, unknown>>> {
   // Sort data by Order property if available to ensure proper sequencing
   data = data.sort((a, b) => {
-    const orderA = a.properties?.['Order']?.number ?? Number.MAX_SAFE_INTEGER;
-    const orderB = b.properties?.['Order']?.number ?? Number.MAX_SAFE_INTEGER;
+    const orderA = a.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
     return orderA - orderB;
   });
 
@@ -53,10 +53,10 @@ export async function fetchNotionPage() {
     const response = await enhancedNotion.blocksChildrenList({
       block_id: DATABASE_ID,
     });
-    console.log('Fetched page content:', response);
+    console.log("Fetched page content:", response);
     return response;
   } catch (error) {
-    console.error('Error fetching Notion page:', error);
+    console.error("Error fetching Notion page:", error);
     throw error;
   }
 }
@@ -65,10 +65,12 @@ export async function fetchNotionBlocks(blockId) {
   try {
     const response = await enhancedNotion.blocksChildrenList({
       block_id: blockId,
-      page_size: 100
+      page_size: 100,
     });
 
-    console.log(`Fetched ${response.results.length} blocks for block ID: ${blockId}`);
+    console.log(
+      `Fetched ${response.results.length} blocks for block ID: ${blockId}`
+    );
 
     // Recursively fetch nested blocks
     for (const block of response.results) {
@@ -79,7 +81,7 @@ export async function fetchNotionBlocks(blockId) {
 
     return response.results;
   } catch (error) {
-    console.error('Error fetching Notion blocks:', error);
+    console.error("Error fetching Notion blocks:", error);
     throw error;
   }
 }

@@ -1,5 +1,5 @@
-import { enhancedNotion } from '../notionClient.js';
-import { NotionBlock } from './contentGenerator.js';
+import { enhancedNotion } from "../notionClient.js";
+import { NotionBlock } from "./contentGenerator.js";
 
 export interface UpdateResult {
   pageId: string;
@@ -32,7 +32,7 @@ export class NotionUpdater {
     dryRun: false,
     preserveExisting: true,
     backupOriginal: true,
-    maxRetries: 3
+    maxRetries: 3,
   };
 
   private static backups = new Map<string, BackupData>();
@@ -46,7 +46,7 @@ export class NotionUpdater {
     options: UpdateOptions = {}
   ): Promise<UpdateResult> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
-    
+
     try {
       // Get current page state
       const currentBlocks = await this.getCurrentBlocks(pageId);
@@ -66,43 +66,49 @@ export class NotionUpdater {
           success: true,
           blocksAdded: 0,
           originalBlockCount,
-          newBlockCount: originalBlockCount
+          newBlockCount: originalBlockCount,
         };
       }
 
       if (opts.dryRun) {
-        console.log(`[DRY RUN] Would add ${blocksToAdd.length} blocks to page ${pageId}`);
+        console.log(
+          `[DRY RUN] Would add ${blocksToAdd.length} blocks to page ${pageId}`
+        );
         return {
           pageId,
           success: true,
           blocksAdded: blocksToAdd.length,
           originalBlockCount,
-          newBlockCount: originalBlockCount + blocksToAdd.length
+          newBlockCount: originalBlockCount + blocksToAdd.length,
         };
       }
 
       // Add content to page with retry logic
-      const blocksAdded = await this.addBlocksWithRetry(pageId, blocksToAdd, opts.maxRetries);
-      
+      const blocksAdded = await this.addBlocksWithRetry(
+        pageId,
+        blocksToAdd,
+        opts.maxRetries
+      );
+
       return {
         pageId,
         success: true,
         blocksAdded,
         originalBlockCount,
-        newBlockCount: originalBlockCount + blocksAdded
+        newBlockCount: originalBlockCount + blocksAdded,
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       console.error(`Failed to update page ${pageId}:`, errorMessage);
-      
+
       return {
         pageId,
         success: false,
         blocksAdded: 0,
         originalBlockCount: 0,
         newBlockCount: 0,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -115,7 +121,7 @@ export class NotionUpdater {
     options: UpdateOptions = {}
   ): Promise<UpdateResult[]> {
     const results: UpdateResult[] = [];
-    
+
     // Process in batches to respect API rate limits
     const batchSize = 3;
     const delayBetweenBatches = 2000; // 2 seconds
@@ -123,26 +129,36 @@ export class NotionUpdater {
 
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize);
-      
-      console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(updates.length / batchSize)}`);
+
+      console.log(
+        `Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(updates.length / batchSize)}`
+      );
 
       for (const update of batch) {
         try {
           const title = update.title || `Page ${update.pageId.slice(0, 8)}...`;
           console.log(`  📄 Updating: "${title}"`);
-          
-          const result = await this.updatePageContent(update.pageId, update.blocks, options);
+
+          const result = await this.updatePageContent(
+            update.pageId,
+            update.blocks,
+            options
+          );
           results.push(result);
-          
+
           if (result.success) {
-            console.log(`  ✅ Added ${result.blocksAdded} blocks to "${title}"`);
+            console.log(
+              `  ✅ Added ${result.blocksAdded} blocks to "${title}"`
+            );
           } else {
             console.log(`  ❌ Failed to update "${title}": ${result.error}`);
           }
-          
+
           // Small delay between requests in the same batch
           if (batch.indexOf(update) < batch.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+            await new Promise((resolve) =>
+              setTimeout(resolve, delayBetweenRequests)
+            );
           }
         } catch (error) {
           const title = update.title || `Page ${update.pageId.slice(0, 8)}...`;
@@ -153,7 +169,7 @@ export class NotionUpdater {
             blocksAdded: 0,
             originalBlockCount: 0,
             newBlockCount: 0,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : "Unknown error",
           });
         }
       }
@@ -161,7 +177,9 @@ export class NotionUpdater {
       // Delay between batches
       if (i + batchSize < updates.length) {
         console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        await new Promise((resolve) =>
+          setTimeout(resolve, delayBetweenBatches)
+        );
       }
     }
 
@@ -175,7 +193,7 @@ export class NotionUpdater {
     try {
       const response = await enhancedNotion.blocksChildrenList({
         block_id: pageId,
-        page_size: 100
+        page_size: 100,
       });
       return response.results;
     } catch (error) {
@@ -188,8 +206,8 @@ export class NotionUpdater {
    * Add blocks to a page with retry logic
    */
   private static async addBlocksWithRetry(
-    pageId: string, 
-    blocks: NotionBlock[], 
+    pageId: string,
+    blocks: NotionBlock[],
     maxRetries: number
   ): Promise<number> {
     let attempt = 0;
@@ -203,50 +221,52 @@ export class NotionUpdater {
 
         for (let i = 0; i < blocks.length; i += batchSize) {
           const batch = blocks.slice(i, i + batchSize);
-          
+
           await enhancedNotion.blocksChildrenAppend({
             block_id: pageId,
-            children: batch
+            children: batch,
           });
-          
+
           totalAdded += batch.length;
-          
+
           // Small delay between batches
           if (i + batchSize < blocks.length) {
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise((resolve) => setTimeout(resolve, 200));
           }
         }
 
         return totalAdded;
-
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error');
+        lastError = error instanceof Error ? error : new Error("Unknown error");
         attempt++;
-        
+
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
           console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    throw lastError || new Error('Max retries exceeded');
+    throw lastError || new Error("Max retries exceeded");
   }
 
   /**
    * Create a backup of the page's current state
    */
-  private static async createBackup(pageId: string, currentBlocks: any[]): Promise<void> {
+  private static async createBackup(
+    pageId: string,
+    currentBlocks: any[]
+  ): Promise<void> {
     try {
       // Get page properties
       const page = await enhancedNotion.pagesRetrieve({ page_id: pageId });
-      
+
       const backup: BackupData = {
         pageId,
         timestamp: new Date(),
         originalBlocks: currentBlocks,
-        pageProperties: page.properties
+        pageProperties: page.properties,
       };
 
       this.backups.set(pageId, backup);
@@ -281,7 +301,6 @@ export class NotionUpdater {
 
       console.log(`Successfully restored page ${pageId} from backup`);
       return true;
-
     } catch (error) {
       console.error(`Failed to restore page ${pageId}:`, error);
       return false;
@@ -291,11 +310,15 @@ export class NotionUpdater {
   /**
    * Get all available backups
    */
-  static getAvailableBackups(): Array<{ pageId: string; timestamp: Date; blockCount: number }> {
+  static getAvailableBackups(): Array<{
+    pageId: string;
+    timestamp: Date;
+    blockCount: number;
+  }> {
     return Array.from(this.backups.entries()).map(([pageId, backup]) => ({
       pageId,
       timestamp: backup.timestamp,
-      blockCount: backup.originalBlocks.length
+      blockCount: backup.originalBlocks.length,
     }));
   }
 
@@ -304,7 +327,7 @@ export class NotionUpdater {
    */
   static clearOldBackups(maxAgeHours: number = 24): void {
     const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
-    
+
     for (const [pageId, backup] of this.backups.entries()) {
       if (backup.timestamp < cutoff) {
         this.backups.delete(pageId);
@@ -316,12 +339,15 @@ export class NotionUpdater {
   /**
    * Validate that blocks can be added to Notion
    */
-  static validateBlocks(blocks: NotionBlock[]): { valid: boolean; errors: string[] } {
+  static validateBlocks(blocks: NotionBlock[]): {
+    valid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
 
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      
+
       // Check required fields
       if (!block.type) {
         errors.push(`Block ${i}: Missing required 'type' field`);
@@ -330,24 +356,24 @@ export class NotionUpdater {
 
       // Check block-specific structure
       switch (block.type) {
-        case 'paragraph':
-        case 'heading_1':
-        case 'heading_2':
-        case 'heading_3':
-        case 'bulleted_list_item':
-        case 'numbered_list_item':
+        case "paragraph":
+        case "heading_1":
+        case "heading_2":
+        case "heading_3":
+        case "bulleted_list_item":
+        case "numbered_list_item":
           if (!block[block.type]?.rich_text) {
             errors.push(`Block ${i}: Missing rich_text for ${block.type}`);
           }
           break;
-        
-        case 'image':
+
+        case "image":
           if (!block.image?.external?.url && !block.image?.file?.url) {
             errors.push(`Block ${i}: Image missing URL`);
           }
           break;
-        
-        case 'code':
+
+        case "code":
           if (!block.code?.rich_text) {
             errors.push(`Block ${i}: Code block missing content`);
           }
@@ -357,7 +383,7 @@ export class NotionUpdater {
 
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -373,10 +399,12 @@ export class NotionUpdater {
   } {
     return {
       totalPages: results.length,
-      successfulUpdates: results.filter(r => r.success).length,
-      failedUpdates: results.filter(r => !r.success).length,
+      successfulUpdates: results.filter((r) => r.success).length,
+      failedUpdates: results.filter((r) => !r.success).length,
       totalBlocksAdded: results.reduce((sum, r) => sum + r.blocksAdded, 0),
-      errors: results.filter(r => r.error).map(r => `${r.pageId}: ${r.error}`)
+      errors: results
+        .filter((r) => r.error)
+        .map((r) => `${r.pageId}: ${r.error}`),
     };
   }
 }

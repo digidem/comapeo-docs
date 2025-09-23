@@ -4,18 +4,18 @@
 
 export default function remarkFixImagePaths() {
   function transformNode(node: any): void {
-    if (!node || typeof node !== 'object') return;
+    if (!node || typeof node !== "object") return;
 
     // Markdown image nodes
-    if (node.type === 'image' && typeof node.url === 'string') {
-      if (node.url.startsWith('images/')) {
+    if (node.type === "image" && typeof node.url === "string") {
+      if (node.url.startsWith("images/")) {
         node.url = `/${node.url}`;
       }
     }
 
     // Raw HTML nodes possibly containing <img>
-    if (node.type === 'html' && typeof node.value === 'string') {
-      node.value = node.value.replace(/src=(["'])images\//g, 'src=$1/images/');
+    if (node.type === "html" && typeof node.value === "string") {
+      node.value = node.value.replace(/src=(["'])images\//g, "src=$1/images/");
     }
 
     // Recurse into children
@@ -28,4 +28,3 @@ export default function remarkFixImagePaths() {
     transformNode(tree);
   };
 }
-

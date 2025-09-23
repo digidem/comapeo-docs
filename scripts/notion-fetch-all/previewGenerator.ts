@@ -354,7 +354,7 @@ export class PreviewGenerator {
 
     // Add table of contents
     markdown += "## 📑 Table of Contents\n\n";
-    markdown += this.generateTableOfContents(sections);
+    markdown += this.generateTableOfContents(sections, options);
     markdown += "\n";
 
     // Add detailed structure
@@ -369,6 +369,7 @@ export class PreviewGenerator {
    */
   private static generateTableOfContents(
     sections: PreviewSection[],
+    options: PreviewOptions,
     level: number = 0
   ): string {
     let toc = "";
@@ -391,7 +392,7 @@ export class PreviewGenerator {
 
       // Add subsections recursively
       if (section.subSections.length > 0) {
-        toc += this.generateTableOfContents(section.subSections, level + 1);
+        toc += this.generateTableOfContents(section.subSections, options, level + 1);
       }
     }
 

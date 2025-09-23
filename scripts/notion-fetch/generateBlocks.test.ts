@@ -52,7 +52,7 @@ describe("generateBlocks", () => {
     expect(typeof module.generateBlocks).toBe("function");
   });
 
-  it("creates toggle folders even when no subpages exist", async () => {
+  it("creates toggle folders when pages have subpages", async () => {
     const { generateBlocks } = await importModule();
 
     // Clear directory creation during module import
@@ -70,12 +70,30 @@ describe("generateBlocks", () => {
           },
         },
         "Sub-item": {
+          relation: [{ id: "child-page-id" }], // Must have sub-items to be processed
+        },
+      },
+    };
+
+    const childPage = {
+      id: "child-page-id",
+      properties: {
+        Language: {
+          select: { name: "English" },
+        },
+        "Content elements": {
+          title: [{ plain_text: "Sample Section" }],
+        },
+        "Title": {
+          title: [{ plain_text: "Sample Section" }],
+        },
+        "Sub-item": {
           relation: [],
         },
       },
     };
 
-    await generateBlocks([togglePage], vi.fn());
+    await generateBlocks([togglePage, childPage], vi.fn());
 
     const mkdirCall = mkdirSyncMock.mock.calls.find(([dir]) =>
       /docs[\\/]sample-section$/.test(dir)
@@ -93,13 +111,13 @@ describe("generateBlocks", () => {
     expect(categoryCall?.[2]).toBe("utf8");
   });
 
-  it("writes placeholder content when website blocks are missing", async () => {
+  it("skips pages when website blocks are missing", async () => {
     const { generateBlocks } = await importModule();
 
     vi.clearAllMocks();
 
     pageToMarkdownMock.mockResolvedValue([]);
-    toMarkdownStringMock.mockReturnValue({ parent: "" });
+    toMarkdownStringMock.mockReturnValue({ parent: "" }); // No content
 
     const mainPage = {
       id: "main-page-id",
@@ -135,12 +153,12 @@ describe("generateBlocks", () => {
 
     await generateBlocks([mainPage, childPage], vi.fn());
 
-    const placeholderCall = writeFileSyncMock.mock.calls.find(
-      ([, content]) =>
-        typeof content === "string" &&
-        content.includes("This page is under construction.")
+    // Should not create any markdown file when content is empty
+    const markdownCall = writeFileSyncMock.mock.calls.find(
+      ([filePath]) => filePath.includes("empty-section.md")
     );
 
-    expect(placeholderCall).toBeDefined();
+    expect(markdownCall).toBeUndefined();
   });
+
 });

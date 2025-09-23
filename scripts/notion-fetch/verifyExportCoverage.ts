@@ -17,7 +17,7 @@ const slugify = (title: string): string =>
     .trim();
 
 const getTitle = (page: NotionPage): string | undefined =>
-  page?.properties?.["Content elements"]?.title?.[0]?.plain_text;
+  page?.properties?.[NOTION_PROPERTIES.TITLE]?.title?.[0]?.plain_text;
 
 const isReadyToPublish = (page: NotionPage): boolean =>
   page?.properties?.[NOTION_PROPERTIES.STATUS]?.select?.name ===
@@ -90,13 +90,13 @@ if (import.meta.main) {
     if (missing.length === 0) {
       console.log(
         chalk.green(
-          `✅ All ${totalReady} \"${NOTION_PROPERTIES.READY_TO_PUBLISH}\" pages have generated markdown.`
+          `✅ All ${totalReady} \"$[NOTION_PROPERTIES.READY_TO_PUBLISH}\" pages have generated markdown.`
         )
       );
     } else {
       console.error(
         chalk.red(
-          `❌ ${missing.length} of ${totalReady} \"${NOTION_PROPERTIES.READY_TO_PUBLISH}\" pages are missing generated markdown:`
+          `❌ ${missing.length} of ${totalReady} \"$[NOTION_PROPERTIES.READY_TO_PUBLISH}\" pages are missing generated markdown:`
         )
       );
       missing.forEach(({ id, slug, title }) => {

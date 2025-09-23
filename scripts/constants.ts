@@ -7,7 +7,7 @@ export const MAIN_LANGUAGE = "English";
 
 // Notion property names
 export const NOTION_PROPERTIES = {
-  TITLE: "Title",
+  TITLE: "Content elements",
   LANGUAGE: "Language",
   STATUS: "Status",
   ORDER: "Order",

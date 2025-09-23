@@ -28,3 +28,7 @@ CLAUDE.md
 test-results.json
 test-results.html
 coverage/
+
+# Generated Notion export files
+notion_*.json
+EXPORT_DOCUMENTATION.md

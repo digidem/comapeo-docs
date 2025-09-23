@@ -159,6 +159,26 @@ class EnhancedNotionClient {
       "blocks.children.list"
     );
   }
+
+  async blocksChildrenAppend(params: Record<string, unknown>) {
+    return executeWithRetry(
+      () =>
+        this.client.blocks.children.append(
+          params as Parameters<typeof this.client.blocks.children.append>[0]
+        ),
+      "blocks.children.append"
+    );
+  }
+
+  async blocksDelete(params: Record<string, unknown>) {
+    return executeWithRetry(
+      () =>
+        this.client.blocks.delete(
+          params as Parameters<typeof this.client.blocks.delete>[0]
+        ),
+      "blocks.delete"
+    );
+  }
 }
 
 // Create enhanced client

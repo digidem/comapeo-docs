@@ -152,13 +152,6 @@ async function downloadAndProcessImage(
 }
 
 const LEGACY_SECTION_PROPERTY = "Section";
-const SECTION_TITLE_PROPERTY = "Content elements";
-const UNDER_CONSTRUCTION_PLACEHOLDER = [
-  ":::info",
-  "This page is under construction.",
-  ":::",
-  "",
-].join("\n");
 
 const getElementTypeProperty = (page: Record<string, any>) =>
   page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
@@ -175,32 +168,18 @@ const groupPagesByLang = (pages, page) => {
     elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
 
   const obj = {
-    mainTitle: page.properties["Content elements"].title[0].plain_text,
+    mainTitle: page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text,
     section: sectionName,
     content: {},
-    mainPage: page,
-    sectionTitles: {},
   };
   const subpagesId = page.properties["Sub-item"].relation.map((obj) => obj.id);
   for (const subpageId of subpagesId) {
     const subpage = pages.find((page) => page.id == subpageId);
     if (subpage) {
       const lang = langMap[subpage.properties["Language"].select?.name];
-      if (lang) {
-        obj.content[lang] = subpage;
-        const subpageTitle =
-          subpage.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]
-            ?.plain_text ?? null;
-        if (subpageTitle) {
-          obj.sectionTitles[lang] = subpageTitle;
-        }
-      }
+      obj.content[lang] = subpage;
     }
   }
-  const mainSectionTitle =
-    page.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]?.plain_text ??
-    obj.mainTitle;
-  obj.sectionTitles.default = mainSectionTitle;
   return obj;
 };
 
@@ -244,11 +223,8 @@ export async function generateBlocks(pages, progressCallback) {
      * }
      */
     for (const page of pages) {
-      const grouped = groupPagesByLang(pages, page);
-      const hasContent = Object.keys(grouped.content).length > 0;
-
-      if (hasContent || grouped.section === "Toggle") {
-        pagesByLang.push(grouped);
+      if (page.properties["Sub-item"].relation.length !== 0) {
+        pagesByLang.push(groupPagesByLang(pages, page));
       }
     }
 
@@ -262,22 +238,11 @@ export async function generateBlocks(pages, progressCallback) {
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-]/g, "");
 
-      const languages = Object.keys(pageByLang.content);
-      if (pageByLang.section === "Toggle" && languages.length === 0) {
-        languages.push(DEFAULT_LOCALE);
-      }
-
-      for (const lang of languages) {
+      for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
-        const page =
-          pageByLang.content[lang] ??
-          (lang === DEFAULT_LOCALE ? pageByLang.mainPage : undefined);
-
-        if (!page) {
-          continue;
-        }
+        const page = pageByLang.content[lang];
         const pageTitle =
-          page.properties["Content elements"].title[0].plain_text;
+          page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(
@@ -286,17 +251,12 @@ export async function generateBlocks(pages, progressCallback) {
         ); // 2 minute timeout per page
 
         try {
-          if (lang !== "en" && pageByLang.content[lang])
+          if (lang !== "en")
             setTranslationString(lang, pageByLang.mainTitle, pageTitle);
 
           // TOGGLE
           if (sectionType === "Toggle") {
-            const sectionName =
-              page.properties?.[SECTION_TITLE_PROPERTY]?.title?.[0]
-                ?.plain_text ??
-              pageByLang.sectionTitles[lang] ??
-              pageByLang.sectionTitles.default ??
-              pageByLang.mainTitle;
+            const sectionName = page.properties["Title"].title[0].plain_text;
             const sectionFolder = filename;
             const sectionFolderPath = path.join(PATH, sectionFolder);
             fs.mkdirSync(sectionFolderPath, { recursive: true });
@@ -349,20 +309,14 @@ export async function generateBlocks(pages, progressCallback) {
             const markdown = await n2m.pageToMarkdown(page.id);
             const markdownString = n2m.toMarkdownString(markdown);
 
-            let contentBody =
-              typeof markdownString?.parent === "string"
-                ? markdownString.parent
-                : "";
-            const hasWebsiteBlock = contentBody.trim().length > 0;
-
-            if (hasWebsiteBlock) {
+            if (markdownString?.parent) {
               // Process images with Promise.allSettled for better error handling
               const imgRegex = /!\[.*?\]\((.*?)\)/g;
               const imgPromises = [];
               let match;
               let imgIndex = 0;
 
-              while ((match = imgRegex.exec(contentBody)) !== null) {
+              while ((match = imgRegex.exec(markdownString.parent)) !== null) {
                 const imgUrl = match[1];
                 if (!imgUrl.startsWith("http")) continue; // Skip local images
                 const fullMatch = match[0];
@@ -374,7 +328,7 @@ export async function generateBlocks(pages, progressCallback) {
                         imgUrl,
                         newPath
                       );
-                      contentBody = contentBody.replace(
+                      markdownString.parent = markdownString.parent.replace(
                         fullMatch,
                         newImageMarkdown
                       );
@@ -410,81 +364,79 @@ export async function generateBlocks(pages, progressCallback) {
               }
 
               // Sanitize content to fix malformed HTML/JSX tags
-              contentBody = sanitizeMarkdownContent(contentBody);
-            } else {
-              contentBody = UNDER_CONSTRUCTION_PLACEHOLDER;
-              console.warn(
-                chalk.yellow(
-                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}. Using placeholder content.`
-                )
+              markdownString.parent = sanitizeMarkdownContent(
+                markdownString.parent
               );
-            }
 
-            // Determine file path based on section folder context
-            const fileName = `${filename}.md`;
-            let filePath;
+              // Determine file path based on section folder context
+              const fileName = `${filename}.md`;
+              let filePath;
 
-            if (currentSectionFolder[lang]) {
-              filePath = path.join(PATH, currentSectionFolder[lang], fileName);
-            } else {
-              filePath = path.join(PATH, fileName);
-            }
+              if (currentSectionFolder[lang]) {
+                filePath = path.join(
+                  PATH,
+                  currentSectionFolder[lang],
+                  fileName
+                );
+              } else {
+                filePath = path.join(PATH, fileName);
+              }
 
-            // Generate frontmatter
-            // Extract additional properties if available
-            let keywords = ["docs", "comapeo"];
-            let tags = ["comapeo"];
-            let sidebarPosition = i + 1;
-            const customProps: Record<string, unknown> = {};
+              // Generate frontmatter
+              // Extract additional properties if available
+              let keywords = ["docs", "comapeo"];
+              let tags = ["comapeo"];
+              let sidebarPosition = i + 1;
+              const customProps: Record<string, unknown> = {};
 
-            // Check for Tags property
-            if (
-              page.properties["Tags"] &&
-              page.properties["Tags"].multi_select
-            ) {
-              tags = page.properties["Tags"].multi_select.map(
-                (tag) => tag.name
-              );
-            }
+              // Check for Tags property
+              if (
+                page.properties["Tags"] &&
+                page.properties["Tags"].multi_select
+              ) {
+                tags = page.properties["Tags"].multi_select.map(
+                  (tag) => tag.name
+                );
+              }
 
-            // Check for Keywords property
-            if (
-              page.properties.Keywords?.multi_select &&
-              page.properties.Keywords.multi_select.length > 0
-            ) {
-              keywords = page.properties.Keywords.multi_select.map(
-                (keyword) => keyword.name
-              );
-            }
+              // Check for Keywords property
+              if (
+                page.properties.Keywords?.multi_select &&
+                page.properties.Keywords.multi_select.length > 0
+              ) {
+                keywords = page.properties.Keywords.multi_select.map(
+                  (keyword) => keyword.name
+                );
+              }
 
-            // Check for Position property
-            if (page.properties["Order"] && page.properties["Order"].number) {
-              sidebarPosition = page.properties["Order"].number;
-            }
+              // Check for Position property
+              if (page.properties["Order"] && page.properties["Order"].number) {
+                sidebarPosition = page.properties["Order"].number;
+              }
 
-            // Check for Icon property
-            if (
-              page.properties["Icon"] &&
-              page.properties["Icon"].rich_text &&
-              page.properties["Icon"].rich_text.length > 0
-            ) {
-              customProps.icon =
-                page.properties["Icon"].rich_text[0].plain_text;
-            }
+              // Check for Icon property
+              if (
+                page.properties["Icon"] &&
+                page.properties["Icon"].rich_text &&
+                page.properties["Icon"].rich_text.length > 0
+              ) {
+                customProps.icon =
+                  page.properties["Icon"].rich_text[0].plain_text;
+              }
 
-            // Apply title from a previous title section if available
-            if (currentHeading.get(lang)) {
-              customProps.title = currentHeading.get(lang);
-              currentHeading.set(lang, null); // Reset after using it
-            }
+              // Apply title from a previous title section if available
+              if (currentHeading.get(lang)) {
+                customProps.title = currentHeading.get(lang);
+                currentHeading.set(lang, null); // Reset after using it
+              }
 
-            // Determine the relative path for the custom_edit_url
-            const relativePath = currentSectionFolder[lang]
-              ? `${currentSectionFolder[lang]}/${fileName}`
-              : fileName;
+              // Determine the relative path for the custom_edit_url
+              const relativePath = currentSectionFolder[lang]
+                ? `${currentSectionFolder[lang]}/${fileName}`
+                : fileName;
 
-            // Generate frontmatter with custom properties
-            let frontmatter = `---
+              // Generate frontmatter with custom properties
+              let frontmatter = `---
 id: doc-${filename}
 title: ${pageTitle}
 sidebar_label: ${pageTitle}
@@ -499,83 +451,88 @@ last_update:
   date: ${new Date().toLocaleDateString("en-US")}
   author: Awana Digital`;
 
-            // Add customProps to frontmatter if they exist
-            if (Object.keys(customProps).length > 0) {
-              frontmatter += `
-sidebar_custom_props:`;
-              for (const [key, value] of Object.entries(customProps)) {
-                // For emoji icons or titles with special characters, wrap in quotes
-                if (
-                  typeof value === "string" &&
-                  (value.includes('"') ||
-                    value.includes("'") ||
-                    /[^\x20-\x7E]/.test(value))
-                ) {
-                  // If the value contains double quotes, use single quotes; otherwise use double quotes
-                  const quoteChar = value.includes('"') ? "'" : '"';
-                  frontmatter += `
-  ${key}: ${quoteChar}${value}${quoteChar}`;
-                } else {
-                  frontmatter += `
-  ${key}: ${value}`;
+              // Add customProps to frontmatter if they exist
+              if (Object.keys(customProps).length > 0) {
+                frontmatter += `\nsidebar_custom_props:`;
+                for (const [key, value] of Object.entries(customProps)) {
+                  // For emoji icons or titles with special characters, wrap in quotes
+                  if (
+                    typeof value === "string" &&
+                    (value.includes('"') ||
+                      value.includes("'") ||
+                      /[^\x20-\x7E]/.test(value))
+                  ) {
+                    // If the value contains double quotes, use single quotes; otherwise use double quotes
+                    const quoteChar = value.includes('"') ? "'" : '"';
+                    frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
+                  } else {
+                    frontmatter += `\n  ${key}: ${value}`;
+                  }
                 }
               }
-            }
 
-            frontmatter += `
----
-`;
+              frontmatter += `\n---\n`;
 
-            // Remove duplicate title heading if it exists
-            // The first H1 heading often duplicates the title in Notion exports
-            const firstH1Regex = /^\s*# (.+?)(?:\n|$)/;
-            const firstH1Match = contentBody.match(firstH1Regex);
+              // Remove duplicate title heading if it exists
+              // The first H1 heading often duplicates the title in Notion exports
+              let contentBody = markdownString.parent;
 
-            if (firstH1Match) {
-              const firstH1Text = firstH1Match[1].trim();
-              // Check if this heading is similar to the page title (exact match or contains)
-              if (
-                firstH1Text === pageTitle ||
-                pageTitle.includes(firstH1Text) ||
-                firstH1Text.includes(pageTitle)
-              ) {
-                // Remove the duplicate heading
-                contentBody = contentBody.replace(firstH1Match[0], "");
+              // Find the first H1 heading pattern at the beginning of the content
+              const firstH1Regex = /^\s*# (.+?)(?:\n|$)/;
+              const firstH1Match = contentBody.match(firstH1Regex);
 
-                // Also remove any empty lines at the beginning
-                contentBody = contentBody.replace(/^\s+/, "");
+              if (firstH1Match) {
+                const firstH1Text = firstH1Match[1].trim();
+                // Check if this heading is similar to the page title (exact match or contains)
+                if (
+                  firstH1Text === pageTitle ||
+                  pageTitle.includes(firstH1Text) ||
+                  firstH1Text.includes(pageTitle)
+                ) {
+                  // Remove the duplicate heading
+                  contentBody = contentBody.replace(firstH1Match[0], "");
+
+                  // Also remove any empty lines at the beginning
+                  contentBody = contentBody.replace(/^\s+/, "");
+                }
               }
-            }
 
-            // Add frontmatter to markdown content
-            const contentWithFrontmatter = frontmatter + contentBody;
-            fs.writeFileSync(filePath, contentWithFrontmatter, "utf8");
+              // Add frontmatter to markdown content
+              const contentWithFrontmatter = frontmatter + contentBody;
+              fs.writeFileSync(filePath, contentWithFrontmatter, "utf8");
 
-            pageSpinner.succeed(
-              chalk.green(
-                `Page ${processedPages + 1}/${totalPages} processed: ${filePath}`
-              )
-            );
-            console.log(
-              chalk.blue(
-                `  ↳ Added frontmatter with id: doc-${filename}, title: ${pageTitle}`
-              )
-            );
-
-            // Log information about custom properties
-            if (Object.keys(customProps).length > 0) {
-              console.log(
-                chalk.yellow(
-                  `  ↳ Added custom properties: ${JSON.stringify(customProps)}`
+              pageSpinner.succeed(
+                chalk.green(
+                  `Page ${processedPages + 1}/${totalPages} processed: ${filePath}`
                 )
               );
-            }
-
-            // Log information about section folder placement
-            if (currentSectionFolder[lang]) {
               console.log(
-                chalk.cyan(
-                  `  ↳ Placed in section folder: ${currentSectionFolder[lang]}`
+                chalk.blue(
+                  `  ↳ Added frontmatter with id: doc-${filename}, title: ${pageTitle}`
+                )
+              );
+
+              // Log information about custom properties
+              if (Object.keys(customProps).length > 0) {
+                console.log(
+                  chalk.yellow(
+                    `  ↳ Added custom properties: ${JSON.stringify(customProps)}`
+                  )
+                );
+              }
+
+              // Log information about section folder placement
+              if (currentSectionFolder[lang]) {
+                console.log(
+                  chalk.cyan(
+                    `  ↳ Placed in section folder: ${currentSectionFolder[lang]}`
+                  )
+                );
+              }
+            } else {
+              pageSpinner.fail(
+                chalk.yellow(
+                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}`
                 )
               );
             }

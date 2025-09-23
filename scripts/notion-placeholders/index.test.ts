@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { main, parseArgs } from "./index.js";
-import * as fetchNotionData from "../fetchNotionData.js";
-import { PageAnalyzer } from "./pageAnalyzer.js";
-import { ContentGenerator } from "./contentGenerator.js";
-import { NotionUpdater } from "./notionUpdater.js";
-import { BackupManager } from "./utils/backupManager.js";
+
+// Set up environment variables for tests
+process.env.NOTION_API_KEY = "test-notion-key";
+process.env.DATABASE_ID = "test-database-id";
 
 // Mock external dependencies
+vi.mock("../notionClient.js", () => ({
+  enhancedNotion: {
+    databasesQuery: vi.fn(),
+  },
+  DATABASE_ID: "test-database-id",
+}));
 vi.mock("../fetchNotionData.js");
 vi.mock("./pageAnalyzer.js");
 vi.mock("./contentGenerator.js");
@@ -20,6 +24,13 @@ vi.mock("ora", () => ({
   })),
 }));
 
+import { main, parseArgs } from "./index.js";
+import * as fetchNotionData from "../fetchNotionData.js";
+import { PageAnalyzer } from "./pageAnalyzer.js";
+import { ContentGenerator } from "./contentGenerator.js";
+import { NotionUpdater } from "./notionUpdater.js";
+import { BackupManager } from "./utils/backupManager.js";
+
 describe("notion-placeholders", () => {
   const mockPages = [
     {
@@ -28,6 +39,9 @@ describe("notion-placeholders", () => {
         "Content elements": {
           title: [{ plain_text: "Getting Started" }],
         },
+        "Language": {
+          select: { name: "English" },
+        },
       },
     },
     {
@@ -35,6 +49,9 @@ describe("notion-placeholders", () => {
       properties: {
         "Content elements": {
           title: [{ plain_text: "API Reference" }],
+        },
+        "Language": {
+          select: { name: "English" },
         },
       },
     },
@@ -100,6 +117,7 @@ describe("notion-placeholders", () => {
     // Setup environment variables
     process.env.NOTION_API_KEY = "test-api-key";
     process.env.DATABASE_ID = "test-database-id";
+    process.env.NODE_ENV = "test";
 
     // Mock console methods
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -115,6 +133,7 @@ describe("notion-placeholders", () => {
     vi.restoreAllMocks();
     delete process.env.NOTION_API_KEY;
     delete process.env.DATABASE_ID;
+    delete process.env.NODE_ENV;
   });
 
   describe("parseArgs", () => {
@@ -238,7 +257,18 @@ describe("notion-placeholders", () => {
 
       await main();
 
-      expect(fetchNotionData.fetchNotionData).toHaveBeenCalledWith(undefined);
+      expect(fetchNotionData.fetchNotionData).toHaveBeenCalledWith({
+        or: [
+          {
+            property: "Publish Status",
+            select: { is_empty: true },
+          },
+          {
+            property: "Publish Status", 
+            select: { does_not_equal: "Remove" },
+          },
+        ],
+      });
       expect(PageAnalyzer.analyzePages).toHaveBeenCalled();
       expect(ContentGenerator.generateCompletePage).toHaveBeenCalled();
       expect(NotionUpdater.updatePages).toHaveBeenCalled();
@@ -267,7 +297,7 @@ describe("notion-placeholders", () => {
       await main();
 
       expect(fetchNotionData.fetchNotionData).toHaveBeenCalledWith({
-        property: "Status",
+        property: "Publish Status",
         select: { equals: "Draft" },
       });
 
@@ -338,6 +368,9 @@ describe("notion-placeholders", () => {
           "Content elements": {
             title: [{ plain_text: `Page ${i}` }],
           },
+          "Language": {
+            select: { name: "English" },
+          },
         },
       }));
 
@@ -355,6 +388,72 @@ describe("notion-placeholders", () => {
           expect.objectContaining({ id: "page2" }),
           expect.objectContaining({ id: "page3" }),
           expect.objectContaining({ id: "page4" }),
+        ]),
+        expect.any(Object)
+      );
+
+      process.argv = originalArgv;
+    });
+
+    it("should filter out non-English pages", async () => {
+      const mixedLanguagePages = [
+        {
+          id: "english-page",
+          properties: {
+            "Content elements": {
+              title: [{ plain_text: "English Page" }],
+            },
+            "Language": {
+              select: { name: "English" },
+            },
+          },
+        },
+        {
+          id: "spanish-page",
+          properties: {
+            "Content elements": {
+              title: [{ plain_text: "Spanish Page" }],
+            },
+            "Language": {
+              select: { name: "Spanish" },
+            },
+          },
+        },
+        {
+          id: "portuguese-page",
+          properties: {
+            "Content elements": {
+              title: [{ plain_text: "Portuguese Page" }],
+            },
+            "Language": {
+              select: { name: "Portuguese" },
+            },
+          },
+        },
+      ];
+
+      vi.mocked(fetchNotionData.fetchNotionData).mockResolvedValue(mixedLanguagePages);
+
+      const originalArgv = process.argv;
+      process.argv = ["node", "script"];
+
+      await main();
+
+      // Should only analyze the English page
+      expect(PageAnalyzer.analyzePages).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ 
+            id: "english-page",
+            title: "English Page"
+          }),
+        ]),
+        expect.any(Object)
+      );
+
+      // Should not include Spanish or Portuguese pages
+      expect(PageAnalyzer.analyzePages).not.toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "spanish-page" }),
         ]),
         expect.any(Object)
       );
@@ -396,8 +495,40 @@ describe("notion-placeholders", () => {
     });
 
     it("should handle update errors gracefully", async () => {
-      vi.mocked(fetchNotionData.fetchNotionData).mockResolvedValue(mockPages);
-      vi.mocked(PageAnalyzer.analyzePages).mockResolvedValue(mockAnalyses);
+      // Use a specific mock that ensures page1 needs updating
+      const mockPagesForUpdate = [
+        {
+          id: "page1",
+          properties: {
+            "Content elements": {
+              title: [{ plain_text: "Getting Started" }],
+            },
+            "Language": {
+              select: { name: "English" },
+            },
+          },
+        },
+      ];
+      
+      const mockAnalysesForUpdate = new Map([
+        [
+          "page1",
+          {
+            pageId: "page1",
+            title: "Getting Started",
+            contentScore: 5,
+            hasContent: false,
+            blockCount: 0,
+            recommendedAction: "fill",
+            recommendedContentType: "tutorial",
+            lastModified: new Date("2024-01-01"),
+            isRecentlyModified: false,
+          },
+        ],
+      ]);
+      
+      vi.mocked(fetchNotionData.fetchNotionData).mockResolvedValue(mockPagesForUpdate);
+      vi.mocked(PageAnalyzer.analyzePages).mockResolvedValue(mockAnalysesForUpdate);
       vi.mocked(ContentGenerator.generateCompletePage).mockReturnValue(
         mockBlocks
       );

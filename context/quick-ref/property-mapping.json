@@ -1,0 +1,38 @@
+{
+  "notionProperties": {
+    "TITLE": "Content elements",
+    "LANGUAGE": "Language",
+    "STATUS": "Publish Status",
+    "ORDER": "Order", 
+    "TAGS": "Tags",
+    "ELEMENT_TYPE": "Element Type",
+    "READY_FOR_TRANSLATION": "Ready for translation",
+    "READY_TO_PUBLISH": "Ready to publish"
+  },
+  "propertyTypes": {
+    "Content elements": "title",
+    "Language": "select",
+    "Publish Status": "select",
+    "Element Type": "select", 
+    "Order": "number",
+    "Tags": "multi_select",
+    "Date Published": "date",
+    "Drafting Status": "select",
+    "↳ Assignment Target Date": "rollup",
+    "Last edited by": "people",
+    "Created time": "created_time",
+    "Last edited time": "last_edited_time"
+  },
+  "coreProperties": [
+    "Content elements",
+    "Language",
+    "Publish Status",
+    "Element Type",
+    "Order",
+    "Tags"
+  ],
+  "requiredProperties": [
+    "Content elements",
+    "Language"
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "validStatuses": [
+    "No Status",
+    "Not started", 
+    "Update in progress",
+    "Draft published",
+    "Ready to publish",
+    "Remove"
+  ],
+  "statusDistribution": {
+    "No Status": {
+      "count": 139,
+      "percentage": 72.0,
+      "description": "Empty placeholders"
+    },
+    "Not started": {
+      "count": 19,
+      "percentage": 9.8,
+      "description": "Planned content"
+    },
+    "Update in progress": {
+      "count": 10,
+      "percentage": 5.2,
+      "description": "Work in progress"
+    },
+    "Draft published": {
+      "count": 7,
+      "percentage": 3.6,
+      "description": "Live content"
+    },
+    "Ready to publish": {
+      "count": 15,
+      "percentage": 7.8,
+      "description": "Completed content"
+    },
+    "Remove": {
+      "count": 3,
+      "percentage": 1.6,
+      "description": "Marked for deletion"
+    }
+  },
+  "workflowStates": {
+    "active": [
+      "No Status",
+      "Not started",
+      "Update in progress", 
+      "Draft published",
+      "Ready to publish"
+    ],
+    "excluded": [
+      "Remove"
+    ],
+    "empty": [
+      "No Status"
+    ],
+    "inProgress": [
+      "Not started",
+      "Update in progress"
+    ],
+    "ready": [
+      "Ready to publish"
+    ],
+    "published": [
+      "Draft published"
+    ]
+  },
+  "elementTypes": [
+    "Page",
+    "Title", 
+    "Toggle",
+    "Unknown"
+  ],
+  "elementTypeDistribution": {
+    "Page": {
+      "count": 136,
+      "percentage": 70.5,
+      "description": "Standard content pages"
+    },
+    "Title": {
+      "count": 37,
+      "percentage": 19.2,
+      "description": "Section headers"
+    },
+    "Toggle": {
+      "count": 10,
+      "percentage": 5.2,
+      "description": "Collapsible sections"
+    },
+    "Unknown": {
+      "count": 10,
+      "percentage": 5.2,
+      "description": "Unclassified content"
+    }
+  },
+  "languages": [
+    "English",
+    "Spanish",
+    "Portuguese"
+  ],
+  "languageDistribution": {
+    "English": {
+      "count": 48,
+      "percentage": 32.7,
+      "role": "source"
+    },
+    "Spanish": {
+      "count": 46,
+      "percentage": 31.3,
+      "role": "translation"
+    },
+    "Portuguese": {
+      "count": 51,
+      "percentage": 34.7,
+      "role": "translation"
+    }
+  }
+}

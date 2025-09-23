@@ -118,6 +118,7 @@ Ask first:
 - Command reference: `./context/workflows/notion-commands.md`
 - Content lifecycle: `./context/workflows/content-lifecycle.md`
 - Translation process: `./context/workflows/translation-process.md`
+- Content pipeline: `./context/workflows/content-pipeline.md`
 
 ### Quick Lookups (for rapid development reference)
 

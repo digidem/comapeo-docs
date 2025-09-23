@@ -19,6 +19,7 @@ Short, high-signal rules for AI agents working in this repo. Keep changes small 
 - do not add heavy dependencies without approval
 - do not commit secrets or modify CI without approval
 - do not place images outside `static/images` or hotlink external assets
+- do not commit content files in `./static` and `./docs` folders - these are generated from Notion
 
 ### Commands
 
@@ -97,6 +98,32 @@ Ask first:
 ### Optional: Test-First
 
 - for new script features or regressions under `scripts/`, add/update Vitest tests first, then code to green
+
+### Database Context (when working with Notion integration)
+
+- Database overview: `./context/database/overview.md`
+- Properties & schema: `./context/database/properties.md` 
+- Block types: `./context/database/block-types.md`
+- Content patterns: `./context/database/content-patterns.md`
+- Script targeting: `./context/database/script-targets.md`
+
+### Development Context (when implementing Notion scripts)
+
+- Development constants: `./context/development/constants.md`
+- Script architecture: `./context/development/script-architecture.md`
+- Testing patterns: `./context/development/testing-patterns.md`
+
+### Workflow Context (when running Notion commands)
+
+- Command reference: `./context/workflows/notion-commands.md`
+- Content lifecycle: `./context/workflows/content-lifecycle.md`
+- Translation process: `./context/workflows/translation-process.md`
+
+### Quick Lookups (for rapid development reference)
+
+- Property mappings: `./context/quick-ref/property-mapping.json`
+- Status values: `./context/quick-ref/status-values.json`
+- Block examples: `./context/quick-ref/block-examples.json`
 
 ### More Context
 

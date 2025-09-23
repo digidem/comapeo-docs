@@ -10,6 +10,7 @@ import { enhancedNotion } from "../notionClient.js";
 
 // Mock the notionClient
 vi.mock("../notionClient.js", () => ({
+  DATABASE_ID: "test-database-id",
   enhancedNotion: {
     databasesQuery: vi.fn(),
     pagesRetrieve: vi.fn(),
@@ -128,13 +129,13 @@ describe("fetchAll", () => {
       expect(enhancedNotion.databasesQuery).toHaveBeenCalledWith({
         database_id: expect.any(String),
         filter: {
-          and: [
+          or: [
             {
-              property: "Archived",
-              checkbox: { equals: false },
+              property: "Publish Status",
+              select: { is_empty: true },
             },
             {
-              property: "Status",
+              property: "Publish Status",
               select: { does_not_equal: "Remove" },
             },
           ],
@@ -169,13 +170,13 @@ describe("fetchAll", () => {
       expect(enhancedNotion.databasesQuery).toHaveBeenNthCalledWith(2, {
         database_id: expect.any(String),
         filter: {
-          and: [
+          or: [
             {
-              property: "Archived",
-              checkbox: { equals: false },
+              property: "Publish Status",
+              select: { is_empty: true },
             },
             {
-              property: "Status",
+              property: "Publish Status",
               select: { does_not_equal: "Remove" },
             },
           ],
@@ -187,28 +188,6 @@ describe("fetchAll", () => {
       expect(pages).toHaveLength(3);
     });
 
-    it("should exclude archived pages when includeArchived is false", async () => {
-      vi.mocked(enhancedNotion.databasesQuery).mockResolvedValue({
-        results: mockNotionPages,
-        has_more: false,
-        next_cursor: null,
-      });
-
-      await fetchAllNotionData({
-        includeArchived: false,
-        includeRemoved: true,
-      });
-
-      expect(enhancedNotion.databasesQuery).toHaveBeenCalledWith({
-        database_id: expect.any(String),
-        filter: {
-          property: "Archived",
-          checkbox: { equals: false },
-        },
-        page_size: 100,
-      });
-    });
-
     it("should include removed pages when includeRemoved is true", async () => {
       vi.mocked(enhancedNotion.databasesQuery).mockResolvedValue({
         results: mockNotionPages,
@@ -216,7 +195,7 @@ describe("fetchAll", () => {
         next_cursor: null,
       });
 
-      await fetchAllNotionData({ includeArchived: true, includeRemoved: true });
+      await fetchAllNotionData({ includeRemoved: true });
 
       expect(enhancedNotion.databasesQuery).toHaveBeenCalledWith({
         database_id: expect.any(String),
@@ -225,7 +204,8 @@ describe("fetchAll", () => {
       });
     });
 
-    it("should exclude both archived and removed pages by default", async () => {
+
+    it("should exclude removed pages by default", async () => {
       vi.mocked(enhancedNotion.databasesQuery).mockResolvedValue({
         results: mockNotionPages,
         has_more: false,
@@ -237,13 +217,13 @@ describe("fetchAll", () => {
       expect(enhancedNotion.databasesQuery).toHaveBeenCalledWith({
         database_id: expect.any(String),
         filter: {
-          and: [
+          or: [
             {
-              property: "Archived",
-              checkbox: { equals: false },
+              property: "Publish Status",
+              select: { is_empty: true },
             },
             {
-              property: "Status",
+              property: "Publish Status",
               select: { does_not_equal: "Remove" },
             },
           ],

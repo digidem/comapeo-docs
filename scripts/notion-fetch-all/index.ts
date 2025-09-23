@@ -8,6 +8,7 @@ import { fetchAllNotionData, FetchAllOptions } from "./fetchAll.js";
 import { PreviewGenerator, PreviewOptions } from "./previewGenerator.js";
 import { StatusAnalyzer } from "./statusAnalyzer.js";
 import { ComparisonEngine } from "./comparisonEngine.js";
+import { generateBlocksForAll } from "./generateBlocksForAll.js";
 
 // Load environment variables
 dotenv.config();
@@ -23,6 +24,7 @@ interface CliOptions {
   analysis: boolean;
   comparison: boolean;
   previewOnly: boolean;
+  exportFiles: boolean;
   statusFilter?: string;
   maxPages?: number;
 }
@@ -38,6 +40,7 @@ const parseArgs = (): CliOptions => {
     analysis: true,
     comparison: false,
     previewOnly: false,
+    exportFiles: true,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -78,6 +81,7 @@ const parseArgs = (): CliOptions => {
         break;
       case "--preview-only":
         options.previewOnly = true;
+        options.exportFiles = false;
         options.analysis = false;
         options.comparison = false;
         break;
@@ -100,10 +104,10 @@ const parseArgs = (): CliOptions => {
 
 const printHelp = () => {
   console.log(
-    chalk.bold("CoMapeo Notion Fetch All - Complete Documentation Preview\\n")
+    chalk.bold("CoMapeo Notion Fetch All - Export All Pages to Markdown\\n")
   );
   console.log(
-    "Fetches ALL pages from Notion (regardless of status) to generate complete documentation preview.\\n"
+    "Fetches ALL pages from Notion (regardless of status) and exports to markdown files. Use --preview-only for analysis reports.\\n"
   );
   console.log(chalk.bold("Usage:"));
   console.log("  npm run notion:fetch-all [options]\\n");
@@ -124,7 +128,9 @@ const printHelp = () => {
   console.log(
     "  --comparison, -c           Compare with published documentation"
   );
-  console.log("  --preview-only             Generate preview only (fastest)");
+  console.log(
+    "  --preview-only             Generate preview only, no file export"
+  );
   console.log("  --status-filter <status>   Filter by specific status");
   console.log("  --max-pages <number>       Limit number of pages to process");
   console.log("  --help, -h                 Show this help message\\n");
@@ -132,6 +138,7 @@ const printHelp = () => {
   console.log("  npm run notion:fetch-all");
   console.log("  npm run notion:fetch-all --comparison --verbose");
   console.log("  npm run notion:fetch-all --preview-only --output preview.md");
+  console.log("  npm run notion:fetch-all --verbose");
   console.log(
     '  npm run notion:fetch-all --status-filter "Draft" --max-pages 50'
   );
@@ -143,7 +150,7 @@ async function main() {
 
   console.log(
     chalk.bold.cyan(
-      "🌍 CoMapeo Notion Fetch All - Complete Documentation Preview\\n"
+      "🌍 CoMapeo Notion Fetch All - Export All Pages to Markdown\\n"
     )
   );
 
@@ -195,6 +202,59 @@ async function main() {
     if (options.maxPages && filteredPages.length > options.maxPages) {
       filteredPages = filteredPages.slice(0, options.maxPages);
       console.log(chalk.blue(`📏 Limited to first ${options.maxPages} pages`));
+    }
+
+    // Export files if requested
+    if (options.exportFiles) {
+      spinner = ora("Exporting pages to markdown files...").start();
+
+      try {
+        let progressCount = 0;
+        const progressCallback = options.verbose
+          ? (progress: { current: number; total: number }) => {
+              if (
+                progress.current % 10 === 0 ||
+                progress.current === progress.total
+              ) {
+                console.log(
+                  chalk.gray(
+                    `  Progress: ${progress.current}/${progress.total} pages`
+                  )
+                );
+              }
+            }
+          : undefined;
+
+        const exportResults = await generateBlocksForAll(
+          filteredPages,
+          progressCallback
+        );
+
+        spinner.succeed(
+          chalk.green(
+            `✅ Exported ${exportResults.totalSaved} pages to markdown files`
+          )
+        );
+
+        if (options.verbose) {
+          console.log(
+            chalk.blue(`📄 Total saved: ${exportResults.totalSaved}`)
+          );
+          console.log(chalk.blue(`📂 Sections: ${exportResults.sectionCount}`));
+          console.log(
+            chalk.blue(`📝 Title sections: ${exportResults.titleSectionCount}`)
+          );
+        }
+      } catch (error) {
+        spinner.fail(chalk.red("❌ Failed to export pages to markdown files"));
+        console.error(chalk.red("Export Error:"), error);
+
+        if (options.verbose) {
+          console.error(chalk.gray("Stack trace:"), error.stack);
+        }
+
+        // Continue with preview generation even if export fails
+      }
     }
 
     // Step 2: Generate documentation preview
@@ -301,7 +361,8 @@ async function main() {
           preview,
           analysisResults,
           comparisonResults,
-          options
+          options,
+          filteredPages
         );
         defaultFilename = `comapeo-docs-preview-${Date.now()}.md`;
         break;
@@ -319,7 +380,8 @@ async function main() {
           preview,
           analysisResults,
           comparisonResults,
-          options
+          options,
+          filteredPages
         );
         defaultFilename = `comapeo-docs-preview-${Date.now()}.html`;
         break;
@@ -337,16 +399,37 @@ async function main() {
 
     console.log(chalk.bold.green("\\n✨ Fetch All Complete!"));
     console.log(chalk.gray(`Execution time: ${executionTime}s`));
-    console.log(chalk.gray(`Output format: ${options.outputFormat}`));
-    console.log(chalk.gray(`Output file: ${outputPath}`));
+    console.log(chalk.gray(`Pages processed: ${filteredPages.length}`));
+
+    if (options.exportFiles) {
+      console.log(chalk.gray(`Mode: Export to markdown files + preview`));
+    } else {
+      console.log(chalk.gray(`Mode: Preview only`));
+      console.log(chalk.gray(`Output format: ${options.outputFormat}`));
+      console.log(chalk.gray(`Output file: ${outputPath}`));
+    }
 
     if (!options.previewOnly) {
       console.log(chalk.blue("\\n💡 Next Steps:"));
-      console.log("  1. Review the generated preview for completeness");
-      console.log("  2. Address any identified content gaps");
-      console.log("  3. Use notion:gen-placeholders for empty pages");
+
+      if (options.exportFiles) {
+        console.log(
+          "  1. Review the exported markdown files in ./docs and ./i18n folders"
+        );
+        console.log("  2. Check language separation is working correctly");
+        console.log("  3. Test the Docusaurus build with the new files");
+        console.log("  4. Address any identified content gaps");
+      } else {
+        console.log("  1. Review the generated preview for completeness");
+        console.log("  2. Address any identified content gaps");
+        console.log("  3. Use notion:gen-placeholders for empty pages");
+        console.log(
+          "  4. Run without --preview-only to export actual markdown files"
+        );
+      }
+
       if (options.comparison) {
-        console.log("  4. Review migration checklist for deployment");
+        console.log("  5. Review migration checklist for deployment");
       }
     }
   } catch (error) {
@@ -366,15 +449,14 @@ async function generateMarkdownOutput(
   preview: any,
   analysis: any,
   comparison: any,
-  options: CliOptions
+  options: CliOptions,
+  pages: any[] = []
 ): Promise<string> {
   let output = preview.markdown || "";
 
-  if (analysis && !options.previewOnly) {
+  if (analysis && !options.previewOnly && pages.length > 0) {
     output += "\\n\\n---\\n\\n";
-    output += StatusAnalyzer.generateReadinessReport(
-      analysis.pages || []
-    ).summary;
+    output += StatusAnalyzer.generateReadinessReport(pages).summary;
   }
 
   if (comparison && !options.previewOnly) {
@@ -418,13 +500,15 @@ async function generateHTMLOutput(
   preview: any,
   analysis: any,
   comparison: any,
-  options: CliOptions
+  options: CliOptions,
+  pages: any[] = []
 ): Promise<string> {
   const markdownContent = await generateMarkdownOutput(
     preview,
     analysis,
     comparison,
-    options
+    options,
+    pages
   );
 
   // Basic HTML wrapper (in production, you'd use a proper markdown-to-HTML converter)

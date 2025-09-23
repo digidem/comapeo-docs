@@ -110,8 +110,9 @@ export class PreviewGenerator {
     const previewPages: PreviewPage[] = [];
 
     for (const page of pages) {
-      // Check if page has content
-      const hasContent = await this.analyzePageContent(page.id);
+      // Use simple heuristic instead of expensive API calls
+      // Pages with "Ready to publish" or "Draft" status likely have content
+      const hasContent = this.estimateHasContent(page);
 
       previewPages.push({
         id: page.id,
@@ -133,7 +134,49 @@ export class PreviewGenerator {
   }
 
   /**
-   * Analyze if page has meaningful content
+   * Simple heuristic to estimate if page has content (replaces expensive API calls)
+   */
+  private static estimateHasContent(page: PageWithStatus): boolean {
+    // Use status and metadata to estimate content presence
+    // This is much faster than making API calls for each page
+
+    // Pages with "Ready to publish" or draft statuses likely have content
+    if (
+      page.status === "Ready to publish" ||
+      page.status === "Draft published" ||
+      page.status === "Update in progress"
+    ) {
+      return true;
+    }
+
+    // Pages that are "Not started" are likely empty
+    if (page.status === "Not started") {
+      return false;
+    }
+
+    // For "No Status" pages, use title heuristics
+    if (page.status === "No Status") {
+      // Generic placeholder titles suggest empty content
+      const placeholderTitles = [
+        "Nueva Página",
+        "Nova Página",
+        "New Page",
+        "Untitled",
+      ];
+
+      const isPlaceholder = placeholderTitles.some((placeholder) =>
+        page.title.includes(placeholder)
+      );
+
+      return !isPlaceholder;
+    }
+
+    // Default to true for other statuses
+    return true;
+  }
+
+  /**
+   * Analyze if page has meaningful content (expensive - use estimateHasContent instead)
    */
   private static async analyzePageContent(pageId: string): Promise<boolean> {
     try {
@@ -392,7 +435,11 @@ export class PreviewGenerator {
 
       // Add subsections recursively
       if (section.subSections.length > 0) {
-        toc += this.generateTableOfContents(section.subSections, options, level + 1);
+        toc += this.generateTableOfContents(
+          section.subSections,
+          options,
+          level + 1
+        );
       }
     }
 

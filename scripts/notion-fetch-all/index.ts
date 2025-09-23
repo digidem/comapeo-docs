@@ -17,7 +17,6 @@ interface CliOptions {
   verbose: boolean;
   outputFormat: "markdown" | "json" | "html";
   outputFile?: string;
-  includeArchived: boolean;
   includeRemoved: boolean;
   sortBy: "order" | "created" | "modified" | "title";
   sortDirection: "asc" | "desc";
@@ -33,7 +32,6 @@ const parseArgs = (): CliOptions => {
   const options: CliOptions = {
     verbose: false,
     outputFormat: "markdown",
-    includeArchived: false,
     includeRemoved: false,
     sortBy: "order",
     sortDirection: "asc",
@@ -58,9 +56,6 @@ const parseArgs = (): CliOptions => {
       case "--output":
       case "-o":
         options.outputFile = args[++i];
-        break;
-      case "--include-archived":
-        options.includeArchived = true;
         break;
       case "--include-removed":
         options.includeRemoved = true;
@@ -118,7 +113,6 @@ const printHelp = () => {
     "  --output-format, -f        Output format: markdown, json, html (default: markdown)"
   );
   console.log("  --output, -o <file>        Output file path");
-  console.log("  --include-archived         Include archived pages");
   console.log(
     '  --include-removed          Include pages with "Remove" status'
   );
@@ -174,7 +168,6 @@ async function main() {
   try {
     // Step 1: Fetch all pages from Notion
     const fetchOptions: FetchAllOptions = {
-      includeArchived: options.includeArchived,
       includeRemoved: options.includeRemoved,
       sortBy: options.sortBy,
       sortDirection: options.sortDirection,

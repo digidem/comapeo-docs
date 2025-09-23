@@ -18,7 +18,6 @@ export interface PageWithStatus {
 }
 
 export interface FetchAllOptions {
-  includeArchived?: boolean;
   includeRemoved?: boolean;
   sortBy?: "order" | "created" | "modified" | "title";
   sortDirection?: "asc" | "desc";
@@ -32,7 +31,6 @@ export async function fetchAllNotionData(
   options: FetchAllOptions = {}
 ): Promise<PageWithStatus[]> {
   const {
-    includeArchived = false,
     includeRemoved = false,
     sortBy = "order",
     sortDirection = "asc",
@@ -48,18 +46,9 @@ export async function fetchAllNotionData(
     let filter: any = undefined;
 
     try {
-      const filters: any[] = [];
-
-      if (!includeArchived) {
-        filters.push({
-          property: "Archived",
-          checkbox: { equals: false },
-        });
-      }
-
       if (!includeRemoved) {
         // Handle null status values properly - most pages have null status
-        filters.push({
+        filter = {
           or: [
             {
               property: NOTION_PROPERTIES.STATUS,
@@ -70,15 +59,6 @@ export async function fetchAllNotionData(
               select: { does_not_equal: "Remove" },
             },
           ],
-        });
-      }
-
-      // Combine filters with AND logic
-      if (filters.length === 1) {
-        filter = filters[0];
-      } else if (filters.length > 1) {
-        filter = {
-          and: filters,
         };
       }
     } catch (filterError) {

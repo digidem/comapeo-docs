@@ -54,9 +54,9 @@ describe("constants", () => {
   describe("NOTION_PROPERTIES", () => {
     it("should contain all required property names", () => {
       // Arrange & Act & Assert
-      expect(NOTION_PROPERTIES.TITLE).toBe("Title");
+      expect(NOTION_PROPERTIES.TITLE).toBe("Content elements");
       expect(NOTION_PROPERTIES.LANGUAGE).toBe("Language");
-      expect(NOTION_PROPERTIES.STATUS).toBe("Status");
+      expect(NOTION_PROPERTIES.STATUS).toBe("Publish Status");
       expect(NOTION_PROPERTIES.ORDER).toBe("Order");
       expect(NOTION_PROPERTIES.TAGS).toBe("Tags");
       expect(NOTION_PROPERTIES.ELEMENT_TYPE).toBe("Element Type");

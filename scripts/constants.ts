@@ -9,7 +9,7 @@ export const MAIN_LANGUAGE = "English";
 export const NOTION_PROPERTIES = {
   TITLE: "Content elements",
   LANGUAGE: "Language",
-  STATUS: "Status",
+  STATUS: "Publish Status",
   ORDER: "Order",
   TAGS: "Tags",
   ELEMENT_TYPE: "Element Type",

@@ -1,5 +1,5 @@
-import { PageWithStatus } from "./fetchAll.js";
-import { PreviewSection } from "./previewGenerator.js";
+import { PageWithStatus } from "./fetchAll";
+import { PreviewSection } from "./previewGenerator";
 
 export interface ComparisonResult {
   published: {

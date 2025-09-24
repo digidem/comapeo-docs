@@ -1,5 +1,16 @@
-import { enhancedNotion } from "../notionClient.js";
-import { NotionBlock } from "./contentGenerator.js";
+import { enhancedNotion } from "../notionClient";
+import { NotionBlock } from "./contentGenerator";
+import {
+  PageObjectResponse,
+  PartialPageObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+// Type guard to check if a page response is complete
+function isFullPage(
+  page: PageObjectResponse | PartialPageObjectResponse
+): page is PageObjectResponse {
+  return "properties" in page;
+}
 
 export interface UpdateResult {
   pageId: string;
@@ -266,7 +277,7 @@ export class NotionUpdater {
         pageId,
         timestamp: new Date(),
         originalBlocks: currentBlocks,
-        pageProperties: page.properties,
+        pageProperties: isFullPage(page) ? page.properties : {},
       };
 
       this.backups.set(pageId, backup);

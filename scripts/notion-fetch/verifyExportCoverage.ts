@@ -1,9 +1,9 @@
 import chalk from "chalk";
 import fs from "node:fs";
 import path from "node:path";
-import glob from "glob";
+import { glob } from "glob";
 
-import { NOTION_PROPERTIES } from "../constants.js";
+import { NOTION_PROPERTIES } from "../constants";
 
 type NotionPage = Record<string, any>;
 

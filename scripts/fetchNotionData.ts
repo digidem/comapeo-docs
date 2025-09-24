@@ -1,4 +1,15 @@
-import { enhancedNotion, DATABASE_ID } from "./notionClient.js";
+import { enhancedNotion, DATABASE_ID } from "./notionClient";
+import {
+  BlockObjectResponse,
+  PartialBlockObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+// Type guard to check if a block is a complete BlockObjectResponse
+function isFullBlock(
+  block: PartialBlockObjectResponse | BlockObjectResponse
+): block is BlockObjectResponse {
+  return "has_children" in block;
+}
 
 export async function fetchNotionData(filter) {
   const response = await enhancedNotion.databasesQuery({
@@ -74,8 +85,8 @@ export async function fetchNotionBlocks(blockId) {
 
     // Recursively fetch nested blocks
     for (const block of response.results) {
-      if (block.has_children) {
-        block.children = await fetchNotionBlocks(block.id);
+      if (isFullBlock(block) && block.has_children) {
+        (block as any).children = await fetchNotionBlocks(block.id);
       }
     }
 

@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { n2m } from "../notionClient.ts";
-import { NOTION_PROPERTIES } from "../constants.ts";
+import { n2m } from "../notionClient";
+import { NOTION_PROPERTIES } from "../constants";
 import axios from "axios";
 import chalk from "chalk";
-import { processImage } from "../notion-fetch/imageProcessor.ts";
+import { processImage } from "../notion-fetch/imageProcessor";
 import {
   sanitizeMarkdownContent,
   compressImageToFileWithFallback,
@@ -14,10 +14,10 @@ import {
   chooseFormat,
   extForFormat,
   isResizableFormat,
-} from "../notion-fetch/utils.ts";
-import config from "../../docusaurus.config.ts";
-import SpinnerManager from "../notion-fetch/spinnerManager.ts";
-import { PageWithStatus } from "./fetchAll.ts";
+} from "../notion-fetch/utils";
+import config from "../../docusaurus.config";
+import SpinnerManager from "../notion-fetch/spinnerManager";
+import { PageWithStatus } from "./fetchAll";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -279,7 +279,9 @@ async function processBase64Image(
     spinner.text = `Processing base64 image ${index + 1}: Saving to file`;
 
     // Check if we can compress the image (only for certain formats)
-    const format = mimeType as "png" | "jpeg" | "jpg" | "gif" | "webp";
+    const rawFormat = mimeType as "png" | "jpeg" | "jpg" | "gif" | "webp";
+    // Normalize jpg to jpeg for the isResizableFormat function
+    const format = rawFormat === "jpg" ? "jpeg" : rawFormat;
     if (isResizableFormat(format) && buffer.length > 50000) {
       // Only compress if > 50KB
       spinner.text = `Processing base64 image ${index + 1}: Compressing`;

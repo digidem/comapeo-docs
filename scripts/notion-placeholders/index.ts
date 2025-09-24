@@ -3,16 +3,13 @@ import ora from "ora";
 import chalk from "chalk";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { fetchNotionData } from "../fetchNotionData.js";
-import { NOTION_PROPERTIES } from "../constants.js";
-import { PageAnalyzer } from "./pageAnalyzer.js";
-import {
-  ContentGenerator,
-  ContentGenerationOptions,
-} from "./contentGenerator.js";
-import { NotionUpdater, UpdateOptions } from "./notionUpdater.js";
-import { RateLimiter } from "./utils/rateLimiter.js";
-import { BackupManager } from "./utils/backupManager.js";
+import { fetchNotionData } from "../fetchNotionData";
+import { NOTION_PROPERTIES } from "../constants";
+import { PageAnalyzer } from "./pageAnalyzer";
+import { ContentGenerator, ContentGenerationOptions } from "./contentGenerator";
+import { NotionUpdater, UpdateOptions } from "./notionUpdater";
+import { RateLimiter } from "./utils/rateLimiter";
+import { BackupManager } from "./utils/backupManager";
 
 // Load environment variables
 dotenv.config();
@@ -341,7 +338,6 @@ async function main() {
       return;
     }
 
-
     console.log(
       chalk.yellow(
         `\n🚀 Generating content for ${pagesToUpdate.length} pages...\n`
@@ -462,7 +458,7 @@ async function main() {
       spinner.fail(chalk.red("❌ Failed to generate placeholders"));
     }
     console.error(chalk.red("Critical Error:"), error);
-    
+
     // Don't exit in test environment
     if (process.env.NODE_ENV !== "test") {
       process.exit(1);

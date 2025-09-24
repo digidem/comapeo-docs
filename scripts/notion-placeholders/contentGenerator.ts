@@ -1,7 +1,7 @@
-import { introTemplates } from "./templates/intro.js";
-import { tutorialTemplates } from "./templates/tutorial.js";
-import { referenceTemplates } from "./templates/reference.js";
-import { troubleshootingTemplates } from "./templates/troubleshooting.js";
+import { introTemplates } from "./templates/intro";
+import { tutorialTemplates } from "./templates/tutorial";
+import { referenceTemplates } from "./templates/reference";
+import { troubleshootingTemplates } from "./templates/troubleshooting";
 
 export type ContentLength = "short" | "medium" | "long";
 export type ContentType =

@@ -1,4 +1,4 @@
-import { PageWithStatus } from "./fetchAll.js";
+import { PageWithStatus } from "./fetchAll";
 
 export interface StatusBreakdown {
   status: string;

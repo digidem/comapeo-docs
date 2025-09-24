@@ -1,5 +1,5 @@
-import { enhancedNotion, DATABASE_ID } from "../notionClient.js";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { enhancedNotion, DATABASE_ID } from "../notionClient";
+import { NOTION_PROPERTIES } from "../constants";
 
 export interface PageWithStatus {
   id: string;
@@ -80,10 +80,7 @@ export async function fetchAllNotionData(
     } catch (queryError) {
       // If filtering fails, try without any filter
       if (filter) {
-        console.warn(
-          "⚠️  Filter failed, trying without filter...",
-          queryError.message
-        );
+        console.warn("⚠️  Filter failed, trying without filter...");
         try {
           response = await enhancedNotion.databasesQuery({
             database_id: DATABASE_ID,
@@ -94,15 +91,16 @@ export async function fetchAllNotionData(
           throw fallbackError;
         }
       } else {
-        throw queryError;
+        console.error("❌ Query failed without filter");
+        throw new Error("Query failed: Unable to fetch pages from Notion");
       }
     }
 
-    let allPages = response.results;
+    let allPages = response?.results || [];
 
     // Handle pagination
-    let hasMore = response.has_more;
-    let nextCursor = response.next_cursor;
+    let hasMore = response?.has_more || false;
+    let nextCursor = response?.next_cursor;
 
     while (hasMore && nextCursor) {
       const nextResponse = await enhancedNotion.databasesQuery({

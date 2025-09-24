@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { createContentTemplate } from "./createTemplate.js";
+import { createContentTemplate } from "./createTemplate";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -28,6 +28,7 @@ if (isDirectExec) {
   createContentTemplate(title)
     .then(() => {
       console.log("🎉 Content template creation completed!");
+      return;
     })
     .catch((error) => {
       console.error(`💥 Error: ${error.message}`);

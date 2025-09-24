@@ -3,12 +3,9 @@ import ora, { Ora } from "ora";
 import chalk from "chalk";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import {
-  fetchNotionData,
-  sortAndExpandNotionData,
-} from "../fetchNotionData.js";
-import { generateBlocks } from "./generateBlocks.js";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
+import { generateBlocks } from "./generateBlocks";
+import { NOTION_PROPERTIES } from "../constants";
 // import { updateJson } from '../lib/updateJson.js';
 
 // Load environment variables from .env file

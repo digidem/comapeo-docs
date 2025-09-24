@@ -1,5 +1,16 @@
-import { enhancedNotion } from "../notionClient.js";
-import { ContentType, ContentLength } from "./contentGenerator.js";
+import { enhancedNotion } from "../notionClient";
+import { ContentType, ContentLength } from "./contentGenerator";
+import {
+  PageObjectResponse,
+  PartialPageObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+// Type guard to check if a page response is complete
+function isFullPage(
+  page: PageObjectResponse | PartialPageObjectResponse
+): page is PageObjectResponse {
+  return "last_edited_time" in page;
+}
 
 export interface ContentAnalysis {
   isEmpty: boolean;
@@ -42,7 +53,9 @@ export class PageAnalyzer {
     try {
       // Fetch page metadata
       const page = await enhancedNotion.pagesRetrieve({ page_id: pageId });
-      const lastModified = new Date(page.last_edited_time);
+      const lastModified = isFullPage(page)
+        ? new Date(page.last_edited_time)
+        : new Date();
       const hoursAgo = (Date.now() - lastModified.getTime()) / (1000 * 60 * 60);
       const hasRecentActivity = hoursAgo < opts.recentThresholdHours;
 

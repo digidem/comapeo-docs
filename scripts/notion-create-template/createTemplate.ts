@@ -2,7 +2,7 @@ import { Client } from "@notionhq/client";
 import dotenv from "dotenv";
 import ora from "ora";
 import chalk from "chalk";
-import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants.js";
+import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants";
 
 // Load environment variables
 dotenv.config();

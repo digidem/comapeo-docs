@@ -4,11 +4,11 @@ import chalk from "chalk";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { fetchAllNotionData, FetchAllOptions } from "./fetchAll.js";
-import { PreviewGenerator, PreviewOptions } from "./previewGenerator.js";
-import { StatusAnalyzer } from "./statusAnalyzer.js";
-import { ComparisonEngine } from "./comparisonEngine.js";
-import { generateBlocksForAll } from "./generateBlocksForAll.js";
+import { fetchAllNotionData, FetchAllOptions } from "./fetchAll";
+import { PreviewGenerator, PreviewOptions } from "./previewGenerator";
+import { StatusAnalyzer } from "./statusAnalyzer";
+import { ComparisonEngine } from "./comparisonEngine";
+import { generateBlocksForAll } from "./generateBlocksForAll";
 
 // Load environment variables
 dotenv.config();
@@ -432,7 +432,7 @@ async function main() {
         console.log("  5. Review migration checklist for deployment");
       }
     }
-    
+
     // Exit successfully
     process.exit(0);
   } catch (error) {

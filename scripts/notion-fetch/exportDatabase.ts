@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import ora from "ora";
 
-import { enhancedNotion, DATABASE_ID } from "../notionClient.js";
-import { fetchNotionBlocks } from "../fetchNotionData.js";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { enhancedNotion, DATABASE_ID } from "../notionClient";
+import { fetchNotionBlocks } from "../fetchNotionData";
+import { NOTION_PROPERTIES } from "../constants";
 
 dotenv.config();
 

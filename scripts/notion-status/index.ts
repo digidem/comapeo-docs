@@ -1,7 +1,7 @@
 import { Client } from "@notionhq/client";
 import ora from "ora";
 import chalk from "chalk";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { NOTION_PROPERTIES } from "../constants";
 
 interface UpdateStatusOptions {
   token: string;
@@ -55,13 +55,13 @@ export async function updateNotionPageStatus(
 
     for (const page of pages) {
       try {
-        const properties: Record<string, unknown> = {
+        const properties = {
           [NOTION_PROPERTIES.STATUS]: {
             select: {
               name: toStatus,
             },
           },
-        };
+        } as any;
 
         // Add Published checkbox if requested
         if (setPublishedCheckbox) {

@@ -133,7 +133,7 @@ class EnhancedNotionClient {
   async databasesQuery(params: Record<string, unknown>) {
     return executeWithRetry(
       () =>
-        this.client.databases.query(
+        this.client.databases.query?.(
           params as Parameters<typeof this.client.databases.query>[0]
         ),
       "databases.query"

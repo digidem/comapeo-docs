@@ -1,5 +1,16 @@
-import { PageWithStatus } from "./fetchAll.js";
-import { enhancedNotion } from "../notionClient.js";
+import { PageWithStatus } from "./fetchAll";
+import { enhancedNotion } from "../notionClient";
+import {
+  BlockObjectResponse,
+  PartialBlockObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
+
+// Type guard to check if a block is a complete BlockObjectResponse
+function isFullBlock(
+  block: PartialBlockObjectResponse | BlockObjectResponse
+): block is BlockObjectResponse {
+  return "type" in block;
+}
 
 export interface PreviewPage {
   id: string;
@@ -189,6 +200,8 @@ export class PreviewGenerator {
 
       // Page has content if it has any blocks with text
       return blocks.some((block) => {
+        if (!isFullBlock(block)) return false;
+
         if (
           block.type === "paragraph" &&
           block.paragraph?.rich_text?.length > 0

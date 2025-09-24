@@ -22,6 +22,14 @@ import { PageWithStatus } from "./fetchAll.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Global failed images tracker for final summary
+const failedImages: Array<{
+  pageId: string;
+  pageTitle: string;
+  imageUrl: string;
+  reason: string;
+}> = [];
+
 const CONTENT_PATH = path.join(__dirname, "../../docs");
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
 const I18N_PATH = path.join(__dirname, "../../i18n/");
@@ -148,6 +156,59 @@ function shouldSkipPage(page: PageWithStatus): boolean {
   }
 
   return false;
+}
+
+/**
+ * Enhanced image processing with comprehensive fallback strategies and noise alerts
+ */
+async function downloadImageWithFallbacks(
+  imageUrl: string,
+  pageFilename: string,
+  index: number,
+  pageId: string,
+  pageTitle: string
+): Promise<{ newPath: string; savedBytes: number }> {
+  // 🚨 NOISE ALERT: Starting image processing attempt
+  console.log(chalk.cyan(`📥 🎯 TRYING HARD: Processing image ${index + 1} from ${pageTitle}`));
+  console.log(chalk.blue(`🔗 Image URL: ${imageUrl.substring(0, 100)}...`));
+  
+  // Fallback strategy 1: Direct download with retries
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(chalk.blue(`🔄 Attempt ${attempt}/3 for image ${index + 1}`));
+      
+      const result = await downloadAndProcessImage(imageUrl, pageFilename, index);
+      
+      // Success! 🎉
+      console.log(chalk.green(`✅ SUCCESS: Image ${index + 1} processed successfully on attempt ${attempt}`));
+      return result;
+      
+    } catch (error: any) {
+      // 🚨 NOISE ALERT for each failed attempt
+      console.warn(chalk.yellow(`⚠️  ATTEMPT ${attempt} FAILED: ${error.message}`));
+      
+      if (attempt < 3) {
+        console.log(chalk.blue(`⏳ Retrying in ${attempt} seconds...`));
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+  
+  // All attempts failed - add to failed images tracker
+  const failureReason = `Failed after 3 download attempts`;
+  failedImages.push({
+    pageId,
+    pageTitle,
+    imageUrl: imageUrl.substring(0, 200),
+    reason: failureReason
+  });
+  
+  // 🚨 CRITICAL NOISE ALERT
+  console.error(chalk.red.bold(`🚨 CRITICAL: Image ${index + 1} FAILED completely after all attempts!`));
+  console.error(chalk.red(`📄 Page: ${pageTitle}`));
+  console.error(chalk.red(`🔗 URL: ${imageUrl.substring(0, 100)}...`));
+  
+  throw new Error(failureReason);
 }
 
 /**
@@ -383,33 +444,54 @@ async function exportPageToMarkdown(
             
             // Skip empty URLs, non-image URLs and handle base64 images
             if (!imgUrl || imgUrl.trim() === "") {
+              // 🚨 NOISE ALERT for empty image URLs
               console.warn(
-                chalk.yellow(
-                  `⚠️  Found empty image URL in page ${page.id}, removing it`
+                chalk.yellow.bold(
+                  `🚨 EMPTY IMAGE URL: Found empty image URL in page "${page.title || page.id}", removing it`
                 )
               );
+              failedImages.push({
+                pageId: page.id,
+                pageTitle: page.title || 'Unknown',
+                imageUrl: 'EMPTY_URL',
+                reason: 'Empty image URL found'
+              });
               markdownString.parent = markdownString.parent.replace(fullMatch, "");
               continue;
             }
             
             if (!imgUrl.startsWith("http") && !imgUrl.startsWith("data:image")) {
+              // Skip relative URLs or other formats
               continue;
             }
             
             // For base64 images, we need to handle them differently
             if (imgUrl.startsWith("data:image")) {
+              // 🚨 NOISE ALERT for base64 images
               console.warn(
-                chalk.yellow(
-                  `⚠️  Found base64 image in page ${page.id}, removing it (base64 images not supported in markdown)`
+                chalk.red.bold(
+                  `🚨 BASE64 IMAGE DETECTED: Found base64 image in page "${page.title || page.id}"`
                 )
               );
+              console.warn(
+                chalk.yellow(
+                  `📄 Base64 images are not supported in Docusaurus - removing to prevent MDX compilation errors`
+                )
+              );
+              failedImages.push({
+                pageId: page.id,
+                pageTitle: page.title || 'Unknown',
+                imageUrl: imgUrl.substring(0, 50) + '...[BASE64]',
+                reason: 'Base64 images not supported in Docusaurus'
+              });
               // Remove the base64 image entirely from the markdown
               markdownString.parent = markdownString.parent.replace(fullMatch, "");
               continue;
             }
 
+            // Use enhanced image processing with fallbacks and noise alerts
             imgPromises.push(
-              downloadAndProcessImage(imgUrl, filename, imgIndex)
+              downloadImageWithFallbacks(imgUrl, filename, imgIndex, page.id, page.title || 'Unknown')
                 .then(({ newPath, savedBytes }) => {
                   const newImageMarkdown = fullMatch.replace(imgUrl, newPath);
                   markdownString.parent = markdownString.parent.replace(
@@ -417,24 +499,29 @@ async function exportPageToMarkdown(
                     newImageMarkdown
                   );
                   totalSaved += savedBytes;
+                  
+                  // 🎉 SUCCESS NOISE ALERT
+                  console.log(chalk.green.bold(`🎉 IMAGE SUCCESS: Successfully processed and linked image ${imgIndex + 1}`));
                   return { success: true, savedBytes };
                 })
                 .catch((error) => {
+                  // 🚨 CRITICAL FAILURE NOISE ALERT
                   console.error(
-                    chalk.red(
-                      `Failed to process image ${imgIndex} for page ${page.id}:`
-                    ),
-                    error.message
+                    chalk.red.bold(
+                      `🚨 CRITICAL IMAGE FAILURE: Image ${imgIndex + 1} in page "${page.title || page.id}" failed completely!`
+                    )
                   );
+                  console.error(chalk.red(`💥 Error details: ${error.message}`));
                   
-                  // Remove the failed image from markdown to prevent empty image tags
+                  // Last resort: Remove the failed image from markdown to ensure valid MDX
                   console.warn(
-                    chalk.yellow(
-                      `⚠️  Removing failed image from page ${page.id} to prevent MDX compilation errors`
+                    chalk.yellow.bold(
+                      `🛡️  PROTECTING MDX: Removing failed image reference to prevent compilation errors`
                     )
                   );
                   markdownString.parent = markdownString.parent.replace(fullMatch, "");
                   
+                  // Already added to failedImages in downloadImageWithFallbacks
                   return { success: false, error: error.message };
                 })
             );
@@ -447,18 +534,68 @@ async function exportPageToMarkdown(
             (result) => result.status === "fulfilled" && result.value.success
           ).length;
 
-          if (successfulImages < imgPromises.length) {
+          // Enhanced image processing summary with noise alerts
+          const failedCount = imgPromises.length - successfulImages;
+          if (failedCount > 0) {
+            // 🚨 PAGE-LEVEL NOISE ALERT for failed images
+            console.warn(
+              chalk.red.bold(
+                `🚨 PAGE IMAGE FAILURES: ${failedCount}/${imgPromises.length} images failed for page "${page.title || page.id}"`
+              )
+            );
             console.warn(
               chalk.yellow(
-                `⚠️  ${imgPromises.length - successfulImages} images failed to process for page ${page.id}`
+                `📊 Success rate: ${successfulImages}/${imgPromises.length} (${Math.round((successfulImages / imgPromises.length) * 100)}%)`
+              )
+            );
+          } else if (imgPromises.length > 0) {
+            console.log(
+              chalk.green.bold(
+                `🎉 PERFECT PAGE: All ${successfulImages} images processed successfully for "${page.title || page.id}"`
               )
             );
           }
 
-          // Sanitize content
+          // Sanitize content and perform final cleanup
           markdownString.parent = sanitizeMarkdownContent(
             markdownString.parent
           );
+          
+          // 🛡️ FINAL MDX SAFETY CHECK: Remove any remaining malformed image references
+          const malformedImagePatterns = [
+            /!\[.*?\]\(\s*\)/g,  // Empty image URLs: ![text]()
+            /!\[.*?\]\(data:image[^)]*\)/g,  // Any remaining base64 images
+            /!\[.*?\]\(\s*undefined\s*\)/g,  // Undefined URLs
+            /!\[.*?\]\(\s*null\s*\)/g,  // Null URLs
+          ];
+          
+          let cleanedAny = false;
+          malformedImagePatterns.forEach((pattern, index) => {
+            const matches = markdownString.parent.match(pattern);
+            if (matches && matches.length > 0) {
+              console.warn(
+                chalk.yellow.bold(
+                  `🛡️  SAFETY CLEANUP: Removing ${matches.length} malformed image reference(s) of type ${index + 1} from "${page.title || page.id}"`
+                )
+              );
+              markdownString.parent = markdownString.parent.replace(pattern, '');
+              cleanedAny = true;
+              
+              // Track these in failed images
+              matches.forEach(match => {
+                failedImages.push({
+                  pageId: page.id,
+                  pageTitle: page.title || 'Unknown',
+                  imageUrl: match.substring(0, 50) + '...',
+                  reason: `Malformed image reference (pattern ${index + 1})`
+                });
+              });
+            }
+          });
+          
+          if (cleanedAny) {
+            console.log(chalk.green(`✅ MDX SAFETY: Page content cleaned and protected`));
+          }
 
           // Determine file path
           const fileName = `${filename}.md`;
@@ -696,8 +833,49 @@ export async function generateBlocksForAll(
     }
   }
 
+  // 🚨 FINAL COMPREHENSIVE IMAGE PROCESSING REPORT
+  console.log(chalk.blue.bold(`\n🚨 ================================`));
+  console.log(chalk.blue.bold(`🚨 FINAL IMAGE PROCESSING REPORT`));
+  console.log(chalk.blue.bold(`🚨 ================================`));
+
+  if (failedImages.length > 0) {
+    console.log(chalk.red.bold(`\n💥 CRITICAL: ${failedImages.length} images failed to process!`));
+    console.log(chalk.red(`📋 Failed images summary:`));
+    
+    // Group failures by reason
+    const failuresByReason = failedImages.reduce((acc, failure) => {
+      if (!acc[failure.reason]) acc[failure.reason] = [];
+      acc[failure.reason].push(failure);
+      return acc;
+    }, {} as Record<string, typeof failedImages>);
+    
+    for (const [reason, failures] of Object.entries(failuresByReason)) {
+      console.log(chalk.red.bold(`\n🚨 ${reason}: ${failures.length} images`));
+      failures.forEach((failure, index) => {
+        console.log(chalk.red(`   ${index + 1}. Page: "${failure.pageTitle}"`));
+        console.log(chalk.red(`      ID: ${failure.pageId}`));
+        console.log(chalk.red(`      URL: ${failure.imageUrl}`));
+      });
+    }
+    
+    console.log(chalk.yellow.bold(`\n⚠️  ACTION REQUIRED:`));
+    console.log(chalk.yellow(`   - Check Notion for broken image links`));
+    console.log(chalk.yellow(`   - Verify image URLs are accessible`));
+    console.log(chalk.yellow(`   - Replace base64 images with proper URLs`));
+    console.log(chalk.yellow(`   - All failed images have been removed to ensure valid MDX`));
+    
+  } else {
+    console.log(chalk.green.bold(`\n🎉 PERFECT: All images processed successfully!`));
+    console.log(chalk.green(`✨ No image processing failures detected`));
+  }
+
+  console.log(chalk.blue.bold(`\n📊 IMAGE PROCESSING STATISTICS:`));
+  console.log(chalk.blue(`   Total failed images: ${failedImages.length}`));
+  console.log(chalk.blue(`   Success rate: ${failedImages.length === 0 ? '100%' : 'See details above'}`));
+  console.log(chalk.blue(`   MDX safety: ${failedImages.length > 0 ? 'Protected (failed images removed)' : 'Perfect'}`));
+
   console.log(chalk.green(`\n✅ Export completed!`));
-  console.log(chalk.green(`📊 Summary:`));
+  console.log(chalk.green(`📊 Processing Summary:`));
   console.log(chalk.green(`  Total pages processed: ${processedPages}`));
   console.log(chalk.green(`  Languages: ${pagesByLanguage.size}`));
   console.log(chalk.green(`  Sections created: ${sectionCount}`));

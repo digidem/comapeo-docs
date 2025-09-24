@@ -1,16 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as scriptModule from "./index";
-import { createContentTemplate } from "./index";
+import { installTestNotionEnv } from "../test-utils";
 
 describe("index", () => {
-  beforeEach(() => {
+  let restoreEnv: () => void;
+  let scriptModule: typeof import("./index");
+  let createContentTemplate: (title: string | null | undefined) => Promise<any>;
+
+  beforeEach(async () => {
     // Reset mocks before each test
     vi.clearAllMocks();
+    restoreEnv = installTestNotionEnv();
+    scriptModule = await import("./index");
+    createContentTemplate = scriptModule.createContentTemplate;
   });
 
   afterEach(() => {
     // Clean up after each test
     vi.restoreAllMocks();
+    restoreEnv();
   });
 
   it("should run without errors", () => {
@@ -26,7 +33,7 @@ describe("index", () => {
 
     it("should have the correct function signature", () => {
       expect(createContentTemplate).toBeInstanceOf(Function);
-      expect(createContentTemplate.length).toBe(1); // expects one parameter
+      expect((createContentTemplate as any).length).toBe(1); // expects one parameter
     });
   });
 

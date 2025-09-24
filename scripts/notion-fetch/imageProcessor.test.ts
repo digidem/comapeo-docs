@@ -1,10 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { processImage } from "./imageProcessor";
+
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("processed")),
+    };
+    return pipeline;
+  };
+
+  const sharpMock = vi.fn(() => createPipeline());
+  return { default: sharpMock };
+});
+
+let processImage: (typeof import("./imageProcessor"))["processImage"];
 
 describe("imageProcessor", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset mocks before each test
     vi.clearAllMocks();
+    processImage = (await import("./imageProcessor")).processImage;
   });
 
   afterEach(() => {

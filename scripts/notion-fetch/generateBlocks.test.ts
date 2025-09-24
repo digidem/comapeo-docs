@@ -1,6 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { installTestNotionEnv } from "../test-utils";
 
 describe("generateBlocks", () => {
+  let restoreEnv: () => void;
+
+  beforeEach(() => {
+    restoreEnv = installTestNotionEnv();
+  });
+
+  afterEach(() => {
+    restoreEnv();
+  });
+
   it("should be able to import module", async () => {
     const generateBlocksModule = await import("./generateBlocks");
     expect(generateBlocksModule).toBeDefined();

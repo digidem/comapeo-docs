@@ -1,20 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  fetchNotionData,
-  sortAndExpandNotionData,
-  fetchNotionPage,
-  fetchNotionBlocks,
-} from "./fetchNotionData";
+import { installTestNotionEnv } from "./test-utils";
 
 describe("fetchNotionData", () => {
-  beforeEach(() => {
+  let restoreEnv: () => void;
+  let fetchNotionData: (typeof import("./fetchNotionData"))["fetchNotionData"];
+  let sortAndExpandNotionData: (typeof import("./fetchNotionData"))["sortAndExpandNotionData"];
+  let fetchNotionPage: (typeof import("./fetchNotionData"))["fetchNotionPage"];
+  let fetchNotionBlocks: (typeof import("./fetchNotionData"))["fetchNotionBlocks"];
+
+  beforeEach(async () => {
     // Reset mocks before each test
     vi.clearAllMocks();
+    restoreEnv = installTestNotionEnv();
+
+    const module = await import("./fetchNotionData");
+    fetchNotionData = module.fetchNotionData;
+    sortAndExpandNotionData = module.sortAndExpandNotionData;
+    fetchNotionPage = module.fetchNotionPage;
+    fetchNotionBlocks = module.fetchNotionBlocks;
   });
 
   afterEach(() => {
     // Clean up after each test
     vi.restoreAllMocks();
+    restoreEnv();
   });
 
   it("should run without errors", () => {

@@ -153,6 +153,31 @@ export const delayedReject = (ms: number, error: Error): Promise<never> => {
 };
 
 /**
+ * Ensure Notion environment variables exist for tests and return a restore function.
+ */
+export const installTestNotionEnv = (): (() => void) => {
+  const previousApiKey = process.env.NOTION_API_KEY;
+  const previousDatabaseId = process.env.DATABASE_ID;
+
+  process.env.NOTION_API_KEY = "test-api-key";
+  process.env.DATABASE_ID = "test-database-id";
+
+  return () => {
+    if (previousApiKey === undefined) {
+      delete process.env.NOTION_API_KEY;
+    } else {
+      process.env.NOTION_API_KEY = previousApiKey;
+    }
+
+    if (previousDatabaseId === undefined) {
+      delete process.env.DATABASE_ID;
+    } else {
+      process.env.DATABASE_ID = previousDatabaseId;
+    }
+  };
+};
+
+/**
  * Retry a function with exponential backoff
  */
 export const retryWithBackoff = async <T>(

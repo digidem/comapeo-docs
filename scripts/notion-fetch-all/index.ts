@@ -432,6 +432,9 @@ async function main() {
         console.log("  5. Review migration checklist for deployment");
       }
     }
+    
+    // Exit successfully
+    process.exit(0);
   } catch (error) {
     spinner.fail(chalk.red("❌ Failed to generate documentation preview"));
     console.error(chalk.red("Error:"), error);

@@ -379,8 +379,34 @@ async function exportPageToMarkdown(
 
           while ((match = imgRegex.exec(markdownString.parent)) !== null) {
             const imgUrl = match[1];
-            if (!imgUrl.startsWith("http")) continue;
             const fullMatch = match[0];
+            
+            // Skip empty URLs, non-image URLs and handle base64 images
+            if (!imgUrl || imgUrl.trim() === "") {
+              console.warn(
+                chalk.yellow(
+                  `⚠️  Found empty image URL in page ${page.id}, removing it`
+                )
+              );
+              markdownString.parent = markdownString.parent.replace(fullMatch, "");
+              continue;
+            }
+            
+            if (!imgUrl.startsWith("http") && !imgUrl.startsWith("data:image")) {
+              continue;
+            }
+            
+            // For base64 images, we need to handle them differently
+            if (imgUrl.startsWith("data:image")) {
+              console.warn(
+                chalk.yellow(
+                  `⚠️  Found base64 image in page ${page.id}, removing it (base64 images not supported in markdown)`
+                )
+              );
+              // Remove the base64 image entirely from the markdown
+              markdownString.parent = markdownString.parent.replace(fullMatch, "");
+              continue;
+            }
 
             imgPromises.push(
               downloadAndProcessImage(imgUrl, filename, imgIndex)
@@ -400,6 +426,15 @@ async function exportPageToMarkdown(
                     ),
                     error.message
                   );
+                  
+                  // Remove the failed image from markdown to prevent empty image tags
+                  console.warn(
+                    chalk.yellow(
+                      `⚠️  Removing failed image from page ${page.id} to prevent MDX compilation errors`
+                    )
+                  );
+                  markdownString.parent = markdownString.parent.replace(fullMatch, "");
+                  
                   return { success: false, error: error.message };
                 })
             );

@@ -232,7 +232,7 @@ async function main() {
 
         spinner.succeed(
           chalk.green(
-            `✅ Exported ${exportResults.totalSaved} pages to markdown files`
+            `✅ Exported ${filteredPages.length} pages to markdown files (image compression saved ${(exportResults.totalSaved / 1024).toFixed(2)} KB)`
           )
         );
 

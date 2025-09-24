@@ -169,14 +169,23 @@ export async function saveTranslatedContentToDisk(
     // Create a sanitized filename from the title
     const title =
       englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
-    const filename =
-      title
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "") + ".md";
-
-    // Determine the output path
-    const outputPath = path.join(config.outputDir, filename);
+    
+    // Create collision-safe filename
+    const baseSlug = title
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+    
+    let filename = `${baseSlug}.md`;
+    let outputPath = path.join(config.outputDir, filename);
+    
+    // Handle filename collisions by adding counter
+    let counter = 1;
+    while (await fs.access(outputPath).then(() => true, () => false)) {
+      filename = `${baseSlug}-${counter}.md`;
+      outputPath = path.join(config.outputDir, filename);
+      counter++;
+    }
 
     // Handle section folders
     const elementType = getElementTypeProperty(englishPage);
@@ -185,10 +194,7 @@ export async function saveTranslatedContentToDisk(
     if (sectionType) {
       if (sectionType === "toggle") {
         // For toggle sections, create a folder with the same name
-        const sectionFolder = title
-          .toLowerCase()
-          .replace(/\s+/g, "-")
-          .replace(/[^a-z0-9-]/g, "");
+        const sectionFolder = baseSlug;
 
         const sectionPath = path.join(config.outputDir, sectionFolder);
         await fs.mkdir(sectionPath, { recursive: true });

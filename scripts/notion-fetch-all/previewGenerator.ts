@@ -239,7 +239,7 @@ export class PreviewGenerator {
     } catch (error) {
       console.warn(
         `Failed to analyze content for page ${pageId}:`,
-        error.message
+        error instanceof Error ? error.message : String(error)
       );
       return false; // Assume empty if we can't check
     }

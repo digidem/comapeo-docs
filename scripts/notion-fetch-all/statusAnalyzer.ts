@@ -121,7 +121,10 @@ export class StatusAnalyzer {
       breakdown.push({
         status,
         count: statusPages.length,
-        percentage: totalPages > 0 ? Math.round((statusPages.length / totalPages) * 100) : 0,
+        percentage:
+          totalPages > 0
+            ? Math.round((statusPages.length / totalPages) * 100)
+            : 0,
         pages: statusPages.map((page) => ({
           id: page.id,
           title: page.title,
@@ -150,7 +153,8 @@ export class StatusAnalyzer {
     ).length;
     const totalPages = pages.length;
     const needsWork = totalPages - readyToPublish;
-    const readinessPercentage = totalPages > 0 ? Math.round((readyToPublish / totalPages) * 100) : 0;
+    const readinessPercentage =
+      totalPages > 0 ? Math.round((readyToPublish / totalPages) * 100) : 0;
 
     // Identify blockers
     const blockers: PublicationReadiness["blockers"] = [];
@@ -248,7 +252,8 @@ export class StatusAnalyzer {
       const emptyPages = languagePages.filter(
         (p) => !this.estimateHasContent(p)
       ).length;
-      const completionPercentage = totalPages > 0 ? Math.round((readyPages / totalPages) * 100) : 0;
+      const completionPercentage =
+        totalPages > 0 ? Math.round((readyPages / totalPages) * 100) : 0;
 
       // Find most recent update
       const lastUpdated = new Date(

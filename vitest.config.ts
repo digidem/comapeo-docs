@@ -15,6 +15,9 @@ export default defineConfig({
     // Environment configuration
     environment: "node",
     globals: true,
+    
+    // Setup files for global mocking
+    setupFiles: [],
 
     // Coverage configuration
     coverage: {

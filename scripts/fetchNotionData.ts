@@ -12,11 +12,23 @@ function isFullBlock(
 }
 
 export async function fetchNotionData(filter) {
-  const response = await enhancedNotion.databasesQuery({
-    database_id: DATABASE_ID,
-    filter: filter,
-  });
-  return response.results;
+  const results: Array<Record<string, unknown>> = [];
+  let hasMore = true;
+  let startCursor: string | undefined;
+
+  while (hasMore) {
+    const response = await enhancedNotion.databasesQuery({
+      database_id: DATABASE_ID,
+      filter,
+      start_cursor: startCursor,
+    });
+
+    results.push(...response.results);
+    hasMore = response.has_more ?? false;
+    startCursor = response.next_cursor ?? undefined;
+  }
+
+  return results;
 }
 
 /**

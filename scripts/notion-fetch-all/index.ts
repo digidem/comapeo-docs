@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import { fetchAllNotionData, FetchAllOptions } from "./fetchAll";
-import { PreviewGenerator, PreviewOptions } from "./previewGenerator";
+import { PreviewGenerator } from "./previewGenerator";
 import { StatusAnalyzer } from "./statusAnalyzer";
 import { ComparisonEngine } from "./comparisonEngine";
-import { generateBlocksForAll } from "./generateBlocksForAll";
+import {
+  gracefulShutdown,
+  initializeGracefulShutdownHandlers,
+  trackSpinner,
+} from "../notion-fetch/runtime";
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +23,8 @@ const resolvedDatabaseId =
 if (resolvedDatabaseId) {
   process.env.DATABASE_ID = resolvedDatabaseId;
 }
+
+initializeGracefulShutdownHandlers();
 
 // Command line argument parsing
 interface CliOptions {
@@ -51,6 +57,8 @@ const parseArgs = (): CliOptions => {
   };
 
   for (let i = 0; i < args.length; i++) {
+    // The command line options map is controlled by known flags; suppress security false positive.
+    // eslint-disable-next-line security/detect-object-injection
     switch (args[i]) {
       case "--verbose":
       case "-v":
@@ -157,267 +165,297 @@ async function main() {
 
   console.log(
     chalk.bold.cyan(
-      "🌍 CoMapeo Notion Fetch All - Export All Pages to Markdown\\n"
+      "🌍 CoMapeo Notion Fetch All - Export All Pages to Markdown\n"
     )
   );
 
-  // Validate environment
   if (!process.env.NOTION_API_KEY) {
     console.error(
       chalk.red("Error: NOTION_API_KEY not found in environment variables")
     );
-    process.exit(1);
+    await gracefulShutdown(1);
   }
 
   if (!process.env.DATABASE_ID) {
     console.error(
       chalk.red("Error: DATABASE_ID not found in environment variables")
     );
-    process.exit(1);
+    await gracefulShutdown(1);
   }
 
   const startTime = Date.now();
-  let spinner = ora("Fetching ALL pages from Notion...").start();
 
   try {
-    // Step 1: Fetch all pages from Notion
+    const progressLogger = options.verbose
+      ? (progress: { current: number; total: number }) => {
+          if (
+            progress.current % 10 === 0 ||
+            progress.current === progress.total
+          ) {
+            console.log(
+              chalk.gray(
+                `  Progress: ${progress.current}/${progress.total} pages`
+              )
+            );
+          }
+        }
+      : undefined;
+
     const fetchOptions: FetchAllOptions = {
       includeRemoved: options.includeRemoved,
       sortBy: options.sortBy,
       sortDirection: options.sortDirection,
-      includeSubPages: true,
+      statusFilter: options.statusFilter,
+      maxPages: options.maxPages,
+      exportFiles: options.exportFiles,
+      fetchSpinnerText:
+        "Fetching ALL pages from Notion (excluding removed items by default)...",
+      generateSpinnerText: "Exporting pages to markdown files",
+      progressLogger,
     };
 
-    const pages = await fetchAllNotionData(fetchOptions);
-    spinner.succeed(
-      chalk.green(`✅ Fetched ${pages.length} pages from Notion`)
+    const fetchResult = await fetchAllNotionData(fetchOptions);
+    const filteredPages = fetchResult.pages;
+
+    console.log(
+      chalk.green(`✅ Fetched ${fetchResult.fetchedCount} pages from Notion`)
     );
 
-    // Apply filters if specified
-    let filteredPages = pages;
-    if (options.statusFilter) {
-      filteredPages = pages.filter(
-        (page) => page.status === options.statusFilter
-      );
+    if (
+      options.statusFilter &&
+      fetchResult.processedCount !== fetchResult.fetchedCount
+    ) {
       console.log(
         chalk.blue(
-          `🔍 Filtered to ${filteredPages.length} pages with status "${options.statusFilter}"`
+          `🔍 Filtered to ${fetchResult.processedCount} pages with status "${options.statusFilter}"`
         )
       );
     }
 
-    if (options.maxPages && filteredPages.length > options.maxPages) {
-      filteredPages = filteredPages.slice(0, options.maxPages);
+    if (
+      options.maxPages &&
+      fetchResult.processedCount === options.maxPages &&
+      fetchResult.processedCount !== fetchResult.fetchedCount
+    ) {
       console.log(chalk.blue(`📏 Limited to first ${options.maxPages} pages`));
     }
 
-    // Export files if requested
-    if (options.exportFiles) {
-      spinner = ora("Exporting pages to markdown files...").start();
-
-      try {
-        let progressCount = 0;
-        const progressCallback = options.verbose
-          ? (progress: { current: number; total: number }) => {
-              if (
-                progress.current % 10 === 0 ||
-                progress.current === progress.total
-              ) {
-                console.log(
-                  chalk.gray(
-                    `  Progress: ${progress.current}/${progress.total} pages`
-                  )
-                );
-              }
-            }
-          : undefined;
-
-        const exportResults = await generateBlocksForAll(
-          filteredPages,
-          progressCallback
-        );
-
-        spinner.succeed(
-          chalk.green(
-            `✅ Exported ${filteredPages.length} pages to markdown files (image compression saved ${(exportResults.totalSaved / 1024).toFixed(2)} KB)`
-          )
-        );
-
-        if (options.verbose) {
-          console.log(
-            chalk.blue(`📄 Total saved: ${exportResults.totalSaved}`)
-          );
-          console.log(chalk.blue(`📂 Sections: ${exportResults.sectionCount}`));
-          console.log(
-            chalk.blue(`📝 Title sections: ${exportResults.titleSectionCount}`)
-          );
-        }
-      } catch (error) {
-        spinner.fail(chalk.red("❌ Failed to export pages to markdown files"));
-        console.error(chalk.red("Export Error:"), error);
-
-        if (options.verbose) {
-          console.error(chalk.gray("Stack trace:"), error.stack);
-        }
-
-        // Continue with preview generation even if export fails
-      }
-    }
-
-    // Step 2: Generate documentation preview
-    spinner = ora("Generating documentation preview...").start();
-
-    const previewOptions: PreviewOptions = {
-      includeEmptyPages: true,
-      groupByStatus: false,
-      includeMetadata: true,
-      generateMarkdown: options.outputFormat === "markdown",
-      showContentStats: true,
-    };
-
-    const preview = await PreviewGenerator.generatePreview(
-      filteredPages,
-      previewOptions
-    );
-    spinner.succeed(chalk.green("✅ Documentation preview generated"));
-
-    // Step 3: Perform status analysis (if requested)
-    let analysisResults;
-    if (options.analysis) {
-      spinner = ora("Analyzing publication status...").start();
-      analysisResults = StatusAnalyzer.analyzePublicationStatus(filteredPages);
-
-      const readinessReport =
-        StatusAnalyzer.generateReadinessReport(filteredPages);
-      const contentGaps = StatusAnalyzer.identifyContentGaps(filteredPages);
-
-      spinner.succeed(chalk.green("✅ Status analysis complete"));
-
-      // Display analysis summary
-      console.log(chalk.bold("\\n📊 Publication Status Analysis:"));
+    if (options.exportFiles && fetchResult.metrics) {
+      const { totalSaved, sectionCount, titleSectionCount } =
+        fetchResult.metrics;
       console.log(
-        `  Ready to Publish: ${chalk.green(analysisResults.readiness.readyToPublish)} pages (${analysisResults.readiness.readinessPercentage}%)`
-      );
-      console.log(
-        `  Needs Work: ${chalk.yellow(analysisResults.readiness.needsWork)} pages`
-      );
-      console.log(
-        `  Main Blockers: ${chalk.red(analysisResults.readiness.blockers.length)} categories`
-      );
-      console.log(
-        `  Content Gaps: ${chalk.yellow(contentGaps.missingPages.length)} missing pages`
+        chalk.green(
+          `✅ Exported ${filteredPages.length} pages to markdown files (image compression saved ${(totalSaved / 1024).toFixed(2)} KB)`
+        )
       );
 
       if (options.verbose) {
-        console.log("\\n📈 Status Breakdown:");
-        for (const breakdown of analysisResults.breakdown) {
-          console.log(
-            `  ${breakdown.status}: ${breakdown.count} pages (${breakdown.percentage}%)`
-          );
-        }
-
-        console.log("\\n🌐 Language Progress:");
-        for (const lang of analysisResults.languages) {
-          console.log(
-            `  ${lang.language}: ${lang.completionPercentage}% complete (${lang.readyPages}/${lang.totalPages} pages)`
-          );
-        }
+        console.log(chalk.blue(`📄 Total saved: ${totalSaved}`));
+        console.log(chalk.blue(`📂 Sections: ${sectionCount}`));
+        console.log(chalk.blue(`📝 Title sections: ${titleSectionCount}`));
       }
     }
 
-    // Step 4: Compare with published documentation (if requested)
-    let comparisonResults;
+    const previewSpinner = ora("Generating documentation preview...").start();
+    const unregisterPreviewSpinner = trackSpinner(previewSpinner);
+    let preview;
+    try {
+      const previewOptions: PreviewOptions = {
+        includeEmptyPages: true,
+        groupByStatus: false,
+        includeMetadata: true,
+        generateMarkdown: options.outputFormat === "markdown",
+        showContentStats: true,
+      };
+
+      preview = await PreviewGenerator.generatePreview(
+        filteredPages,
+        previewOptions
+      );
+      previewSpinner.succeed(chalk.green("✅ Documentation preview generated"));
+    } catch (error) {
+      previewSpinner.fail(
+        chalk.red("❌ Failed to generate documentation preview")
+      );
+      throw error;
+    } finally {
+      unregisterPreviewSpinner();
+    }
+
+    let analysisResults: ReturnType<
+      typeof StatusAnalyzer.analyzePublicationStatus
+    > | null = null;
+
+    if (options.analysis) {
+      const analysisSpinner = ora("Analyzing publication status...").start();
+      const unregisterAnalysisSpinner = trackSpinner(analysisSpinner);
+
+      try {
+        analysisResults =
+          StatusAnalyzer.analyzePublicationStatus(filteredPages);
+        const readinessReport =
+          StatusAnalyzer.generateReadinessReport(filteredPages);
+        const contentGaps = StatusAnalyzer.identifyContentGaps(filteredPages);
+
+        analysisSpinner.succeed(chalk.green("✅ Status analysis complete"));
+
+        console.log(chalk.bold("\n📊 Publication Status Analysis:"));
+        console.log(
+          `  Ready to Publish: ${chalk.green(analysisResults.readiness.readyToPublish)} pages (${analysisResults.readiness.readinessPercentage}%)`
+        );
+        console.log(
+          `  Needs Work: ${chalk.yellow(analysisResults.readiness.needsWork)} pages`
+        );
+        console.log(
+          `  Main Blockers: ${chalk.red(analysisResults.readiness.blockers.length)} categories`
+        );
+        console.log(
+          `  Content Gaps: ${chalk.yellow(contentGaps.missingPages.length)} missing pages`
+        );
+
+        if (options.verbose) {
+          console.log("\n📈 Status Breakdown:");
+          for (const breakdown of analysisResults.breakdown) {
+            console.log(
+              `  ${breakdown.status}: ${breakdown.count} pages (${breakdown.percentage}%)`
+            );
+          }
+
+          console.log("\n🌐 Language Progress:");
+          for (const lang of analysisResults.languages) {
+            console.log(
+              `  ${lang.language}: ${lang.completionPercentage}% complete (${lang.readyPages}/${lang.totalPages} pages)`
+            );
+          }
+        }
+      } catch (error) {
+        analysisSpinner.fail(
+          chalk.red("❌ Failed to analyze publication status")
+        );
+        throw error;
+      } finally {
+        unregisterAnalysisSpinner();
+      }
+    }
+
+    let comparisonResults: Awaited<
+      ReturnType<typeof ComparisonEngine.compareWithPublished>
+    > | null = null;
+
     if (options.comparison) {
-      spinner = ora("Comparing with published documentation...").start();
-      comparisonResults = await ComparisonEngine.compareWithPublished(
-        preview.sections,
-        filteredPages
-      );
-      spinner.succeed(
-        chalk.green("✅ Comparison with published version complete")
-      );
+      const comparisonSpinner = ora(
+        "Comparing with published documentation..."
+      ).start();
+      const unregisterComparisonSpinner = trackSpinner(comparisonSpinner);
 
-      // Display comparison summary
-      console.log(chalk.bold("\\n🔍 Comparison Results:"));
-      console.log(
-        `  New Pages: ${chalk.green(comparisonResults.differences.newPages.length)}`
-      );
-      console.log(
-        `  Updated Pages: ${chalk.yellow(comparisonResults.differences.updatedPages.length)}`
-      );
-      console.log(
-        `  Removed Pages: ${chalk.red(comparisonResults.differences.removedPages.length)}`
-      );
-      console.log(
-        `  Content Volume Change: ${comparisonResults.impact.contentVolume.increase > 0 ? "+" : ""}${comparisonResults.impact.contentVolume.increase} pages (${comparisonResults.impact.contentVolume.percentageChange}%)`
-      );
-      console.log(
-        `  Structural Changes: ${comparisonResults.impact.structuralChanges}`
-      );
+      try {
+        comparisonResults = await ComparisonEngine.compareWithPublished(
+          preview.sections,
+          filteredPages
+        );
+        comparisonSpinner.succeed(
+          chalk.green("✅ Comparison with published version complete")
+        );
+
+        console.log(chalk.bold("\n🔍 Comparison Results:"));
+        console.log(
+          `  New Pages: ${chalk.green(comparisonResults.differences.newPages.length)}`
+        );
+        console.log(
+          `  Updated Pages: ${chalk.yellow(comparisonResults.differences.updatedPages.length)}`
+        );
+        console.log(
+          `  Removed Pages: ${chalk.red(comparisonResults.differences.removedPages.length)}`
+        );
+        console.log(
+          `  Content Volume Change: ${comparisonResults.impact.contentVolume.increase > 0 ? "+" : ""}${comparisonResults.impact.contentVolume.increase} pages (${comparisonResults.impact.contentVolume.percentageChange}%)`
+        );
+        console.log(
+          `  Structural Changes: ${comparisonResults.impact.structuralChanges}`
+        );
+      } catch (error) {
+        comparisonSpinner.fail(
+          chalk.red("❌ Failed to compare with published documentation")
+        );
+        throw error;
+      } finally {
+        unregisterComparisonSpinner();
+      }
     }
 
-    // Step 5: Generate and save output
-    spinner = ora("Generating output files...").start();
+    const outputSpinner = ora("Generating output files...").start();
+    const unregisterOutputSpinner = trackSpinner(outputSpinner);
 
-    let outputContent: string;
-    let defaultFilename: string;
+    let outputPath: string | undefined;
 
-    switch (options.outputFormat) {
-      case "markdown":
-        outputContent = await generateMarkdownOutput(
-          preview,
-          analysisResults,
-          comparisonResults,
-          options,
-          filteredPages
-        );
-        defaultFilename = `comapeo-docs-preview-${Date.now()}.md`;
-        break;
-      case "json":
-        outputContent = await generateJSONOutput(
-          preview,
-          analysisResults,
-          comparisonResults,
-          filteredPages
-        );
-        defaultFilename = `comapeo-docs-preview-${Date.now()}.json`;
-        break;
-      case "html":
-        outputContent = await generateHTMLOutput(
-          preview,
-          analysisResults,
-          comparisonResults,
-          options,
-          filteredPages
-        );
-        defaultFilename = `comapeo-docs-preview-${Date.now()}.html`;
-        break;
+    try {
+      let outputContent = "";
+      let defaultFilename = "";
+
+      switch (options.outputFormat) {
+        case "markdown":
+          outputContent = await generateMarkdownOutput(
+            preview,
+            analysisResults,
+            comparisonResults,
+            options,
+            filteredPages
+          );
+          defaultFilename = `comapeo-docs-preview-${Date.now()}.md`;
+          break;
+        case "json":
+          outputContent = await generateJSONOutput(
+            preview,
+            analysisResults,
+            comparisonResults,
+            filteredPages
+          );
+          defaultFilename = `comapeo-docs-preview-${Date.now()}.json`;
+          break;
+        case "html":
+          outputContent = await generateHTMLOutput(
+            preview,
+            analysisResults,
+            comparisonResults,
+            options,
+            filteredPages
+          );
+          defaultFilename = `comapeo-docs-preview-${Date.now()}.html`;
+          break;
+      }
+
+      const outputFile = options.outputFile || defaultFilename;
+      outputPath = path.resolve(outputFile);
+      // Destination path is resolved within the workspace; flag suppressed as this is intentional CLI output.
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      fs.writeFileSync(outputPath, outputContent, "utf8");
+
+      outputSpinner.succeed(chalk.green(`✅ Output saved to: ${outputPath}`));
+    } catch (error) {
+      outputSpinner.fail(chalk.red("❌ Failed to generate output files"));
+      throw error;
+    } finally {
+      unregisterOutputSpinner();
     }
 
-    // Save to file
-    const outputFile = options.outputFile || defaultFilename;
-    const outputPath = path.resolve(outputFile);
-    fs.writeFileSync(outputPath, outputContent, "utf8");
-
-    spinner.succeed(chalk.green(`✅ Output saved to: ${outputPath}`));
-
-    // Step 6: Display summary
     const executionTime = Math.round((Date.now() - startTime) / 1000);
 
-    console.log(chalk.bold.green("\\n✨ Fetch All Complete!"));
+    console.log(chalk.bold.green("\n✨ Fetch All Complete!"));
     console.log(chalk.gray(`Execution time: ${executionTime}s`));
-    console.log(chalk.gray(`Pages processed: ${filteredPages.length}`));
+    console.log(chalk.gray(`Pages processed: ${fetchResult.processedCount}`));
 
     if (options.exportFiles) {
       console.log(chalk.gray(`Mode: Export to markdown files + preview`));
     } else {
       console.log(chalk.gray(`Mode: Preview only`));
       console.log(chalk.gray(`Output format: ${options.outputFormat}`));
-      console.log(chalk.gray(`Output file: ${outputPath}`));
+      if (outputPath) {
+        console.log(chalk.gray(`Output file: ${outputPath}`));
+      }
     }
 
     if (!options.previewOnly) {
-      console.log(chalk.blue("\\n💡 Next Steps:"));
+      console.log(chalk.blue("\n💡 Next Steps:"));
 
       if (options.exportFiles) {
         console.log(
@@ -440,17 +478,22 @@ async function main() {
       }
     }
 
-    // Exit successfully
-    process.exit(0);
+    await gracefulShutdown(0);
   } catch (error) {
-    spinner.fail(chalk.red("❌ Failed to generate documentation preview"));
-    console.error(chalk.red("Error:"), error);
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Process exit called with code:")
+    ) {
+      throw error;
+    }
 
-    if (options.verbose) {
+    console.error(chalk.red("❌ Error:"), error);
+
+    if (options.verbose && error instanceof Error) {
       console.error(chalk.gray("Stack trace:"), error.stack);
     }
 
-    process.exit(1);
+    await gracefulShutdown(1);
   }
 }
 
@@ -604,17 +647,6 @@ async function generateHTMLOutput(
 </html>`;
 }
 
-// Handle graceful shutdown
-process.on("SIGINT", () => {
-  console.log(chalk.yellow("\\n🛑 Interrupted by user"));
-  process.exit(0);
-});
-
-process.on("uncaughtException", (error) => {
-  console.error(chalk.red("❌ Uncaught exception:"), error);
-  process.exit(1);
-});
-
 // Export for testing
 export { main, parseArgs };
 
@@ -624,8 +656,8 @@ const isDirectExec =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
-  main().catch((error) => {
+  await main().catch(async (error) => {
     console.error(chalk.red("❌ Fatal error:"), error);
-    process.exit(1);
+    await gracefulShutdown(1);
   });
 }

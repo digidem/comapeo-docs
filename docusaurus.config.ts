@@ -36,7 +36,7 @@ const config: Config = {
 
   // Custom fields to pass environment variables to client-side code
   customFields: {
-    defaultDocsPage: process.env.DEFAULT_DOCS_PAGE || "introduction",
+    defaultDocsPage: DEFAULT_DOCS_PAGE,
   },
 
   // Set the production url of your site here

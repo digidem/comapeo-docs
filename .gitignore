@@ -32,3 +32,18 @@ coverage/
 # Generated Notion export files
 notion_*.json
 EXPORT_DOCUMENTATION.md
+
+# IDE and editor directories
+.marscode/
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*-preview-*.md
+html.meta.json.gz
+bg.png
+favicon.ico
+favicon.svg
+/assets/

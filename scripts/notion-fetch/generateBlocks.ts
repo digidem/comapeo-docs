@@ -237,111 +237,119 @@ async function downloadAndProcessImage(
   blockName: string,
   index: number
 ) {
-  const spinner = SpinnerManager.create(`Processing image ${index + 1}`, 60000); // 60 second timeout for images
+  let attempt = 0;
+  let lastError: unknown;
 
-  try {
-    // 1) Download with timeout
-    spinner.text = `Processing image ${index + 1}: Downloading`;
-    const response = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 30000, // 30 second timeout
-      maxRedirects: 5,
-      headers: {
-        "User-Agent": "notion-fetch-script/1.0",
-      },
-    });
-
-    const originalBuffer = Buffer.from(response.data, "binary");
-
-    // Remove query parameters from the URL
-    const cleanUrl = url.split("?")[0];
-
-    // Detect true format from buffer and Content-Type, and save with the right extension
-    const headerCT = (response.headers as Record<string, string | string[]>)?.[
-      "content-type"
-    ] as string | undefined;
-    const headerFmt = formatFromContentType(headerCT);
-    const bufferFmt = detectFormatFromBuffer(originalBuffer);
-    const chosenFmt = chooseFormat(bufferFmt, headerFmt);
-
-    // Compute extension. If unknown, fall back to URL extension or .jpg
-    const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
-    let extension = extForFormat(chosenFmt);
-    if (!extension) {
-      extension = urlExt || ".jpg";
-    }
-
-    // Create a short, sanitized filename using the chosen extension
-    const sanitizedBlockName = blockName
-      .replace(/[^a-z0-9]/gi, "")
-      .toLowerCase()
-      .slice(0, 20);
-    const filename = `${sanitizedBlockName}_${index}${extension}`;
-
-    const filepath = path.join(IMAGES_PATH, filename);
-
-    let resizedBuffer = originalBuffer;
-    let originalSize = originalBuffer.length;
-
-    // 2) Resize only for formats sharp supports without conversion (jpeg/png/webp)
-    if (isResizableFormat(chosenFmt)) {
-      spinner.text = `Processing image ${index + 1}: Resizing`;
-      // processImage uses the outputPath extension to choose encoder; since we computed
-      // "extension" from detected format, sharp will keep that format.
-      const processed = await processImage(originalBuffer, filepath);
-      resizedBuffer = processed.outputBuffer;
-      originalSize = processed.originalSize;
-    } else {
-      spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
-      // Keep original buffer as candidate for optimization
-      resizedBuffer = originalBuffer;
-      originalSize = originalBuffer.length;
-    }
-
-    // 3) Compression/Optimization with fail-open. On any optimizer error, keep original unmodified.
-    spinner.text = `Processing image ${index + 1}: Compressing`;
-    // Streaming-like safe write: only replace final file on success; else keep original
-    const { finalSize, usedFallback } = await compressImageToFileWithFallback(
-      originalBuffer,
-      resizedBuffer,
-      filepath,
-      url
+  while (attempt < 3) {
+    const attemptNumber = attempt + 1;
+    const spinner = SpinnerManager.create(
+      `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
+      60000
     );
 
-    spinner.succeed(
-      usedFallback
-        ? chalk.green(
-            `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
+    try {
+      spinner.text = `Processing image ${index + 1}: Downloading`;
+      const response = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+        maxRedirects: 5,
+        headers: {
+          "User-Agent": "notion-fetch-script/1.0",
+        },
+      });
+
+      const originalBuffer = Buffer.from(response.data, "binary");
+      const cleanUrl = url.split("?")[0];
+
+      const headerCT = (
+        response.headers as Record<string, string | string[]>
+      )?.["content-type"] as string | undefined;
+      const headerFmt = formatFromContentType(headerCT);
+      const bufferFmt = detectFormatFromBuffer(originalBuffer);
+      const chosenFmt = chooseFormat(bufferFmt, headerFmt);
+
+      const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
+      let extension = extForFormat(chosenFmt);
+      if (!extension) {
+        extension = urlExt || ".jpg";
+      }
+
+      const sanitizedBlockName = blockName
+        .replace(/[^a-z0-9]/gi, "")
+        .toLowerCase()
+        .slice(0, 20);
+      const filename = `${sanitizedBlockName}_${index}${extension}`;
+      const filepath = path.join(IMAGES_PATH, filename);
+
+      let resizedBuffer = originalBuffer;
+      let originalSize = originalBuffer.length;
+
+      if (isResizableFormat(chosenFmt)) {
+        spinner.text = `Processing image ${index + 1}: Resizing`;
+        const processed = await processImage(originalBuffer, filepath);
+        resizedBuffer = processed.outputBuffer;
+        originalSize = processed.originalSize;
+      } else {
+        spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
+        resizedBuffer = originalBuffer;
+        originalSize = originalBuffer.length;
+      }
+
+      spinner.text = `Processing image ${index + 1}: Compressing`;
+      const { finalSize, usedFallback } = await compressImageToFileWithFallback(
+        originalBuffer,
+        resizedBuffer,
+        filepath,
+        url
+      );
+
+      spinner.succeed(
+        usedFallback
+          ? chalk.green(
+              `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
+            )
+          : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
+      );
+
+      const savedBytes = usedFallback
+        ? 0
+        : Math.max(0, originalSize - finalSize);
+      const imagePath = `/images/${filename.replace(/\\/g, "/")}`;
+      return { newPath: imagePath, savedBytes };
+    } catch (error) {
+      lastError = error;
+      let errorMessage = `Error processing image ${index + 1} from ${url}`;
+
+      if ((error as any)?.code === "ECONNABORTED") {
+        errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
+      } else if ((error as any)?.response) {
+        errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
+      } else if ((error as any)?.code === "ENOTFOUND") {
+        errorMessage = `DNS resolution failed for image ${index + 1}: ${url}`;
+      }
+
+      spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
+      console.error(chalk.red("Image processing error details:"), error);
+
+      if (attemptNumber < 3) {
+        const delayMs = attemptNumber * 1000;
+        console.warn(
+          chalk.yellow(
+            `Retrying image ${index + 1} in ${delayMs / 1000}s (attempt ${attemptNumber + 1}/3)`
           )
-        : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
-    );
-
-    const savedBytes = usedFallback ? 0 : Math.max(0, originalSize - finalSize);
-    // Use absolute path so Docusaurus resolves from /static
-    const imagePath = `/images/${filename.replace(/\\/g, "/")}`;
-    return { newPath: imagePath, savedBytes };
-  } catch (error) {
-    // Enhanced error handling with specific error types
-    let errorMessage = `Error processing image ${index + 1} from ${url}`;
-
-    if (error.code === "ECONNABORTED") {
-      errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
-    } else if (error.response) {
-      errorMessage = `HTTP ${error.response.status} error for image ${index + 1}: ${url}`;
-    } else if (error.code === "ENOTFOUND") {
-      errorMessage = `DNS resolution failed for image ${index + 1}: ${url}`;
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    } finally {
+      SpinnerManager.remove(spinner);
     }
 
-    spinner.fail(chalk.red(errorMessage));
-    console.error(chalk.red("Image processing error details:"), error);
-
-    // Per requirement: network failures should propagate; resizing failures should propagate.
-    // We rethrow to abort the page/process. No partial file was written unless optimizer succeeded.
-    throw error;
-  } finally {
-    // Ensure spinner is always cleaned up
-    SpinnerManager.remove(spinner);
+    attempt++;
   }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? "Unknown image processing error"));
 }
 
 const LEGACY_SECTION_PROPERTY = "Section";
@@ -449,7 +457,15 @@ export async function generateBlocks(pages, progressCallback) {
 
           // TOGGLE
           if (sectionType === "Toggle") {
-            const sectionName = page.properties["Title"].title[0].plain_text;
+            const sectionName =
+              page.properties?.["Title"]?.title?.[0]?.plain_text ?? pageTitle;
+            if (!page.properties?.["Title"]?.title?.[0]?.plain_text) {
+              console.warn(
+                chalk.yellow(
+                  `Missing 'Title' property for toggle page ${page.id}; falling back to page title.`
+                )
+              );
+            }
             const sectionFolder = filename;
             const sectionFolderPath = path.join(PATH, sectionFolder);
             fs.mkdirSync(sectionFolderPath, { recursive: true });
@@ -754,9 +770,17 @@ last_update:
                 );
               }
             } else {
-              pageSpinner.fail(
+              const placeholderBody = `\n<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->\n\n:::note\nContent placeholder – add blocks in Notion to replace this file.\n:::\n`;
+
+              fs.writeFileSync(
+                filePath,
+                `${frontmatter}${placeholderBody}`,
+                "utf8"
+              );
+
+              pageSpinner.warn(
                 chalk.yellow(
-                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}`
+                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}. Placeholder content generated.`
                 )
               );
             }

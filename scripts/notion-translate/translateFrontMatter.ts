@@ -1,10 +1,13 @@
-import OpenAI from 'openai';
-import dotenv from 'dotenv';
-import fs from 'fs/promises';
-import path from 'path';
-import ora from 'ora';
-import chalk from 'chalk';
-import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE } from '../constants.js';
+import OpenAI from "openai";
+import dotenv from "dotenv";
+import fs from "fs/promises";
+import path from "path";
+import ora from "ora";
+import chalk from "chalk";
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_TEMPERATURE,
+} from "../constants.js";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 
@@ -78,11 +81,13 @@ export async function translateMarkdownFile(
   targetLanguage: string,
   outputPath: string
 ): Promise<string> {
-  const spinner = ora(`Translating ${path.basename(filePath)} to ${targetLanguage}`).start();
+  const spinner = ora(
+    `Translating ${path.basename(filePath)} to ${targetLanguage}`
+  ).start();
 
   try {
     // Read the markdown file
-    const content = await fs.readFile(filePath, 'utf8');
+    const content = await fs.readFile(filePath, "utf8");
 
     // Translate the content
     const translatedContent = await translateText(content, targetLanguage);
@@ -91,12 +96,18 @@ export async function translateMarkdownFile(
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
     // Write the translated content to the output file
-    await fs.writeFile(outputPath, translatedContent, 'utf8');
+    await fs.writeFile(outputPath, translatedContent, "utf8");
 
-    spinner.succeed(chalk.green(`Translated ${path.basename(filePath)} to ${targetLanguage}`));
+    spinner.succeed(
+      chalk.green(`Translated ${path.basename(filePath)} to ${targetLanguage}`)
+    );
     return outputPath;
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to translate ${path.basename(filePath)}: ${error.message}`));
+    spinner.fail(
+      chalk.red(
+        `Failed to translate ${path.basename(filePath)}: ${error.message}`
+      )
+    );
     throw error;
   }
 }
@@ -108,19 +119,27 @@ export async function translateMarkdownFile(
  * @param targetLanguage Target language for translation
  * @returns {markdown: string, title: string}
  */
-export async function translateText(text: string, title: string, targetLanguage: string): Promise<string> {
+export async function translateText(
+  text: string,
+  title: string,
+  targetLanguage: string
+): Promise<string> {
   // Add "title: {title}" to the first line of the text
   const textWithTitle = `title: ${title}\n\n markdown: ${text}`;
   try {
     // Validate input
-    if (!text || typeof text !== 'string') {
-      console.warn('Invalid text provided for translation. Using fallback text.');
-      text = '# Empty Content\n\nThis page has no content to translate.';
+    if (!text || typeof text !== "string") {
+      console.warn(
+        "Invalid text provided for translation. Using fallback text."
+      );
+      text = "# Empty Content\n\nThis page has no content to translate.";
     }
 
     // Create the prompt with the target language
-    const prompt = TRANSLATION_PROMPT
-      .replace('{targetLanguage}', targetLanguage)
+    const prompt = TRANSLATION_PROMPT.replace(
+      "{targetLanguage}",
+      targetLanguage
+    );
 
     // Call OpenAI API
 
@@ -133,7 +152,7 @@ export async function translateText(text: string, title: string, targetLanguage:
       model,
       input: [
         { role: "system", content: prompt },
-        { role: "user", content: textWithTitle }
+        { role: "user", content: textWithTitle },
       ],
       text: {
         format: zodTextFormat(TranslationResult, "translation"),
@@ -161,11 +180,14 @@ export async function translateText(text: string, title: string, targetLanguage:
  * @param targetLanguage Target language for translation
  * @returns Translated text
  */
-export async function translateString(text: string, targetLanguage: string): Promise<string> {
+export async function translateString(
+  text: string,
+  targetLanguage: string
+): Promise<string> {
   const spinner = ora(`Translating text to ${targetLanguage}`).start();
 
   try {
-    const translatedText = await translateText(text, '', targetLanguage);
+    const translatedText = await translateText(text, "", targetLanguage);
     spinner.succeed(chalk.green(`Text translated to ${targetLanguage}`));
     return translatedText;
   } catch (error) {

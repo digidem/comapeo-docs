@@ -4,14 +4,14 @@ import ora from "ora";
 import chalk from "chalk";
 import fs from "fs/promises";
 import path from "path";
-import { notion, DATABASE_ID, n2m } from "../notionClient.js";
-import { translateText } from "./translateFrontMatter.js";
+import { notion, DATABASE_ID, n2m } from "../notionClient";
+import { translateText } from "./translateFrontMatter";
 import {
   translateJson,
   extractTranslatableText,
   getLanguageName,
-} from "./translateCodeJson.js";
-import { createNotionPageFromMarkdown } from "./markdownToNotion.js";
+} from "./translateCodeJson";
+import { createNotionPageFromMarkdown } from "./markdownToNotion";
 import {
   fetchNotionData,
   sortAndExpandNotionData,
@@ -84,7 +84,6 @@ export async function findTranslationPage(
   targetLanguage: string
 ): Promise<NotionPage | null> {
   try {
-    // @ts-expect-error - We know the property structure
     const title =
       englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
@@ -131,9 +130,7 @@ export function needsTranslationUpdate(
   }
 
   // Compare last edited times
-  // @ts-expect-error - We know the property structure
   const englishLastEdited = new Date(englishPage.last_edited_time);
-  // @ts-expect-error - We know the property structure
   const translationLastEdited = new Date(translationPage.last_edited_time);
 
   // If the English page was edited after the translation, it needs an update
@@ -170,17 +167,30 @@ export async function saveTranslatedContentToDisk(
 ): Promise<string> {
   try {
     // Create a sanitized filename from the title
-    // @ts-expect-error - We know the property structure
     const title =
       englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
-    const filename =
-      title
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "") + ".md";
 
-    // Determine the output path
-    const outputPath = path.join(config.outputDir, filename);
+    // Create collision-safe filename
+    const baseSlug = title
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+
+    let filename = `${baseSlug}.md`;
+    let outputPath = path.join(config.outputDir, filename);
+
+    // Handle filename collisions by adding counter
+    let counter = 1;
+    while (
+      await fs.access(outputPath).then(
+        () => true,
+        () => false
+      )
+    ) {
+      filename = `${baseSlug}-${counter}.md`;
+      outputPath = path.join(config.outputDir, filename);
+      counter++;
+    }
 
     // Handle section folders
     const elementType = getElementTypeProperty(englishPage);
@@ -189,10 +199,7 @@ export async function saveTranslatedContentToDisk(
     if (sectionType) {
       if (sectionType === "toggle") {
         // For toggle sections, create a folder with the same name
-        const sectionFolder = title
-          .toLowerCase()
-          .replace(/\s+/g, "-")
-          .replace(/[^a-z0-9-]/g, "");
+        const sectionFolder = baseSlug;
 
         const sectionPath = path.join(config.outputDir, sectionFolder);
         await fs.mkdir(sectionPath, { recursive: true });
@@ -200,7 +207,6 @@ export async function saveTranslatedContentToDisk(
         // Create _category_.json file
         const categoryContent = {
           label: title,
-          // @ts-expect-error - We know the property structure
           position:
             englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
           collapsible: true,
@@ -372,7 +378,6 @@ async function processLanguageTranslations(
   let skippedTranslations = 0;
 
   for (const englishPage of englishPages) {
-    // @ts-expect-error - We know the property structure
     const originalTitle =
       englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
     console.log(chalk.blue(`Processing: ${originalTitle}`));
@@ -430,12 +435,10 @@ async function processSinglePageTranslation({
   onNew: () => void;
   onUpdate: () => void;
 }) {
-  // @ts-expect-error - We know the property structure
   const originalTitle =
     englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
   // Check if this is a title page
-  // @ts-expect-error - We know the property structure
   const elementType = getElementTypeProperty(englishPage);
   const isTitlePage = elementType?.select?.name?.toLowerCase() === "title";
 
@@ -471,7 +474,6 @@ async function processSinglePageTranslation({
   };
 
   // Copy other properties from the English page
-  // @ts-expect-error - We know the property structure
   if (
     englishPage.properties[NOTION_PROPERTIES.ORDER] &&
     englishPage.properties[NOTION_PROPERTIES.ORDER].number
@@ -480,7 +482,6 @@ async function processSinglePageTranslation({
       number: englishPage.properties[NOTION_PROPERTIES.ORDER].number,
     };
   }
-  // @ts-expect-error - We know the property structure
   if (
     englishPage.properties[NOTION_PROPERTIES.TAGS] &&
     englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select
@@ -491,7 +492,6 @@ async function processSinglePageTranslation({
       ].multi_select.map((tag: { name: string }) => ({ name: tag.name })),
     };
   }
-  // @ts-expect-error - We know the property structure
   const englishElementType = getElementTypeProperty(englishPage);
   if (englishElementType?.select?.name) {
     properties[NOTION_PROPERTIES.ELEMENT_TYPE] = {

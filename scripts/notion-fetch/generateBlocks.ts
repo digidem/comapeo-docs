@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { n2m } from "../notionClient.js";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { n2m } from "../notionClient";
+import { NOTION_PROPERTIES } from "../constants";
 import axios from "axios";
 import chalk from "chalk";
 import { processImage } from "./imageProcessor";
@@ -15,8 +15,8 @@ import {
   extForFormat,
   isResizableFormat,
 } from "./utils";
-import config from "../../docusaurus.config.js";
-import SpinnerManager from "./spinnerManager.js";
+import config from "../../docusaurus.config";
+import SpinnerManager from "./spinnerManager";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -168,7 +168,7 @@ const groupPagesByLang = (pages, page) => {
     elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
 
   const obj = {
-    mainTitle: page.properties["Content elements"].title[0].plain_text,
+    mainTitle: page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text,
     section: sectionName,
     content: {},
   };
@@ -242,7 +242,7 @@ export async function generateBlocks(pages, progressCallback) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
         const pageTitle =
-          page.properties["Content elements"].title[0].plain_text;
+          page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(

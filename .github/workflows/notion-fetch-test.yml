@@ -1,0 +1,92 @@
+name: Fetch All Content from Notion for Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force fetch even if content exists'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  fetch-notion:
+    runs-on: ubuntu-latest
+    
+    environment: production
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Setup environment
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "🔄 Force mode enabled - will overwrite existing content"
+          else
+            echo "📥 Normal mode - will fetch and update content"
+          fi
+        
+      - name: Fetch content from Notion
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: bun run notion:fetch-all
+        
+      - name: Commit fetched content
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stage specific paths (adjust to your generated files)
+          git add docs
+          if [ -d i18n ]; then
+            git add i18n
+          fi
+          # Also stage generated images
+          if [ -d static/images ]; then
+            git add static/images
+          fi
+
+          # Commit if there are changes
+          git diff --cached --quiet || git commit -m "(content-test): fetch and test all content from Notion"
+
+          # Push back to the repository
+          git push
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Show fetch results
+        run: |
+          echo "📊 Notion fetch completed"
+          echo "📁 Generated content structure:"
+          find docs -name "*.md" -type f | wc -l | xargs echo "English docs:"
+          find i18n -name "*.md" -type f | wc -l | xargs echo "Localized docs:"
+          echo "🖼️ Generated images:"
+          find static/images -name "*.jpg" -o -name "*.png" -o -name "*.gif" 2>/dev/null | wc -l | xargs echo "Images processed:"
+          
+      - name: Create summary
+        run: |
+          echo "## 📋 Notion Fetch Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**📅 Execution Time:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**🔄 Force Mode:** ${{ github.event.inputs.force }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Content Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- **English docs:** $(find docs -name "*.md" -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Localized docs:** $(find i18n -name "*.md" -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Images processed:** $(find static/images -name "*.jpg" -o -name "*.png" -o -name "*.gif" 2>/dev/null | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Review generated content for quality" >> $GITHUB_STEP_SUMMARY
+          echo "- Test site build: \`bun run build\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy when ready" >> $GITHUB_STEP_SUMMARY

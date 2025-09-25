@@ -1,55 +1,61 @@
 import { Client } from "@notionhq/client";
 import { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import { visit } from 'unist-util-visit';
-import fs from 'fs/promises';
-import ora from 'ora';
-import chalk from 'chalk';
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import { visit } from "unist-util-visit";
+import fs from "fs/promises";
+import ora from "ora";
+import chalk from "chalk";
 // Define Root type for the AST
-type Root = { type: 'root'; children: unknown[] };
-import { ENGLISH_MODIFICATION_ERROR, MAIN_LANGUAGE, MAX_RETRIES, NOTION_API_CHUNK_SIZE, NOTION_PROPERTIES } from '../constants.js';
+type Root = { type: "root"; children: unknown[] };
+import {
+  ENGLISH_MODIFICATION_ERROR,
+  MAIN_LANGUAGE,
+  MAX_RETRIES,
+  NOTION_API_CHUNK_SIZE,
+  NOTION_PROPERTIES,
+} from "../constants.js";
 
 // Define types for markdown nodes
 interface HeadingNode {
-  type: 'heading';
+  type: "heading";
   depth: 1 | 2 | 3;
   children: (TextNode | MarkdownNode)[];
 }
 
 interface ParagraphNode {
-  type: 'paragraph';
+  type: "paragraph";
   children: (TextNode | MarkdownNode)[];
 }
 
 interface ListNode {
-  type: 'list';
+  type: "list";
   ordered: boolean;
   children: ListItemNode[];
 }
 
 interface ListItemNode {
-  type: 'listItem';
+  type: "listItem";
   children: (TextNode | MarkdownNode)[];
 }
 
 interface CodeNode {
-  type: 'code';
+  type: "code";
   value: string;
   lang?: string;
 }
 
 interface BlockquoteNode {
-  type: 'blockquote';
+  type: "blockquote";
   children: (TextNode | MarkdownNode)[];
 }
 
 interface ThematicBreakNode {
-  type: 'thematicBreak';
+  type: "thematicBreak";
 }
 
 interface ImageNode {
-  type: 'image';
+  type: "image";
   url: string;
   alt?: string;
 }
@@ -69,7 +75,9 @@ type MarkdownNode =
  * @param markdownContent The markdown content to parse
  * @returns An array of Notion block objects
  */
-export async function markdownToNotionBlocks(markdownContent: string): Promise<BlockObjectRequest[]> {
+export async function markdownToNotionBlocks(
+  markdownContent: string
+): Promise<BlockObjectRequest[]> {
   // Parse the markdown content
   const processor = unified().use(remarkParse);
   const ast = processor.parse(markdownContent) as Root;
@@ -82,7 +90,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
     // Cast node to our custom type
     const typedNode = node as MarkdownNode;
     switch (typedNode.type) {
-      case 'heading': {
+      case "heading": {
         const headingNode = typedNode as HeadingNode;
         const headingLevel = headingNode.depth;
         const headingText = getTextFromNode(headingNode);
@@ -91,7 +99,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
         break;
       }
 
-      case 'paragraph': {
+      case "paragraph": {
         const paragraphNode = typedNode as ParagraphNode;
         const paragraphText = getTextFromNode(paragraphNode);
 
@@ -99,44 +107,48 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
           paragraph: {
             rich_text: [
               {
-                type: 'text',
+                type: "text",
                 text: {
-                  content: paragraphText
-                }
-              }
-            ]
-          }
+                  content: paragraphText,
+                },
+              },
+            ],
+          },
         });
         break;
       }
 
-      case 'list': {
+      case "list": {
         const listNode = typedNode as ListNode;
-        const listItems = listNode.children.map(item => getTextFromNode(item));
+        const listItems = listNode.children.map((item) =>
+          getTextFromNode(item)
+        );
         const isOrdered = listNode.ordered;
         for (const item of listItems) {
-          const blockType = isOrdered ? 'numbered_list_item' : 'bulleted_list_item';
+          const blockType = isOrdered
+            ? "numbered_list_item"
+            : "bulleted_list_item";
           notionBlocks.push({
             type: blockType,
             [blockType]: {
               rich_text: [
                 {
-                  type: 'text',
+                  type: "text",
                   text: {
-                    content: item
-                  }
-                }
-              ]
-            }
+                    content: item,
+                  },
+                },
+              ],
+            },
           } as BlockObjectRequest);
         }
         break;
       }
 
-      case 'code': {
+      case "code": {
         const codeNode = typedNode as CodeNode;
         const codeContent = codeNode.value;
-        const language = codeNode.lang || 'plain text';
+        const language = codeNode.lang || "plain text";
         const mappedLanguage = mapCodeLanguage(language);
 
         // Notion API has a limit of 2000 characters per text content
@@ -146,18 +158,18 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
         if (codeContent.length <= MAX_CODE_BLOCK_LENGTH) {
           // If code block is small enough, add it as is
           notionBlocks.push({
-            type: 'code',
+            type: "code",
             code: {
               rich_text: [
                 {
-                  type: 'text',
+                  type: "text",
                   text: {
-                    content: codeContent
-                  }
-                }
+                    content: codeContent,
+                  },
+                },
               ],
-              language: mappedLanguage
-            }
+              language: mappedLanguage,
+            },
           });
         } else {
           // Split code into multiple blocks
@@ -169,7 +181,10 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
             let splitIndex = MAX_CODE_BLOCK_LENGTH;
             if (remainingCode.length > MAX_CODE_BLOCK_LENGTH) {
               // Try to find a newline to split at
-              const newlineIndex = remainingCode.lastIndexOf('\n', MAX_CODE_BLOCK_LENGTH);
+              const newlineIndex = remainingCode.lastIndexOf(
+                "\n",
+                MAX_CODE_BLOCK_LENGTH
+              );
               if (newlineIndex > 0) {
                 splitIndex = newlineIndex + 1; // Include the newline in the first chunk
               }
@@ -190,52 +205,52 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
             // For the first chunk, add a paragraph with the language info
             if (i === 0) {
               notionBlocks.push({
-                type: 'paragraph',
+                type: "paragraph",
                 paragraph: {
                   rich_text: [
                     {
-                      type: 'text',
+                      type: "text",
                       text: {
-                        content: `\`\`\`${language}`
-                      }
-                    }
-                  ]
-                }
+                        content: `\`\`\`${language}`,
+                      },
+                    },
+                  ],
+                },
               });
             }
 
             // Add the code content as a paragraph with code formatting
             notionBlocks.push({
-              type: 'paragraph',
+              type: "paragraph",
               paragraph: {
                 rich_text: [
                   {
-                    type: 'text',
+                    type: "text",
                     text: {
-                      content: codeChunks[i]
+                      content: codeChunks[i],
                     },
                     annotations: {
-                      code: true
-                    }
-                  }
-                ]
-              }
+                      code: true,
+                    },
+                  },
+                ],
+              },
             });
 
             // For the last chunk, add a closing code fence
             if (i === codeChunks.length - 1) {
               notionBlocks.push({
-                type: 'paragraph',
+                type: "paragraph",
                 paragraph: {
                   rich_text: [
                     {
-                      type: 'text',
+                      type: "text",
                       text: {
-                        content: '```'
-                      }
-                    }
-                  ]
-                }
+                        content: "```",
+                      },
+                    },
+                  ],
+                },
               });
             }
           }
@@ -243,7 +258,7 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
         break;
       }
 
-      case 'blockquote': {
+      case "blockquote": {
         const quoteNode = typedNode as BlockquoteNode;
         const quoteText = getTextFromNode(quoteNode);
 
@@ -251,30 +266,30 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
           quote: {
             rich_text: [
               {
-                type: 'text',
+                type: "text",
                 text: {
-                  content: quoteText
-                }
-              }
-            ]
-          }
+                  content: quoteText,
+                },
+              },
+            ],
+          },
         });
         break;
       }
 
-      case 'thematicBreak': {
+      case "thematicBreak": {
         notionBlocks.push({
-          type: 'divider',
-          divider: {}
+          type: "divider",
+          divider: {},
         });
         break;
       }
 
-      case 'image': {
+      case "image": {
         // For translations, we'll just convert images to text to avoid Notion API issues
         const imageNode = typedNode as ImageNode;
         const imageUrl = imageNode.url;
-        const altText = imageNode.alt || '';
+        const altText = imageNode.alt || "";
 
         // Always convert images to text for safety
         console.warn(`Converting image to text: ${imageUrl}`);
@@ -282,13 +297,13 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
           paragraph: {
             rich_text: [
               {
-                type: 'text',
+                type: "text",
                 text: {
-                  content: `[Image: ${altText || imageUrl}]`
-                }
-              }
-            ]
-          }
+                  content: `[Image: ${altText || imageUrl}]`,
+                },
+              },
+            ],
+          },
         });
         break;
       }
@@ -300,30 +315,33 @@ export async function markdownToNotionBlocks(markdownContent: string): Promise<B
 
 // Define a TextNode type for text elements
 interface TextNode {
-  type: 'text';
+  type: "text";
   value: string;
 }
-
 
 /**
  * Helper function to extract text from a node
  */
 function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
-  if (!node || typeof node !== 'object') {
-    return '';
+  if (!node || typeof node !== "object") {
+    return "";
   }
 
   const typedNode = node as Record<string, unknown>;
 
-  if (typedNode.value && typeof typedNode.value === 'string') {
+  if (typedNode.value && typeof typedNode.value === "string") {
     return typedNode.value;
   }
 
   if (typedNode.children && Array.isArray(typedNode.children)) {
-    let text = '';
+    let text = "";
     typedNode.children.forEach((child: unknown) => {
       const childNode = child as Record<string, unknown>;
-      if (childNode.type === 'text' && childNode.value && typeof childNode.value === 'string') {
+      if (
+        childNode.type === "text" &&
+        childNode.value &&
+        typeof childNode.value === "string"
+      ) {
         text += childNode.value;
       } else {
         text += getTextFromNode(child);
@@ -332,27 +350,33 @@ function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
     return text;
   }
 
-  return '';
+  return "";
 }
 
 /**
  * Creates a heading block with the specified level
  */
-function createHeadingBlock(text: string, level: 1 | 2 | 3): BlockObjectRequest {
-  const headingType = `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3';
+function createHeadingBlock(
+  text: string,
+  level: 1 | 2 | 3
+): BlockObjectRequest {
+  const headingType = `heading_${level}` as
+    | "heading_1"
+    | "heading_2"
+    | "heading_3";
 
   return {
     type: headingType,
     [headingType]: {
       rich_text: [
         {
-          type: 'text',
+          type: "text",
           text: {
-            content: text
-          }
-        }
-      ]
-    }
+            content: text,
+          },
+        },
+      ],
+    },
   } as BlockObjectRequest;
 }
 
@@ -360,15 +384,78 @@ function createHeadingBlock(text: string, level: 1 | 2 | 3): BlockObjectRequest 
  * Define the valid Notion code block languages
  */
 type NotionCodeLanguage =
-  'abap' | 'arduino' | 'bash' | 'basic' | 'c' | 'clojure' | 'coffeescript' |
-  'c++' | 'c#' | 'css' | 'dart' | 'diff' | 'docker' | 'elixir' | 'elm' | 'erlang' |
-  'flow' | 'fortran' | 'f#' | 'gherkin' | 'glsl' | 'go' | 'graphql' | 'groovy' |
-  'haskell' | 'html' | 'java' | 'javascript' | 'json' | 'julia' | 'kotlin' | 'latex' |
-  'less' | 'lisp' | 'livescript' | 'lua' | 'makefile' | 'markdown' | 'markup' | 'matlab' |
-  'mermaid' | 'nix' | 'objective-c' | 'ocaml' | 'pascal' | 'perl' | 'php' | 'plain text' |
-  'powershell' | 'prolog' | 'protobuf' | 'python' | 'r' | 'reason' | 'ruby' | 'rust' |
-  'sass' | 'scala' | 'scheme' | 'scss' | 'shell' | 'sql' | 'swift' | 'typescript' |
-  'vb.net' | 'verilog' | 'vhdl' | 'visual basic' | 'webassembly' | 'xml' | 'yaml' | 'java/c/c++/c#';
+  | "abap"
+  | "arduino"
+  | "bash"
+  | "basic"
+  | "c"
+  | "clojure"
+  | "coffeescript"
+  | "c++"
+  | "c#"
+  | "css"
+  | "dart"
+  | "diff"
+  | "docker"
+  | "elixir"
+  | "elm"
+  | "erlang"
+  | "flow"
+  | "fortran"
+  | "f#"
+  | "gherkin"
+  | "glsl"
+  | "go"
+  | "graphql"
+  | "groovy"
+  | "haskell"
+  | "html"
+  | "java"
+  | "javascript"
+  | "json"
+  | "julia"
+  | "kotlin"
+  | "latex"
+  | "less"
+  | "lisp"
+  | "livescript"
+  | "lua"
+  | "makefile"
+  | "markdown"
+  | "markup"
+  | "matlab"
+  | "mermaid"
+  | "nix"
+  | "objective-c"
+  | "ocaml"
+  | "pascal"
+  | "perl"
+  | "php"
+  | "plain text"
+  | "powershell"
+  | "prolog"
+  | "protobuf"
+  | "python"
+  | "r"
+  | "reason"
+  | "ruby"
+  | "rust"
+  | "sass"
+  | "scala"
+  | "scheme"
+  | "scss"
+  | "shell"
+  | "sql"
+  | "swift"
+  | "typescript"
+  | "vb.net"
+  | "verilog"
+  | "vhdl"
+  | "visual basic"
+  | "webassembly"
+  | "xml"
+  | "yaml"
+  | "java/c/c++/c#";
 
 /**
  * Removes front-matter from markdown content
@@ -378,7 +465,7 @@ type NotionCodeLanguage =
 export function removeFrontMatter(content: string): string {
   // Check if content starts with front-matter (---)
   const frontMatterRegex = /^---\n[\s\S]*?\n---\n/m;
-  return content.replace(frontMatterRegex, '');
+  return content.replace(frontMatterRegex, "");
 }
 
 /**
@@ -386,26 +473,26 @@ export function removeFrontMatter(content: string): string {
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
   const languageMap: Record<string, NotionCodeLanguage> = {
-    'js': 'javascript',
-    'ts': 'typescript',
-    'py': 'python',
-    'rb': 'ruby',
-    'go': 'go',
-    'java': 'java',
-    'php': 'php',
-    'c': 'c',
-    'cpp': 'c++',
-    'cs': 'c#',
-    'html': 'html',
-    'css': 'css',
-    'shell': 'shell',
-    'bash': 'bash',
-    'json': 'json',
-    'yaml': 'yaml',
-    'md': 'markdown'
+    js: "javascript",
+    ts: "typescript",
+    py: "python",
+    rb: "ruby",
+    go: "go",
+    java: "java",
+    php: "php",
+    c: "c",
+    cpp: "c++",
+    cs: "c#",
+    html: "html",
+    css: "css",
+    shell: "shell",
+    bash: "bash",
+    json: "json",
+    yaml: "yaml",
+    md: "markdown",
   };
 
-  return languageMap[language] || 'plain text';
+  return languageMap[language] || "plain text";
 }
 
 interface NotionPageProperties {
@@ -445,7 +532,9 @@ export async function createNotionPageFromMarkdown(
   while (retryCount < MAX_RETRIES) {
     try {
       // Read the markdown content
-      let markdownContent = isContent ? markdownPath : await fs.readFile(markdownPath, 'utf8');
+      let markdownContent = isContent
+        ? markdownPath
+        : await fs.readFile(markdownPath, "utf8");
 
       // Remove front-matter if present
       markdownContent = removeFrontMatter(markdownContent);
@@ -459,48 +548,51 @@ export async function createNotionPageFromMarkdown(
       }
 
       // Check if a page with this title and language already exists
-      const filter = language ? {
-        and: [
-          {
+      const filter = language
+        ? {
+            and: [
+              {
+                property: NOTION_PROPERTIES.TITLE,
+                title: {
+                  equals: title,
+                },
+              },
+              {
+                property: NOTION_PROPERTIES.LANGUAGE,
+                select: {
+                  equals: language,
+                },
+              },
+            ],
+          }
+        : {
             property: NOTION_PROPERTIES.TITLE,
             title: {
-              equals: title
-            }
-          },
-          {
-            property: NOTION_PROPERTIES.LANGUAGE,
-            select: {
-              equals: language
-            }
-          }
-        ]
-      } : {
-        property: NOTION_PROPERTIES.TITLE,
-        title: {
-          equals: title
-        }
-      };
+              equals: title,
+            },
+          };
 
       const response = await notion.databases.query({
         database_id: databaseId,
-        filter: filter
+        filter: filter,
       });
 
       // If we're not filtering by language, make sure we don't modify English pages
-      const nonEnglishResults = language ? response.results : response.results.filter(page => {
-        // @ts-expect-error - We know the page has properties
-        const pageLanguage = page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
-        return pageLanguage !== MAIN_LANGUAGE;
-      });
+      const nonEnglishResults = language
+        ? response.results
+        : response.results.filter((page) => {
+            // @ts-expect-error - We know the page has properties
+            const pageLanguage =
+              page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
+            return pageLanguage !== MAIN_LANGUAGE;
+          });
 
       let pageId: string;
       // Always include Parent item relation in properties for both update and create
       const pageRelation = {
         "Parent item": {
-          relation: [
-            { id: parentPageId }
-          ]
-        }
+          relation: [{ id: parentPageId }],
+        },
       };
 
       if (nonEnglishResults.length > 0) {
@@ -514,34 +606,36 @@ export async function createNotionPageFromMarkdown(
             title: [
               {
                 text: {
-                  content: title
-                }
-              }
-            ]
+                  content: title,
+                },
+              },
+            ],
           },
           ...pageRelation,
-          ...properties as Record<string, unknown>
+          ...(properties as Record<string, unknown>),
         };
 
         // Update page properties
         await notion.pages.update({
           page_id: pageId,
           // @ts-expect-error - Notion API types are not fully compatible with our types
-          properties: pageProperties
+          properties: pageProperties,
         });
 
         // Delete existing blocks
         const existingBlocks = await notion.blocks.children.list({
-          block_id: pageId
+          block_id: pageId,
         });
 
         for (const block of existingBlocks.results) {
           try {
             await notion.blocks.delete({
-              block_id: block.id
+              block_id: block.id,
             });
           } catch (deleteError) {
-            console.warn(`Warning: Failed to delete block ${block.id}: ${deleteError.message}`);
+            console.warn(
+              `Warning: Failed to delete block ${block.id}: ${deleteError.message}`
+            );
             // Continue with other blocks even if one fails
           }
         }
@@ -552,13 +646,13 @@ export async function createNotionPageFromMarkdown(
             title: [
               {
                 text: {
-                  content: title
-                }
-              }
-            ]
+                  content: title,
+                },
+              },
+            ],
           },
           ...pageRelation,
-          ...properties as Record<string, unknown>
+          ...(properties as Record<string, unknown>),
         };
 
         // Create a new page with correct parent and Parent item relation
@@ -568,7 +662,7 @@ export async function createNotionPageFromMarkdown(
             database_id: databaseId,
           },
           // @ts-expect-error - Notion API types are not fully compatible with our types
-          properties: pageProperties
+          properties: pageProperties,
         });
 
         pageId = newPage.id;
@@ -579,12 +673,12 @@ export async function createNotionPageFromMarkdown(
         const blockChunk = blocks.slice(i, i + NOTION_API_CHUNK_SIZE);
         await notion.blocks.children.append({
           block_id: pageId,
-          children: blockChunk
+          children: blockChunk,
         });
 
         // Add a small delay between chunks to avoid rate limiting
         if (i + NOTION_API_CHUNK_SIZE < blocks.length) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
       }
 
@@ -594,12 +688,21 @@ export async function createNotionPageFromMarkdown(
       retryCount++;
 
       if (retryCount < MAX_RETRIES) {
-        console.warn(`Attempt ${retryCount}/${MAX_RETRIES} failed: ${error.message}. Retrying...`);
+        console.warn(
+          `Attempt ${retryCount}/${MAX_RETRIES} failed: ${error.message}. Retrying...`
+        );
         // Exponential backoff: wait longer between retries
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+        );
       } else {
-        console.error('Error creating Notion page from markdown after multiple retries:', error);
-        throw new Error(`Failed after ${MAX_RETRIES} attempts: ${error.message}`);
+        console.error(
+          "Error creating Notion page from markdown after multiple retries:",
+          error
+        );
+        throw new Error(
+          `Failed after ${MAX_RETRIES} attempts: ${error.message}`
+        );
       }
     }
   }
@@ -649,10 +752,16 @@ export async function createTranslationPage(
       targetLanguage // Pass the language to ensure we don't modify English pages
     );
 
-    spinner.succeed(chalk.green(`Translation page created/updated for ${title} in ${targetLanguage}`));
+    spinner.succeed(
+      chalk.green(
+        `Translation page created/updated for ${title} in ${targetLanguage}`
+      )
+    );
     return pageId;
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to create translation page: ${error.message}`));
+    spinner.fail(
+      chalk.red(`Failed to create translation page: ${error.message}`)
+    );
     throw error;
   }
 }

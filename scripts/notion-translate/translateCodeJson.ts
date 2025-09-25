@@ -1,10 +1,13 @@
-import OpenAI from 'openai';
-import dotenv from 'dotenv';
-import fs from 'fs/promises';
-import path from 'path';
-import ora from 'ora';
-import chalk from 'chalk';
-import { DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TEMPERATURE } from '../constants.js';
+import OpenAI from "openai";
+import dotenv from "dotenv";
+import fs from "fs/promises";
+import path from "path";
+import ora from "ora";
+import chalk from "chalk";
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_TEMPERATURE,
+} from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -56,11 +59,15 @@ export async function translateJson(
 ): Promise<string> {
   const MAX_RETRIES = 3;
   const spinner = ora(
-    `Translating to ${targetLanguage}${retryCount > 0 ? ` (Attempt ${retryCount + 1}/${MAX_RETRIES})` : ""
+    `Translating to ${targetLanguage}${
+      retryCount > 0 ? ` (Attempt ${retryCount + 1}/${MAX_RETRIES})` : ""
     }...`
   ).start();
 
-  const prompt = JSON_TRANSLATION_PROMPT.replace('{targetLanguage}', targetLanguage);
+  const prompt = JSON_TRANSLATION_PROMPT.replace(
+    "{targetLanguage}",
+    targetLanguage
+  );
 
   // Zod schema for code.json: require both message and description as strings
   // Accept objects with at least a "message" string, and optionally a "description" string
@@ -79,11 +86,11 @@ export async function translateJson(
       type: "object",
       properties: {
         message: { type: "string" },
-        description: { type: "string" }
+        description: { type: "string" },
       },
       required: ["message", "description"],
-      additionalProperties: false
-    }
+      additionalProperties: false,
+    },
   };
   try {
     const response = await openai.chat.completions.create({
@@ -97,8 +104,8 @@ export async function translateJson(
         json_schema: {
           name: "translation",
           schema: CodeJsonSchema,
-          strict: true
-        }
+          strict: true,
+        },
       },
       temperature: DEFAULT_OPENAI_TEMPERATURE,
     });
@@ -162,10 +169,13 @@ interface FooterConfig {
   copyright?: string;
 }
 
-export function extractTranslatableText(config: NavbarConfig | FooterConfig, type: 'navbar' | 'footer'): Record<string, { message: string; description: string }> {
+export function extractTranslatableText(
+  config: NavbarConfig | FooterConfig,
+  type: "navbar" | "footer"
+): Record<string, { message: string; description: string }> {
   const result: Record<string, { message: string; description: string }> = {};
 
-  if (type === 'navbar') {
+  if (type === "navbar") {
     const nav = config as NavbarConfig;
     if (nav.items) {
       nav.items.forEach((item: NavbarItem) => {
@@ -173,14 +183,14 @@ export function extractTranslatableText(config: NavbarConfig | FooterConfig, typ
           const key = `item.label.${item.label}`;
           result[key] = {
             message: item.label,
-            description: `Navbar item with label ${item.label}`
+            description: `Navbar item with label ${item.label}`,
           };
         }
       });
     }
   }
 
-  if (type === 'footer') {
+  if (type === "footer") {
     const footer = config as FooterConfig;
     if (footer.links) {
       footer.links.forEach((section: FooterSection) => {
@@ -188,7 +198,7 @@ export function extractTranslatableText(config: NavbarConfig | FooterConfig, typ
           const titleKey = `links.title.${section.title}`;
           result[titleKey] = {
             message: section.title,
-            description: `Footer section title: ${section.title}`
+            description: `Footer section title: ${section.title}`,
           };
         }
 
@@ -198,7 +208,7 @@ export function extractTranslatableText(config: NavbarConfig | FooterConfig, typ
               const labelKey = `links.${section.title}.${item.label}`;
               result[labelKey] = {
                 message: item.label,
-                description: `Footer link label: ${item.label}`
+                description: `Footer link label: ${item.label}`,
               };
             }
           });
@@ -207,9 +217,12 @@ export function extractTranslatableText(config: NavbarConfig | FooterConfig, typ
     }
 
     if (footer.copyright) {
-      result['copyright'] = {
-        message: footer.copyright.replace(/\$\{new Date\(\)\.getFullYear\(\)\}/, new Date().getFullYear().toString()),
-        description: 'Footer copyright text'
+      result["copyright"] = {
+        message: footer.copyright.replace(
+          /\$\{new Date\(\)\.getFullYear\(\)\}/,
+          new Date().getFullYear().toString()
+        ),
+        description: "Footer copyright text",
       };
     }
   }
@@ -224,83 +237,83 @@ export function extractTranslatableText(config: NavbarConfig | FooterConfig, typ
  */
 export function getLanguageName(langCode: string): string {
   const languageMap: Record<string, string> = {
-    'pt': 'Portuguese',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'zh': 'Chinese',
-    'ru': 'Russian',
-    'ar': 'Arabic',
-    'hi': 'Hindi',
-    'tr': 'Turkish',
-    'nl': 'Dutch',
-    'sv': 'Swedish',
-    'pl': 'Polish',
-    'vi': 'Vietnamese',
-    'th': 'Thai',
-    'id': 'Indonesian',
-    'uk': 'Ukrainian',
-    'cs': 'Czech',
-    'hu': 'Hungarian',
-    'ro': 'Romanian',
-    'el': 'Greek',
-    'da': 'Danish',
-    'fi': 'Finnish',
-    'no': 'Norwegian',
-    'he': 'Hebrew',
-    'bg': 'Bulgarian',
-    'hr': 'Croatian',
-    'sk': 'Slovak',
-    'lt': 'Lithuanian',
-    'sl': 'Slovenian',
-    'et': 'Estonian',
-    'lv': 'Latvian',
-    'sr': 'Serbian',
-    'ms': 'Malay',
-    'bn': 'Bengali',
-    'fa': 'Persian',
-    'ur': 'Urdu',
-    'ta': 'Tamil',
-    'te': 'Telugu',
-    'ml': 'Malayalam',
-    'kn': 'Kannada',
-    'mr': 'Marathi',
-    'gu': 'Gujarati',
-    'pa': 'Punjabi',
-    'sw': 'Swahili',
-    'am': 'Amharic',
-    'km': 'Khmer',
-    'lo': 'Lao',
-    'my': 'Burmese',
-    'ne': 'Nepali',
-    'si': 'Sinhala',
-    'ka': 'Georgian',
-    'hy': 'Armenian',
-    'az': 'Azerbaijani',
-    'be': 'Belarusian',
-    'is': 'Icelandic',
-    'mk': 'Macedonian',
-    'mn': 'Mongolian',
-    'cy': 'Welsh',
-    'gl': 'Galician',
-    'eu': 'Basque',
-    'ca': 'Catalan',
-    'af': 'Afrikaans',
-    'zu': 'Zulu',
-    'xh': 'Xhosa',
-    'st': 'Sesotho',
-    'tn': 'Tswana',
-    'yo': 'Yoruba',
-    'ig': 'Igbo',
-    'ha': 'Hausa',
-    'lb': 'Luxembourgish',
-    'mt': 'Maltese',
-    'ga': 'Irish',
-    'gd': 'Scottish Gaelic',
-    'en': 'English'
+    pt: "Portuguese",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    ja: "Japanese",
+    ko: "Korean",
+    zh: "Chinese",
+    ru: "Russian",
+    ar: "Arabic",
+    hi: "Hindi",
+    tr: "Turkish",
+    nl: "Dutch",
+    sv: "Swedish",
+    pl: "Polish",
+    vi: "Vietnamese",
+    th: "Thai",
+    id: "Indonesian",
+    uk: "Ukrainian",
+    cs: "Czech",
+    hu: "Hungarian",
+    ro: "Romanian",
+    el: "Greek",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+    he: "Hebrew",
+    bg: "Bulgarian",
+    hr: "Croatian",
+    sk: "Slovak",
+    lt: "Lithuanian",
+    sl: "Slovenian",
+    et: "Estonian",
+    lv: "Latvian",
+    sr: "Serbian",
+    ms: "Malay",
+    bn: "Bengali",
+    fa: "Persian",
+    ur: "Urdu",
+    ta: "Tamil",
+    te: "Telugu",
+    ml: "Malayalam",
+    kn: "Kannada",
+    mr: "Marathi",
+    gu: "Gujarati",
+    pa: "Punjabi",
+    sw: "Swahili",
+    am: "Amharic",
+    km: "Khmer",
+    lo: "Lao",
+    my: "Burmese",
+    ne: "Nepali",
+    si: "Sinhala",
+    ka: "Georgian",
+    hy: "Armenian",
+    az: "Azerbaijani",
+    be: "Belarusian",
+    is: "Icelandic",
+    mk: "Macedonian",
+    mn: "Mongolian",
+    cy: "Welsh",
+    gl: "Galician",
+    eu: "Basque",
+    ca: "Catalan",
+    af: "Afrikaans",
+    zu: "Zulu",
+    xh: "Xhosa",
+    st: "Sesotho",
+    tn: "Tswana",
+    yo: "Yoruba",
+    ig: "Igbo",
+    ha: "Hausa",
+    lb: "Luxembourgish",
+    mt: "Maltese",
+    ga: "Irish",
+    gd: "Scottish Gaelic",
+    en: "English",
   };
 
   return languageMap[langCode] || langCode;
@@ -310,55 +323,72 @@ export function getLanguageName(langCode: string): string {
  * Main function to translate code.json files
  */
 export async function main() {
-  console.log(chalk.blue('🌐 Starting code.json translation process\n'));
+  console.log(chalk.blue("🌐 Starting code.json translation process\n"));
 
   try {
     // Get the i18n directory
-    const i18nDir = path.join(process.cwd(), 'i18n');
+    const i18nDir = path.join(process.cwd(), "i18n");
 
     // Get all language directories
     const langDirs = await fs.readdir(i18nDir);
 
     // Get the English code.json as source
-    const englishCodeJsonPath = path.join(i18nDir, 'en', 'code.json');
+    const englishCodeJsonPath = path.join(i18nDir, "en", "code.json");
     let englishCodeJson: string;
 
     try {
-      englishCodeJson = await fs.readFile(englishCodeJsonPath, 'utf8');
+      englishCodeJson = await fs.readFile(englishCodeJsonPath, "utf8");
       // Validate JSON
       JSON.parse(englishCodeJson);
     } catch (error) {
-      console.error(chalk.red(`Error reading or parsing English code.json: ${error.message}`));
+      console.error(
+        chalk.red(
+          `Error reading or parsing English code.json: ${error.message}`
+        )
+      );
       process.exit(1);
     }
 
     // Process each language directory (except 'en')
     for (const langDir of langDirs) {
-      if (langDir === 'en') continue; // Skip English
+      if (langDir === "en") continue; // Skip English
 
       const langPath = path.join(i18nDir, langDir);
       const langStat = await fs.stat(langPath);
 
       if (!langStat.isDirectory()) continue; // Skip if not a directory
 
-      const codeJsonPath = path.join(langPath, 'code.json');
+      const codeJsonPath = path.join(langPath, "code.json");
       const languageName = getLanguageName(langDir);
 
-      console.log(chalk.cyan(`\nProcessing ${languageName} (${langDir}) translation:`));
+      console.log(
+        chalk.cyan(`\nProcessing ${languageName} (${langDir}) translation:`)
+      );
 
       try {
         // Translate the English code.json to the target language
-        const translatedJson = await translateJson(englishCodeJson, languageName);
+        const translatedJson = await translateJson(
+          englishCodeJson,
+          languageName
+        );
 
         // Write the translated JSON to the target file
-        await fs.writeFile(codeJsonPath, translatedJson, 'utf8');
-        console.log(chalk.green(`✓ Successfully saved translated code.json for ${languageName}`));
+        await fs.writeFile(codeJsonPath, translatedJson, "utf8");
+        console.log(
+          chalk.green(
+            `✓ Successfully saved translated code.json for ${languageName}`
+          )
+        );
       } catch (error) {
-        console.error(chalk.red(`✗ Error translating code.json for ${languageName}: ${error.message}`));
+        console.error(
+          chalk.red(
+            `✗ Error translating code.json for ${languageName}: ${error.message}`
+          )
+        );
       }
     }
 
-    console.log(chalk.blue('\n✨ code.json translation process completed!'));
+    console.log(chalk.blue("\n✨ code.json translation process completed!"));
   } catch (error) {
     console.error(chalk.red(`Error in translation process: ${error.message}`));
     process.exit(1);
@@ -367,8 +397,9 @@ export async function main() {
 
 // Run the main function only when executed directly outside of tests
 if (
-  process.env.NODE_ENV !== 'test' &&
-  (import.meta.url.endsWith('translateCodeJson.js') || import.meta.url.endsWith('translateCodeJson.ts'))
+  process.env.NODE_ENV !== "test" &&
+  (import.meta.url.endsWith("translateCodeJson.js") ||
+    import.meta.url.endsWith("translateCodeJson.ts"))
 ) {
   void main();
 }

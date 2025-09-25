@@ -13,11 +13,13 @@ if (!process.env.DATABASE_ID) {
 }
 
 // Configuration for retry logic
+const IS_TEST_ENV = process.env.NODE_ENV === "test";
+
 const RETRY_CONFIG = {
-  maxRetries: 3,
-  baseDelay: 1000, // 1 second
-  maxDelay: 30000, // 30 seconds
-  timeout: 10000, // 10 seconds per request
+  maxRetries: 4,
+  baseDelay: IS_TEST_ENV ? 50 : 1000, // faster retries in tests
+  maxDelay: IS_TEST_ENV ? 1000 : 45000,
+  timeout: IS_TEST_ENV ? 5000 : 15000,
 };
 
 // Create Notion client with timeout
@@ -58,9 +60,12 @@ function isRetryableError(error: unknown): boolean {
   if (
     err.code === "ECONNABORTED" ||
     err.code === "ENOTFOUND" ||
-    err.code === "ETIMEDOUT"
+    err.code === "ETIMEDOUT" ||
+    err.code === "notionhq_client_request_timeout"
   )
     return true;
+
+  if ((error as { name?: string }).name === "RequestTimeoutError") return true;
 
   // Server errors (5xx)
   if (err.status && err.status >= 500) return true;
@@ -128,7 +133,7 @@ class EnhancedNotionClient {
   async databasesQuery(params: Record<string, unknown>) {
     return executeWithRetry(
       () =>
-        this.client.databases.query(
+        this.client.databases.query?.(
           params as Parameters<typeof this.client.databases.query>[0]
         ),
       "databases.query"
@@ -152,6 +157,26 @@ class EnhancedNotionClient {
           params as Parameters<typeof this.client.blocks.children.list>[0]
         ),
       "blocks.children.list"
+    );
+  }
+
+  async blocksChildrenAppend(params: Record<string, unknown>) {
+    return executeWithRetry(
+      () =>
+        this.client.blocks.children.append(
+          params as Parameters<typeof this.client.blocks.children.append>[0]
+        ),
+      "blocks.children.append"
+    );
+  }
+
+  async blocksDelete(params: Record<string, unknown>) {
+    return executeWithRetry(
+      () =>
+        this.client.blocks.delete(
+          params as Parameters<typeof this.client.blocks.delete>[0]
+        ),
+      "blocks.delete"
     );
   }
 }

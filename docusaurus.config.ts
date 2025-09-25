@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
@@ -7,25 +9,138 @@ import remarkFixImagePaths from "./scripts/remark-fix-image-paths";
 // Load environment variables from .env file
 dotenv.config();
 
-const resolveDefaultDocsPage = (value?: string): string => {
-  const fallback = "introduction";
-  if (!value) return fallback;
+const docsRoot = path.join(__dirname, "docs");
 
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
+const collectDocRouteInfo = (root: string) => {
+  const explicitSlugs = new Set<string>();
+  const docIds = new Set<string>();
+  const relativePaths = new Set<string>();
 
-  const isValid = /^[a-z0-9\-/]+$/i.test(trimmed);
-  if (!isValid) {
-    console.warn(
-      `[docusaurus] DEFAULT_DOCS_PAGE="${trimmed}" contains invalid characters, falling back to "${fallback}".`
-    );
-    return fallback;
+  if (!fs.existsSync(root)) {
+    return { explicitSlugs, docIds, relativePaths };
   }
 
-  return trimmed;
+  const walk = (dir: string) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        walk(entryPath);
+        continue;
+      }
+
+      if (!entry.name.endsWith(".md") && !entry.name.endsWith(".mdx")) {
+        continue;
+      }
+
+      const relativePath = path
+        .relative(root, entryPath)
+        .replace(/\\/g, "/")
+        .replace(/(index)?\.(md|mdx)$/i, "")
+        .replace(/(^\/|\/$)/g, "");
+
+      if (relativePath) {
+        relativePaths.add(relativePath);
+      }
+
+      try {
+        const content = fs.readFileSync(entryPath, "utf8");
+        if (content.startsWith("---")) {
+          const closingIndex = content.indexOf("---", 3);
+          if (closingIndex !== -1) {
+            const frontmatter = content.slice(3, closingIndex);
+            const slugMatch = frontmatter.match(
+              /^slug:\s*["']?(\/?[^"'\n]+)["']?/m
+            );
+            if (slugMatch?.[1]) {
+              const explicit = slugMatch[1].replace(/(^\/|\/$)/g, "").trim();
+              if (explicit) {
+                explicitSlugs.add(explicit);
+              }
+            }
+
+            const idMatch = frontmatter.match(/^id:\s*["']?([^"'\n]+)["']?/m);
+            if (idMatch?.[1]) {
+              const docId = idMatch[1].trim();
+              if (docId) {
+                docIds.add(docId);
+              }
+            } else if (relativePath) {
+              docIds.add(relativePath);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `[docusaurus] Unable to read doc frontmatter for ${entryPath}:`,
+          error
+        );
+      }
+    }
+  };
+
+  walk(root);
+  return { explicitSlugs, docIds, relativePaths };
 };
 
-const DEFAULT_DOCS_PAGE = resolveDefaultDocsPage(process.env.DEFAULT_DOCS_PAGE);
+const DOC_ROUTE_INFO = collectDocRouteInfo(docsRoot);
+const ALL_DOC_PATHS = new Set<string>([
+  ...DOC_ROUTE_INFO.explicitSlugs,
+  ...DOC_ROUTE_INFO.docIds,
+]);
+
+const resolveDefaultDocsPage = (
+  value: string | undefined,
+  validSlugs: Set<string>
+): string => {
+  const preferredFallbackCandidates = [
+    "overview",
+    "doc-overview",
+    "introduction",
+    "doc-introduction",
+  ];
+
+  const preferredFallback =
+    preferredFallbackCandidates.find((candidate) =>
+      validSlugs.has(candidate)
+    ) ??
+    Array.from(validSlugs)[0] ??
+    "overview";
+
+  const sanitize = (candidate?: string): string | undefined => {
+    if (!candidate) return undefined;
+    const trimmed = candidate.trim();
+    if (!trimmed) return undefined;
+    if (!/^[a-z0-9\-/]+$/i.test(trimmed)) {
+      console.warn(
+        `[docusaurus] DEFAULT_DOCS_PAGE="${trimmed}" contains invalid characters; ignoring.`
+      );
+      return undefined;
+    }
+    return trimmed.replace(/(^\/|\/$)/g, "");
+  };
+
+  const sanitized = sanitize(value);
+
+  if (sanitized && validSlugs.has(sanitized)) {
+    return sanitized;
+  }
+
+  if (sanitized && !validSlugs.has(sanitized)) {
+    console.warn(
+      `[docusaurus] DEFAULT_DOCS_PAGE="${sanitized}" not found under docs/. Falling back to "${preferredFallback}".`
+    );
+  }
+
+  return preferredFallback;
+};
+
+const DEFAULT_DOCS_PAGE = resolveDefaultDocsPage(
+  process.env.DEFAULT_DOCS_PAGE,
+  ALL_DOC_PATHS
+);
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 

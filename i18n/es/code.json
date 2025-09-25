@@ -386,5 +386,56 @@
     },
     "Introduction  [remove]": {
         "message": "Introducción"
+    },
+    "Instalación y desinstalación de CoMapeo": {
+        "message": "Instalación y desinstalación de CoMapeo"
+    },
+    "Glosario": {
+        "message": "Glosario"
+    },
+    "Preguntas frecuentes": {
+        "message": "Preguntas frecuentes"
+    },
+    "Misceláneas": {
+        "message": "Misceláneas"
+    },
+    "Finalizar un proyecto": {
+        "message": "Finalizar un proyecto"
+    },
+    "Solución de problemas": {
+        "message": "Solución de problemas"
+    },
+    "Compartir observaciones fuera de CoMapeo": {
+        "message": "Compartir observaciones fuera de CoMapeo"
+    },
+    "Recopilación de observaciones": {
+        "message": "Recopilación de observaciones"
+    },
+    "Gestión de datos y privacidad": {
+        "message": "Gestión de datos y privacidad"
+    },
+    "Gestión de proyectos": {
+        "message": "Gestión de proyectos"
+    },
+    "Elementos de contenido de prueba": {
+        "message": "Elementos de contenido de prueba"
+    },
+    "Reunir el Equipo Adecuado para CoMapeo": {
+        "message": "Reunir el Equipo Adecuado para CoMapeo"
+    },
+    "Nueva Página A": {
+        "message": "Nueva Página A"
+    },
+    "Tracar Observao…": {
+        "message": "Tracar Observao…"
+    },
+    "Revisión de observaciones": {
+        "message": "Revisión de observaciones"
+    },
+    "Preparación para el uso de ": {
+        "message": "Preparación para el uso de "
+    },
+    "Introducción": {
+        "message": "Introducción"
     }
 }

@@ -386,5 +386,71 @@
     },
     "Introduction  [remove]": {
         "message": "Introdução"
+    },
+    "Instalando e desinstalando o CoMapeo": {
+        "message": "Instalando e desinstalando o CoMapeo"
+    },
+    "Glossário": {
+        "message": "Glossário"
+    },
+    "Perguntas frequentes": {
+        "message": "Perguntas frequentes"
+    },
+    "Variado": {
+        "message": "Variado"
+    },
+    "Encerrando um Projeto": {
+        "message": "Encerrando um Projeto"
+    },
+    "Solução de problemas": {
+        "message": "Solução de problemas"
+    },
+    "Compartilhando observações fora do CoMapeo": {
+        "message": "Compartilhando observações fora do CoMapeo"
+    },
+    "Coletando Observações": {
+        "message": "Coletando Observações"
+    },
+    "Gerenciamento de dados e privacidade": {
+        "message": "Gerenciamento de dados e privacidade"
+    },
+    "Gerenciando Projetos": {
+        "message": "Gerenciando Projetos"
+    },
+    "Elementos de Conteúdo de Teste": {
+        "message": "Elementos de Conteúdo de Teste"
+    },
+    "Reunindo o Equipamento Certo para o CoMapeo": {
+        "message": "Reunindo o Equipamento Certo para o CoMapeo"
+    },
+    "Nova Página A": {
+        "message": "Nova Página A"
+    },
+    "Intercambiar Observaciones": {
+        "message": "Intercambiar Observaciones"
+    },
+    "Revisando Observações": {
+        "message": "Revisando Observações"
+    },
+    "Preparando para usar do CoMapeo (Mobile)": {
+        "message": "Preparando para usar do CoMapeo (Mobile)"
+    },
+    "Introdução": {
+        "message": "Introdução"
+    },
+    "Visão Geral": {
+        "message": "Visão Geral"
+    },
+    "Guia Rápido": {
+        "message": "Guia Rápido"
+    },
+    "Começando": {
+        "message": "Começando"
+    },
+    "Sobre o Mapeo": {
+        "message": "Sobre o Mapeo"
+    },
+    "Ferramentas Mapeo": {
+        "message": "Ferramentas Mapeo"
     }
 }

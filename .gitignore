@@ -31,7 +31,6 @@ coverage/
 
 # Generated Notion export files
 notion_*.json
-EXPORT_DOCUMENTATION.md
 
 # IDE and editor directories
 .marscode/

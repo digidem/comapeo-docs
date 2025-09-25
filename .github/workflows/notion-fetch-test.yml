@@ -41,6 +41,30 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: bun run notion:fetch-all
         
+      - name: Commit fetched content
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stage specific paths (adjust to your generated files)
+          git add docs
+          if [ -d i18n ]; then
+            git add i18n
+          fi
+          # Also stage generated images
+          if [ -d static/images ]; then
+            git add static/images
+          fi
+
+          # Commit if there are changes
+          git diff --cached --quiet || git commit -m "(content-test): fetch and test all content from Notion"
+
+          # Push back to the repository
+          git push
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Show fetch results
         run: |
           echo "📊 Notion fetch completed"

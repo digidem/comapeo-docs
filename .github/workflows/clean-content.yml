@@ -40,6 +40,23 @@ jobs:
       - name: Clean generated content
         run: bun run clean:generated --confirm=yes
         
+      - name: Commit cleanup results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stage all changes from the cleanup
+          git add .
+
+          # Commit if there are changes
+          git diff --cached --quiet || git commit -m "(content-cleanup): remove all generated content from Notion"
+
+          # Push back to the repository
+          git push
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Show cleanup results
         run: |
           echo "🧹 Generated content cleanup completed"

@@ -72,6 +72,31 @@ GIT_USER=<Your GitHub username> bun deploy
 
 For GitHub Pages hosting, this command conveniently builds the site and pushes to the `gh-pages` branch.
 
+### GitHub Actions Workflows
+
+The repository includes several automated workflows for content management:
+
+#### Sync Notion Docs (`sync-docs.yml`)
+- **Trigger**: Manual dispatch or repository dispatch
+- **Purpose**: Automatically fetches content from Notion and commits changes
+- **Usage**: Production content updates and scheduled syncing
+- **Environment**: Requires `NOTION_API_KEY` and `DATABASE_ID` secrets
+
+#### Clean All Generated Content (`clean-content.yml`)
+- **Trigger**: Manual dispatch with confirmation
+- **Purpose**: Removes all generated content from docs, i18n, and static/images
+- **Usage**: Reset repository to clean state before fresh content generation
+- **Safety**: Requires explicit "yes" confirmation to prevent accidental deletion
+
+#### Fetch All Content for Testing (`notion-fetch-test.yml`)
+- **Trigger**: Manual dispatch with optional force mode
+- **Purpose**: Fetches complete content from Notion for testing and validation
+- **Usage**: Testing content changes before production deployment
+- **Environment**: Uses production environment with `NOTION_API_KEY` and `NOTION_DATABASE_ID` secrets
+- **Features**: Provides detailed summary with content statistics and next steps
+
+All workflows automatically commit their changes to the repository using the github-actions bot user.
+
 ### Roadmap & Future Enhancements
 
 - [ ] Develop a robust translation strategy to further enhance our multilingual support.

@@ -132,6 +132,7 @@ describe("notionClient", () => {
       const module = await import("./notionClient");
 
       expect(module.DATABASE_ID).toBe("fallback-database-id");
+      expect(process.env.DATABASE_ID).toBe("fallback-database-id");
     });
 
     it("should create Client with correct configuration", async () => {

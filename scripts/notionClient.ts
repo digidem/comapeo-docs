@@ -20,6 +20,8 @@ if (!resolvedDatabaseId) {
   );
 }
 
+process.env.DATABASE_ID = resolvedDatabaseId;
+
 // Configuration for retry logic
 const IS_TEST_ENV = process.env.NODE_ENV === "test";
 

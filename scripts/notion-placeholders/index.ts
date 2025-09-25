@@ -14,6 +14,13 @@ import { BackupManager } from "./utils/backupManager";
 // Load environment variables
 dotenv.config();
 
+const resolvedDatabaseId =
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+
+if (resolvedDatabaseId) {
+  process.env.DATABASE_ID = resolvedDatabaseId;
+}
+
 // Command line argument parsing
 interface CliOptions {
   dryRun: boolean;

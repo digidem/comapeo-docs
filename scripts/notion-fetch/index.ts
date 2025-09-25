@@ -10,6 +10,12 @@ import { NOTION_PROPERTIES } from "../constants";
 
 // Load environment variables from .env file
 dotenv.config();
+const resolvedDatabaseId =
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+
+if (resolvedDatabaseId) {
+  process.env.DATABASE_ID = resolvedDatabaseId;
+}
 if (process.env.DEBUG) {
   console.log("Environment variables:", process.env);
 }

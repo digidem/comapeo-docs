@@ -7,6 +7,13 @@ import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants";
 // Load environment variables
 dotenv.config();
 
+const resolvedDatabaseId =
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+
+if (resolvedDatabaseId) {
+  process.env.DATABASE_ID = resolvedDatabaseId;
+}
+
 interface NotionPageProperties {
   Title: {
     title: {

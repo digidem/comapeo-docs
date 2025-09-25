@@ -124,7 +124,14 @@ async function main() {
 
   // Use environment variables as fallback
   const token = options.token || process.env.NOTION_API_KEY;
-  const databaseId = options.databaseId || process.env.DATABASE_ID;
+  const databaseId =
+    options.databaseId ||
+    process.env.DATABASE_ID ||
+    process.env.NOTION_DATABASE_ID;
+
+  if (databaseId) {
+    process.env.DATABASE_ID = databaseId;
+  }
 
   if (!token) {
     console.error(

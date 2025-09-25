@@ -795,14 +795,19 @@ async function exportPageToMarkdown(
             customProps.status = page.status;
           }
 
-          // Determine relative path for edit URL
+          // Determine relative path for edit URL, slug, and id
           const relativePath = currentSectionFolder
             ? `${currentSectionFolder}/${fileName}`
             : fileName;
+          const relativeId = relativePath
+            .replace(/\\/g, "/")
+            .replace(/\.md$/, "");
+          const slugPath = `/${relativeId}`;
+          const normalizedId = `doc-${relativeId.replace(/\//g, "-")}`;
 
           // Generate frontmatter
           let frontmatter = `---
-id: doc-${filename}
+id: ${normalizedId}
 title: ${pageTitle}
 sidebar_label: ${pageTitle}
 sidebar_position: ${sidebarPosition}
@@ -811,7 +816,7 @@ custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relati
 keywords:
 ${keywords.map((k) => `  - ${k}`).join("\n")}
 tags: [${tags.join(", ")}]
-slug: /${filename}
+slug: ${slugPath}
 last_update:
   date: ${new Date().toLocaleDateString("en-US")}
   author: Awana Digital`;
@@ -865,14 +870,26 @@ last_update:
         } else {
           // No content, create minimal file
           const fileName = `${filename}.md`;
-          const filePath = path.join(PATH, fileName);
+          const currentSectionFolder = sectionFolders.get(language);
+          const filePath = currentSectionFolder
+            ? path.join(PATH, currentSectionFolder, fileName)
+            : path.join(PATH, fileName);
+          const relativePath = currentSectionFolder
+            ? `${currentSectionFolder}/${fileName}`
+            : fileName;
+          const relativeId = relativePath
+            .replace(/\\/g, "/")
+            .replace(/\.md$/, "");
+          const slugPath = `/${relativeId}`;
+          const normalizedId = `doc-${relativeId.replace(/\//g, "-")}`;
 
           const minimalContent = `---
-id: doc-${filename}
+id: ${normalizedId}
 title: ${pageTitle}
 sidebar_label: ${pageTitle}
 sidebar_position: ${page.order || index + 1}
 tags: [comapeo, placeholder]
+slug: ${slugPath}
 ---
 
 # ${pageTitle}

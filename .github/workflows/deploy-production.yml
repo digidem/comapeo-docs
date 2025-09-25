@@ -1,0 +1,56 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [deploy-production]
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Pages and Update Notion
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Build documentation
+        run: bun run build
+        
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build --project-name comapeo-docs --compatibility-date 2024-01-01
+        
+      - name: Update Notion status to Published
+        run: bun run notionStatus:publish-production
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          
+      - name: Deployment summary
+        run: |
+          echo "🚀 **Production Deployment Complete!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Notion status updated: Staging → Published" >> $GITHUB_STEP_SUMMARY
+          echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY

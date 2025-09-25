@@ -1,6 +1,9 @@
+import dotenv from "dotenv";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 import chalk from "chalk";
+
+dotenv.config();
 
 if (!process.env.NOTION_API_KEY) {
   throw new Error(
@@ -8,8 +11,13 @@ if (!process.env.NOTION_API_KEY) {
   );
 }
 
-if (!process.env.DATABASE_ID) {
-  throw new Error("DATABASE_ID is not defined in the environment variables.");
+const resolvedDatabaseId =
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+
+if (!resolvedDatabaseId) {
+  throw new Error(
+    "DATABASE_ID is not defined in the environment variables."
+  );
 }
 
 // Configuration for retry logic
@@ -30,7 +38,7 @@ const notion = new Client({
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
-export const DATABASE_ID = process.env.DATABASE_ID;
+export const DATABASE_ID = resolvedDatabaseId;
 
 /**
  * Sleep utility for retry delays

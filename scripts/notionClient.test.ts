@@ -21,6 +21,12 @@ vi.mock("notion-to-md", () => ({
   NotionToMarkdown: vi.fn(),
 }));
 
+vi.mock("dotenv", () => ({
+  default: {
+    config: vi.fn(),
+  },
+}));
+
 // Mock chalk to avoid color output in tests
 vi.mock("chalk", () => ({
   default: {
@@ -52,6 +58,7 @@ describe("notionClient", () => {
     // Set up test environment variables
     process.env.NOTION_API_KEY = "test-api-key";
     process.env.DATABASE_ID = "test-database-id";
+    delete process.env.NOTION_DATABASE_ID;
 
     // Mock console methods
     consoleMocks = mockConsole();
@@ -96,6 +103,7 @@ describe("notionClient", () => {
     it("should throw error when DATABASE_ID is not defined", async () => {
       // Arrange
       delete process.env.DATABASE_ID;
+      delete process.env.NOTION_DATABASE_ID;
 
       // Act & Assert
       await expect(async () => {
@@ -114,6 +122,16 @@ describe("notionClient", () => {
       await expect(async () => {
         await import("./notionClient");
       }).not.toThrow();
+    });
+
+    it("should fall back to NOTION_DATABASE_ID when DATABASE_ID is not set", async () => {
+      // Arrange
+      delete process.env.DATABASE_ID;
+      process.env.NOTION_DATABASE_ID = "fallback-database-id";
+
+      const module = await import("./notionClient");
+
+      expect(module.DATABASE_ID).toBe("fallback-database-id");
     });
 
     it("should create Client with correct configuration", async () => {

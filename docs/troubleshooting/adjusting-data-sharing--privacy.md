@@ -1,15 +1,15 @@
 ---
-id: doc-adjusting-data-sharing--privacy
+id: doc-troubleshooting-adjusting-data-sharing--privacy
 title: Adjusting Data Sharing & Privacy
 sidebar_label: Adjusting Data Sharing & Privacy
-sidebar_position: 73
+sidebar_position: 72
 pagination_label: Adjusting Data Sharing & Privacy
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/adjusting-data-sharing--privacy.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /adjusting-data-sharing--privacy
+slug: /troubleshooting/adjusting-data-sharing--privacy
 last_update:
   date: 9/25/2025
   author: Awana Digital

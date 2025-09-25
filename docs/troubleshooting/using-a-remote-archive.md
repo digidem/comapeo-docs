@@ -1,15 +1,15 @@
 ---
-id: doc-using-a-remote-archive
+id: doc-troubleshooting-using-a-remote-archive
 title: Using a Remote Archive
 sidebar_label: Using a Remote Archive
-sidebar_position: 70
+sidebar_position: 69
 pagination_label: Using a Remote Archive
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/using-a-remote-archive.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /using-a-remote-archive
+slug: /troubleshooting/using-a-remote-archive
 last_update:
   date: 9/25/2025
   author: Awana Digital

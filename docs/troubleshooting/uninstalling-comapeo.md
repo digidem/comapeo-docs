@@ -1,5 +1,5 @@
 ---
-id: doc-uninstalling-comapeo
+id: doc-troubleshooting-uninstalling-comapeo
 title: Uninstalling CoMapeo
 sidebar_label: Uninstalling CoMapeo
 sidebar_position: 58
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /uninstalling-comapeo
+slug: /troubleshooting/uninstalling-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

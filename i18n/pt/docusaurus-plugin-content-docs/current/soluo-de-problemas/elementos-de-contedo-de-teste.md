@@ -1,5 +1,5 @@
 ---
-id: doc-elementos-de-contedo-de-teste
+id: doc-soluo-de-problemas-elementos-de-contedo-de-teste
 title: Elementos de Conteúdo de Teste
 sidebar_label: Elementos de Conteúdo de Teste
 sidebar_position: 24
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /elementos-de-contedo-de-teste
+slug: /soluo-de-problemas/elementos-de-contedo-de-teste
 last_update:
   date: 9/25/2025
   author: Awana Digital

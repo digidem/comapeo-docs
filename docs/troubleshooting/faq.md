@@ -1,15 +1,15 @@
 ---
-id: doc-faq
+id: doc-troubleshooting-faq
 title: FAQ
 sidebar_label: FAQ
-sidebar_position: 63
+sidebar_position: 62
 pagination_label: FAQ
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/faq.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /faq
+slug: /troubleshooting/faq
 last_update:
   date: 9/25/2025
   author: Awana Digital

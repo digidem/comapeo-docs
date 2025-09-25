@@ -1,5 +1,5 @@
 ---
-id: doc-i-want-to-update-app-permissions-in-comapeo-mobile
+id: doc-troubleshooting-i-want-to-update-app-permissions-in-comapeo-mobile
 title: I want to update app permissions in CoMapeo Mobile
 sidebar_label: I want to update app permissions in CoMapeo Mobile
 sidebar_position: 104
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /i-want-to-update-app-permissions-in-comapeo-mobile
+slug: /troubleshooting/i-want-to-update-app-permissions-in-comapeo-mobile
 last_update:
   date: 9/25/2025
   author: Awana Digital

@@ -1,5 +1,5 @@
 ---
-id: doc-i-have-problems-with-the-camera-in-comapeo-mobile
+id: doc-troubleshooting-i-have-problems-with-the-camera-in-comapeo-mobile
 title: I have problems with the camera in CoMapeo Mobile
 sidebar_label: I have problems with the camera in CoMapeo Mobile
 sidebar_position: 103
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /i-have-problems-with-the-camera-in-comapeo-mobile
+slug: /troubleshooting/i-have-problems-with-the-camera-in-comapeo-mobile
 last_update:
   date: 9/25/2025
   author: Awana Digital

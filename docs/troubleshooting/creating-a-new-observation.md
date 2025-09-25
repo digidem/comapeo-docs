@@ -1,15 +1,15 @@
 ---
-id: doc-creating-a-new-observation
+id: doc-troubleshooting-creating-a-new-observation
 title: Creating a New Observation
 sidebar_label: Creating a New Observation
-sidebar_position: 86
+sidebar_position: 85
 pagination_label: Creating a New Observation
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/creating-a-new-observation.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /creating-a-new-observation
+slug: /troubleshooting/creating-a-new-observation
 last_update:
   date: 9/25/2025
   author: Awana Digital

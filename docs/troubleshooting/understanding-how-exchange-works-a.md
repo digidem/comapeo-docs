@@ -1,15 +1,15 @@
 ---
-id: doc-understanding-how-exchange-works-a
+id: doc-troubleshooting-understanding-how-exchange-works-a
 title: Understanding How Exchange Works A
 sidebar_label: Understanding How Exchange Works A
-sidebar_position: 71
+sidebar_position: 70
 pagination_label: Understanding How Exchange Works A
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/understanding-how-exchange-works-a.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /understanding-how-exchange-works-a
+slug: /troubleshooting/understanding-how-exchange-works-a
 last_update:
   date: 9/25/2025
   author: Awana Digital
@@ -106,7 +106,7 @@ Exchange requires 4 things:
 
 
 > 👁️ Video Walkthrough [ ample of video]  
-> [JC-VID_New_user_1_onboarding_v5_20250731_104046_captions_PT.mp4](https://prod-files-secure.s3.us-west-2.amazonaws.com/c1033c29-9030-4781-b626-4cc54aaa9588/f3a319e6-c35f-4bc4-8de1-d934ac8ac857/JC-VID_New_user_1_onboarding_v5_20250731_104046_captions_PT.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAZI2LB4667ISE22KW%2F20250925%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20250925T161543Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLXdlc3QtMiJHMEUCIQCkpX9dmZo4mmQ3QL4ARlY7qfoPx0la9I9jT9ImP9ezQQIgU%2Fcjmlh0TI%2BHttjifIVIOmdfeRC5b3iRWfkLpFD%2BNWAq%2FwMIeRAAGgw2Mzc0MjMxODM4MDUiDBzp%2F9VL0AHrYjYDtircA0QPF0vY0wZAek8XwnKgKMHKh2SvCbAw%2F2mKb3xzqA2kT4%2Bg%2FcVma6KeAD%2FbhHVR1yI0qLDKGdhmGYGqz9a1kf7em6eZFantUum2IagtLfLD7mF31PmNNzs8XKWJPl1Nrq2r7AL7sp5tvxPYq%2FX%2BN88vZdi4hnN8Aql8LUq1LenPaEgcaKipv5ntZ%2F9ALRwCJEpptHMp%2FFG7AWSVHZLHFjwCCJqwv%2FRGlowDLrGdMJX6V07y16mDs74uLuuwj%2FQpbXn%2FV4yOAfyooLqc7Br7WlX8BLDb7MkFMMF8J%2F3befylxnibF4rxQrWO7Qwr3LiANKBh3R%2Bra99SOucFei8noN5Nls8mnd2kw0w%2FBpRdoYz4jUa0JLr8wG2p5GgMcfiik4alR2MEtkrdA0KaOPCqWkJMawfnyyhSE8QyGk%2FhZ53hBIafVBmfePit2n0W9Y3bXi%2Fmgn10FzoxxJnHFdAHW1JPdkLWfCOl96YPpwKINCSPGoHjNNS%2FusSOGdLBjJpUJNibZ%2FpS1kTv9B11JBFeeDlyVErEXQZvuY0YP8dVIxV12wny1pTBrKNEW80vbRtSIHucgQoKKE%2B2CkZrt63oIJZuf1cSopiUCTtrN63u8R2ydAtS1dZpm29fug52MJDO1cYGOqUB8C8y4pnSgdLBqAEkXXDiBF7FFChJIZ8fO4A0ME4rCxKK6ttH60ihfdXJk%2BPAHEaVpcabBgcBl1JKtofVx73Sma5rmxzCTuGhYu3CTmBLd8I6mo7NXAdef%2FIgcA5cPGLLO7J8HkZEotKh%2FukfElLXWXsgMONzQ4%2BexAHXvWYWsnSNPbkrsJIaq78RCJ5USt6CH5Wc6wdFMVDyvQgwUgu8EmE80dn3&X-Amz-Signature=7440f5742a68669f93bd217b726436ecb07deccb1fb8273c65f98225de1591f9&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+> [JC-VID_New_user_1_onboarding_v5_20250731_104046_captions_PT.mp4](https://prod-files-secure.s3.us-west-2.amazonaws.com/c1033c29-9030-4781-b626-4cc54aaa9588/f3a319e6-c35f-4bc4-8de1-d934ac8ac857/JC-VID_New_user_1_onboarding_v5_20250731_104046_captions_PT.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAZI2LB466QG7AETNY%2F20250925%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20250925T164539Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLXdlc3QtMiJGMEQCIGotHl8zLGmmoZVqeXVIG4QqsnquVUAMrtxlLAIoY%2FP0AiBOAoPAFcQKa2EYHJZxmFDeBDOHqPeb4QLdy56AelBY2ir%2FAwh5EAAaDDYzNzQyMzE4MzgwNSIMCI%2FK696K0%2BiIsJ92KtwDz4i1dFPVdd%2BZTWmsG%2FBN0EG%2FXAAufw0PDTduseQJrhFaUEgKSxc7L2BeCTEXtk9gScQUuzeDYxcaLDi7gjz2rZySgAlPV8BbM0eI%2B%2Bc9%2FkSyRnMKGC7GINbtz6Q2Rr%2Fyoc4yU4%2FiFWzKGXKsbJduFnVUOhf5%2FcMqzjg9gBFnGtfY6iAf1F87Yj6vWWLEoMe8VwBWOv%2FiPFLBFjPiIWbopPI%2F%2BqPQHmLFmqFgrb3o9od7Vx5GENBwhY9o8AtIbh4QPLp2%2FeFhYqx%2BfVcct7UJpLlv8idzJcHuV76VzsAfvGdqfkDDHl7KkMMYL5k6Dm0qqngP1RKRI5P%2BZREyj6Hq8PKJoWt90VMYySyKQOVBcirCJnLNL7smLZ3qhvvCJNHHEilMY0Vmjk4wWj25U8SK45hfQQQGFqnmCtohA4%2FVI2hTUuvYh0alMmdL4clxOzWewqjUBvl2raLow06VsneRGFfusATG%2BJgqJ6Ef8a5WT6ZvC1ZBYup6e0T4TcF5bIqlsYYxvSnNlYCGFBIWF78sDni7koG2TKNsRs9lbymNDG94pxaZlnsADrXm8dTCBNUoyLRPhMs%2F62avXqGZ846leGbm5Lvy7YerycO%2F0yYbB6Wery0H5Tw0aA6FNp4w4M7VxgY6pgEDRGQxX4IdeGEdb7XDGBf6P2f385kT6ALD8UUJftOsmSw7hjnwZEaHOAzzs%2FiXKQG80B6DPXl7gmrY0WFJ08svJmzlmmwQmYMiv6yG0greVSERkFjn7iWwvMupV5bSh0ERl4uUUbDydaQRI14PXl2tVLreymt2btYnCjKHe5u4wAqejtl01DuXH0hIl2oSxrUOXwdcQNhWUVoJ40vPA%2BdMhEWNNWAA&X-Amz-Signature=4dc01f9e671870970ad0cad1177100b27a31abf51ff2f0ebb92525e81e64c98a&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
 
 
 ---

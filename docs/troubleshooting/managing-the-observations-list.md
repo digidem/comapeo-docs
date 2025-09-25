@@ -1,15 +1,15 @@
 ---
-id: doc-managing-the-observations-list
+id: doc-troubleshooting-managing-the-observations-list
 title: Managing the Observations List
 sidebar_label: Managing the Observations List
-sidebar_position: 82
+sidebar_position: 81
 pagination_label: Managing the Observations List
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/managing-the-observations-list.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /managing-the-observations-list
+slug: /troubleshooting/managing-the-observations-list
 last_update:
   date: 9/25/2025
   author: Awana Digital

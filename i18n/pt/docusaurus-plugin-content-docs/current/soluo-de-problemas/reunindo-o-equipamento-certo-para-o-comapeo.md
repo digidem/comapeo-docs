@@ -1,5 +1,5 @@
 ---
-id: doc-reunindo-o-equipamento-certo-para-o-comapeo
+id: doc-soluo-de-problemas-reunindo-o-equipamento-certo-para-o-comapeo
 title: Reunindo o Equipamento Certo para o CoMapeo
 sidebar_label: Reunindo o Equipamento Certo para o CoMapeo
 sidebar_position: 27
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /reunindo-o-equipamento-certo-para-o-comapeo
+slug: /soluo-de-problemas/reunindo-o-equipamento-certo-para-o-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

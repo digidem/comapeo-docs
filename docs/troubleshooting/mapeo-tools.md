@@ -1,5 +1,5 @@
 ---
-id: doc-mapeo-tools
+id: doc-troubleshooting-mapeo-tools
 title: Mapeo Tools
 sidebar_label: Mapeo Tools
 sidebar_position: 46
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /mapeo-tools
+slug: /troubleshooting/mapeo-tools
 last_update:
   date: 9/25/2025
   author: Awana Digital

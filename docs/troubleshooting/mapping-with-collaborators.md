@@ -1,5 +1,5 @@
 ---
-id: doc-mapping-with-collaborators
+id: doc-troubleshooting-mapping-with-collaborators
 title: Mapping with Collaborators
 sidebar_label: Mapping with Collaborators
 sidebar_position: 28
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /mapping-with-collaborators
+slug: /troubleshooting/mapping-with-collaborators
 last_update:
   date: 9/25/2025
   author: Awana Digital

@@ -1,5 +1,5 @@
 ---
-id: doc-sharing-outside-your-project
+id: doc-understanding-how-exchange-works-c-sharing-outside-your-project
 title: Sharing Outside Your Project
 sidebar_label: Sharing Outside Your Project
 sidebar_position: 71
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /sharing-outside-your-project
+slug: /understanding-how-exchange-works-c/sharing-outside-your-project
 last_update:
   date: 9/25/2025
   author: Awana Digital

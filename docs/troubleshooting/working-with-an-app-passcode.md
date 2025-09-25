@@ -1,15 +1,15 @@
 ---
-id: doc-working-with-an-app-passcode
+id: doc-troubleshooting-working-with-an-app-passcode
 title: Working with an App Passcode
 sidebar_label: Working with an App Passcode
-sidebar_position: 74
+sidebar_position: 73
 pagination_label: Working with an App Passcode
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/working-with-an-app-passcode.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /working-with-an-app-passcode
+slug: /troubleshooting/working-with-an-app-passcode
 last_update:
   date: 9/25/2025
   author: Awana Digital

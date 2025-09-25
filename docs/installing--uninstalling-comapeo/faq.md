@@ -1,5 +1,5 @@
 ---
-id: doc-faq
+id: doc-installing--uninstalling-comapeo-faq
 title: FAQ
 sidebar_label: FAQ
 sidebar_position: 5
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /faq
+slug: /installing--uninstalling-comapeo/faq
 last_update:
   date: 9/25/2025
   author: Awana Digital

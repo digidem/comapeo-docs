@@ -1,15 +1,15 @@
 ---
-id: doc-understanding-comapeos-core-concepts-and-functions
+id: doc-troubleshooting-understanding-comapeos-core-concepts-and-functions
 title: Understanding CoMapeo’s Core Concepts and Functions
 sidebar_label: Understanding CoMapeo’s Core Concepts and Functions
-sidebar_position: 65
+sidebar_position: 64
 pagination_label: Understanding CoMapeo’s Core Concepts and Functions
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/understanding-comapeos-core-concepts-and-functions.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /understanding-comapeos-core-concepts-and-functions
+slug: /troubleshooting/understanding-comapeos-core-concepts-and-functions
 last_update:
   date: 9/25/2025
   author: Awana Digital

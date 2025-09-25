@@ -1,5 +1,5 @@
 ---
-id: doc-glossrio
+id: doc-soluo-de-problemas-glossrio
 title: Glossário
 sidebar_label: Glossário
 sidebar_position: 28
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /glossrio
+slug: /soluo-de-problemas/glossrio
 last_update:
   date: 9/25/2025
   author: Awana Digital

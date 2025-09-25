@@ -1,5 +1,5 @@
 ---
-id: doc-introduction
+id: doc-troubleshooting-introduction
 title: Introduction
 sidebar_label: Introduction
 sidebar_position: 49
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /introduction
+slug: /troubleshooting/introduction
 last_update:
   date: 9/25/2025
   author: Awana Digital

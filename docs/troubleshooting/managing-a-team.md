@@ -1,15 +1,15 @@
 ---
-id: doc-managing-a-team
+id: doc-troubleshooting-managing-a-team
 title: Managing a Team
 sidebar_label: Managing a Team
-sidebar_position: 76
+sidebar_position: 75
 pagination_label: Managing a Team
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/managing-a-team.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /managing-a-team
+slug: /troubleshooting/managing-a-team
 last_update:
   date: 9/25/2025
   author: Awana Digital

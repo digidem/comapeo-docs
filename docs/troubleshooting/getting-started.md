@@ -1,5 +1,5 @@
 ---
-id: doc-getting-started
+id: doc-troubleshooting-getting-started
 title: Getting started
 sidebar_label: Getting started
 sidebar_position: 44
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /getting-started
+slug: /troubleshooting/getting-started
 last_update:
   date: 9/25/2025
   author: Awana Digital

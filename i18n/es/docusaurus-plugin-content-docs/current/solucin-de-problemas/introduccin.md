@@ -1,5 +1,5 @@
 ---
-id: doc-introduccin
+id: doc-solucin-de-problemas-introduccin
 title: Introducción
 sidebar_label: Introducción
 sidebar_position: 17
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /introduccin
+slug: /solucin-de-problemas/introduccin
 last_update:
   date: 9/25/2025
   author: Awana Digital

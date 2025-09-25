@@ -1,5 +1,5 @@
 ---
-id: doc-installing-comapeo
+id: doc-troubleshooting-installing-comapeo
 title: Installing CoMapeo
 sidebar_label: Installing CoMapeo
 sidebar_position: 59
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /installing-comapeo
+slug: /troubleshooting/installing-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

@@ -1,5 +1,5 @@
 ---
-id: doc-reunir-el-equipo-adecuado-para-comapeo
+id: doc-solucin-de-problemas-reunir-el-equipo-adecuado-para-comapeo
 title: Reunir el Equipo Adecuado para CoMapeo
 sidebar_label: Reunir el Equipo Adecuado para CoMapeo
 sidebar_position: 22
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /reunir-el-equipo-adecuado-para-comapeo
+slug: /solucin-de-problemas/reunir-el-equipo-adecuado-para-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

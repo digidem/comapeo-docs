@@ -1,5 +1,5 @@
 ---
-id: doc-testing-content-elements
+id: doc-troubleshooting-testing-content-elements
 title: Testing Content Elements
 sidebar_label: Testing Content Elements
 sidebar_position: 57
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /testing-content-elements
+slug: /troubleshooting/testing-content-elements
 last_update:
   date: 9/25/2025
   author: Awana Digital

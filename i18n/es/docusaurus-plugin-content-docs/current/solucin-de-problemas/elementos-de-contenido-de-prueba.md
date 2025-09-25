@@ -1,5 +1,5 @@
 ---
-id: doc-elementos-de-contenido-de-prueba
+id: doc-solucin-de-problemas-elementos-de-contenido-de-prueba
 title: Elementos de contenido de prueba
 sidebar_label: Elementos de contenido de prueba
 sidebar_position: 19
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /elementos-de-contenido-de-prueba
+slug: /solucin-de-problemas/elementos-de-contenido-de-prueba
 last_update:
   date: 9/25/2025
   author: Awana Digital

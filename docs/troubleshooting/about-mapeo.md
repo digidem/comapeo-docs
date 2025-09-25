@@ -1,5 +1,5 @@
 ---
-id: doc-about-mapeo
+id: doc-troubleshooting-about-mapeo
 title: About Mapeo
 sidebar_label: About Mapeo
 sidebar_position: 47
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /about-mapeo
+slug: /troubleshooting/about-mapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

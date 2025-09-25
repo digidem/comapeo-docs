@@ -1,5 +1,5 @@
 ---
-id: doc-i-have-problems-with-gps-in-comapeo
+id: doc-installing--uninstalling-comapeo-i-have-problems-with-gps-in-comapeo
 title: I have problems with GPS in CoMapeo 
 sidebar_label: I have problems with GPS in CoMapeo 
 sidebar_position: 11
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /i-have-problems-with-gps-in-comapeo
+slug: /installing--uninstalling-comapeo/i-have-problems-with-gps-in-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

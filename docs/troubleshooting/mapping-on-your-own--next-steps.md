@@ -1,15 +1,15 @@
 ---
-id: doc-mapping-on-your-own--next-steps
+id: doc-troubleshooting-mapping-on-your-own--next-steps
 title: Mapping On Your Own & Next Steps
 sidebar_label: Mapping On Your Own & Next Steps
-sidebar_position: 88
+sidebar_position: 87
 pagination_label: Mapping On Your Own & Next Steps
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/mapping-on-your-own--next-steps.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /mapping-on-your-own--next-steps
+slug: /troubleshooting/mapping-on-your-own--next-steps
 last_update:
   date: 9/25/2025
   author: Awana Digital

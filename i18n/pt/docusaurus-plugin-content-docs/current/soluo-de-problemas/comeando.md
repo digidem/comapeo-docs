@@ -1,5 +1,5 @@
 ---
-id: doc-comeando
+id: doc-soluo-de-problemas-comeando
 title: Começando
 sidebar_label: Começando
 sidebar_position: 20
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /comeando
+slug: /soluo-de-problemas/comeando
 last_update:
   date: 9/25/2025
   author: Awana Digital

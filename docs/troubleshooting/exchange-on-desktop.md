@@ -1,5 +1,5 @@
 ---
-id: doc-exchange-on-desktop
+id: doc-troubleshooting-exchange-on-desktop
 title: Exchange on Desktop
 sidebar_label: Exchange on Desktop
 sidebar_position: 50
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /exchange-on-desktop
+slug: /troubleshooting/exchange-on-desktop
 last_update:
   date: 9/25/2025
   author: Awana Digital

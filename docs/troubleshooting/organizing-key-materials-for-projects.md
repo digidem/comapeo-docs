@@ -1,5 +1,5 @@
 ---
-id: doc-organizing-key-materials-for-projects
+id: doc-troubleshooting-organizing-key-materials-for-projects
 title: Organizing Key Materials for Projects
 sidebar_label: Organizing Key Materials for Projects
 sidebar_position: 30
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /organizing-key-materials-for-projects
+slug: /troubleshooting/organizing-key-materials-for-projects
 last_update:
   date: 9/25/2025
   author: Awana Digital
@@ -179,7 +179,7 @@ Whether you imported a Mapeo config or are starting from scratch, you will find 
 
 
 
-![icon.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/c1033c29-9030-4781-b626-4cc54aaa9588/5be551cd-419b-41f1-93d2-f3f4a6a5062f/icon.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAZI2LB466ZJEKMKQH%2F20250925%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20250925T161310Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLXdlc3QtMiJGMEQCICgguj%2BYIIjdSpQleHua6bu%2BxVdxl3N%2BKr8LVQny1EpiAiAkL0YGTJD9a9XIyzrPuKqGUlW5%2BtVIHem7rIDW6u35Myr%2FAwh5EAAaDDYzNzQyMzE4MzgwNSIMazi0DOHp5WoJ8qm9KtwD47iOxtGaioxcZ%2BlFNiC7SKRTn8WQY6ObIAr8TXRk9Hso3s2X7bR27x%2FkK%2FIubyHTtokoEExs1n4XobpJMNSPs0%2BRxkidBqnI65WBjnENX5JnMwOgKYhza258XGzl%2BHCapOlRN%2BGUx1UkD3sHo8yqYcsbz6fhiDFsfY%2FWheHrJnuzwlvbD%2BZNI8eUAkteR5f27l%2Fb%2FIrrCjiMuUswK3FbQNRufBhYThdLyXr0Uz1nNBYLBNv2q%2FXdedJjqWf6WRw%2FDD9fejje%2F6B5NL37hDDPPzy1fbZ3rq9sGGryrALoO5kfQ%2BDcrT16kzLqs9JQ0n%2BH0w%2BLIRumPRCqzrVppKvtmqt4sjKt%2FTk6hnktH%2Fv2MX24YENsMxmd5t7xa4bML8QZLAsH9BuhLE4Xn3q%2FGn5Jbxa8lhYznsuOYXCPOsXP8LJFJzxJUi7FKA%2FtX5%2FMisgZcFWtKcqVf7k8eu5X%2BOG7%2Fa217p5PdbZBPXgv8si4S4HnHhmORhhItZOtX5BuWIk7cyIi6ZXgiTAvhZvIBUA39lQ%2F7LWper%2BVt70JZ4ZFBBklAF5n%2FFdeoOBnCgw7GFbU5lq%2BmLQHfk%2B7moiK22%2ByKY%2BPIGzg3UFe63B4Ztr9BwRPd35xbWas1GsB4AgwwM7VxgY6pgFZS1LkVTqb%2Fthjhd51HW%2BqEhy44ZpNE4IK2LaKQzObThhvlRQMhJOHdG1a6qNlBLVZklWoV40cQ4agAz%2Ba6qPOQmm0JWpxZRZXZIPZnhDbjVvvzB%2F7HbH0cEEEWxBTSZJNMn7FRajIIqHUZsBQ3v2EUWM3r8vNQL%2FhlfSaUbSatbI1lqNnlavPtYfFhLb3%2FxW2l6EzRX0ni1MDOESpvJPVL8AGjlz5&X-Amz-Signature=faf70e0efca7f5003160c46434f843a644fb9fffe02acb0eb6219591176e2148&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+![icon.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/c1033c29-9030-4781-b626-4cc54aaa9588/5be551cd-419b-41f1-93d2-f3f4a6a5062f/icon.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAZI2LB466STBE2BGY%2F20250925%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20250925T164332Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEPD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLXdlc3QtMiJHMEUCIH5%2BB7qsiBtBBNkvm15YagycAkX0kWlA7qfG%2FGgSAh%2FoAiEAo609hq6Z5Ihe0ImssXPutrj3wC8WZZxYHDfWIXRiDQIq%2FwMIeRAAGgw2Mzc0MjMxODM4MDUiDMzhqyhQt%2B%2FREQm5IircAy9s%2B4n05bcp6dvXUipKukp1YRznG3tmLL%2FG1XRkz5plUK7a49lsWKaxAjsmJfRYcMEZYg6jE2iVUwizBeIxUDIS8r6q91n6YW7SLvpQceqh5%2FbrcOjGq6vCHGMvIviO6CH9mc1zqbiRUhxB5kzTorBFI8xWqNCwCKw3XmZi4Z1k2DRyUFvq4RpLYxMBIMMHpT%2Bn6erxHF%2BMlHbqdUONX6ffr8yYd7mkXTaXDGiByG9qdCdvZ88kwOrfQUyH4p4lIEKaTibCi6v7YmHAWotJ%2FRbqJrXv%2F9mcB0CoC9gFZ6sPux%2F7rEz4o26l%2BlTwy6bxvm1HWmZKLnAsYwstJUaqaYOpM%2B0lx6Dy1gbevH8X7MtBZ9%2Fh%2FkPtQVa1gs6yFIbrdjsybwvaMNgnvRJ4EXtMEkuGDyUdr4xGXJrY2uQuslwJbiEaJtOCN1wRi8jJqPXw%2F0kFwJhsJZ84A6JyJIn2Ouh%2FV8URAVDNmkWP%2Fv2DIXJAxKEFr%2F%2BORIr2H6PFeIguV%2BfNKzgNKa5EEaV0Hu9MjQzBcTiqys0CQhH7f%2FjCaD02jGnCkHg4FleBCZQEdTldruDgtU5un9xTPKGsEs2jQkDWNDGiYLHbcrp92k5tKlZIgEpeFVzyJJiC%2FU5NMOPO1cYGOqUBQXH835vWmLTORe4%2BU5%2FiqsNBxh5ex%2BCp3EdlCnFoKIBLwIEF%2Frfm46NItBrdhDPyks7z0NErnbr9S5qHF9V0PGVVcSVB%2BrLV8YI0LqAWn%2BHzbIiKtO2es2suxq%2BvZ8VCfYuK2dNNZqqHODCGkJXYw1hUahtcEMQrwH%2Bsn2JE4Y%2BExSir19775vX%2F7O676iD882KKk8FYWngPwJgXwFBC8Wnchw46&X-Amz-Signature=6793a3998f023aa05a4a95fd8a4f7bc3b37b5aa7cd4b651b8c8f0057ec652196&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
 
 
 ![2025-08-27_06-46_1.png](/images/organizingkeymateria_10.png)

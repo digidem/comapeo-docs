@@ -1,15 +1,15 @@
 ---
-id: doc-creating-a-new-track
+id: doc-troubleshooting-creating-a-new-track
 title: Creating a New Track
 sidebar_label: Creating a New Track
-sidebar_position: 83
+sidebar_position: 82
 pagination_label: Creating a New Track
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/creating-a-new-track.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /creating-a-new-track
+slug: /troubleshooting/creating-a-new-track
 last_update:
   date: 9/25/2025
   author: Awana Digital

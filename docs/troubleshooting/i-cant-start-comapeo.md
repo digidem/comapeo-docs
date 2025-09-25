@@ -1,5 +1,5 @@
 ---
-id: doc-i-cant-start-comapeo
+id: doc-troubleshooting-i-cant-start-comapeo
 title: I can’t start CoMapeo
 sidebar_label: I can’t start CoMapeo
 sidebar_position: 101
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /i-cant-start-comapeo
+slug: /troubleshooting/i-cant-start-comapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

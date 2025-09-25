@@ -1,5 +1,5 @@
 ---
-id: doc-glosario
+id: doc-instalacin-y-desinstalacin-de-comapeo-glosario
 title: Glosario
 sidebar_label: Glosario
 sidebar_position: 2
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /glosario
+slug: /instalacin-y-desinstalacin-de-comapeo/glosario
 last_update:
   date: 9/25/2025
   author: Awana Digital

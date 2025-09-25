@@ -1,5 +1,5 @@
 ---
-id: doc-ferramentas-mapeo
+id: doc-soluo-de-problemas-ferramentas-mapeo
 title: Ferramentas Mapeo
 sidebar_label: Ferramentas Mapeo
 sidebar_position: 22
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /ferramentas-mapeo
+slug: /soluo-de-problemas/ferramentas-mapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

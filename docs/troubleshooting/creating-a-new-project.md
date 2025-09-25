@@ -1,15 +1,15 @@
 ---
-id: doc-creating-a-new-project
+id: doc-troubleshooting-creating-a-new-project
 title: Creating a New Project
 sidebar_label: Creating a New Project
-sidebar_position: 77
+sidebar_position: 76
 pagination_label: Creating a New Project
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/creating-a-new-project.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /creating-a-new-project
+slug: /troubleshooting/creating-a-new-project
 last_update:
   date: 9/25/2025
   author: Awana Digital

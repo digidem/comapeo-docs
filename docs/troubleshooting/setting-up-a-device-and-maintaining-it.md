@@ -1,15 +1,15 @@
 ---
-id: doc-setting-up-a-device-and-maintaining-it
+id: doc-troubleshooting-setting-up-a-device-and-maintaining-it
 title: Setting up a device and maintaining it
 sidebar_label: Setting up a device and maintaining it
-sidebar_position: 87
+sidebar_position: 86
 pagination_label: Setting up a device and maintaining it
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/setting-up-a-device-and-maintaining-it.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /setting-up-a-device-and-maintaining-it
+slug: /troubleshooting/setting-up-a-device-and-maintaining-it
 last_update:
   date: 9/25/2025
   author: Awana Digital

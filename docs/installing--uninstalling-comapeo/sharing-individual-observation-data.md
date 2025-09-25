@@ -1,5 +1,5 @@
 ---
-id: doc-sharing-individual-observation-data
+id: doc-installing--uninstalling-comapeo-sharing-individual-observation-data
 title: Sharing individual Observation data
 sidebar_label: Sharing individual Observation data
 sidebar_position: 9
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /sharing-individual-observation-data
+slug: /installing--uninstalling-comapeo/sharing-individual-observation-data
 last_update:
   date: 9/25/2025
   author: Awana Digital

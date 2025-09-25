@@ -1,15 +1,15 @@
 ---
-id: doc-adjusting-categories-set
+id: doc-troubleshooting-adjusting-categories-set
 title: Adjusting Categories Set
 sidebar_label: Adjusting Categories Set
-sidebar_position: 78
+sidebar_position: 77
 pagination_label: Adjusting Categories Set
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/adjusting-categories-set.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /adjusting-categories-set
+slug: /troubleshooting/adjusting-categories-set
 last_update:
   date: 9/25/2025
   author: Awana Digital

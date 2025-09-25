@@ -1,5 +1,5 @@
 ---
-id: doc-viso-geral
+id: doc-soluo-de-problemas-viso-geral
 title: Visão Geral
 sidebar_label: Visão Geral
 sidebar_position: 18
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /viso-geral
+slug: /soluo-de-problemas/viso-geral
 last_update:
   date: 9/25/2025
   author: Awana Digital

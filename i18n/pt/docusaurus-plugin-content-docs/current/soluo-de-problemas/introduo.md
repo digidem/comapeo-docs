@@ -1,5 +1,5 @@
 ---
-id: doc-introduo
+id: doc-soluo-de-problemas-introduo
 title: Introdução
 sidebar_label: Introdução
 sidebar_position: 17
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /introduo
+slug: /soluo-de-problemas/introduo
 last_update:
   date: 9/25/2025
   author: Awana Digital

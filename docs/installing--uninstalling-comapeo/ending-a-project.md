@@ -1,5 +1,5 @@
 ---
-id: doc-ending-a-project
+id: doc-installing--uninstalling-comapeo-ending-a-project
 title: Ending a Project
 sidebar_label: Ending a Project
 sidebar_position: 7
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /ending-a-project
+slug: /installing--uninstalling-comapeo/ending-a-project
 last_update:
   date: 9/25/2025
   author: Awana Digital

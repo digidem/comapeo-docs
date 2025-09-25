@@ -1,5 +1,5 @@
 ---
-id: doc-exchange-on-desktop-c-only
+id: doc-understanding-how-exchange-works-c-exchange-on-desktop-c-only
 title: Exchange on Desktop (C only)
 sidebar_label: Exchange on Desktop (C only)
 sidebar_position: 62
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /exchange-on-desktop-c-only
+slug: /understanding-how-exchange-works-c/exchange-on-desktop-c-only
 last_update:
   date: 9/25/2025
   author: Awana Digital

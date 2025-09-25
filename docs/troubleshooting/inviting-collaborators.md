@@ -1,15 +1,15 @@
 ---
-id: doc-inviting-collaborators
+id: doc-troubleshooting-inviting-collaborators
 title: Inviting Collaborators
 sidebar_label: Inviting Collaborators
-sidebar_position: 79
+sidebar_position: 78
 pagination_label: Inviting Collaborators
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/inviting-collaborators.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /inviting-collaborators
+slug: /troubleshooting/inviting-collaborators
 last_update:
   date: 9/25/2025
   author: Awana Digital

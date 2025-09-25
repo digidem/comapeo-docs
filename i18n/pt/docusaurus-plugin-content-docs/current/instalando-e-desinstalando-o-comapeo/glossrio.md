@@ -1,5 +1,5 @@
 ---
-id: doc-glossrio
+id: doc-instalando-e-desinstalando-o-comapeo-glossrio
 title: Glossário
 sidebar_label: Glossário
 sidebar_position: 2
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /glossrio
+slug: /instalando-e-desinstalando-o-comapeo/glossrio
 last_update:
   date: 9/25/2025
   author: Awana Digital

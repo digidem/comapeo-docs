@@ -1,5 +1,5 @@
 ---
-id: doc-sobre-o-mapeo
+id: doc-soluo-de-problemas-sobre-o-mapeo
 title: Sobre o Mapeo
 sidebar_label: Sobre o Mapeo
 sidebar_position: 21
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /sobre-o-mapeo
+slug: /soluo-de-problemas/sobre-o-mapeo
 last_update:
   date: 9/25/2025
   author: Awana Digital

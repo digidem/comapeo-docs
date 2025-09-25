@@ -1,5 +1,5 @@
 ---
-id: doc-sharing-individual-observation-data
+id: doc-troubleshooting-sharing-individual-observation-data
 title: Sharing individual Observation data
 sidebar_label: Sharing individual Observation data
 sidebar_position: 60
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /sharing-individual-observation-data
+slug: /troubleshooting/sharing-individual-observation-data
 last_update:
   date: 9/25/2025
   author: Awana Digital

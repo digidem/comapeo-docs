@@ -1,5 +1,5 @@
 ---
-id: doc-guia-rpido
+id: doc-soluo-de-problemas-guia-rpido
 title: Guia Rápido
 sidebar_label: Guia Rápido
 sidebar_position: 19
@@ -9,7 +9,7 @@ keywords:
   - docs
   - comapeo
 tags: []
-slug: /guia-rpido
+slug: /soluo-de-problemas/guia-rpido
 last_update:
   date: 9/25/2025
   author: Awana Digital

@@ -38,7 +38,7 @@ jobs:
       - name: Fetch content from Notion
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_DATABASE_ID: ${{ secrets.DATABASE_ID }}
         run: bun run notion:fetch-all
         
       - name: Commit fetched content

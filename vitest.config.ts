@@ -16,7 +16,6 @@ export default defineConfig({
     environment: "node",
     globals: true,
     pool: "threads",
-    
     // Setup files for global mocking
     setupFiles: [],
 

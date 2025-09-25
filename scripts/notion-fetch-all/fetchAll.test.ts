@@ -1,5 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installTestNotionEnv } from "../test-utils";
+
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+    };
+    return pipeline;
+  };
+
+  const sharpMock = vi.fn(() => createPipeline());
+
+  return {
+    default: sharpMock,
+  };
+});
 
 describe("notion-fetch-all fetchAll", () => {
   let restoreEnv: () => void;

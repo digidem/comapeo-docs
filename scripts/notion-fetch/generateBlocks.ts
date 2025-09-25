@@ -17,6 +17,8 @@ import {
 } from "./utils";
 import config from "../../docusaurus.config";
 import SpinnerManager from "./spinnerManager";
+import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
+import { fetchNotionBlocks } from "../fetchNotionData";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +40,115 @@ for (const locale of locales.filter((l) => l !== DEFAULT_LOCALE)) {
 }
 
 // (moved to utils) Format detection helpers
+
+/**
+ * Process callout blocks in the markdown string to convert them to Docusaurus admonitions
+ */
+function processCalloutsInMarkdown(
+  markdownContent: string,
+  blocks: any[]
+): string {
+  if (!markdownContent || !blocks || blocks.length === 0) {
+    return markdownContent;
+  }
+
+  let processedContent = markdownContent;
+
+  // Find all callout blocks in the block data
+  const calloutBlocks: any[] = [];
+
+  function findCallouts(blockList: any[]) {
+    for (const block of blockList) {
+      if (isCalloutBlock(block)) {
+        calloutBlocks.push(block);
+      }
+      // Recursively check children
+      if (block.children && Array.isArray(block.children)) {
+        findCallouts(block.children);
+      }
+    }
+  }
+
+  findCallouts(blocks);
+
+  // Convert each callout block to admonition
+  for (const calloutBlock of calloutBlocks) {
+    const admonitionMarkdown = convertCalloutToAdmonition(calloutBlock);
+    if (admonitionMarkdown) {
+      // Extract text content from the callout to find it in the markdown
+      const calloutText = extractTextFromCalloutBlock(calloutBlock);
+
+      if (calloutText) {
+        // Use a simpler string-based approach instead of regex for security
+        // Look for blockquote patterns that contain the callout text
+        const lines = processedContent.split("\n");
+        let inBlockquote = false;
+        let blockquoteStart = -1;
+        let blockquoteEnd = -1;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.startsWith("> ")) {
+            if (!inBlockquote) {
+              // Check if this blockquote contains our callout text
+              const blockquoteContent = lines.slice(i).join("\n");
+              if (blockquoteContent.includes(calloutText.slice(0, 50))) {
+                inBlockquote = true;
+                blockquoteStart = i;
+              }
+            }
+          } else if (
+            inBlockquote &&
+            !line.startsWith("> ") &&
+            line.trim() !== ""
+          ) {
+            // End of blockquote
+            blockquoteEnd = i - 1;
+            break;
+          } else if (inBlockquote && i === lines.length - 1) {
+            // Blockquote goes to end of content
+            blockquoteEnd = i;
+            break;
+          }
+        }
+
+        // Replace the found blockquote with admonition
+        if (blockquoteStart >= 0 && blockquoteEnd >= blockquoteStart) {
+          const beforeBlockquote = lines.slice(0, blockquoteStart);
+          const afterBlockquote = lines.slice(blockquoteEnd + 1);
+          const newLines = [
+            ...beforeBlockquote,
+            "",
+            admonitionMarkdown,
+            ...afterBlockquote,
+          ];
+          processedContent = newLines.join("\n");
+        }
+      }
+    }
+  }
+
+  return processedContent;
+}
+
+/**
+ * Extract text content from a callout block for matching
+ */
+function extractTextFromCalloutBlock(block: any): string {
+  if (!block?.callout?.rich_text) return "";
+
+  return block.callout.rich_text
+    .map((text: any) => text.plain_text || "")
+    .join("")
+    .slice(0, 100); // Limit to first 100 chars for matching
+}
+
+/**
+ * Escape special regex characters
+ */
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 async function downloadAndProcessImage(
   url: string,
@@ -310,6 +421,33 @@ export async function generateBlocks(pages, progressCallback) {
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {
+              // Fetch raw block data for callout processing
+              let rawBlocks: any[] = [];
+              try {
+                rawBlocks = await fetchNotionBlocks(page.id);
+                console.log(
+                  chalk.blue(
+                    `  ↳ Fetched ${rawBlocks.length} raw blocks for callout processing`
+                  )
+                );
+              } catch (error) {
+                console.warn(
+                  chalk.yellow(
+                    `  ⚠️  Failed to fetch raw blocks for callout processing: ${error.message}`
+                  )
+                );
+              }
+
+              // Process callouts in the markdown to convert them to Docusaurus admonitions
+              if (rawBlocks.length > 0) {
+                markdownString.parent = processCalloutsInMarkdown(
+                  markdownString.parent,
+                  rawBlocks
+                );
+                console.log(
+                  chalk.blue(`  ↳ Processed callouts in markdown content`)
+                );
+              }
               // Process images with Promise.allSettled for better error handling
               const imgRegex = /!\[.*?\]\((.*?)\)/g;
               const imgPromises = [];

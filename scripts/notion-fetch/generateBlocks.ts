@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type {
+  BlockObjectResponse,
+  CalloutBlockObjectResponse,
+  PartialBlockObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
 import { n2m } from "../notionClient";
 import { NOTION_PROPERTIES } from "../constants";
 import axios from "axios";
@@ -22,6 +27,10 @@ import { fetchNotionBlocks } from "../fetchNotionData";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+type CalloutBlockNode = CalloutBlockObjectResponse & {
+  children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
+};
 
 const CONTENT_PATH = path.join(__dirname, "../../docs");
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
@@ -46,108 +55,119 @@ for (const locale of locales.filter((l) => l !== DEFAULT_LOCALE)) {
  */
 function processCalloutsInMarkdown(
   markdownContent: string,
-  blocks: any[]
+  blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>
 ): string {
   if (!markdownContent || !blocks || blocks.length === 0) {
     return markdownContent;
   }
 
-  let processedContent = markdownContent;
+  const lines = markdownContent.split("\n");
+  const calloutBlocks: CalloutBlockNode[] = [];
 
-  // Find all callout blocks in the block data
-  const calloutBlocks: any[] = [];
-
-  function findCallouts(blockList: any[]) {
+  function collectCallouts(
+    blockList: Array<PartialBlockObjectResponse | BlockObjectResponse>
+  ) {
     for (const block of blockList) {
       if (isCalloutBlock(block)) {
-        calloutBlocks.push(block);
+        calloutBlocks.push(block as CalloutBlockNode);
       }
-      // Recursively check children
-      if (block.children && Array.isArray(block.children)) {
-        findCallouts(block.children);
+
+      const potentialChildren = (
+        block as {
+          children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
+        }
+      ).children;
+
+      if (Array.isArray(potentialChildren)) {
+        collectCallouts(potentialChildren);
       }
     }
   }
 
-  findCallouts(blocks);
+  collectCallouts(blocks);
 
-  // Convert each callout block to admonition
+  let searchIndex = 0;
+
   for (const calloutBlock of calloutBlocks) {
-    const admonitionMarkdown = convertCalloutToAdmonition(calloutBlock);
-    if (admonitionMarkdown) {
-      // Extract text content from the callout to find it in the markdown
-      const calloutText = extractTextFromCalloutBlock(calloutBlock);
+    const searchText = extractTextFromCalloutBlock(calloutBlock);
+    const match = findMatchingBlockquote(lines, searchText, searchIndex);
 
-      if (calloutText) {
-        // Use a simpler string-based approach instead of regex for security
-        // Look for blockquote patterns that contain the callout text
-        const lines = processedContent.split("\n");
-        let inBlockquote = false;
-        let blockquoteStart = -1;
-        let blockquoteEnd = -1;
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.startsWith("> ")) {
-            if (!inBlockquote) {
-              // Check if this blockquote contains our callout text
-              const blockquoteContent = lines.slice(i).join("\n");
-              if (blockquoteContent.includes(calloutText.slice(0, 50))) {
-                inBlockquote = true;
-                blockquoteStart = i;
-              }
-            }
-          } else if (
-            inBlockquote &&
-            !line.startsWith("> ") &&
-            line.trim() !== ""
-          ) {
-            // End of blockquote
-            blockquoteEnd = i - 1;
-            break;
-          } else if (inBlockquote && i === lines.length - 1) {
-            // Blockquote goes to end of content
-            blockquoteEnd = i;
-            break;
-          }
-        }
-
-        // Replace the found blockquote with admonition
-        if (blockquoteStart >= 0 && blockquoteEnd >= blockquoteStart) {
-          const beforeBlockquote = lines.slice(0, blockquoteStart);
-          const afterBlockquote = lines.slice(blockquoteEnd + 1);
-          const newLines = [
-            ...beforeBlockquote,
-            "",
-            admonitionMarkdown,
-            ...afterBlockquote,
-          ];
-          processedContent = newLines.join("\n");
-        }
-      }
+    if (!match) {
+      continue;
     }
+
+    const admonitionMarkdown = convertCalloutToAdmonition(
+      calloutBlock,
+      match.contentLines
+    );
+
+    if (!admonitionMarkdown) {
+      continue;
+    }
+
+    const admonitionLines = admonitionMarkdown.trimEnd().split("\n");
+    const replaceCount = match.end - match.start + 1;
+    lines.splice(match.start, replaceCount, ...admonitionLines);
+    searchIndex = match.start + admonitionLines.length;
   }
 
-  return processedContent;
+  return lines.join("\n");
 }
 
 /**
  * Extract text content from a callout block for matching
  */
 function extractTextFromCalloutBlock(block: any): string {
-  if (!block?.callout?.rich_text) return "";
+  if (!block?.callout?.rich_text) {
+    return "";
+  }
 
   return block.callout.rich_text
     .map((text: any) => text.plain_text || "")
-    .join("")
-    .slice(0, 100); // Limit to first 100 chars for matching
+    .join(" ");
 }
 
-/**
- * Escape special regex characters
- */
-function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function normalizeForMatch(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function findMatchingBlockquote(
+  lines: string[],
+  searchText: string,
+  fromIndex: number
+): { start: number; end: number; contentLines: string[] } | null {
+  const normalizedSearch = normalizeForMatch(searchText);
+
+  for (let i = fromIndex; i < lines.length; i++) {
+    if (!lines[i].startsWith(">")) {
+      continue;
+    }
+
+    const blockLines: string[] = [];
+    let end = i;
+
+    while (end < lines.length && lines[end].startsWith(">")) {
+      blockLines.push(lines[end]);
+      end++;
+    }
+
+    end -= 1;
+
+    const contentLines = blockLines.map((line) => line.replace(/^>\s?/, ""));
+    const normalizedContent = normalizeForMatch(contentLines.join(" "));
+
+    if (
+      !normalizedSearch ||
+      normalizedContent.includes(normalizedSearch) ||
+      normalizedContent.startsWith(normalizedSearch)
+    ) {
+      return { start: i, end, contentLines };
+    }
+
+    i = end;
+  }
+
+  return null;
 }
 
 async function downloadAndProcessImage(

@@ -59,12 +59,13 @@ describe("calloutProcessor", () => {
         color: "green_background" as const,
       };
 
-      const result = processCalloutBlock(calloutProperties);
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["👁️ This is a test callout content"],
+      });
 
       expect(result.type).toBe("tip");
       expect(result.title).toBe("👁️");
       expect(result.content).toBe("This is a test callout content");
-      expect(result.hasCustomTitle).toBe(true);
     });
 
     it("should process a callout without icon", () => {
@@ -79,12 +80,13 @@ describe("calloutProcessor", () => {
         color: "blue_background" as const,
       };
 
-      const result = processCalloutBlock(calloutProperties);
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["This is a callout without icon"],
+      });
 
       expect(result.type).toBe("info");
       expect(result.title).toBeUndefined();
       expect(result.content).toBe("This is a callout without icon");
-      expect(result.hasCustomTitle).toBe(false);
     });
 
     it("should handle different color mappings", () => {
@@ -108,7 +110,9 @@ describe("calloutProcessor", () => {
           color,
         };
 
-        const result = processCalloutBlock(calloutProperties);
+        const result = processCalloutBlock(calloutProperties, {
+          markdownLines: ["Test content"],
+        });
         expect(result.type).toBe(expectedType);
       });
     });
@@ -125,11 +129,41 @@ describe("calloutProcessor", () => {
         color: "default" as const,
       };
 
-      const result = processCalloutBlock(calloutProperties);
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["**Important Note:**", "This is the content"],
+      });
 
       expect(result.title).toBe("Important Note");
-      expect(result.hasCustomTitle).toBe(true);
       expect(result.content).toBe("This is the content");
+    });
+
+    it("should pull inline title and preserve formatting", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text",
+            text: {
+              content: "**Heads up:** Remember to `bun install` before running",
+            },
+            plain_text:
+              "**Heads up:** Remember to `bun install` before running",
+          },
+        ],
+        color: "yellow_background" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: [
+          "**Heads up:** Remember to `bun install` before running",
+          "- Don't forget to copy the .env file",
+        ],
+      });
+
+      expect(result.type).toBe("warning");
+      expect(result.title).toBe("Heads up");
+      expect(result.content).toBe(
+        "Remember to `bun install` before running\n- Don't forget to copy the .env file"
+      );
     });
 
     it("should handle multiple rich text objects", () => {
@@ -153,7 +187,9 @@ describe("calloutProcessor", () => {
         color: "yellow_background" as const,
       };
 
-      const result = processCalloutBlock(calloutProperties);
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["🔔 First part second part"],
+      });
 
       expect(result.type).toBe("warning");
       expect(result.title).toBe("🔔");
@@ -167,7 +203,6 @@ describe("calloutProcessor", () => {
         type: "tip" as const,
         title: "💡",
         content: "This is helpful information",
-        hasCustomTitle: true,
       };
 
       const result = calloutToAdmonition(processedCallout);
@@ -180,7 +215,6 @@ describe("calloutProcessor", () => {
         type: "warning" as const,
         title: undefined,
         content: "This is a warning message",
-        hasCustomTitle: false,
       };
 
       const result = calloutToAdmonition(processedCallout);
@@ -193,7 +227,6 @@ describe("calloutProcessor", () => {
         type: "note" as const,
         title: "Empty Note",
         content: "",
-        hasCustomTitle: true,
       };
 
       const result = calloutToAdmonition(processedCallout);
@@ -206,7 +239,6 @@ describe("calloutProcessor", () => {
         type: "info" as const,
         title: undefined,
         content: "Line 1\nLine 2\nLine 3",
-        hasCustomTitle: false,
       };
 
       const result = calloutToAdmonition(processedCallout);
@@ -236,7 +268,9 @@ describe("calloutProcessor", () => {
         },
       };
 
-      const result = convertCalloutToAdmonition(calloutBlock as any);
+      const result = convertCalloutToAdmonition(calloutBlock as any, [
+        "👁️ See screen capture below",
+      ]);
 
       expect(result).toBe(":::tip 👁️\nSee screen capture below\n:::\n");
     });
@@ -256,7 +290,9 @@ describe("calloutProcessor", () => {
         },
       };
 
-      const result = convertCalloutToAdmonition(paragraphBlock as any);
+      const result = convertCalloutToAdmonition(paragraphBlock as any, [
+        "Regular paragraph",
+      ]);
 
       expect(result).toBeNull();
     });

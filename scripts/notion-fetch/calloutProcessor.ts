@@ -1,5 +1,7 @@
 import type {
-  BlockObject,
+  BlockObjectResponse,
+  CalloutBlockObjectResponse,
+  PartialBlockObjectResponse,
   RichTextItemResponse,
 } from "@notionhq/client/build/src/api-endpoints";
 
@@ -44,7 +46,10 @@ export interface ProcessedCallout {
   type: DocusaurusAdmonitionType;
   title?: string;
   content: string;
-  hasCustomTitle: boolean;
+}
+
+interface ProcessCalloutOptions {
+  markdownLines?: string[];
 }
 
 /**
@@ -80,104 +85,111 @@ function extractTextFromRichText(richText: RichTextItemResponse[]): string {
     .join("");
 }
 
-/**
- * Generate Docusaurus admonition title from callout properties
- */
-function generateTitle(
-  icon: string | null,
-  content: string,
-  admonitionType: DocusaurusAdmonitionType
-): { title: string | undefined; hasCustomTitle: boolean } {
-  // If we have an icon, use it as the title
-  if (icon) {
-    return { title: icon, hasCustomTitle: true };
+function normalizeLines(
+  markdownLines?: string[],
+  fallbackText?: string
+): string[] {
+  if (markdownLines && markdownLines.length > 0) {
+    return markdownLines.map((line) => line.replace(/\s+$/u, ""));
   }
 
-  // For certain types, we might want to extract the first line as title
-  const lines = content.split("\n");
-  const firstLine = lines[0]?.trim();
+  if (!fallbackText) {
+    return [];
+  }
 
-  // If the first line looks like a title (short, with formatting indicators)
-  if (firstLine && firstLine.length < 100 && lines.length > 1) {
-    // Check if first line has bold formatting or ends with colon
-    if (firstLine.includes("**") || firstLine.endsWith(":")) {
-      return {
-        title: firstLine.replace(/\*\*/g, "").replace(/:$/, "").trim(),
-        hasCustomTitle: true,
-      };
+  return fallbackText.split("\n").map((line) => line.trim());
+}
+
+function stripIconFromLines(lines: string[], icon: string): string[] {
+  if (lines.length === 0) {
+    return lines;
+  }
+
+  const [firstLine, ...rest] = lines;
+  const trimmed = firstLine.trimStart();
+
+  if (!trimmed.startsWith(icon)) {
+    return lines;
+  }
+
+  const remainder = trimmed.slice(icon.length).trimStart();
+  if (remainder) {
+    return [remainder, ...rest];
+  }
+
+  return rest;
+}
+
+function extractTitleFromLines(lines: string[]): {
+  title?: string;
+  contentLines: string[];
+} {
+  if (lines.length === 0) {
+    return { contentLines: [] };
+  }
+
+  const [firstLine, ...restLines] = lines;
+  const trimmed = firstLine.trim();
+
+  const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*:?(.*)$/u);
+  if (boldMatch) {
+    const title = boldMatch[1].trim().replace(/:$/u, "");
+    if (title) {
+      const remainder = boldMatch[2].trimStart();
+      const contentLines = remainder ? [remainder, ...restLines] : restLines;
+      return { title, contentLines };
     }
   }
 
-  // Use default Docusaurus admonition titles
-  return { title: undefined, hasCustomTitle: false };
+  const colonMatch = trimmed.match(/^([^:]{1,100})\s*:(.*)$/u);
+  if (colonMatch) {
+    const titleCandidate = colonMatch[1].trim().replace(/:$/u, "");
+    const remainder = colonMatch[2].trimStart();
+    const hasContent = remainder.length > 0 || restLines.length > 0;
+
+    if (titleCandidate && hasContent) {
+      const contentLines = remainder ? [remainder, ...restLines] : restLines;
+      return { title: titleCandidate, contentLines };
+    }
+  }
+
+  return { contentLines: lines };
 }
 
 /**
  * Process a Notion callout block into Docusaurus admonition format
  */
 export function processCalloutBlock(
-  calloutProperties: CalloutBlockProperties
+  calloutProperties: CalloutBlockProperties,
+  options: ProcessCalloutOptions = {}
 ): ProcessedCallout {
   // Map Notion color to Docusaurus admonition type
   const admonitionType =
     CALLOUT_COLOR_MAPPING[calloutProperties.color] ||
     CALLOUT_COLOR_MAPPING.default;
 
-  // Extract text content
-  const content = extractTextFromRichText(calloutProperties.rich_text);
+  const fallbackContent = extractTextFromRichText(calloutProperties.rich_text);
+  let contentLines = normalizeLines(options.markdownLines, fallbackContent);
 
-  // Extract icon
   const icon = extractIconText(calloutProperties.icon);
 
-  // Generate title
-  const { title, hasCustomTitle } = generateTitle(
-    icon,
-    content,
-    admonitionType
-  );
-
-  // Handle content processing for custom titles
-  let finalContent = content;
-  if (hasCustomTitle && title) {
-    // Use simple string matching instead of regex for security
-    const lines = content.split("\n");
-    const firstLine = lines[0]?.trim() || "";
-
-    // Clean the first line by removing markdown formatting for comparison
-    const cleanedFirstLine = firstLine.replace(/\*\*/g, "").replace(/:$/, "").trim().toLowerCase();
-    const cleanedTitle = title.toLowerCase();
-    
-    // Check if first line matches the title (with or without formatting)
-    if (cleanedFirstLine === cleanedTitle) {
-      // Remove the first line and rejoin
-      finalContent = lines.slice(1).join("\n").trim();
-    } else if (cleanedFirstLine.startsWith(cleanedTitle)) {
-      // Remove the title part from the first line using string operations
-      let processedLine = firstLine.replace(/\*\*/g, ""); // Remove bold formatting
-      
-      // Remove the title text (case-insensitive)
-      const titleIndex = processedLine.toLowerCase().indexOf(title.toLowerCase());
-      if (titleIndex === 0) {
-        processedLine = processedLine.slice(title.length);
-      }
-      
-      // Remove colon and whitespace at the beginning
-      processedLine = processedLine.replace(/^:\s*/, "").trim();
-      
-      if (processedLine) {
-        lines[0] = processedLine;
-        finalContent = lines.join("\n").trim();
-      } else {
-        finalContent = lines.slice(1).join("\n").trim();
-      }
-    }
+  if (icon) {
+    contentLines = stripIconFromLines(contentLines, icon);
   }
+
+  const { title, contentLines: linesWithoutTitle } = icon
+    ? { title: icon, contentLines }
+    : extractTitleFromLines(contentLines);
+
+  const joinedContent = linesWithoutTitle.join("\n");
+  const finalContent = joinedContent
+    .replace(/^[\s\t]*\n+/u, "")
+    .replace(/\n+[\s\t]*$/u, "");
 
   return {
     type: admonitionType,
     title,
     content: finalContent,
-    hasCustomTitle,
   };
 }
 
@@ -188,50 +200,46 @@ export function calloutToAdmonition(
   processedCallout: ProcessedCallout
 ): string {
   const { type, title, content } = processedCallout;
+  const lines = [`:::${type}${title ? ` ${title}` : ""}`];
 
-  // Build the admonition opening
-  let admonition = `:::${type}`;
-  if (title) {
-    admonition += ` ${title}`;
-  }
-  admonition += "\n";
-
-  // Add content (preserve any existing markdown formatting)
   if (content) {
-    admonition += content + "\n";
+    lines.push(content);
   }
 
-  // Close the admonition
-  admonition += ":::\n";
-
-  return admonition;
+  lines.push(":::");
+  return `${lines.join("\n")}\n`;
 }
 
 /**
  * Check if a block is a callout block
  */
 export function isCalloutBlock(
-  block: BlockObject
-): block is BlockObject & { type: "callout" } {
+  block: PartialBlockObjectResponse | BlockObjectResponse
+): block is CalloutBlockObjectResponse {
   return block.type === "callout";
 }
 
 /**
  * Main processing function to convert a callout block to admonition markdown
  */
-export function convertCalloutToAdmonition(block: BlockObject): string | null {
+export function convertCalloutToAdmonition(
+  block: PartialBlockObjectResponse | BlockObjectResponse,
+  markdownLines?: string[]
+): string | null {
   if (!isCalloutBlock(block)) {
     return null;
   }
 
   // Type assertion since we've confirmed this is a callout block
-  const calloutBlock = block as any;
+  const calloutBlock = block as CalloutBlockObjectResponse;
   const calloutProperties: CalloutBlockProperties = calloutBlock.callout;
 
   if (!calloutProperties) {
     return null;
   }
 
-  const processedCallout = processCalloutBlock(calloutProperties);
+  const processedCallout = processCalloutBlock(calloutProperties, {
+    markdownLines,
+  });
   return calloutToAdmonition(processedCallout);
 }

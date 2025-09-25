@@ -1,96 +1,116 @@
-import { themes as prismThemes } from 'prism-react-renderer';
-import type { Config } from '@docusaurus/types';
-import type * as Preset from '@docusaurus/preset-classic';
-import dotenv from 'dotenv';
-import remarkFixImagePaths from './scripts/remark-fix-image-paths';
+import { themes as prismThemes } from "prism-react-renderer";
+import type { Config } from "@docusaurus/types";
+import type * as Preset from "@docusaurus/preset-classic";
+import dotenv from "dotenv";
+import remarkFixImagePaths from "./scripts/remark-fix-image-paths";
 
 // Load environment variables from .env file
 dotenv.config();
 
+const resolveDefaultDocsPage = (value?: string): string => {
+  const fallback = "introduction";
+  if (!value) return fallback;
+
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+
+  const isValid = /^[a-z0-9\-/]+$/i.test(trimmed);
+  if (!isValid) {
+    console.warn(
+      `[docusaurus] DEFAULT_DOCS_PAGE="${trimmed}" contains invalid characters, falling back to "${fallback}".`
+    );
+    return fallback;
+  }
+
+  return trimmed;
+};
+
+const DEFAULT_DOCS_PAGE = resolveDefaultDocsPage(process.env.DEFAULT_DOCS_PAGE);
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Comapeo Documentation',
-  tagline: 'Learn how to use the CoMapeo platform',
-  favicon: 'img/favicon.ico',
-  
+  title: "Comapeo Documentation",
+  tagline: "Learn how to use the CoMapeo platform",
+  favicon: "img/favicon.ico",
+
   // Custom fields to pass environment variables to client-side code
   customFields: {
-    defaultDocsPage: process.env.DEFAULT_DOCS_PAGE || 'introduction',
+    defaultDocsPage: process.env.DEFAULT_DOCS_PAGE || "introduction",
   },
 
   // Set the production url of your site here
-  url: 'https://docs.comapeo.app',
+  url: "https://docs.comapeo.app",
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: process.env.BASE_URL || '/',
+  baseUrl: process.env.BASE_URL || "/",
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'awana-digital', // Usually your GitHub org/user name.
-  projectName: 'comapeo-docs', // Usually your repo name.
+  organizationName: "awana-digital", // Usually your GitHub org/user name.
+  projectName: "comapeo-docs", // Usually your repo name.
 
-  onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: "throw",
+  onBrokenMarkdownLinks: "warn",
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en', 'pt', 'es'],
+    defaultLocale: "en",
+    locales: ["en", "pt", "es"],
     localeConfigs: {
       en: {
-        label: 'English',
-        htmlLang: 'en-US',
+        label: "English",
+        htmlLang: "en-US",
       },
       pt: {
-        label: 'Português',
-        htmlLang: 'pt-BR',
+        label: "Português",
+        htmlLang: "pt-BR",
       },
       es: {
-        label: 'Español',
-        htmlLang: 'es-ES',
+        label: "Español",
+        htmlLang: "es-ES",
       },
     },
   },
   plugins: [
     [
-      '@docusaurus/plugin-client-redirects',
+      "@docusaurus/plugin-client-redirects",
       {
         redirects: [
           // Redirect `/docs` and `/docs/` to default docs page (configurable via DEFAULT_DOCS_PAGE env var)
           {
-            to: `/docs/${process.env.DEFAULT_DOCS_PAGE || 'introduction'}`,
-            from: '/docs',
+            to: `/docs/${DEFAULT_DOCS_PAGE}`,
+            from: "/docs",
           },
         ],
       },
     ],
     [
-      '@docusaurus/plugin-pwa',
+      "@docusaurus/plugin-pwa",
       {
         debug: true,
         offlineModeActivationStrategies: [
-          'appInstalled',
-          'standalone',
-          'queryString',
+          "appInstalled",
+          "standalone",
+          "queryString",
         ],
         pwaHead: [
           {
-            tagName: 'link',
-            rel: 'icon',
-            href: '/img/comapeo.png',
+            tagName: "link",
+            rel: "icon",
+            href: "/img/comapeo.png",
           },
           {
-            tagName: 'link',
-            rel: 'manifest',
-            href: '/manifest.json', // your PWA manifest
+            tagName: "link",
+            rel: "manifest",
+            href: "/manifest.json", // your PWA manifest
           },
           {
-            tagName: 'meta',
-            name: 'theme-color',
-            content: '#050F77',
+            tagName: "meta",
+            name: "theme-color",
+            content: "#050F77",
           },
         ],
       },
@@ -122,7 +142,7 @@ const config: Config = {
     //   },
     // ],
     [
-      '@docusaurus/plugin-ideal-image',
+      "@docusaurus/plugin-ideal-image",
       {
         quality: 70,
         max: 1030, // max resized image's size.
@@ -134,25 +154,25 @@ const config: Config = {
   ],
   presets: [
     [
-      'classic',
+      "classic",
       {
         docs: {
-          path: 'docs',
-          sidebarPath: './src/components/sidebars.ts',
+          path: "docs",
+          sidebarPath: "./src/components/sidebars.ts",
           remarkPlugins: [remarkFixImagePaths],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/digidem/comapeo-docs/tree/main/packages/create-docusaurus/templates/shared/',
-          lastVersion: 'current',
+            "https://github.com/digidem/comapeo-docs/tree/main/packages/create-docusaurus/templates/shared/",
+          lastVersion: "current",
           versions: {
             current: {
-              label: 'Latest',
+              label: "Latest",
             },
           },
         },
         theme: {
-          customCss: './src/css/custom.css',
+          customCss: "./src/css/custom.css",
         },
       } satisfies Preset.Options,
     ],
@@ -160,91 +180,91 @@ const config: Config = {
 
   themeConfig: {
     // Replace with your project's social card
-    image: 'img/comapeo-social-card.jpg',
+    image: "img/comapeo-social-card.jpg",
     navbar: {
       // title: 'CoMapeo',
       logo: {
-        alt: 'CoMapeo',
-        src: 'img/comapeo_icon.png',
+        alt: "CoMapeo",
+        src: "img/comapeo_icon.png",
       },
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
-          position: 'left',
-          label: 'Documentation',
+          type: "docSidebar",
+          sidebarId: "docsSidebar",
+          position: "left",
+          label: "Documentation",
         },
         {
-          type: 'docsVersionDropdown',
-          position: 'left',
+          type: "docsVersionDropdown",
+          position: "left",
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'localeDropdown',
-          position: 'right',
+          type: "localeDropdown",
+          position: "right",
         },
         {
-          href: 'https://github.com/digidem/comapeo-docs',
-          label: 'GitHub',
-          position: 'right',
+          href: "https://github.com/digidem/comapeo-docs",
+          label: "GitHub",
+          position: "right",
         },
       ],
     },
     footer: {
-      style: 'dark',
+      style: "dark",
       links: [
         {
-          title: 'Awana Digital',
+          title: "Awana Digital",
           items: [
             {
-              label: 'Website',
-              href: 'https://awana.digital',
+              label: "Website",
+              href: "https://awana.digital",
             },
             {
-              label: 'Discord',
-              href: 'https://discord.gg/NtZgtAjj',
+              label: "Discord",
+              href: "https://discord.gg/NtZgtAjj",
             },
             {
-              label: 'Bluesky',
-              href: 'https://bsky.app/profile/awana.digital',
+              label: "Bluesky",
+              href: "https://bsky.app/profile/awana.digital",
             },
             {
-              label: 'Blog',
-              href: 'https://awana.digital/blog',
+              label: "Blog",
+              href: "https://awana.digital/blog",
             },
           ],
         },
         {
-          title: 'CoMapeo',
+          title: "CoMapeo",
           items: [
             {
-              label: 'Website',
-              href: 'https://comapeo.app',
+              label: "Website",
+              href: "https://comapeo.app",
             },
             {
-              label: 'CoMapeo Mobile GitHub',
-              href: 'https://github.com/digidem/comapeo-docs',
+              label: "CoMapeo Mobile GitHub",
+              href: "https://github.com/digidem/comapeo-docs",
             },
             {
-              label: 'CoMapeo Desktop GitHub',
-              href: 'https://github.com/digidem/comapeo-docs',
+              label: "CoMapeo Desktop GitHub",
+              href: "https://github.com/digidem/comapeo-docs",
             },
           ],
         },
         {
-          title: 'More',
+          title: "More",
           items: [
             {
-              label: 'PlayStore',
-              href: 'https://play.google.com/store/apps/details?id=com.comapeo',
+              label: "PlayStore",
+              href: "https://play.google.com/store/apps/details?id=com.comapeo",
             },
             {
-              label: 'GitHub',
-              href: 'https://github.com/digidem/comapeo-docs',
+              label: "GitHub",
+              href: "https://github.com/digidem/comapeo-docs",
             },
             {
-              label: 'Earth Defenders Toolkit',
-              href: 'https://www.earthdefenderstoolkit.com/',
+              label: "Earth Defenders Toolkit",
+              href: "https://www.earthdefenderstoolkit.com/",
             },
           ],
         },

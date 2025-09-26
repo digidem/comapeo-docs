@@ -138,7 +138,7 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
   // - whitespace after icon, or
   // - optional punctuation then at least one space, to avoid stripping "👁️is"
   const iconPattern = new RegExp(
-    `^${escapedIcon}(?:\\s+|\\s*[:\\-–—]\\s*)`,
+    `^${escapedIcon}(?:\\s+|\\s*[:\\-–—]\\s+)`,
     "u"
   );
 

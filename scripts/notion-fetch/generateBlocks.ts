@@ -107,12 +107,10 @@ function processCalloutsInMarkdown(
 
     // Guard: avoid replacing inside code fences or existing admonitions
     const isWithinFenceOrAdmonition = (() => {
-      let fenceDelim: string | null = null; // ``` or ~~~
+      let fenceDelim: string | null = null;
       let inAdmonition = false;
-      for (let i = 0; i < match.start; i++) {
-        const raw = lines[i];
-        const ln = raw.trim();
-        // detect start/end of fences with same delimiter
+      for (let i = 0; i <= match.end; i++) {
+        const ln = lines[i].trim();
         const fenceMatch = ln.match(/^(```+|~~~+)(.*)?$/);
         if (fenceMatch) {
           const delim = fenceMatch[1];
@@ -125,6 +123,7 @@ function processCalloutsInMarkdown(
         if (/^:::[a-z]+/i.test(ln)) inAdmonition = true;
         if (/^:::$/.test(ln)) inAdmonition = false;
       }
+      // inside if fence is currently open or we're currently inside an admonition
       return fenceDelim !== null || inAdmonition;
     })();
     if (isWithinFenceOrAdmonition) {
@@ -151,13 +150,26 @@ function extractTextFromCalloutBlock(block: any): string {
   const rich = block?.callout?.rich_text;
   if (!Array.isArray(rich)) return "";
 
-  return rich
-    .map((t: any) => {
-      if (t?.type === "text" && t?.text?.content != null) return t.text.content;
-      if (typeof t?.plain_text === "string") return t.plain_text;
-      return "";
-    })
-    .join("");
+  const parts = rich.map((t: any) => {
+    if (typeof t?.plain_text === "string") return t.plain_text;
+    if (t?.type === "text" && t?.text?.content != null) return t.text.content;
+    return "";
+  });
+
+  const result: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const cur = parts[i];
+    if (!cur) continue;
+    if (
+      result.length > 0 &&
+      !/\s$/.test(result[result.length - 1]) &&
+      !/^\s/.test(cur)
+    ) {
+      result.push(" ");
+    }
+    result.push(cur);
+  }
+  return result.join("");
 }
 
 function normalizeForMatch(text: string): string {

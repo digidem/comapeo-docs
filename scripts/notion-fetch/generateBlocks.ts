@@ -105,7 +105,11 @@ function processCalloutsInMarkdown(
       continue;
     }
 
-    const admonitionLines = admonitionMarkdown.trimEnd().split("\n");
+    const leadingWhitespace = lines[match.start].match(/^\s*/)?.[0] ?? "";
+    const admonitionLines = admonitionMarkdown
+      .trimEnd()
+      .split("\n")
+      .map((l) => (l.length ? `${leadingWhitespace}${l}` : l));
     const replaceCount = match.end - match.start + 1;
     lines.splice(match.start, replaceCount, ...admonitionLines);
     searchIndex = match.start + admonitionLines.length;

@@ -109,7 +109,8 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
   if (lines.length === 0) return lines;
 
   const [firstLine, ...rest] = lines;
-  const trimmed = firstLine.trimStart();
+  const leading = firstLine.match(/^\s*/)?.[0] ?? "";
+  const trimmed = firstLine.slice(leading.length);
 
   // Do not strip when the first non-space char starts a code fence, inline code, or blockquote
   if (/^`{1,3}/.test(trimmed) || trimmed.startsWith(">")) {
@@ -125,7 +126,7 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
   }
 
   const remainder = trimmed.replace(iconPattern, "");
-  return remainder ? [remainder, ...rest] : rest;
+  return remainder ? [`${leading}${remainder}`, ...rest] : rest;
 }
 
 function extractTitleFromLines(lines: string[]): {
@@ -135,6 +136,7 @@ function extractTitleFromLines(lines: string[]): {
   if (lines.length === 0) return { contentLines: [] };
 
   const [firstLine, ...restLines] = lines;
+  const leading = firstLine.match(/^\s*/)?.[0] ?? "";
   const trimmed = firstLine.trim();
 
   // Match **Title** optionally followed by a colon and optional same-line content
@@ -147,7 +149,7 @@ function extractTitleFromLines(lines: string[]): {
     const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (title && hasContent) {
       const contentLines = sameLineRemainder
-        ? [sameLineRemainder, ...restLines]
+        ? [`${leading}${sameLineRemainder}`, ...restLines]
         : restLines;
       return { title, contentLines };
     }
@@ -161,7 +163,7 @@ function extractTitleFromLines(lines: string[]): {
     const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (titleCandidate && hasContent) {
       const contentLines = sameLineRemainder
-        ? [sameLineRemainder, ...restLines]
+        ? [`${leading}${sameLineRemainder}`, ...restLines]
         : restLines;
       return { title: titleCandidate, contentLines };
     }

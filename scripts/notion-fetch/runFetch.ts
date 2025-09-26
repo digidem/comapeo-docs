@@ -49,7 +49,6 @@ export async function runFetchPipeline(
     }
 
     fetchSpinner.succeed(chalk.green("Data fetched successfully"));
-    unregisterFetchSpinner();
 
     if (!shouldGenerate) {
       return { data };
@@ -63,23 +62,22 @@ export async function runFetchPipeline(
         generateSpinner.text = chalk.blue(
           `${generateSpinnerText}: ${progress.current}/${progress.total}`
         );
-        if (onProgress) {
-          onProgress(progress);
-        }
+        onProgress?.(progress);
       });
 
       generateSpinner.succeed(chalk.green("Blocks generated successfully"));
-      unregisterGenerateSpinner();
 
       return { data, metrics };
     } catch (error) {
       generateSpinner.fail(chalk.red("Failed to generate blocks"));
-      unregisterGenerateSpinner();
       throw error;
+    } finally {
+      unregisterGenerateSpinner();
     }
   } catch (error) {
     fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
-    unregisterFetchSpinner();
     throw error;
+  } finally {
+    unregisterFetchSpinner();
   }
 }

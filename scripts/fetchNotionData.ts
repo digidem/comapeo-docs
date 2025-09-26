@@ -15,8 +15,14 @@ export async function fetchNotionData(filter) {
   const results: Array<Record<string, unknown>> = [];
   let hasMore = true;
   let startCursor: string | undefined;
+  let safetyCounter = 0;
+  const MAX_PAGES = 10_000; // Safety limit to prevent infinite loops
 
   while (hasMore) {
+    if (++safetyCounter > MAX_PAGES) {
+      throw new Error("Pagination safety limit exceeded when fetching Notion data");
+    }
+
     const response = await enhancedNotion.databasesQuery({
       database_id: DATABASE_ID,
       filter,
@@ -26,6 +32,12 @@ export async function fetchNotionData(filter) {
     results.push(...response.results);
     hasMore = response.has_more ?? false;
     startCursor = response.next_cursor ?? undefined;
+
+    // Validate cursor to prevent infinite loops
+    if (hasMore && !startCursor) {
+      console.warn("Warning: Notion API reported has_more=true but provided no next_cursor");
+      break;
+    }
   }
 
   return results;

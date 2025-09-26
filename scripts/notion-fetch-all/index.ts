@@ -656,8 +656,13 @@ const isDirectExec =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
-  await main().catch(async (error) => {
-    console.error(chalk.red("❌ Fatal error:"), error);
-    await gracefulShutdown(1);
-  });
+  (async () => {
+    try {
+      await main();
+    } catch (error) {
+      console.error(chalk.red("❌ Fatal error:"), error);
+      await gracefulShutdown(1);
+      return;
+    }
+  })();
 }

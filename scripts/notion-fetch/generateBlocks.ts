@@ -340,10 +340,15 @@ async function downloadAndProcessImage(
       console.error(chalk.red("Image processing error details:"), error);
 
       if (attemptNumber < 3) {
-        const delayMs = attemptNumber * 1000;
+        // Test-environment-aware retry delays
+        const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+        const baseDelayMs = isTestEnv ? 10 : 1000;
+        const jitter = Math.floor(Math.random() * (isTestEnv ? 5 : 250));
+        const delayMs = Math.min(isTestEnv ? 50 : 4000, baseDelayMs * 2 ** (attemptNumber - 1)) + jitter;
+        
         console.warn(
           chalk.yellow(
-            `Retrying image ${index + 1} in ${delayMs / 1000}s (attempt ${attemptNumber + 1}/3)`
+            `Retrying image ${index + 1} in ${delayMs}ms (attempt ${attemptNumber + 1}/3)`
           )
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));

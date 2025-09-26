@@ -73,14 +73,17 @@ function extractIconText(icon?: CalloutBlockProperties["icon"]): string | null {
 function extractTextFromRichText(richText: RichTextItemResponse[]): string {
   return richText
     .map((textObj) => {
-      if (textObj.type === "text") {
-        return textObj.text.content;
-      } else if (textObj.type === "mention") {
-        return textObj.plain_text || "";
-      } else if (textObj.type === "equation") {
+      if (typeof textObj.plain_text === "string") {
+        return textObj.plain_text;
+      }
+      if (textObj.type === "equation") {
         return textObj.equation.expression || "";
       }
-      return textObj.plain_text || "";
+      // Fallback
+      if (textObj.type === "text") {
+        return textObj.text.content;
+      }
+      return "";
     })
     .join("");
 }
@@ -107,6 +110,11 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
 
   const [firstLine, ...rest] = lines;
   const trimmed = firstLine.trimStart();
+
+  // Do not strip when the first non-space char starts a code fence or inline code
+  if (/^`{1,3}/.test(trimmed)) {
+    return lines;
+  }
 
   // Build a safe pattern for the exact icon, followed by optional punctuation and space
   const escapedIcon = icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

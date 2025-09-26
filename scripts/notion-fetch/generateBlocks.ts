@@ -107,13 +107,9 @@ function processCalloutsInMarkdown(
 
     const leadingWhitespace = lines[match.start].match(/^\s*/)?.[0] ?? "";
     const admonitionLinesRaw = admonitionMarkdown.trimEnd().split("\n");
-    const admonitionLines = admonitionLinesRaw.map((l, idx) => {
-      const isFence = idx === 0 || idx === admonitionLinesRaw.length - 1;
-      if (isFence) {
-        return l;
-      }
-      return l.length ? `${leadingWhitespace}${l}` : l;
-    });
+    const admonitionLines = admonitionLinesRaw.map((l) =>
+      l.length ? `${leadingWhitespace}${l}` : l
+    );
     const replaceCount = match.end - match.start + 1;
     lines.splice(match.start, replaceCount, ...admonitionLines);
     searchIndex = match.start + admonitionLines.length;
@@ -146,7 +142,9 @@ function normalizeForMatch(text: string): string {
   let stripped = nfkc;
   const graphemes = Array.from(stripped);
   if (graphemes.length > 0 && /\p{Extended_Pictographic}/u.test(graphemes[0])) {
-    stripped = stripped.slice(graphemes[0].length).replace(/^[\s:;\-–—]+/u, "");
+    // Remove first grapheme safely
+    stripped = graphemes.slice(1).join("");
+    stripped = stripped.replace(/^[\s:;\-–—]+/u, "");
   }
 
   return stripped.replace(/\s+/g, " ").trim();

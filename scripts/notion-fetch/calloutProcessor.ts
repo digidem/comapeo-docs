@@ -71,21 +71,32 @@ function extractIconText(icon?: CalloutBlockProperties["icon"]): string | null {
  * Extract plain text content from Notion rich text array
  */
 function extractTextFromRichText(richText: RichTextItemResponse[]): string {
-  return richText
-    .map((textObj) => {
-      if (typeof textObj.plain_text === "string") {
-        return textObj.plain_text;
-      }
-      if (textObj.type === "equation") {
-        return textObj.equation.expression || "";
-      }
-      // Fallback
-      if (textObj.type === "text") {
-        return textObj.text.content;
-      }
-      return "";
-    })
-    .join("");
+  const parts = richText.map((textObj) => {
+    if (typeof (textObj as any).plain_text === "string") {
+      return (textObj as any).plain_text as string;
+    }
+    if (textObj.type === "equation") {
+      return textObj.equation.expression || "";
+    }
+    if (textObj.type === "text") {
+      return textObj.text.content;
+    }
+    return "";
+  });
+  const result: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const cur = parts[i];
+    if (!cur) continue;
+    if (
+      result.length > 0 &&
+      !/\s$/.test(result[result.length - 1]) &&
+      !/^\s/.test(cur)
+    ) {
+      result.push(" ");
+    }
+    result.push(cur);
+  }
+  return result.join("");
 }
 
 function normalizeLines(

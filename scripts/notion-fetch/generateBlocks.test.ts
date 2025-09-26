@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { 
+import {
   installTestNotionEnv,
   createMockFileSystem,
   createMockAxios,
@@ -13,6 +13,7 @@ import {
   mockImageBuffer,
   mockProcessedImageResult,
 } from "../test-utils";
+import { NOTION_PROPERTIES } from "../constants";
 import path from "path";
 import fs from "node:fs";
 
@@ -204,6 +205,36 @@ describe("generateBlocks", () => {
     });
   });
 
+  describe("Title fallbacks", () => {
+    it("should fallback to legacy Title property when Content elements is missing", async () => {
+      const { n2m } = vi.mocked(await import("../notionClient"));
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+
+      const legacyTitlePage = createMockNotionPage({
+        title: "Legacy Title Page",
+        elementType: "Page",
+      });
+
+      delete legacyTitlePage.properties[NOTION_PROPERTIES.TITLE];
+
+      const pages = [legacyTitlePage];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "# Legacy Title Page" });
+
+      await generateBlocks(pages, progressCallback);
+
+      const markdownCall = mockWriteFileSync.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].endsWith(".md")
+      );
+
+      expect(markdownCall).toBeDefined();
+      expect(progressCallback).toHaveBeenCalled();
+    });
+  });
+
   describe("Image processing", () => {
     it("should capture image processing success/failure totals with retry metrics", async () => {
       const { n2m } = vi.mocked(await import("../notionClient"));
@@ -329,8 +360,10 @@ describe("generateBlocks", () => {
         title: "Section Heading",
       });
       
-      const togglePage = createMockTogglePage({
+      const togglePage = createMockNotionPage({
         title: "Following Section",
+        elementType: "Toggle",
+        hasSubItems: false,
       });
       
       const pages = [headingPage, togglePage];
@@ -346,6 +379,7 @@ describe("generateBlocks", () => {
         typeof call[0] === 'string' && call[0].includes('_category_.json')
       );
       
+      expect(categoryCall).toBeDefined();
       if (categoryCall) {
         const categoryContent = JSON.parse(categoryCall[1] as string);
         expect(categoryContent.customProps.title).toBe("Section Heading");

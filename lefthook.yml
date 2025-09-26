@@ -23,6 +23,11 @@ pre-commit:
     - run: npx eslint {staged_files}
       glob: "*.{js,ts,jsx,tsx}"
 
+    - name: notion-fetch-tests
+      run: bunx vitest run scripts/notion-fetch/__tests__/
+      files: git ls-files -m
+      glob: "scripts/notion-fetch/**/*.{ts,js}"
+
     # - name: rubocop
     #   glob: "*.rb"
     #   exclude:

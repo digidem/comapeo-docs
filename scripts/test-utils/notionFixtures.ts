@@ -4,6 +4,7 @@
  */
 
 import { generateMockUUID } from "./helpers";
+import { NOTION_PROPERTIES } from "../constants";
 
 export interface MockNotionPageOptions {
   id?: string;
@@ -91,9 +92,11 @@ export const createMockNotionPage = (options: MockNotionPageOptions = {}) => {
 
   // Add Title property if hasTitle is true
   if (hasTitle) {
-    page.properties.Title = {
+    const titleProperty = {
       title: [{ plain_text: title }],
     };
+    page.properties.Title = titleProperty;
+    page.properties[NOTION_PROPERTIES.TITLE] = titleProperty;
   }
 
   // Add Website Block property if hasWebsiteBlock is true

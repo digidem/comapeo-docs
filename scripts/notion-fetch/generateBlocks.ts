@@ -40,6 +40,14 @@ const getI18NPath = (locale: string) =>
 const locales = config.i18n.locales;
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
 
+const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
+  English: "en",
+  Spanish: "es",
+  Portuguese: "pt",
+};
+
+const FALLBACK_TITLE_PREFIX = "untitled";
+
 // Ensure directories exist (preserve existing content)
 fs.mkdirSync(CONTENT_PATH, { recursive: true });
 fs.mkdirSync(IMAGES_PATH, { recursive: true });
@@ -358,31 +366,155 @@ const getElementTypeProperty = (page: Record<string, any>) =>
   page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
   page?.properties?.[LEGACY_SECTION_PROPERTY];
 
-const groupPagesByLang = (pages, page) => {
-  const langMap = {
-    English: "en",
-    Spanish: "es",
-    Portuguese: "pt",
-  };
+const extractPlainText = (property: any) => {
+  if (!property) {
+    return undefined;
+  }
+
+  if (typeof property === "string") {
+    return property;
+  }
+
+  const candidates = Array.isArray(property.title)
+    ? property.title
+    : Array.isArray(property.rich_text)
+    ? property.rich_text
+    : [];
+
+  for (const item of candidates) {
+    if (item?.plain_text) {
+      return item.plain_text;
+    }
+    if (item?.text?.content) {
+      return item.text.content;
+    }
+  }
+
+  return undefined;
+};
+
+const resolvePageTitle = (page: Record<string, any>) => {
+  const properties = page?.properties ?? {};
+  const candidates = [
+    properties[NOTION_PROPERTIES.TITLE],
+    properties.Title,
+    properties.title,
+  ];
+
+  for (const candidate of candidates) {
+    const resolved = extractPlainText(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  const fallbackId = (page?.id ?? "page").slice(0, 8);
+  return `${FALLBACK_TITLE_PREFIX}-${fallbackId}`;
+};
+
+const resolvePageLocale = (page: Record<string, any>) => {
+  const languageProperty =
+    page?.properties?.[NOTION_PROPERTIES.LANGUAGE] ??
+    page?.properties?.Language;
+
+  const languageName = languageProperty?.select?.name;
+  if (languageName && LANGUAGE_NAME_TO_LOCALE[languageName]) {
+    return LANGUAGE_NAME_TO_LOCALE[languageName];
+  }
+
+  return DEFAULT_LOCALE;
+};
+
+const groupPagesByLang = (pages: Array<Record<string, any>>, page) => {
   const elementType = getElementTypeProperty(page);
   const sectionName =
     elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
 
-  const obj = {
-    mainTitle: page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text,
+  const grouped = {
+    mainTitle: resolvePageTitle(page),
     section: sectionName,
-    content: {},
+    content: {} as Record<string, Record<string, any>>,
   };
-  const subpagesId = page.properties["Sub-item"].relation.map((obj) => obj.id);
-  for (const subpageId of subpagesId) {
-    const subpage = pages.find((page) => page.id == subpageId);
-    if (subpage) {
-      const lang = langMap[subpage.properties["Language"].select?.name];
-      obj.content[lang] = subpage;
+
+  const subItemRelation =
+    page?.properties?.["Sub-item"]?.relation ?? [];
+
+  for (const relation of subItemRelation) {
+    const subpage = pages.find((candidate) => candidate.id === relation?.id);
+    if (!subpage) {
+      continue;
+    }
+
+    const lang = resolvePageLocale(subpage);
+    grouped.content[lang] = subpage;
+  }
+
+  const parentLocale = resolvePageLocale(page);
+  if (!grouped.content[parentLocale]) {
+    grouped.content[parentLocale] = page;
+  }
+
+  return grouped;
+};
+
+const createStandalonePageGroup = (page: Record<string, any>) => {
+  const elementType = getElementTypeProperty(page);
+  const sectionName =
+    elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
+  const locale = resolvePageLocale(page);
+
+  return {
+    mainTitle: resolvePageTitle(page),
+    section: sectionName,
+    content: {
+      [locale]: page,
+    } as Record<string, Record<string, any>>,
+  };
+};
+
+const buildFrontmatter = (
+  pageTitle: string,
+  sidebarPosition: number,
+  tags: string[],
+  keywords: string[],
+  customProps: Record<string, unknown>,
+  relativePath: string,
+  safeSlug: string
+) => {
+  let frontmatter = `---
+id: doc-${safeSlug}
+title: ${pageTitle}
+sidebar_label: ${pageTitle}
+sidebar_position: ${sidebarPosition}
+pagination_label: ${pageTitle}
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
+keywords:
+${keywords.map((k) => `  - ${k}`).join("\n")}
+tags: [${tags.join(", ")}]
+slug: /${safeSlug}
+last_update:
+  date: ${new Date().toLocaleDateString("en-US")}
+  author: Awana Digital`;
+
+  if (Object.keys(customProps).length > 0) {
+    frontmatter += `\nsidebar_custom_props:`;
+    for (const [key, value] of Object.entries(customProps)) {
+      if (
+        typeof value === "string" &&
+        (value.includes('"') || value.includes("'") || /[^\x20-\x7E]/.test(value))
+      ) {
+        const quoteChar = value.includes('"') ? "'" : '"';
+        frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
+      } else {
+        frontmatter += `\n  ${key}: ${value}`;
+      }
     }
   }
-  return obj;
+
+  frontmatter += `\n---\n`;
+  return frontmatter;
 };
+
 
 function setTranslationString(
   lang: string,
@@ -390,7 +522,32 @@ function setTranslationString(
   translated: string
 ) {
   const lPath = path.join(I18N_PATH, lang, "code.json");
-  const file = JSON.parse(fs.readFileSync(lPath, "utf8"));
+  let fileContents = "{}";
+  try {
+    const existing = fs.readFileSync(lPath, "utf8");
+    if (typeof existing === "string" && existing.trim().length > 0) {
+      fileContents = existing;
+    }
+  } catch (error) {
+    console.warn(
+      chalk.yellow(
+        `Translation file missing for ${lang}, creating a new one at ${lPath}`
+      )
+    );
+  }
+
+  let file;
+  try {
+    file = JSON.parse(fileContents);
+  } catch (parseError) {
+    console.warn(
+      chalk.yellow(
+        `Failed to parse translation file for ${lang}, resetting content`
+      ),
+      parseError
+    );
+    file = {};
+  }
   const translationObj = { message: translated };
   file[original] = translationObj;
   // console.log('adding translation to: ' + lPath)
@@ -400,7 +557,6 @@ function setTranslationString(
 
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
-  const totalPages = pages.length;
   let totalSaved = 0;
   let processedPages = 0;
 
@@ -414,6 +570,16 @@ export async function generateBlocks(pages, progressCallback) {
 
   const pagesByLang = [];
 
+  const subpageIdSet = new Set<string>();
+  for (const page of pages) {
+    const relations = page?.properties?.["Sub-item"]?.relation ?? [];
+    for (const relation of relations) {
+      if (relation?.id) {
+        subpageIdSet.add(relation.id);
+      }
+    }
+  }
+
   try {
     /*
      * group pages by language likeso:
@@ -424,10 +590,22 @@ export async function generateBlocks(pages, progressCallback) {
      * }
      */
     for (const page of pages) {
-      if (page.properties["Sub-item"].relation.length !== 0) {
+      const relations = page?.properties?.["Sub-item"]?.relation ?? [];
+
+      if (subpageIdSet.has(page?.id)) {
+        continue;
+      }
+
+      if (relations.length !== 0) {
         pagesByLang.push(groupPagesByLang(pages, page));
+      } else {
+        pagesByLang.push(createStandalonePageGroup(page));
       }
     }
+
+    const totalPages = pagesByLang.reduce((count, pageGroup) => {
+      return count + Object.keys(pageGroup.content).length;
+    }, 0);
 
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
@@ -442,8 +620,57 @@ export async function generateBlocks(pages, progressCallback) {
       for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
-        const pageTitle =
-          page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+        const pageTitle = resolvePageTitle(page);
+        const safeFallbackId = (page?.id ?? String(i + 1)).slice(0, 8);
+        const safeFilename = filename || `${FALLBACK_TITLE_PREFIX}-${safeFallbackId}`;
+
+        const fileName = `${safeFilename}.md`;
+        const filePath = currentSectionFolder[lang]
+          ? path.join(PATH, currentSectionFolder[lang], fileName)
+          : path.join(PATH, fileName);
+        const relativePath = currentSectionFolder[lang]
+          ? `${currentSectionFolder[lang]}/${fileName}`
+          : fileName;
+
+        let tags = ["comapeo"];
+        if (page.properties["Tags"] && page.properties["Tags"].multi_select) {
+          tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
+        }
+
+        let keywords = ["docs", "comapeo"];
+        if (
+          page.properties.Keywords?.multi_select &&
+          page.properties.Keywords.multi_select.length > 0
+        ) {
+          keywords = page.properties.Keywords.multi_select.map(
+            (keyword) => keyword.name
+          );
+        }
+
+        let sidebarPosition = i + 1;
+        if (page.properties["Order"] && page.properties["Order"].number) {
+          sidebarPosition = page.properties["Order"].number;
+        }
+
+        const customProps: Record<string, unknown> = {};
+        if (
+          page.properties["Icon"] &&
+          page.properties["Icon"].rich_text &&
+          page.properties["Icon"].rich_text.length > 0
+        ) {
+          customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
+        }
+
+
+        const frontmatter = buildFrontmatter(
+          pageTitle,
+          sidebarPosition,
+          tags,
+          keywords,
+          customProps,
+          relativePath,
+          safeFilename
+        );
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(
@@ -466,7 +693,7 @@ export async function generateBlocks(pages, progressCallback) {
                 )
               );
             }
-            const sectionFolder = filename;
+            const sectionFolder = filename || safeFilename;
             const sectionFolderPath = path.join(PATH, sectionFolder);
             fs.mkdirSync(sectionFolderPath, { recursive: true });
             currentSectionFolder[lang] = sectionFolder;
@@ -474,21 +701,21 @@ export async function generateBlocks(pages, progressCallback) {
               chalk.green(`Section folder created: ${sectionFolder}`)
             );
             sectionCount++;
-            const categoryContent = {
-              label: sectionName,
-              position: i + 1,
-              collapsible: true,
-              collapsed: true,
-              link: {
-                type: "generated-index",
-              },
-              customProps: { title: null },
-            };
-            if (currentHeading.get(lang)) {
-              categoryContent.customProps.title = currentHeading.get(lang);
-              currentHeading.set(lang, null);
-            }
             if (lang === "en") {
+              const categoryContent = {
+                label: sectionName,
+                position: i + 1,
+                collapsible: true,
+                collapsed: true,
+                link: {
+                  type: "generated-index",
+                },
+                customProps: { title: null },
+              };
+              if (currentHeading.get(lang)) {
+                categoryContent.customProps.title = currentHeading.get(lang);
+                currentHeading.set(lang, null);
+              }
               const categoryFilePath = path.join(
                 sectionFolderPath,
                 "_category_.json"
@@ -562,7 +789,7 @@ export async function generateBlocks(pages, progressCallback) {
                 const fullMatch = match[0];
 
                 imgPromises.push(
-                  downloadAndProcessImage(imgUrl, filename, imgIndex)
+                  downloadAndProcessImage(imgUrl, safeFilename, imgIndex)
                     .then(({ newPath, savedBytes }) => {
                       const newImageMarkdown = fullMatch.replace(
                         imgUrl,
@@ -608,111 +835,6 @@ export async function generateBlocks(pages, progressCallback) {
                 markdownString.parent
               );
 
-              // Determine file path based on section folder context
-              const fileName = `${filename}.md`;
-              let filePath;
-
-              if (currentSectionFolder[lang]) {
-                filePath = path.join(
-                  PATH,
-                  currentSectionFolder[lang],
-                  fileName
-                );
-              } else {
-                filePath = path.join(PATH, fileName);
-              }
-
-              // Generate frontmatter
-              // Extract additional properties if available
-              let keywords = ["docs", "comapeo"];
-              let tags = ["comapeo"];
-              let sidebarPosition = i + 1;
-              const customProps: Record<string, unknown> = {};
-
-              // Check for Tags property
-              if (
-                page.properties["Tags"] &&
-                page.properties["Tags"].multi_select
-              ) {
-                tags = page.properties["Tags"].multi_select.map(
-                  (tag) => tag.name
-                );
-              }
-
-              // Check for Keywords property
-              if (
-                page.properties.Keywords?.multi_select &&
-                page.properties.Keywords.multi_select.length > 0
-              ) {
-                keywords = page.properties.Keywords.multi_select.map(
-                  (keyword) => keyword.name
-                );
-              }
-
-              // Check for Position property
-              if (page.properties["Order"] && page.properties["Order"].number) {
-                sidebarPosition = page.properties["Order"].number;
-              }
-
-              // Check for Icon property
-              if (
-                page.properties["Icon"] &&
-                page.properties["Icon"].rich_text &&
-                page.properties["Icon"].rich_text.length > 0
-              ) {
-                customProps.icon =
-                  page.properties["Icon"].rich_text[0].plain_text;
-              }
-
-              // Apply title from a previous title section if available
-              if (currentHeading.get(lang)) {
-                customProps.title = currentHeading.get(lang);
-                currentHeading.set(lang, null); // Reset after using it
-              }
-
-              // Determine the relative path for the custom_edit_url
-              const relativePath = currentSectionFolder[lang]
-                ? `${currentSectionFolder[lang]}/${fileName}`
-                : fileName;
-
-              // Generate frontmatter with custom properties
-              let frontmatter = `---
-id: doc-${filename}
-title: ${pageTitle}
-sidebar_label: ${pageTitle}
-sidebar_position: ${sidebarPosition}
-pagination_label: ${pageTitle}
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
-keywords:
-${keywords.map((k) => `  - ${k}`).join("\n")}
-tags: [${tags.join(", ")}]
-slug: /${filename}
-last_update:
-  date: ${new Date().toLocaleDateString("en-US")}
-  author: Awana Digital`;
-
-              // Add customProps to frontmatter if they exist
-              if (Object.keys(customProps).length > 0) {
-                frontmatter += `\nsidebar_custom_props:`;
-                for (const [key, value] of Object.entries(customProps)) {
-                  // For emoji icons or titles with special characters, wrap in quotes
-                  if (
-                    typeof value === "string" &&
-                    (value.includes('"') ||
-                      value.includes("'") ||
-                      /[^\x20-\x7E]/.test(value))
-                  ) {
-                    // If the value contains double quotes, use single quotes; otherwise use double quotes
-                    const quoteChar = value.includes('"') ? "'" : '"';
-                    frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
-                  } else {
-                    frontmatter += `\n  ${key}: ${value}`;
-                  }
-                }
-              }
-
-              frontmatter += `\n---\n`;
-
               // Remove duplicate title heading if it exists
               // The first H1 heading often duplicates the title in Notion exports
               let contentBody = markdownString.parent;
@@ -748,7 +870,7 @@ last_update:
               );
               console.log(
                 chalk.blue(
-                  `  ↳ Added frontmatter with id: doc-${filename}, title: ${pageTitle}`
+                  `  ↳ Added frontmatter with id: doc-${safeFilename}, title: ${pageTitle}`
                 )
               );
 

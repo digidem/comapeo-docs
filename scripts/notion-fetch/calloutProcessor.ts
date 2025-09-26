@@ -112,8 +112,12 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
   const leading = firstLine.match(/^\s*/)?.[0] ?? "";
   const trimmed = firstLine.slice(leading.length);
 
-  // Do not strip when the first non-space char starts a code fence, inline code, or blockquote
-  if (/^`{1,3}/.test(trimmed) || trimmed.startsWith(">")) {
+  // Do not strip when the first non-space char starts a code fence, inline code, blockquote, or admonition fence
+  if (
+    /^`{1,3}/.test(trimmed) ||
+    trimmed.startsWith(">") ||
+    trimmed.startsWith(":::")
+  ) {
     return lines;
   }
 

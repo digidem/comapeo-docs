@@ -48,7 +48,9 @@ export async function gracefulShutdown(exitCode: number = 0, signal?: string) {
     console.error(chalk.red("❌ Error during cleanup:"), error);
   }
 
-  process.exit(exitCode);
+  if (process.env.NODE_ENV !== "test") {
+    process.exit(exitCode);
+  }
 }
 
 export function initializeGracefulShutdownHandlers() {

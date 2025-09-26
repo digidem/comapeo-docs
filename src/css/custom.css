@@ -81,3 +81,106 @@
   color: var(--ifm-color-content-secondary);
   font-size: 0.9rem;
 }
+
+/* 
+ * Custom Admonition Colors
+ * 
+ * To change colors, simply modify the hex values below:
+ * - Border: The left border and icon color
+ * - Background: Semi-transparent background (using rgba for opacity)
+ * 
+ * Available admonition types: note, tip, info, warning, danger, caution
+ */
+
+/* NOTE - Platinum/Silver theme */
+.admonition,
+.alert,
+div[class*="admonition"] {
+  /* Default fallback - will be overridden by specific types below */
+}
+
+/* NOTE admonitions (gray callouts from Notion) */
+.admonition--note,
+.admonition-note,
+.alert--secondary,
+div[class*="admonition"][class*="note"] {
+  background-color: rgba(229, 228, 226, 0.3) !important;
+  border-left-color: #e5e4e2 !important;
+  border-color: #e5e4e2 !important;
+}
+
+/* TIP admonitions (green callouts) */
+.admonition--tip,
+.admonition-tip,
+div[class*="admonition"][class*="tip"] {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+  border-left-color: #22c55e !important;
+  border-color: #22c55e !important;
+}
+
+/* INFO admonitions (blue callouts) */
+.admonition--info,
+.admonition-info,
+div[class*="admonition"][class*="info"] {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  border-left-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+/* WARNING admonitions (yellow callouts) */
+.admonition--warning,
+.admonition-warning,
+div[class*="admonition"][class*="warning"] {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+  border-left-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+}
+
+/* DANGER admonitions (red callouts) */
+.admonition--danger,
+.admonition-danger,
+div[class*="admonition"][class*="danger"] {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-left-color: #ef4444 !important;
+  border-color: #ef4444 !important;
+}
+
+/* CAUTION admonitions (orange callouts) */
+.admonition--caution,
+.admonition-caution,
+div[class*="admonition"][class*="caution"] {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+  border-left-color: #f97316 !important;
+  border-color: #f97316 !important;
+}
+
+/* Icon colors - match border colors */
+.admonition-note .admonition-icon svg,
+div[class*="admonition"][class*="note"] svg {
+  fill: #e5e4e2 !important;
+}
+
+.admonition-tip .admonition-icon svg,
+div[class*="admonition"][class*="tip"] svg {
+  fill: #22c55e !important;
+}
+
+.admonition-info .admonition-icon svg,
+div[class*="admonition"][class*="info"] svg {
+  fill: #3b82f6 !important;
+}
+
+.admonition-warning .admonition-icon svg,
+div[class*="admonition"][class*="warning"] svg {
+  fill: #f59e0b !important;
+}
+
+.admonition-danger .admonition-icon svg,
+div[class*="admonition"][class*="danger"] svg {
+  fill: #ef4444 !important;
+}
+
+.admonition-caution .admonition-icon svg,
+div[class*="admonition"][class*="caution"] svg {
+  fill: #f97316 !important;
+}

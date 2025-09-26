@@ -72,6 +72,41 @@ GIT_USER=<Your GitHub username> bun deploy
 
 For GitHub Pages hosting, this command conveniently builds the site and pushes to the `gh-pages` branch.
 
+### Customizing Admonition Colors
+
+The site supports custom colors for Notion callouts (admonitions). To modify the color scheme:
+
+1. **Open** `src/css/custom.css`
+2. **Find** the "Custom Admonition Colors" section (around line 85)
+3. **Modify** the hex color values for any admonition type:
+   - `NOTE` (gray Notion callouts): Currently `#e5e4e2` (platinum/silver)
+   - `TIP` (green Notion callouts): Currently `#22c55e` (green)
+   - `INFO` (blue Notion callouts): Currently `#3b82f6` (blue)
+   - `WARNING` (yellow Notion callouts): Currently `#f59e0b` (amber)
+   - `DANGER` (red Notion callouts): Currently `#ef4444` (red)
+   - `CAUTION` (orange Notion callouts): Currently `#f97316` (orange)
+
+**Example**: To change NOTE admonitions to purple:
+```css
+/* NOTE admonitions (gray callouts from Notion) */
+.admonition--note,
+.admonition-note,
+.alert--secondary,
+div[class*="admonition"][class*="note"] {
+  background-color: rgba(147, 51, 234, 0.1) !important;
+  border-left-color: #9333ea !important;
+  border-color: #9333ea !important;
+}
+
+/* Update the corresponding icon color */
+.admonition-note .admonition-icon svg,
+div[class*="admonition"][class*="note"] svg {
+  fill: #9333ea !important;
+}
+```
+
+Changes will be reflected immediately in development mode (`bun dev`).
+
 ### GitHub Actions Workflows
 
 The repository includes several automated workflows for content management:

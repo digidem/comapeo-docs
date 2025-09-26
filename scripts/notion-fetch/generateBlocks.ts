@@ -118,13 +118,16 @@ function processCalloutsInMarkdown(
  * Extract text content from a callout block for matching
  */
 function extractTextFromCalloutBlock(block: any): string {
-  if (!block?.callout?.rich_text) {
-    return "";
-  }
+  const rich = block?.callout?.rich_text;
+  if (!Array.isArray(rich)) return "";
 
-  return block.callout.rich_text
-    .map((text: any) => text.plain_text || "")
-    .join(" ");
+  return rich
+    .map((t: any) => {
+      if (t?.type === "text" && t?.text?.content != null) return t.text.content;
+      if (typeof t?.plain_text === "string") return t.plain_text;
+      return "";
+    })
+    .join("");
 }
 
 function normalizeForMatch(text: string): string {
@@ -137,30 +140,23 @@ function findMatchingBlockquote(
   fromIndex: number
 ): { start: number; end: number; contentLines: string[] } | null {
   const normalizedSearch = normalizeForMatch(searchText);
+  if (!normalizedSearch) return null;
 
   for (let i = fromIndex; i < lines.length; i++) {
-    if (!lines[i].startsWith(">")) {
-      continue;
-    }
+    if (!lines[i].startsWith(">")) continue;
 
     const blockLines: string[] = [];
     let end = i;
-
     while (end < lines.length && lines[end].startsWith(">")) {
       blockLines.push(lines[end]);
       end++;
     }
-
     end -= 1;
 
     const contentLines = blockLines.map((line) => line.replace(/^>\s?/, ""));
     const normalizedContent = normalizeForMatch(contentLines.join(" "));
 
-    if (
-      !normalizedSearch ||
-      normalizedContent.includes(normalizedSearch) ||
-      normalizedContent.startsWith(normalizedSearch)
-    ) {
+    if (normalizedContent.includes(normalizedSearch)) {
       return { start: i, end, contentLines };
     }
 
@@ -451,9 +447,13 @@ export async function generateBlocks(pages, progressCallback) {
                   )
                 );
               } catch (error) {
+                const msg =
+                  error && typeof error === "object" && "message" in error
+                    ? (error as any).message
+                    : String(error);
                 console.warn(
                   chalk.yellow(
-                    `  ⚠️  Failed to fetch raw blocks for callout processing: ${error.message}`
+                    `  ⚠️  Failed to fetch raw blocks for callout processing: ${msg}`
                   )
                 );
               }

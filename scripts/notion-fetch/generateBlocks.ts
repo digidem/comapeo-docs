@@ -131,7 +131,14 @@ function extractTextFromCalloutBlock(block: any): string {
 }
 
 function normalizeForMatch(text: string): string {
-  return text.replace(/\s+/g, " ").trim().toLowerCase();
+  // Remove common markdown markers that shouldn't affect matching
+  const withoutMd = text
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
+    .replace(/\*([^*]+)\*/g, "$1") // italics
+    .replace(/__([^_]+)__/g, "$1") // underline style
+    .replace(/~~([^~]+)~~/g, "$1"); // strikethrough
+  return withoutMd.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function findMatchingBlockquote(
@@ -153,7 +160,12 @@ function findMatchingBlockquote(
     }
     end -= 1;
 
-    const contentLines = blockLines.map((line) => line.replace(/^>\s?/, ""));
+    const contentLines = blockLines.map((line) =>
+      line
+        .replace(/^>\s?/, "")
+        .replace(/^(\s*>+\s*)+/g, "")
+        .trimStart()
+    );
     const normalizedContent = normalizeForMatch(contentLines.join(" "));
 
     if (normalizedContent.includes(normalizedSearch)) {

@@ -124,31 +124,37 @@ function extractTitleFromLines(lines: string[]): {
   title?: string;
   contentLines: string[];
 } {
-  if (lines.length === 0) {
-    return { contentLines: [] };
-  }
+  if (lines.length === 0) return { contentLines: [] };
 
   const [firstLine, ...restLines] = lines;
   const trimmed = firstLine.trim();
 
-  const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*:?(.*)$/u);
+  // Match **Title** optionally followed by a colon and optional same-line content
+  const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*:?\s*(.*)$/u);
   if (boldMatch) {
-    const title = boldMatch[1].trim().replace(/:$/u, "");
-    if (title) {
-      const remainder = boldMatch[2].trimStart();
-      const contentLines = remainder ? [remainder, ...restLines] : restLines;
+    const rawTitle = boldMatch[1].trim();
+    // Remove a single trailing colon from title if present
+    const title = rawTitle.replace(/:$/u, "");
+    const sameLineRemainder = boldMatch[2]?.trimStart() ?? "";
+    const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
+    if (title && hasContent) {
+      const contentLines = sameLineRemainder
+        ? [sameLineRemainder, ...restLines]
+        : restLines;
       return { title, contentLines };
     }
   }
 
-  const colonMatch = trimmed.match(/^([^:]{1,100})\s*:(.*)$/u);
+  // Plain "Title: content" case
+  const colonMatch = trimmed.match(/^([^:]{1,100})\s*:\s*(.*)$/u);
   if (colonMatch) {
     const titleCandidate = colonMatch[1].trim().replace(/:$/u, "");
-    const remainder = colonMatch[2].trimStart();
-    const hasContent = remainder.length > 0 || restLines.length > 0;
-
+    const sameLineRemainder = colonMatch[2]?.trimStart() ?? "";
+    const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (titleCandidate && hasContent) {
-      const contentLines = remainder ? [remainder, ...restLines] : restLines;
+      const contentLines = sameLineRemainder
+        ? [sameLineRemainder, ...restLines]
+        : restLines;
       return { title: titleCandidate, contentLines };
     }
   }

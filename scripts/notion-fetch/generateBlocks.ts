@@ -131,8 +131,10 @@ function extractTextFromCalloutBlock(block: any): string {
 }
 
 function normalizeForMatch(text: string): string {
-  // Only normalize whitespace; preserve inline markdown formatting and casing for accurate matching
-  return text.replace(/\s+/g, " ").trim();
+  // Normalize Unicode to reduce variant mismatches (e.g., emoji, punctuation)
+  const nfkc =
+    typeof text.normalize === "function" ? text.normalize("NFKC") : text;
+  return nfkc.replace(/\s+/g, " ").trim();
 }
 
 function findMatchingBlockquote(

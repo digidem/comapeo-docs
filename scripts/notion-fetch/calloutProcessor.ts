@@ -111,8 +111,8 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
   const [firstLine, ...rest] = lines;
   const trimmed = firstLine.trimStart();
 
-  // Do not strip when the first non-space char starts a code fence or inline code
-  if (/^`{1,3}/.test(trimmed)) {
+  // Do not strip when the first non-space char starts a code fence, inline code, or blockquote
+  if (/^`{1,3}/.test(trimmed) || trimmed.startsWith(">")) {
     return lines;
   }
 
@@ -141,8 +141,8 @@ function extractTitleFromLines(lines: string[]): {
   const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*:?\s*(.*)$/u);
   if (boldMatch) {
     const rawTitle = boldMatch[1].trim();
-    // Remove a single trailing colon from title if present
-    const title = rawTitle.replace(/:$/u, "");
+    // Remove trailing punctuation commonly used in headings
+    const title = rawTitle.replace(/[:\.!?\uFF1A\u3002\uFF01\uFF1F]+$/u, "");
     const sameLineRemainder = boldMatch[2]?.trimStart() ?? "";
     const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (title && hasContent) {

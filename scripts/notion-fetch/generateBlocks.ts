@@ -273,7 +273,7 @@ class ImageCache {
 
   private getAbsoluteImagePath(fileNameOrWebPath: string): string {
     const baseName = path.basename(fileNameOrWebPath);
-    return path.join(__dirname, "../../static/images/", baseName);
+    return path.join(IMAGES_PATH, baseName);
   }
 
   has(url: string): boolean {
@@ -1126,23 +1126,35 @@ export async function generateBlocks(pages, progressCallback) {
               }
 
               // Enhanced image processing with comprehensive fallback handling
-              const imgRegex = /!\[.*?\]\((.*?)\)/g;
-              const imageProcessingTasks = [];
-              let match;
-              let imgIndex = 0;
+              // Collect matches first without mutating the source
+              const sourceMarkdown = markdownString.parent;
+              // Improved URL pattern: match until a ')' not preceded by '\', allow spaces trimmed
+              const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+              const imageMatches: Array<{
+                full: string;
+                url: string;
+                alt: string;
+                idx: number;
+              }> = [];
+              let m: RegExpExecArray | null;
+              let tmpIndex = 0;
+              while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+                imageMatches.push({
+                  full: m[0],
+                  url: m[2],
+                  alt: m[1],
+                  idx: tmpIndex++,
+                });
+              }
+
               const imageReplacements: Array<{
                 original: string;
                 replacement: string;
               }> = [];
 
               // Phase 1: Validate and queue all images for processing
-              while ((match = imgRegex.exec(markdownString.parent)) !== null) {
-                const imgUrl = match[1];
-                const fullMatch = match[0];
-
-                // Enhanced validation - check for any type of URL
-                const urlValidation = validateAndSanitizeImageUrl(imgUrl);
-
+              const imageProcessingTasks = imageMatches.map((match) => {
+                const urlValidation = validateAndSanitizeImageUrl(match.url);
                 if (!urlValidation.isValid) {
                   // Log the invalid URL and create a fallback immediately
                   console.warn(
@@ -1151,50 +1163,62 @@ export async function generateBlocks(pages, progressCallback) {
                     )
                   );
                   const fallbackMarkdown = createFallbackImageMarkdown(
-                    fullMatch,
-                    imgUrl,
-                    imgIndex
+                    match.full,
+                    match.url,
+                    match.idx
                   );
                   imageReplacements.push({
-                    original: fullMatch,
+                    original: match.full,
                     replacement: fallbackMarkdown,
                   });
 
                   // Log for manual recovery
-                  await logImageFailure({
+                  logImageFailure({
                     timestamp: new Date().toISOString(),
                     pageBlock: safeFilename,
-                    imageIndex: imgIndex,
-                    originalUrl: imgUrl,
+                    imageIndex: match.idx,
+                    originalUrl: match.url,
                     error: urlValidation.error,
                     fallbackUsed: true,
                     validationFailed: true,
                   });
-                } else {
-                  // Only process valid HTTP/HTTPS URLs
-                  if (urlValidation.sanitizedUrl!.startsWith("http")) {
-                    imageProcessingTasks.push(
-                      processImageWithFallbacks(
-                        urlValidation.sanitizedUrl!,
-                        safeFilename,
-                        imgIndex,
-                        fullMatch
-                      ).then((result) => ({
-                        ...result,
-                        originalMarkdown: fullMatch,
-                        imageUrl: urlValidation.sanitizedUrl!,
-                        index: imgIndex,
-                      }))
-                    );
-                  } else {
-                    // Skip local images but log them
-                    console.info(
-                      chalk.blue(`ℹ️  Skipping local image: ${imgUrl}`)
-                    );
-                  }
+
+                  return Promise.resolve({
+                    success: false,
+                    originalMarkdown: match.full,
+                    imageUrl: match.url,
+                    index: match.idx,
+                    error: urlValidation.error,
+                    fallbackUsed: true,
+                  });
                 }
-                imgIndex++;
-              }
+
+                if (!urlValidation.sanitizedUrl!.startsWith("http")) {
+                  console.info(
+                    chalk.blue(`ℹ️  Skipping local image: ${match.url}`)
+                  );
+                  return Promise.resolve({
+                    success: false,
+                    originalMarkdown: match.full,
+                    imageUrl: match.url,
+                    index: match.idx,
+                    error: "Local image skipped",
+                    fallbackUsed: true,
+                  });
+                }
+
+                return processImageWithFallbacks(
+                  urlValidation.sanitizedUrl!,
+                  safeFilename,
+                  match.idx,
+                  match.full
+                ).then((result) => ({
+                  ...result,
+                  originalMarkdown: match.full,
+                  imageUrl: urlValidation.sanitizedUrl!,
+                  index: match.idx,
+                }));
+              });
 
               // Phase 2: Process all valid images concurrently
               let successfulImages = 0;
@@ -1260,7 +1284,7 @@ export async function generateBlocks(pages, progressCallback) {
               markdownString.parent = processedMarkdown;
 
               // Phase 5: Report results
-              const totalImages = imgIndex;
+              const totalImages = imageMatches.length;
               if (totalImages > 0) {
                 console.info(
                   chalk.green(

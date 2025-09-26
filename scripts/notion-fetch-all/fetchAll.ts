@@ -91,7 +91,7 @@ export async function fetchAllNotionData(
   return {
     pages: sortedPages,
     rawPages: data,
-    metrics,
+    metrics: exportFiles ? metrics : undefined,
     fetchedCount,
     processedCount: sortedPages.length,
   };

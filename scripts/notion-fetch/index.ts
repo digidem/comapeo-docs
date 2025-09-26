@@ -74,26 +74,29 @@ async function main(): Promise<number> {
       generateSpinnerText: "Generating blocks",
     });
 
-    if (!metrics) {
-      throw new Error("Expected metrics from generateBlocks");
-    }
-
     console.log(chalk.bold.green("\n✨ All tasks completed successfully!"));
-    console.log(
-      chalk.bold.cyan(
-        `A total of ${(metrics.totalSaved / 1024).toFixed(2)} KB was saved on image compression.`
-      )
-    );
-    console.log(
-      chalk.bold.yellow(
-        `Created ${metrics.sectionCount} section folders with _category_.json files.`
-      )
-    );
-    console.log(
-      chalk.bold.magenta(
-        `Applied ${metrics.titleSectionCount} title sections to content items.`
-      )
-    );
+
+    if (metrics) {
+      console.log(
+        chalk.bold.cyan(
+          `A total of ${(metrics.totalSaved / 1024).toFixed(2)} KB was saved on image compression.`
+        )
+      );
+      console.log(
+        chalk.bold.yellow(
+          `Created ${metrics.sectionCount} section folders with _category_.json files.`
+        )
+      );
+      console.log(
+        chalk.bold.magenta(
+          `Applied ${metrics.titleSectionCount} title sections to content items.`
+        )
+      );
+    } else {
+      console.log(
+        chalk.gray("Generation step was skipped; no metrics to report.")
+      );
+    }
 
     return await gracefulShutdown(0);
   } catch (error) {

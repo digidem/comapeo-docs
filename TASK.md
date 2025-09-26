@@ -1,31 +1,43 @@
-# Notion Sync Work Plan
+# Stabilise Notion Fetch Test Suite
 
-This is a temporary checklist covering open Issues #15–19. Work through them sequentially; each item should be completed on its own branch and pull request before moving to the next.
+The recently-added tests for the Notion fetch pipeline are failing for structural reasons. This task documents the fixes required so the suite becomes trustworthy and can replace manual regression testing.
 
-## Sequencing Rationale
+## Current Blockers
 
-1. **Issue #18 – rename Section → Element Type**: foundational change that other tasks depend on; update code/tests/docs so later work can rely on the new schema.
-2. **Issue #15 – import empty sections**: once naming is stable, extend fetch logic to generate Toggle sections even without child pages.
-3. **Issue #17 – render callout colors**: enhance block rendering after structural fixes are in place.
-4. **Issue #16 – support custom emojis**: media-handling improvements can layer on top of the earlier parsing changes.
-5. **Issue #19 – support Published date**: audit and migrate publication metadata once other content-generation updates are complete.
+- `scripts/notion-fetch/__tests__/runFetchPipeline.test.ts` invokes an undefined symbol `runFetch`. The intended function lives in `runFetchPipeline.ts` as `runFetchPipeline`. The typo causes the test file to throw before assertions run.
+- `scripts/notion-fetch/__tests__/downloadImage.test.ts` constructs a `mockAxios` helper but never connects it to the mocked `axios` module used by `generateBlocks`. Consequently, `axios.get` returns `undefined`, the code under test cannot read `response.data`, and the test fails.
+- The suite doesn’t verify the placeholder markdown path or toggle-title fallback behaviour after the latest runtime hardening changes; these should be covered to prevent regressions.
 
-## Execution Checklist
+## Deliverables
 
-- [ ] **#18** `refactor: rename Section property to Element Type`
-  - Branch: `refactor/notion-element-type`
-  - PR: https://github.com/digidem/comapeo-docs/pull/20
-- [ ] **#15** `feat: import empty sections from Notion`
-  - Branch: `feat/notion-empty-sections`
-  - PR: _link once opened_
-- [ ] **#17** `feat: render Notion callout colors`
-  - Branch: `feat/notion-callout-colors`
-  - PR: _link once opened_
-- [ ] **#16** `feat: support Notion custom emojis`
-  - Branch: `feat/notion-custom-emojis`
-  - PR: _link once opened_
-- [ ] **#19** `investigate: support Published date property`
-  - Branch: `chore/notion-published-date`
-  - PR: _link once opened_
+- ✅ `downloadImage.test.ts` reliably covers retry success and failure paths by wiring mocks directly into the `axios` module used by `generateBlocks`. Prefer `vi.mocked(await import("axios")).get.mockImplementation(...)` or `vi.spyOn` after importing `axios`.
+- ✅ Replace all stray `runFetch(...)` references with `runFetchPipeline(...)` (imported from `../runFetch`), and ensure the test asserts the intended error propagation.
+- ✅ Add targeted assertions verifying:
+  - toggle sections without a Notion `Title` property use the page title fallback instead of throwing.
+  - pages lacking `Website Block` produce placeholder markdown files with the expected frontmatter and note.
+  - retry logic respects backoff without sleeping the test (use fake timers via `vi.useFakeTimers()` and `vi.advanceTimersByTime`).
+- ✅ Ensure filesystem writes are intercepted (e.g., mock `fs.writeFileSync`) so tests remain hermetic.
+- ✅ All new/updated tests pass with `bunx vitest run scripts/notion-fetch/__tests__ scripts/notion-fetch-all/__tests__`.
 
-> Update this file after each merge: check off the completed item, add the PR URL, and remove the file entirely once all tasks are done.
+## Suggested Implementation Steps
+
+1. **Fix test wiring**
+   - Import `axios` inside `downloadImage.test.ts` and hook `vi.mocked(axios).get` to fail/succeed as needed. Remove unused `createMockAxios` return values if they remain disconnected.
+   - Replace `runFetch` typo with `runFetchPipeline` in `runFetchPipeline.test.ts`. Confirm all branches call the correct function.
+
+2. **Expand coverage for new runtime behaviour**
+   - Within `generateBlocks` tests (either existing file or new `generateBlocks.behaviour.test.ts`), build mock Notion pages using the fixtures. Stub `n2m.pageToMarkdown`/`toMarkdownString` to produce markdown with/without images.
+   - Mock `fs.writeFileSync` to capture written content. Assert placeholder markdown includes comment and admonition, and toggle without Title logs a warning but completes.
+   - Enable fake timers around image retry tests to avoid real delays.
+
+3. **Housekeeping**
+   - Update any helper functions in `scripts/test-utils` needed to support the new expectations (e.g., expose a helper to flush fake timers or to capture `fs.writeFileSync` arguments).
+   - Document the new test command in `README.md` if missing, and ensure lefthook/CI runs it if desired.
+
+## Definition of Done
+
+- Test files run without throwing, cover the regression scenarios above, and cleanly reset mocks after each test.
+- No manual sleeps/backoffs in tests; all timing handled via fake timers.
+- Developers can run `bunx vitest run scripts/notion-fetch/__tests__ scripts/notion-fetch-all/__tests__` and get a green suite.
+- The task list is updated or removed once merged.
+

@@ -90,6 +90,7 @@ function normalizeLines(
   fallbackText?: string
 ): string[] {
   if (markdownLines && markdownLines.length > 0) {
+    // Preserve leading indentation; only strip trailing whitespace
     return markdownLines.map((line) => line.replace(/\s+$/u, ""));
   }
 
@@ -97,7 +98,8 @@ function normalizeLines(
     return [];
   }
 
-  return fallbackText.split("\n").map((line) => line.trim());
+  // Preserve leading indentation on fallback-derived lines as well
+  return fallbackText.split("\n").map((line) => line.replace(/\s+$/u, ""));
 }
 
 function stripIconFromLines(lines: string[], icon: string): string[] {
@@ -183,9 +185,22 @@ export function processCalloutBlock(
     contentLines = stripIconFromLines(contentLines, icon);
   }
 
-  const { title, contentLines: linesWithoutTitle } = icon
-    ? { title: icon, contentLines }
-    : extractTitleFromLines(contentLines);
+  // Try to extract a textual title even when an icon exists; fall back to icon if none found
+  let derivedTitle: string | undefined = undefined;
+  let linesWithoutTitle: string[] = contentLines;
+  if (icon) {
+    const extracted = extractTitleFromLines(contentLines);
+    if (extracted.title) {
+      derivedTitle = `${icon} ${extracted.title}`;
+      linesWithoutTitle = extracted.contentLines;
+    } else {
+      derivedTitle = icon;
+    }
+  } else {
+    const extracted = extractTitleFromLines(contentLines);
+    derivedTitle = extracted.title;
+    linesWithoutTitle = extracted.contentLines;
+  }
 
   const joinedContent = linesWithoutTitle.join("\n");
   const finalContent = joinedContent
@@ -194,7 +209,7 @@ export function processCalloutBlock(
 
   return {
     type: admonitionType,
-    title,
+    title: derivedTitle,
     content: finalContent,
   };
 }

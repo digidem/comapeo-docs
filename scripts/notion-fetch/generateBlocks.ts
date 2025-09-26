@@ -160,11 +160,9 @@ function findMatchingBlockquote(
     }
     end -= 1;
 
+    // Remove leading '>' markers while preserving inner indentation
     const contentLines = blockLines.map((line) =>
-      line
-        .replace(/^>\s?/, "")
-        .replace(/^(\s*>+\s*)+/g, "")
-        .trimStart()
+      line.replace(/^(\s*>+\s?)/, "")
     );
     const normalizedContent = normalizeForMatch(contentLines.join(" "));
 

@@ -107,15 +107,25 @@ function processCalloutsInMarkdown(
 
     // Guard: avoid replacing inside code fences or existing admonitions
     const isWithinFenceOrAdmonition = (() => {
-      let inFence = false;
+      let fenceDelim: string | null = null; // ``` or ~~~
       let inAdmonition = false;
       for (let i = 0; i < match.start; i++) {
-        const ln = lines[i].trim();
-        if (/^```/.test(ln)) inFence = !inFence;
+        const raw = lines[i];
+        const ln = raw.trim();
+        // detect start/end of fences with same delimiter
+        const fenceMatch = ln.match(/^(```+|~~~+)(.*)?$/);
+        if (fenceMatch) {
+          const delim = fenceMatch[1];
+          if (!fenceDelim) {
+            fenceDelim = delim;
+          } else if (fenceDelim === delim) {
+            fenceDelim = null;
+          }
+        }
         if (/^:::[a-z]+/i.test(ln)) inAdmonition = true;
         if (/^:::$/.test(ln)) inAdmonition = false;
       }
-      return inFence || inAdmonition;
+      return fenceDelim !== null || inAdmonition;
     })();
     if (isWithinFenceOrAdmonition) {
       continue;

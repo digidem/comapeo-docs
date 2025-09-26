@@ -137,3 +137,86 @@ export const mockFetch = () => {
     },
   };
 };
+
+/**
+ * Create a mock axios instance with configurable responses
+ */
+export const createMockAxios = () => {
+  const mockAxios = {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+  };
+
+  return {
+    axios: mockAxios,
+    mockImageDownload: (url: string, imageBuffer: Buffer, contentType = "image/jpeg") => {
+      mockAxios.get.mockImplementation((requestUrl) => {
+        if (requestUrl === url) {
+          return Promise.resolve({
+            data: imageBuffer,
+            headers: { "content-type": contentType },
+          });
+        }
+        return Promise.reject(new Error("Mock URL not found"));
+      });
+    },
+    mockImageDownloadFailure: (url: string, error: any) => {
+      mockAxios.get.mockImplementation((requestUrl) => {
+        if (requestUrl === url) {
+          return Promise.reject(error);
+        }
+        return Promise.reject(new Error("Mock URL not found"));
+      });
+    },
+    mockMultipleImageDownloads: (
+      urlMappings: Array<{ url: string; buffer: Buffer; contentType?: string }>
+    ) => {
+      mockAxios.get.mockImplementation((requestUrl) => {
+        const mapping = urlMappings.find(m => m.url === requestUrl);
+        if (mapping) {
+          return Promise.resolve({
+            data: mapping.buffer,
+            headers: { "content-type": mapping.contentType || "image/jpeg" },
+          });
+        }
+        return Promise.reject(new Error(`Mock URL not found: ${requestUrl}`));
+      });
+    },
+    mockTimeoutError: (url: string) => {
+      const timeoutError = new Error("timeout of 30000ms exceeded");
+      (timeoutError as any).code = "ECONNABORTED";
+      mockAxios.get.mockImplementation((requestUrl) => {
+        if (requestUrl === url) {
+          return Promise.reject(timeoutError);
+        }
+        return Promise.reject(new Error("Mock URL not found"));
+      });
+    },
+    mockNetworkError: (url: string) => {
+      const networkError = new Error("getaddrinfo ENOTFOUND example.com");
+      (networkError as any).code = "ENOTFOUND";
+      mockAxios.get.mockImplementation((requestUrl) => {
+        if (requestUrl === url) {
+          return Promise.reject(networkError);
+        }
+        return Promise.reject(new Error("Mock URL not found"));
+      });
+    },
+    mockHttpError: (url: string, status: number, statusText: string) => {
+      const httpError = new Error(`Request failed with status ${status}`);
+      (httpError as any).response = { status, statusText };
+      mockAxios.get.mockImplementation((requestUrl) => {
+        if (requestUrl === url) {
+          return Promise.reject(httpError);
+        }
+        return Promise.reject(new Error("Mock URL not found"));
+      });
+    },
+    restore: () => {
+      vi.restoreAllMocks();
+    },
+  };
+};

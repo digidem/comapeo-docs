@@ -206,6 +206,45 @@ export const retryWithBackoff = async <T>(
 };
 
 /**
+ * Create a mock filesystem in memory for testing
+ */
+export const createMockFileSystem = () => {
+  const files = new Map<string, string>();
+  const directories = new Set<string>();
+
+  return {
+    files,
+    directories,
+    writeFile: (path: string, content: string) => {
+      files.set(path, content);
+      // Ensure parent directories exist
+      const parentDir = path.substring(0, path.lastIndexOf("/"));
+      if (parentDir) {
+        directories.add(parentDir);
+      }
+    },
+    readFile: (path: string) => {
+      if (!files.has(path)) {
+        throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+      }
+      return files.get(path);
+    },
+    mkdir: (path: string) => {
+      directories.add(path);
+    },
+    exists: (path: string) => {
+      return files.has(path) || directories.has(path);
+    },
+    clear: () => {
+      files.clear();
+      directories.clear();
+    },
+    getFileList: () => Array.from(files.keys()),
+    getDirectoryList: () => Array.from(directories),
+  };
+};
+
+/**
  * Capture console output during test execution
  */
 export const captureConsoleOutput = () => {

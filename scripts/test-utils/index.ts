@@ -5,6 +5,9 @@
 // Export all fixtures
 export * from "./fixtures";
 
+// Export Notion-specific fixtures
+export * from "./notionFixtures";
+
 // Export all mocks
 export * from "./mocks";
 

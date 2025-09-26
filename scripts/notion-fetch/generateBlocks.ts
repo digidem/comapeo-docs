@@ -105,6 +105,22 @@ function processCalloutsInMarkdown(
       continue;
     }
 
+    // Guard: avoid replacing inside code fences or existing admonitions
+    const isWithinFenceOrAdmonition = (() => {
+      let inFence = false;
+      let inAdmonition = false;
+      for (let i = 0; i < match.start; i++) {
+        const ln = lines[i].trim();
+        if (/^```/.test(ln)) inFence = !inFence;
+        if (/^:::[a-z]+/i.test(ln)) inAdmonition = true;
+        if (/^:::$/.test(ln)) inAdmonition = false;
+      }
+      return inFence || inAdmonition;
+    })();
+    if (isWithinFenceOrAdmonition) {
+      continue;
+    }
+
     const leadingWhitespace = lines[match.start].match(/^\s*/)?.[0] ?? "";
     const admonitionLinesRaw = admonitionMarkdown.trimEnd().split("\n");
     const admonitionLines = admonitionLinesRaw.map((l) =>

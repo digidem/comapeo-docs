@@ -134,7 +134,13 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
 
   // Build a safe pattern for the exact icon, followed by optional punctuation and space
   const escapedIcon = icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const iconPattern = new RegExp(`^${escapedIcon}(?:\\s*[:\\-]\\s*|\\s+)`, "u");
+  // Require either:
+  // - whitespace after icon, or
+  // - optional punctuation then at least one space, to avoid stripping "👁️is"
+  const iconPattern = new RegExp(
+    `^${escapedIcon}(?:\\s+|\\s*[:\\-–—]\\s+)`,
+    "u"
+  );
 
   if (!iconPattern.test(trimmed)) {
     return lines;
@@ -170,10 +176,10 @@ function extractTitleFromLines(lines: string[]): {
     }
   }
 
-  // Plain "Title: content" case
-  const colonMatch = trimmed.match(/^([^:]{1,100})\s*:\s*(.*)$/u);
+  // Conservative plain "Title: content" case (short, single-phrase title)
+  const colonMatch = trimmed.match(/^([A-Z][^:\s]{0,49})\s*:\s*(.*)$/u);
   if (colonMatch) {
-    const titleCandidate = colonMatch[1].trim().replace(/:$/u, "");
+    const titleCandidate = colonMatch[1].trim();
     const sameLineRemainder = colonMatch[2]?.trimStart() ?? "";
     const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (titleCandidate && hasContent) {

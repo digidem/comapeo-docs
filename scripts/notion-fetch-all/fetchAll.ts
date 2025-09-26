@@ -152,7 +152,7 @@ function getStatusFromRawPage(page: Record<string, any>): string {
   if (!page || typeof page !== "object") return "No Status";
   const properties = page.properties;
   if (!properties || typeof properties !== "object") return "No Status";
-  
+
   const statusProperty =
     properties[NOTION_PROPERTIES.STATUS] || properties["Status"];
 
@@ -180,7 +180,8 @@ function logStatusSummary(pages: PageWithStatus[]) {
     const count = statusCounts.get(page.status) || 0;
     statusCounts.set(page.status, count + 1);
 
-    if (index < 10 || page.status !== NOTION_PROPERTIES.READY_TO_PUBLISH) {
+    const READY_STATUS = "Ready to publish";
+    if (index < 10 || page.status !== READY_STATUS) {
       console.log(
         `  ${index + 1}. [${page.status}] ${page.title} (${page.elementType})`
       );

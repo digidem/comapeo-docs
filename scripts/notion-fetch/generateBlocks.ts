@@ -66,8 +66,12 @@ function validateAndSanitizeImageUrl(url: string): ImageUrlValidationResult {
       return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
     }
     return { isValid: true, sanitizedUrl: trimmedUrl };
-  } catch (error) {
-    return { isValid: false, error: `Invalid URL format: ${error.message}` };
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as any).message)
+        : "Unknown URL parse error";
+    return { isValid: false, error: `Invalid URL format: ${message}` };
   }
 }
 
@@ -127,20 +131,21 @@ async function processImageWithFallbacks(
       savedBytes: result.savedBytes,
       fallbackUsed: false,
     };
-  } catch (error) {
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as any).message)
+        : String(err ?? "Unknown error");
     console.warn(
-      chalk.yellow(
-        `⚠️  Image download failed for ${imageUrl}: ${error.message}`
-      )
+      chalk.yellow(`⚠️  Image download failed for ${imageUrl}: ${message}`)
     );
 
-    // Step 3: Log failure for manual recovery
     const logEntry = {
       timestamp: new Date().toISOString(),
       pageBlock: blockName,
       imageIndex: index,
       originalUrl: imageUrl,
-      error: error.message,
+      error: message,
       fallbackUsed: true,
     };
 
@@ -148,7 +153,7 @@ async function processImageWithFallbacks(
 
     return {
       success: false,
-      error: error.message,
+      error: message,
       fallbackUsed: true,
     };
   }
@@ -335,27 +340,23 @@ async function downloadAndProcessImageWithCache(
   blockName: string,
   index: number
 ): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
-  // Check cache first
   const cachedEntry = imageCache.get(url);
   if (cachedEntry) {
-    console.info(
-      chalk.green(`💾 Using cached image: ${cachedEntry.localPath}`)
-    );
+    const webPath = `/images/${path.basename(cachedEntry.localPath).replace(/\\/g, "/")}`;
+    console.info(chalk.green(`💾 Using cached image: ${webPath}`));
     return {
-      newPath: cachedEntry.localPath,
-      savedBytes: 0, // No new bytes saved since it was cached
+      newPath: webPath,
+      savedBytes: 0,
       fromCache: true,
     };
   }
 
-  // Download and process the image
   const result = await downloadAndProcessImage(url, blockName, index);
-
-  // Cache the result for future use
   imageCache.set(url, result.newPath, blockName);
 
   return {
-    ...result,
+    newPath: result.newPath,
+    savedBytes: result.savedBytes,
     fromCache: false,
   };
 }

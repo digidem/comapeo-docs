@@ -20,13 +20,16 @@ export async function fetchNotionData(filter) {
 
   while (hasMore) {
     if (++safetyCounter > MAX_PAGES) {
-      throw new Error("Pagination safety limit exceeded when fetching Notion data");
+      throw new Error(
+        "Pagination safety limit exceeded when fetching Notion data"
+      );
     }
 
     const response = await enhancedNotion.databasesQuery({
       database_id: DATABASE_ID,
       filter,
       start_cursor: startCursor,
+      page_size: 100,
     });
 
     results.push(...response.results);
@@ -35,7 +38,9 @@ export async function fetchNotionData(filter) {
 
     // Validate cursor to prevent infinite loops
     if (hasMore && !startCursor) {
-      console.warn("Warning: Notion API reported has_more=true but provided no next_cursor");
+      console.warn(
+        "Warning: Notion API reported has_more=true but provided no next_cursor"
+      );
       break;
     }
   }

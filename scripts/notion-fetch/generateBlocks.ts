@@ -25,6 +25,295 @@ import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 
+// Enhanced image handling utilities for robust processing
+interface ImageProcessingResult {
+  success: boolean;
+  newPath?: string;
+  savedBytes?: number;
+  error?: string;
+  fallbackUsed?: boolean;
+}
+
+interface ImageUrlValidationResult {
+  isValid: boolean;
+  sanitizedUrl?: string;
+  error?: string;
+}
+
+/**
+ * Validates and sanitizes image URLs to prevent broken references
+ */
+function validateAndSanitizeImageUrl(url: string): ImageUrlValidationResult {
+  if (!url || typeof url !== 'string') {
+    return { isValid: false, error: 'URL is empty or not a string' };
+  }
+
+  const trimmedUrl = url.trim();
+  if (trimmedUrl === '') {
+    return { isValid: false, error: 'URL is empty after trimming' };
+  }
+
+  // Check for obvious invalid patterns
+  if (trimmedUrl === 'undefined' || trimmedUrl === 'null') {
+    return { isValid: false, error: 'URL contains literal undefined/null' };
+  }
+
+  // Validate URL format
+  try {
+    const urlObj = new URL(trimmedUrl);
+    // Ensure it's a reasonable protocol
+    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
+    }
+    return { isValid: true, sanitizedUrl: trimmedUrl };
+  } catch (error) {
+    return { isValid: false, error: `Invalid URL format: ${error.message}` };
+  }
+}
+
+/**
+ * Creates a fallback image reference when download fails
+ */
+function createFallbackImageMarkdown(originalMarkdown: string, imageUrl: string, index: number): string {
+  // Extract alt text from original markdown
+  const altMatch = originalMarkdown.match(/!\[(.*?)\]/);
+  const altText = altMatch?.[1] || `Image ${index + 1}`;
+  
+  // Create a placeholder that documents the original URL for recovery
+  const fallbackComment = `<!-- Failed to download image: ${imageUrl} -->`;
+  const placeholderText = `**[Image ${index + 1}: ${altText}]** *(Image failed to download)*`;
+  
+  return `${fallbackComment}\n${placeholderText}`;
+}
+
+/**
+ * Enhanced image processing with comprehensive fallback handling
+ */
+async function processImageWithFallbacks(
+  imageUrl: string,
+  blockName: string,
+  index: number,
+  originalMarkdown: string
+): Promise<ImageProcessingResult> {
+  // Step 1: Validate URL
+  const validation = validateAndSanitizeImageUrl(imageUrl);
+  if (!validation.isValid) {
+    console.warn(chalk.yellow(`⚠️  Invalid image URL for image ${index + 1}: ${validation.error}`));
+    return {
+      success: false,
+      error: validation.error,
+      fallbackUsed: true
+    };
+  }
+
+  // Step 2: Attempt download with caching and retries
+  try {
+    const result = await downloadAndProcessImageWithCache(validation.sanitizedUrl!, blockName, index);
+    return {
+      success: true,
+      newPath: result.newPath,
+      savedBytes: result.savedBytes,
+      fallbackUsed: false
+    };
+  } catch (error) {
+    console.warn(chalk.yellow(`⚠️  Image download failed for ${imageUrl}: ${error.message}`));
+    
+    // Step 3: Log failure for manual recovery
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      pageBlock: blockName,
+      imageIndex: index,
+      originalUrl: imageUrl,
+      error: error.message,
+      fallbackUsed: true
+    };
+    
+    await logImageFailure(logEntry);
+    
+    return {
+      success: false,
+      error: error.message,
+      fallbackUsed: true
+    };
+  }
+}
+
+/**
+ * Logs image failures for manual recovery
+ */
+async function logImageFailure(logEntry: any): Promise<void> {
+  const logPath = path.join(process.cwd(), 'image-failures.json');
+  let existingLogs = [];
+  
+  try {
+    if (fs.existsSync(logPath)) {
+      const content = fs.readFileSync(logPath, 'utf-8');
+      existingLogs = JSON.parse(content);
+    }
+  } catch (error) {
+    console.warn(chalk.yellow('Failed to read existing image failure log'));
+  }
+  
+  existingLogs.push(logEntry);
+  
+  try {
+    fs.writeFileSync(logPath, JSON.stringify(existingLogs, null, 2));
+  } catch (error) {
+    console.warn(chalk.yellow('Failed to write image failure log'));
+  }
+}
+
+/**
+ * Post-process markdown to ensure no broken image references remain
+ */
+function sanitizeMarkdownImages(content: string): string {
+  // Remove any remaining empty image references
+  let sanitized = content;
+  
+  // Pattern 1: Completely empty URLs
+  sanitized = sanitized.replace(/!\[([^\]]*)\]\(\s*\)/g, '**[Image: $1]** *(Image URL was empty)*');
+  
+  // Pattern 2: Invalid URLs (undefined, null, etc.)
+  sanitized = sanitized.replace(/!\[([^\]]*)\]\((undefined|null)\)/g, '**[Image: $1]** *(Image URL was invalid)*');
+  
+  // Pattern 3: Malformed URLs
+  sanitized = sanitized.replace(/!\[([^\]]*)\]\([^)]*\s+[^)]*\)/g, '**[Image: $1]** *(Image URL was malformed)*');
+  
+  return sanitized;
+}
+
+/**
+ * Image cache system to prevent re-downloading and provide recovery options
+ */
+interface ImageCacheEntry {
+  url: string;
+  localPath: string;
+  timestamp: string;
+  blockName: string;
+  checksum?: string;
+}
+
+class ImageCache {
+  private cacheFile: string;
+  private cache: Map<string, ImageCacheEntry>;
+
+  constructor() {
+    this.cacheFile = path.join(process.cwd(), 'image-cache.json');
+    this.cache = new Map();
+    this.loadCache();
+  }
+
+  private loadCache(): void {
+    try {
+      if (fs.existsSync(this.cacheFile)) {
+        const content = fs.readFileSync(this.cacheFile, 'utf-8');
+        const cacheData = JSON.parse(content);
+        Object.entries(cacheData).forEach(([url, entry]) => {
+          this.cache.set(url, entry as ImageCacheEntry);
+        });
+        console.info(chalk.blue(`📦 Loaded image cache with ${this.cache.size} entries`));
+      }
+    } catch (error) {
+      console.warn(chalk.yellow('⚠️  Failed to load image cache, starting fresh'));
+    }
+  }
+
+  private saveCache(): void {
+    try {
+      const cacheData = Object.fromEntries(this.cache);
+      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
+    } catch (error) {
+      console.warn(chalk.yellow('⚠️  Failed to save image cache'));
+    }
+  }
+
+  has(url: string): boolean {
+    const entry = this.cache.get(url);
+    if (!entry) return false;
+    
+    // Verify the cached file still exists
+    const fullPath = path.join(__dirname, '../../static/images/', path.basename(entry.localPath));
+    return fs.existsSync(fullPath);
+  }
+
+  get(url: string): ImageCacheEntry | undefined {
+    if (this.has(url)) {
+      return this.cache.get(url);
+    }
+    // Clean up stale entries
+    this.cache.delete(url);
+    return undefined;
+  }
+
+  set(url: string, localPath: string, blockName: string): void {
+    const entry: ImageCacheEntry = {
+      url,
+      localPath,
+      timestamp: new Date().toISOString(),
+      blockName
+    };
+    this.cache.set(url, entry);
+    this.saveCache();
+  }
+
+  getStats(): { totalEntries: number; validEntries: number } {
+    let validEntries = 0;
+    for (const [url] of this.cache) {
+      if (this.has(url)) validEntries++;
+    }
+    return { totalEntries: this.cache.size, validEntries };
+  }
+
+  cleanup(): void {
+    // Remove stale entries where local files no longer exist
+    const staleUrls = [];
+    for (const [url] of this.cache) {
+      if (!this.has(url)) {
+        staleUrls.push(url);
+      }
+    }
+    staleUrls.forEach(url => this.cache.delete(url));
+    if (staleUrls.length > 0) {
+      this.saveCache();
+      console.info(chalk.blue(`🧹 Cleaned up ${staleUrls.length} stale cache entries`));
+    }
+  }
+}
+
+// Global image cache instance
+const imageCache = new ImageCache();
+
+/**
+ * Enhanced download function with caching
+ */
+async function downloadAndProcessImageWithCache(
+  url: string,
+  blockName: string,
+  index: number
+): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
+  // Check cache first
+  const cachedEntry = imageCache.get(url);
+  if (cachedEntry) {
+    console.info(chalk.green(`💾 Using cached image: ${cachedEntry.localPath}`));
+    return {
+      newPath: cachedEntry.localPath,
+      savedBytes: 0, // No new bytes saved since it was cached
+      fromCache: true
+    };
+  }
+
+  // Download and process the image
+  const result = await downloadAndProcessImage(url, blockName, index);
+  
+  // Cache the result for future use
+  imageCache.set(url, result.newPath, blockName);
+  
+  return {
+    ...result,
+    fromCache: false
+  };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -782,57 +1071,120 @@ export async function generateBlocks(pages, progressCallback) {
                   chalk.blue(`  ↳ Processed callouts in markdown content`)
                 );
               }
-              // Process images with Promise.allSettled for better error handling
+              
+              // Enhanced image processing with comprehensive fallback handling
               const imgRegex = /!\[.*?\]\((.*?)\)/g;
-              const imgPromises = [];
+              const imageProcessingTasks = [];
               let match;
               let imgIndex = 0;
+              const imageReplacements: Array<{ original: string; replacement: string }> = [];
 
+              // Phase 1: Validate and queue all images for processing
               while ((match = imgRegex.exec(markdownString.parent)) !== null) {
                 const imgUrl = match[1];
-                if (!imgUrl.startsWith("http")) continue; // Skip local images
                 const fullMatch = match[0];
-
-                imgPromises.push(
-                  downloadAndProcessImage(imgUrl, safeFilename, imgIndex)
-                    .then(({ newPath, savedBytes }) => {
-                      const newImageMarkdown = fullMatch.replace(
-                        imgUrl,
-                        newPath
-                      );
-                      markdownString.parent = markdownString.parent.replace(
-                        fullMatch,
-                        newImageMarkdown
-                      );
-                      totalSaved += savedBytes;
-                      return { success: true, savedBytes };
-                    })
-                    .catch((error) => {
-                      console.error(
-                        chalk.red(
-                          `Failed to process image ${imgIndex} for page ${page.id}:`
-                        ),
-                        error.message
-                      );
-                      return { success: false, error: error.message };
-                    })
-                );
+                
+                // Enhanced validation - check for any type of URL
+                const urlValidation = validateAndSanitizeImageUrl(imgUrl);
+                
+                if (!urlValidation.isValid) {
+                  // Log the invalid URL and create a fallback immediately
+                  console.warn(chalk.yellow(`⚠️  Invalid image URL detected: ${urlValidation.error}`));
+                  const fallbackMarkdown = createFallbackImageMarkdown(fullMatch, imgUrl, imgIndex);
+                  imageReplacements.push({ original: fullMatch, replacement: fallbackMarkdown });
+                  
+                  // Log for manual recovery
+                  await logImageFailure({
+                    timestamp: new Date().toISOString(),
+                    pageBlock: safeFilename,
+                    imageIndex: imgIndex,
+                    originalUrl: imgUrl,
+                    error: urlValidation.error,
+                    fallbackUsed: true,
+                    validationFailed: true
+                  });
+                } else {
+                  // Only process valid HTTP/HTTPS URLs
+                  if (urlValidation.sanitizedUrl!.startsWith("http")) {
+                    imageProcessingTasks.push(
+                      processImageWithFallbacks(urlValidation.sanitizedUrl!, safeFilename, imgIndex, fullMatch)
+                        .then((result) => ({
+                          ...result,
+                          originalMarkdown: fullMatch,
+                          imageUrl: urlValidation.sanitizedUrl!,
+                          index: imgIndex
+                        }))
+                    );
+                  } else {
+                    // Skip local images but log them
+                    console.info(chalk.blue(`ℹ️  Skipping local image: ${imgUrl}`));
+                  }
+                }
                 imgIndex++;
               }
 
-              // Use Promise.allSettled to handle partial failures gracefully
-              const imgResults = await Promise.allSettled(imgPromises);
-              const successfulImages = imgResults.filter(
-                (result) =>
-                  result.status === "fulfilled" && result.value.success
-              ).length;
+              // Phase 2: Process all valid images concurrently
+              let successfulImages = 0;
+              let totalFailures = 0;
+              
+              if (imageProcessingTasks.length > 0) {
+                const imageResults = await Promise.allSettled(imageProcessingTasks);
+                
+                for (const result of imageResults) {
+                  if (result.status === "fulfilled") {
+                    const processResult = result.value;
+                    
+                    if (processResult.success && processResult.newPath) {
+                      // Success: Replace with new image path
+                      const newImageMarkdown = processResult.originalMarkdown!.replace(
+                        processResult.imageUrl!,
+                        processResult.newPath
+                      );
+                      imageReplacements.push({
+                        original: processResult.originalMarkdown!,
+                        replacement: newImageMarkdown
+                      });
+                      totalSaved += processResult.savedBytes || 0;
+                      successfulImages++;
+                    } else {
+                      // Failure: Create informative fallback
+                      const fallbackMarkdown = createFallbackImageMarkdown(
+                        processResult.originalMarkdown!,
+                        processResult.imageUrl!,
+                        processResult.index!
+                      );
+                      imageReplacements.push({
+                        original: processResult.originalMarkdown!,
+                        replacement: fallbackMarkdown
+                      });
+                      totalFailures++;
+                    }
+                  } else {
+                    // Promise rejection - should not happen with our error handling
+                    console.error(chalk.red(`Unexpected image processing failure: ${result.reason}`));
+                    totalFailures++;
+                  }
+                }
+              }
 
-              if (successfulImages < imgPromises.length) {
-                console.warn(
-                  chalk.yellow(
-                    `⚠️  ${imgPromises.length - successfulImages} images failed to process for page ${page.id}`
-                  )
-                );
+              // Phase 3: Apply all replacements to markdown
+              let processedMarkdown = markdownString.parent;
+              for (const replacement of imageReplacements) {
+                processedMarkdown = processedMarkdown.replace(replacement.original, replacement.replacement);
+              }
+              
+              // Phase 4: Final sanitization to catch any remaining issues
+              processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
+              markdownString.parent = processedMarkdown;
+
+              // Phase 5: Report results
+              const totalImages = imgIndex;
+              if (totalImages > 0) {
+                console.info(chalk.green(`📸 Processed ${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`));
+                if (totalFailures > 0) {
+                  console.warn(chalk.yellow(`⚠️  ${totalFailures} images failed but have been replaced with informative placeholders`));
+                  console.info(chalk.blue(`💡 Check 'image-failures.json' for recovery information`));
+                }
               }
 
               // Sanitize content to fix malformed HTML/JSX tags
@@ -936,12 +1288,47 @@ export async function generateBlocks(pages, progressCallback) {
       }
     }
 
+    // Final cache cleanup and statistics
+    imageCache.cleanup();
+    const cacheStats = imageCache.getStats();
+    
+    console.info(chalk.green(`\n📊 Image Processing Summary:`));
+    console.info(chalk.blue(`   💾 Cache: ${cacheStats.validEntries}/${cacheStats.totalEntries} entries valid`));
+    console.info(chalk.green(`   💰 Storage saved: ${Math.round(totalSaved / 1024)} KB`));
+    console.info(chalk.blue(`   📄 Sections created: ${sectionCount}`));
+    console.info(chalk.blue(`   📝 Title sections: ${titleSectionCount}`));
+    
+    if (cacheStats.validEntries > 0) {
+      console.info(chalk.green(`   🚀 Future runs will be faster with ${cacheStats.validEntries} cached images`));
+    }
+
     return { totalSaved, sectionCount, titleSectionCount };
   } catch (error) {
     console.error(chalk.red("Critical error in generateBlocks:"), error);
+    
+    // Log the error for debugging
+    try {
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        stack: error.stack,
+        type: 'generateBlocks_critical_error'
+      };
+      await logImageFailure(errorLog);
+    } catch (logError) {
+      console.warn(chalk.yellow('Failed to log critical error'));
+    }
+    
     throw error;
   } finally {
     // Ensure all spinners are cleaned up
     SpinnerManager.stopAll();
+    
+    // Final cache save
+    try {
+      imageCache.cleanup();
+    } catch (cacheError) {
+      console.warn(chalk.yellow('Warning: Failed to cleanup image cache'));
+    }
   }
 }

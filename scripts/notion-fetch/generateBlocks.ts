@@ -131,14 +131,8 @@ function extractTextFromCalloutBlock(block: any): string {
 }
 
 function normalizeForMatch(text: string): string {
-  // Remove common markdown markers that shouldn't affect matching
-  const withoutMd = text
-    .replace(/`([^`]+)`/g, "$1") // inline code
-    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
-    .replace(/\*([^*]+)\*/g, "$1") // italics
-    .replace(/__([^_]+)__/g, "$1") // underline style
-    .replace(/~~([^~]+)~~/g, "$1"); // strikethrough
-  return withoutMd.replace(/\s+/g, " ").trim().toLowerCase();
+  // Only normalize whitespace; preserve inline markdown formatting for accurate matching
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function findMatchingBlockquote(
@@ -149,20 +143,29 @@ function findMatchingBlockquote(
   const normalizedSearch = normalizeForMatch(searchText);
   if (!normalizedSearch) return null;
 
+  const stripQuote = (line: string) => line.replace(/^\s*>+\s?/, "");
+
   for (let i = fromIndex; i < lines.length; i++) {
-    if (!lines[i].startsWith(">")) continue;
+    if (!lines[i].trimStart().startsWith(">")) continue;
 
     const blockLines: string[] = [];
     let end = i;
-    while (end < lines.length && lines[end].startsWith(">")) {
-      blockLines.push(lines[end]);
+    while (end < lines.length) {
+      const l = lines[end];
+      if (l.trim() === "") {
+        // allow blank lines inside the blockquote region
+        blockLines.push(l);
+        end++;
+        continue;
+      }
+      if (!l.trimStart().startsWith(">")) break;
+      blockLines.push(l);
       end++;
     }
     end -= 1;
 
-    // Remove leading '>' markers while preserving inner indentation
     const contentLines = blockLines.map((line) =>
-      line.replace(/^(\s*>+\s?)/, "")
+      line.trim() === "" ? "" : stripQuote(line)
     );
     const normalizedContent = normalizeForMatch(contentLines.join(" "));
 

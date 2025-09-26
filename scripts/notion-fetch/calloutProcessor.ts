@@ -103,23 +103,21 @@ function normalizeLines(
 }
 
 function stripIconFromLines(lines: string[], icon: string): string[] {
-  if (lines.length === 0) {
-    return lines;
-  }
+  if (lines.length === 0) return lines;
 
   const [firstLine, ...rest] = lines;
   const trimmed = firstLine.trimStart();
 
-  if (!trimmed.startsWith(icon)) {
+  // Build a safe pattern for the exact icon, followed by optional punctuation and space
+  const escapedIcon = icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const iconPattern = new RegExp(`^${escapedIcon}(?:\\s*[:\\-]\\s*|\\s+)`, "u");
+
+  if (!iconPattern.test(trimmed)) {
     return lines;
   }
 
-  const remainder = trimmed.slice(icon.length).trimStart();
-  if (remainder) {
-    return [remainder, ...rest];
-  }
-
-  return rest;
+  const remainder = trimmed.replace(iconPattern, "");
+  return remainder ? [remainder, ...rest] : rest;
 }
 
 function extractTitleFromLines(lines: string[]): {

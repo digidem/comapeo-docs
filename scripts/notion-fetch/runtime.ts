@@ -31,8 +31,11 @@ async function cleanupResources() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-export async function gracefulShutdown(exitCode: number = 0, signal?: string) {
-  if (isShuttingDown) return;
+export async function gracefulShutdown(
+  exitCode: number = 0,
+  signal?: string
+): Promise<number> {
+  if (isShuttingDown) return exitCode;
   isShuttingDown = true;
 
   console.log(
@@ -51,6 +54,9 @@ export async function gracefulShutdown(exitCode: number = 0, signal?: string) {
   if (process.env.NODE_ENV !== "test") {
     process.exit(exitCode);
   }
+
+  // Return the exit code for test mode
+  return exitCode;
 }
 
 export function initializeGracefulShutdownHandlers() {

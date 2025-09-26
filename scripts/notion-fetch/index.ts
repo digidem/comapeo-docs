@@ -29,7 +29,7 @@ const isDirectExec =
 
 initializeGracefulShutdownHandlers();
 
-async function main() {
+async function main(): Promise<number> {
   console.log(
     chalk.bold.cyan("🚀 Starting Notion data fetch and processing\n")
   );
@@ -40,7 +40,7 @@ async function main() {
         "Error: NOTION_API_KEY is not defined in the environment variables."
       )
     );
-    await gracefulShutdown(1);
+    return await gracefulShutdown(1);
   }
 
   if (!process.env.DATABASE_ID) {
@@ -49,7 +49,7 @@ async function main() {
         "Error: DATABASE_ID is not defined in the environment variables."
       )
     );
-    await gracefulShutdown(1);
+    return await gracefulShutdown(1);
   }
 
   try {
@@ -95,7 +95,7 @@ async function main() {
       )
     );
 
-    await gracefulShutdown(0);
+    return await gracefulShutdown(0);
   } catch (error) {
     if (
       error instanceof Error &&
@@ -106,7 +106,7 @@ async function main() {
 
     console.error(chalk.bold.red("❌ Fatal error in main:"), error);
     console.error(chalk.bold.red("\n❌ Error updating files:"), error);
-    await gracefulShutdown(1);
+    return await gracefulShutdown(1);
   }
 }
 

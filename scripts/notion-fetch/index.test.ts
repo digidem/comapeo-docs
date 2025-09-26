@@ -184,13 +184,11 @@ describe("notion-fetch integration", () => {
 
       // Act
       // Import the module which will execute main() automatically
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
       // Assert
-      expect(exitCode).toBe(0);
+      expect(actualExitCode).toBe(0);
       expect(fetchNotionData).toHaveBeenCalledWith({
         and: [
           {
@@ -215,12 +213,10 @@ describe("notion-fetch integration", () => {
       delete process.env.NOTION_API_KEY;
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 1");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
-      expect(exitCode).toBe(1);
+      expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
         expect.stringContaining("NOTION_API_KEY is not defined")
       );
@@ -231,12 +227,10 @@ describe("notion-fetch integration", () => {
       delete process.env.DATABASE_ID;
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 1");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
-      expect(exitCode).toBe(1);
+      expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
         expect.stringContaining("DATABASE_ID is not defined")
       );
@@ -249,12 +243,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(fetchNotionData).mockRejectedValue(fetchError);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 1");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
-      expect(exitCode).toBe(1);
+      expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
         expect.stringContaining("Error updating files:"),
         fetchError
@@ -283,12 +275,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(generateBlocks).mockRejectedValue(generateError);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 1");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
-      expect(exitCode).toBe(1);
+      expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
         expect.stringContaining("Error updating files:"),
         generateError
@@ -321,11 +311,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(0);
       expect(consoleMocks.log).toHaveBeenCalledWith(
         expect.stringContaining("2.00 KB was saved on image compression")
       );
@@ -367,11 +356,10 @@ describe("notion-fetch integration", () => {
       const ora = vi.mocked(await import("ora")).default;
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(0);
       expect(ora).toHaveBeenCalledWith("Fetching data from Notion");
       expect(ora).toHaveBeenCalledWith("Generating blocks");
     });
@@ -412,11 +400,10 @@ describe("notion-fetch integration", () => {
       );
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(0);
       // The progress callback should have been called
       expect(generateBlocks).toHaveBeenCalledWith(
         mockData,
@@ -433,11 +420,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(fetchNotionData).mockRejectedValue(fatalError);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 1");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
         expect.stringContaining("Fatal error in main:"),
         fatalError
@@ -499,11 +485,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(0);
       expect(fetchNotionData).toHaveBeenCalledWith({
         and: [
           {
@@ -554,11 +539,10 @@ describe("notion-fetch integration", () => {
       vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
 
       // Act & Assert
-      await expect(async () => {
-        const mod = await import("./index");
-        await mod.main();
-      }).rejects.toThrow("Process exit called with code: 0");
+      const mod = await import("./index");
+      const actualExitCode = await mod.main();
 
+      expect(actualExitCode).toBe(0);
       expect(sortAndExpandNotionData).toHaveBeenCalledWith(mockData);
       expect(generateBlocks).toHaveBeenCalledWith(
         sortedData,

@@ -204,12 +204,13 @@ describe("EmojiProcessor", () => {
     });
 
     it("should accept Notion static URLs", async () => {
-      const url = "https://s3-us-west-2.amazonaws.com/public.notion-static.com/b900aefd-3951-4b85-b75f-44e28a611e8a/icon-save.jpg";
+      const url =
+        "https://s3-us-west-2.amazonaws.com/public.notion-static.com/b900aefd-3951-4b85-b75f-44e28a611e8a/icon-save.jpg";
 
       // Mock successful download and processing
       const mockAxiosGet = vi.mocked(axios.get);
       const jpgMagicBytes = Buffer.from([
-        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
       ]); // Full JPEG header
 
       mockAxiosGet.mockResolvedValueOnce({
@@ -219,7 +220,9 @@ describe("EmojiProcessor", () => {
 
       const result = await EmojiProcessor.processEmoji(url, "test-page");
 
-      expect(result.newPath).toMatch(/^\/images\/emojis\/icon-save_.+\.(png|jpg)$/);
+      expect(result.newPath).toMatch(
+        /^\/images\/emojis\/icon-save_.+\.(png|jpg)$/
+      );
       expect(result.reused).toBe(false);
     });
 

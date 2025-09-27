@@ -126,10 +126,10 @@ export class EmojiProcessor {
 
       // Allow paths that contain 'emoji' (generic emoji URLs)
       const hasEmojiInPath = parsed.pathname.includes("emoji");
-      
+
       // Allow Notion static URLs (for custom emojis from Notion)
       const isNotionStaticUrl = parsed.pathname.includes("notion-static.com");
-      
+
       // Allow icon files (common pattern for Notion custom emojis)
       const isIconFile = /\/icon-[^\/]*\.(png|jpg|jpeg|gif|svg|webp)$/i.test(
         parsed.pathname

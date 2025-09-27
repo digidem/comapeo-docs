@@ -12,11 +12,86 @@ function isFullBlock(
 }
 
 export async function fetchNotionData(filter) {
-  const response = await enhancedNotion.databasesQuery({
-    database_id: DATABASE_ID,
-    filter: filter,
-  });
-  return response.results;
+  const results: Array<Record<string, unknown>> = [];
+  let hasMore = true;
+  let startCursor: string | undefined;
+  let safetyCounter = 0;
+  const MAX_PAGES = 10_000; // Safety limit to prevent infinite loops
+
+  const seenIds = new Set<string>();
+  while (hasMore) {
+    if (++safetyCounter > MAX_PAGES) {
+      console.warn(
+        "Pagination safety limit exceeded; returning partial results."
+      );
+      break;
+    }
+
+    const response = await enhancedNotion.databasesQuery({
+      database_id: DATABASE_ID,
+      filter,
+      start_cursor: startCursor,
+      page_size: 100,
+    });
+
+    const pageResults = Array.isArray(response.results) ? response.results : [];
+
+    // Detect duplicate IDs to avoid stalling and data corruption
+    let duplicateDetected = false;
+    for (const r of pageResults) {
+      const id = (r as any)?.id;
+      if (id && seenIds.has(id)) {
+        duplicateDetected = true;
+        break;
+      }
+      if (id) seenIds.add(id);
+    }
+
+    results.push(...pageResults);
+
+    const prevCursor = startCursor;
+    const prevCount = pageResults.length;
+    hasMore = Boolean(response.has_more);
+    startCursor = response.next_cursor ?? undefined;
+
+    const anomaly =
+      hasMore &&
+      (duplicateDetected ||
+        !startCursor ||
+        startCursor === prevCursor ||
+        prevCount === 0);
+    if (anomaly) {
+      // One retry attempt to recover from transient anomaly
+      console.warn("Notion API pagination anomaly detected; retrying once...");
+      const retryResp = await enhancedNotion.databasesQuery({
+        database_id: DATABASE_ID,
+        filter,
+        start_cursor: prevCursor,
+        page_size: 100,
+      });
+      const retryResults = Array.isArray(retryResp.results)
+        ? retryResp.results
+        : [];
+      for (const r of retryResults) {
+        const id = (r as any)?.id;
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        results.push(r);
+      }
+      const retryCursor = retryResp.next_cursor ?? undefined;
+      if (retryCursor && retryCursor !== prevCursor) {
+        hasMore = Boolean(retryResp.has_more);
+        startCursor = retryCursor;
+        continue;
+      }
+      console.warn(
+        "Anomaly persisted after retry; stopping early with partial results."
+      );
+      break;
+    }
+  }
+
+  return results;
 }
 
 /**

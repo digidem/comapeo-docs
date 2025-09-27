@@ -137,3 +137,78 @@ export const mockFetch = () => {
     },
   };
 };
+
+/**
+ * Create a mock axios instance with configurable responses
+ */
+export const createMockAxios = () => {
+  const routes = new Map<
+    string,
+    | { type: "success"; buffer: Buffer; contentType: string }
+    | { type: "error"; error: any }
+  >();
+
+  const mockAxios = {
+    get: vi.fn(async (requestUrl: string) => {
+      const route = routes.get(requestUrl);
+      if (!route) {
+        throw new Error(`Mock URL not found: ${requestUrl}`);
+      }
+      if (route.type === "success") {
+        return {
+          data: route.buffer,
+          headers: { "content-type": route.contentType },
+        };
+      }
+      throw route.error;
+    }),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+  };
+
+  return {
+    axios: mockAxios,
+    mockImageDownload: (
+      url: string,
+      imageBuffer: Buffer,
+      contentType = "image/jpeg"
+    ) => {
+      routes.set(url, { type: "success", buffer: imageBuffer, contentType });
+    },
+    mockImageDownloadFailure: (url: string, error: any) => {
+      routes.set(url, { type: "error", error });
+    },
+    mockMultipleImageDownloads: (
+      urlMappings: Array<{ url: string; buffer: Buffer; contentType?: string }>
+    ) => {
+      urlMappings.forEach(({ url, buffer, contentType }) => {
+        routes.set(url, {
+          type: "success",
+          buffer,
+          contentType: contentType || "image/jpeg",
+        });
+      });
+    },
+    mockTimeoutError: (url: string) => {
+      const timeoutError = new Error("timeout of 30000ms exceeded");
+      (timeoutError as any).code = "ECONNABORTED";
+      routes.set(url, { type: "error", error: timeoutError });
+    },
+    mockNetworkError: (url: string) => {
+      const networkError = new Error("getaddrinfo ENOTFOUND example.com");
+      (networkError as any).code = "ENOTFOUND";
+      routes.set(url, { type: "error", error: networkError });
+    },
+    mockHttpError: (url: string, status: number, statusText: string) => {
+      const httpError = new Error(`Request failed with status ${status}`);
+      (httpError as any).response = { status, statusText };
+      routes.set(url, { type: "error", error: httpError });
+    },
+    restore: () => {
+      routes.clear();
+      vi.restoreAllMocks();
+    },
+  };
+};

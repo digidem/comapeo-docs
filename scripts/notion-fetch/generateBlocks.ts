@@ -25,6 +25,404 @@ import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 
+// Enhanced image handling utilities for robust processing
+interface ImageProcessingResult {
+  success: boolean;
+  newPath?: string;
+  savedBytes?: number;
+  error?: string;
+  fallbackUsed?: boolean;
+}
+
+interface ImageUrlValidationResult {
+  isValid: boolean;
+  sanitizedUrl?: string;
+  error?: string;
+}
+
+/**
+ * Validates and sanitizes image URLs to prevent broken references
+ */
+function validateAndSanitizeImageUrl(url: string): ImageUrlValidationResult {
+  if (!url || typeof url !== "string") {
+    return { isValid: false, error: "URL is empty or not a string" };
+  }
+
+  const trimmedUrl = url.trim();
+  if (trimmedUrl === "") {
+    return { isValid: false, error: "URL is empty after trimming" };
+  }
+
+  // Check for obvious invalid patterns
+  if (trimmedUrl === "undefined" || trimmedUrl === "null") {
+    return { isValid: false, error: "URL contains literal undefined/null" };
+  }
+
+  // Validate URL format
+  try {
+    const urlObj = new URL(trimmedUrl);
+    // Ensure it's a reasonable protocol
+    if (!["http:", "https:"].includes(urlObj.protocol)) {
+      return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
+    }
+    return { isValid: true, sanitizedUrl: trimmedUrl };
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as any).message)
+        : "Unknown URL parse error";
+    return { isValid: false, error: `Invalid URL format: ${message}` };
+  }
+}
+
+/**
+ * Creates a fallback image reference when download fails
+ */
+function createFallbackImageMarkdown(
+  originalMarkdown: string,
+  imageUrl: string,
+  index: number
+): string {
+  // Extract alt text from original markdown
+  const altMatch = originalMarkdown.match(/!\[(.*?)\]/);
+  const altText = altMatch?.[1] || `Image ${index + 1}`;
+
+  // Create a placeholder that documents the original URL for recovery
+  const fallbackComment = `<!-- Failed to download image: ${imageUrl} -->`;
+  const placeholderText = `**[Image ${index + 1}: ${altText}]** *(Image failed to download)*`;
+
+  return `${fallbackComment}\n${placeholderText}`;
+}
+
+/**
+ * Enhanced image processing with comprehensive fallback handling
+ */
+async function processImageWithFallbacks(
+  imageUrl: string,
+  blockName: string,
+  index: number,
+  originalMarkdown: string
+): Promise<ImageProcessingResult> {
+  // Step 1: Validate URL
+  const validation = validateAndSanitizeImageUrl(imageUrl);
+  if (!validation.isValid) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  Invalid image URL for image ${index + 1}: ${validation.error}`
+      )
+    );
+    return {
+      success: false,
+      error: validation.error,
+      fallbackUsed: true,
+    };
+  }
+
+  // Step 2: Attempt download with caching and retries
+  try {
+    const result = await downloadAndProcessImageWithCache(
+      validation.sanitizedUrl!,
+      blockName,
+      index
+    );
+    return {
+      success: true,
+      newPath: result.newPath,
+      savedBytes: result.savedBytes,
+      fallbackUsed: false,
+    };
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as any).message)
+        : String(err ?? "Unknown error");
+    console.warn(
+      chalk.yellow(`⚠️  Image download failed for ${imageUrl}: ${message}`)
+    );
+
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      pageBlock: blockName,
+      imageIndex: index,
+      originalUrl: imageUrl,
+      error: message,
+      fallbackUsed: true,
+    };
+
+    await logImageFailure(logEntry);
+
+    return {
+      success: false,
+      error: message,
+      fallbackUsed: true,
+    };
+  }
+}
+
+// Simple in-process mutex to serialize writes
+let imageLogWriting = Promise.resolve();
+
+/**
+ * Logs image failures for manual recovery
+ */
+async function logImageFailure(logEntry: any): Promise<void> {
+  const logPath = path.join(process.cwd(), "image-failures.json");
+  const logDir = path.dirname(logPath);
+  const tmpPath = `${logPath}.tmp`;
+  const MAX_ENTRIES = 5000;
+  const MAX_FIELD_LEN = 2000;
+
+  const safeEntry = (() => {
+    try {
+      const clone: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(logEntry ?? {})) {
+        let val = v;
+        if (typeof val === "string") val = val.slice(0, MAX_FIELD_LEN);
+        else if (typeof val === "object") val = JSON.parse(JSON.stringify(val));
+        clone[k] = val;
+      }
+      return clone;
+    } catch {
+      return { message: "non-serializable log entry" };
+    }
+  })();
+
+  imageLogWriting = imageLogWriting
+    .then(async () => {
+      try {
+        fs.mkdirSync(logDir, { recursive: true });
+      } catch {
+        // ignore
+      }
+
+      let existingLogs: any[] = [];
+      try {
+        if (fs.existsSync(logPath)) {
+          const content = fs.readFileSync(logPath, "utf-8");
+          const parsed = JSON.parse(content);
+          existingLogs = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch {
+        existingLogs = [];
+      }
+      existingLogs.push(safeEntry);
+      if (existingLogs.length > MAX_ENTRIES) {
+        existingLogs = existingLogs.slice(-MAX_ENTRIES);
+      }
+
+      const payload = JSON.stringify(existingLogs, null, 2);
+      try {
+        fs.writeFileSync(tmpPath, payload);
+        fs.renameSync(tmpPath, logPath);
+      } catch {
+        console.warn(
+          chalk.yellow("Failed to write image failure log atomically")
+        );
+        try {
+          fs.writeFileSync(logPath, payload);
+        } catch {
+          console.warn(chalk.yellow("Failed to write image failure log"));
+        }
+      } finally {
+        try {
+          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+      return undefined;
+    })
+    .catch((e) => {
+      console.warn(
+        chalk.yellow("Image failure log write error; resetting queue"),
+        e
+      );
+      return undefined;
+    });
+
+  await imageLogWriting;
+}
+
+/**
+ * Post-process markdown to ensure no broken image references remain
+ */
+function sanitizeMarkdownImages(content: string): string {
+  if (!content || content.indexOf("![") === -1) return content;
+  // Cap processing size to avoid ReDoS on pathological inputs
+  const MAX_LEN = 2_000_000;
+  const text = content.length > MAX_LEN ? content.slice(0, MAX_LEN) : content;
+  let sanitized = text;
+
+  // Pattern 1: Completely empty URLs
+  sanitized = sanitized.replace(
+    /!\[([^\]]*)\]\(\s*\)/g,
+    "**[Image: $1]** *(Image URL was empty)*"
+  );
+
+  // Pattern 2: Invalid literal placeholders
+  sanitized = sanitized.replace(
+    /!\[([^\]]*)\]\(\s*(?:undefined|null)\s*\)/g,
+    "**[Image: $1]** *(Image URL was invalid)*"
+  );
+
+  // Pattern 3: Unencoded whitespace inside URL (safe regex without nested greedy scans)
+  // Matches any whitespace in the URL excluding escaped closing parens and %20
+  sanitized = sanitized.replace(
+    /!\[([^\]]*)\]\(\s*([^()\s][^()\r\n]*?(?:\s+)[^()\r\n]*?)\s*\)/g,
+    "**[Image: $1]** *(Image URL contained whitespace)*"
+  );
+
+  // If we truncated, append a notice to avoid corrupting content silently
+  if (text.length !== content.length) {
+    return sanitized + "\n\n<!-- Content truncated for sanitation safety -->";
+  }
+  return sanitized;
+}
+
+/**
+ * Image cache system to prevent re-downloading and provide recovery options
+ */
+interface ImageCacheEntry {
+  url: string;
+  localPath: string;
+  timestamp: string;
+  blockName: string;
+  checksum?: string;
+}
+
+class ImageCache {
+  private cacheFile: string;
+  private cache: Map<string, ImageCacheEntry>;
+
+  constructor() {
+    this.cacheFile = path.join(process.cwd(), "image-cache.json");
+    this.cache = new Map();
+    this.loadCache();
+  }
+
+  private loadCache(): void {
+    try {
+      if (fs.existsSync(this.cacheFile)) {
+        const content = fs.readFileSync(this.cacheFile, "utf-8");
+        const cacheData = JSON.parse(content);
+        Object.entries(cacheData).forEach(([url, entry]) => {
+          this.cache.set(url, entry as ImageCacheEntry);
+        });
+        console.info(
+          chalk.blue(`📦 Loaded image cache with ${this.cache.size} entries`)
+        );
+      }
+    } catch (error) {
+      console.warn(
+        chalk.yellow("⚠️  Failed to load image cache, starting fresh")
+      );
+    }
+  }
+
+  private saveCache(): void {
+    try {
+      const cacheData = Object.fromEntries(this.cache);
+      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
+    } catch (error) {
+      console.warn(chalk.yellow("⚠️  Failed to save image cache"));
+    }
+  }
+
+  private getAbsoluteImagePath(fileNameOrWebPath: string): string {
+    const baseName = path.basename(fileNameOrWebPath || "");
+    // reject suspicious names
+    if (!baseName || baseName.includes("..") || baseName.includes(path.sep)) {
+      return path.join(IMAGES_PATH, "_invalid-image-name_");
+    }
+    return path.join(IMAGES_PATH, baseName);
+  }
+
+  has(url: string): boolean {
+    const entry = this.cache.get(url);
+    if (!entry) return false;
+    const fullPath = this.getAbsoluteImagePath(entry.localPath);
+    return fs.existsSync(fullPath);
+  }
+
+  get(url: string): ImageCacheEntry | undefined {
+    if (this.has(url)) {
+      return this.cache.get(url);
+    }
+    this.cache.delete(url);
+    return undefined;
+  }
+
+  set(url: string, localPath: string, blockName: string): void {
+    const safeBase = path.basename(localPath || "");
+    const entry: ImageCacheEntry = {
+      url,
+      localPath: safeBase,
+      timestamp: new Date().toISOString(),
+      blockName,
+    };
+    this.cache.set(url, entry);
+    this.saveCache();
+  }
+
+  getStats(): { totalEntries: number; validEntries: number } {
+    let validEntries = 0;
+    for (const [url] of this.cache) {
+      if (this.has(url)) validEntries++;
+    }
+    return { totalEntries: this.cache.size, validEntries };
+  }
+
+  cleanup(): void {
+    // Remove stale entries where local files no longer exist
+    const staleUrls = [];
+    for (const [url] of this.cache) {
+      if (!this.has(url)) {
+        staleUrls.push(url);
+      }
+    }
+    staleUrls.forEach((url) => this.cache.delete(url));
+    if (staleUrls.length > 0) {
+      this.saveCache();
+      console.info(
+        chalk.blue(`🧹 Cleaned up ${staleUrls.length} stale cache entries`)
+      );
+    }
+  }
+}
+
+// Global image cache instance
+const imageCache = new ImageCache();
+
+/**
+ * Enhanced download function with caching
+ */
+async function downloadAndProcessImageWithCache(
+  url: string,
+  blockName: string,
+  index: number
+): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
+  const cachedEntry = imageCache.get(url);
+  if (cachedEntry) {
+    const fileName = path.basename(cachedEntry.localPath);
+    const webPath = `/images/${fileName}`;
+    console.info(chalk.green(`💾 Using cached image: ${webPath}`));
+    return {
+      newPath: webPath,
+      savedBytes: 0,
+      fromCache: true,
+    };
+  }
+
+  const result = await downloadAndProcessImage(url, blockName, index);
+  imageCache.set(url, result.newPath, blockName);
+
+  return {
+    newPath: result.newPath,
+    savedBytes: result.savedBytes,
+    fromCache: false,
+  };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,6 +437,14 @@ const getI18NPath = (locale: string) =>
   path.join(I18N_PATH, locale, "docusaurus-plugin-content-docs", "current");
 const locales = config.i18n.locales;
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
+
+const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
+  English: "en",
+  Spanish: "es",
+  Portuguese: "pt",
+};
+
+const FALLBACK_TITLE_PREFIX = "untitled";
 
 // Ensure directories exist (preserve existing content)
 fs.mkdirSync(CONTENT_PATH, { recursive: true });
@@ -237,111 +643,135 @@ async function downloadAndProcessImage(
   blockName: string,
   index: number
 ) {
-  const spinner = SpinnerManager.create(`Processing image ${index + 1}`, 60000); // 60 second timeout for images
+  let attempt = 0;
+  let lastError: unknown;
 
-  try {
-    // 1) Download with timeout
-    spinner.text = `Processing image ${index + 1}: Downloading`;
-    const response = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 30000, // 30 second timeout
-      maxRedirects: 5,
-      headers: {
-        "User-Agent": "notion-fetch-script/1.0",
-      },
-    });
-
-    const originalBuffer = Buffer.from(response.data, "binary");
-
-    // Remove query parameters from the URL
-    const cleanUrl = url.split("?")[0];
-
-    // Detect true format from buffer and Content-Type, and save with the right extension
-    const headerCT = (response.headers as Record<string, string | string[]>)?.[
-      "content-type"
-    ] as string | undefined;
-    const headerFmt = formatFromContentType(headerCT);
-    const bufferFmt = detectFormatFromBuffer(originalBuffer);
-    const chosenFmt = chooseFormat(bufferFmt, headerFmt);
-
-    // Compute extension. If unknown, fall back to URL extension or .jpg
-    const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
-    let extension = extForFormat(chosenFmt);
-    if (!extension) {
-      extension = urlExt || ".jpg";
-    }
-
-    // Create a short, sanitized filename using the chosen extension
-    const sanitizedBlockName = blockName
-      .replace(/[^a-z0-9]/gi, "")
-      .toLowerCase()
-      .slice(0, 20);
-    const filename = `${sanitizedBlockName}_${index}${extension}`;
-
-    const filepath = path.join(IMAGES_PATH, filename);
-
-    let resizedBuffer = originalBuffer;
-    let originalSize = originalBuffer.length;
-
-    // 2) Resize only for formats sharp supports without conversion (jpeg/png/webp)
-    if (isResizableFormat(chosenFmt)) {
-      spinner.text = `Processing image ${index + 1}: Resizing`;
-      // processImage uses the outputPath extension to choose encoder; since we computed
-      // "extension" from detected format, sharp will keep that format.
-      const processed = await processImage(originalBuffer, filepath);
-      resizedBuffer = processed.outputBuffer;
-      originalSize = processed.originalSize;
-    } else {
-      spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
-      // Keep original buffer as candidate for optimization
-      resizedBuffer = originalBuffer;
-      originalSize = originalBuffer.length;
-    }
-
-    // 3) Compression/Optimization with fail-open. On any optimizer error, keep original unmodified.
-    spinner.text = `Processing image ${index + 1}: Compressing`;
-    // Streaming-like safe write: only replace final file on success; else keep original
-    const { finalSize, usedFallback } = await compressImageToFileWithFallback(
-      originalBuffer,
-      resizedBuffer,
-      filepath,
-      url
+  while (attempt < 3) {
+    const attemptNumber = attempt + 1;
+    const spinner = SpinnerManager.create(
+      `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
+      60000
     );
 
-    spinner.succeed(
-      usedFallback
-        ? chalk.green(
-            `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
+    try {
+      spinner.text = `Processing image ${index + 1}: Downloading`;
+      const response = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+        maxRedirects: 5,
+        headers: {
+          "User-Agent": "notion-fetch-script/1.0",
+        },
+      });
+
+      const originalBuffer = Buffer.from(response.data, "binary");
+      const cleanUrl = url.split("?")[0];
+
+      const rawCT = (response.headers as Record<string, unknown>)[
+        "content-type"
+      ];
+      const normalizedCT =
+        typeof rawCT === "string"
+          ? rawCT
+          : Array.isArray(rawCT)
+            ? rawCT[0]
+            : undefined;
+      const headerFmt = formatFromContentType(normalizedCT);
+      const bufferFmt = detectFormatFromBuffer(originalBuffer);
+      const chosenFmt = chooseFormat(bufferFmt, headerFmt);
+
+      const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
+      let extension = extForFormat(chosenFmt);
+      if (!extension) {
+        extension = urlExt || ".jpg";
+      }
+
+      const sanitizedBlockName = blockName
+        .replace(/[^a-z0-9]/gi, "")
+        .toLowerCase()
+        .slice(0, 20);
+      const filename = `${sanitizedBlockName}_${index}${extension}`;
+      const filepath = path.join(IMAGES_PATH, filename);
+
+      let resizedBuffer = originalBuffer;
+      let originalSize = originalBuffer.length;
+
+      if (isResizableFormat(chosenFmt)) {
+        spinner.text = `Processing image ${index + 1}: Resizing`;
+        const processed = await processImage(originalBuffer, filepath);
+        resizedBuffer = processed.outputBuffer;
+        originalSize = processed.originalSize;
+      } else {
+        spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
+        resizedBuffer = originalBuffer;
+        originalSize = originalBuffer.length;
+      }
+
+      spinner.text = `Processing image ${index + 1}: Compressing`;
+      const { finalSize, usedFallback } = await compressImageToFileWithFallback(
+        originalBuffer,
+        resizedBuffer,
+        filepath,
+        url
+      );
+
+      spinner.succeed(
+        usedFallback
+          ? chalk.green(
+              `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
+            )
+          : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
+      );
+
+      const savedBytes = usedFallback
+        ? 0
+        : Math.max(0, originalSize - finalSize);
+      const imagePath = `/images/${filename}`;
+      return { newPath: imagePath, savedBytes };
+    } catch (error) {
+      lastError = error;
+      let errorMessage = `Error processing image ${index + 1} from ${url}`;
+
+      if ((error as any)?.code === "ECONNABORTED") {
+        errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
+      } else if ((error as any)?.response) {
+        errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
+      } else if ((error as any)?.code === "ENOTFOUND") {
+        errorMessage = `DNS resolution failed for image ${index + 1}: ${url}`;
+      }
+
+      spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
+      console.error(chalk.red("Image processing error details:"), error);
+
+      if (attemptNumber < 3) {
+        // Test-environment-aware retry delays
+        const isTestEnv =
+          process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+        const baseDelayMs = isTestEnv ? 10 : 1000;
+        const jitter = Math.floor(Math.random() * (isTestEnv ? 5 : 250));
+        const delayMs =
+          Math.min(
+            isTestEnv ? 50 : 4000,
+            baseDelayMs * 2 ** (attemptNumber - 1)
+          ) + jitter;
+
+        console.warn(
+          chalk.yellow(
+            `Retrying image ${index + 1} in ${delayMs}ms (attempt ${attemptNumber + 1}/3)`
           )
-        : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
-    );
-
-    const savedBytes = usedFallback ? 0 : Math.max(0, originalSize - finalSize);
-    // Use absolute path so Docusaurus resolves from /static
-    const imagePath = `/images/${filename.replace(/\\/g, "/")}`;
-    return { newPath: imagePath, savedBytes };
-  } catch (error) {
-    // Enhanced error handling with specific error types
-    let errorMessage = `Error processing image ${index + 1} from ${url}`;
-
-    if (error.code === "ECONNABORTED") {
-      errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
-    } else if (error.response) {
-      errorMessage = `HTTP ${error.response.status} error for image ${index + 1}: ${url}`;
-    } else if (error.code === "ENOTFOUND") {
-      errorMessage = `DNS resolution failed for image ${index + 1}: ${url}`;
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    } finally {
+      SpinnerManager.remove(spinner);
     }
 
-    spinner.fail(chalk.red(errorMessage));
-    console.error(chalk.red("Image processing error details:"), error);
-
-    // Per requirement: network failures should propagate; resizing failures should propagate.
-    // We rethrow to abort the page/process. No partial file was written unless optimizer succeeded.
-    throw error;
-  } finally {
-    // Ensure spinner is always cleaned up
-    SpinnerManager.remove(spinner);
+    attempt++;
   }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? "Unknown image processing error"));
 }
 
 const LEGACY_SECTION_PROPERTY = "Section";
@@ -350,30 +780,154 @@ const getElementTypeProperty = (page: Record<string, any>) =>
   page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
   page?.properties?.[LEGACY_SECTION_PROPERTY];
 
-const groupPagesByLang = (pages, page) => {
-  const langMap = {
-    English: "en",
-    Spanish: "es",
-    Portuguese: "pt",
-  };
+const extractPlainText = (property: any) => {
+  if (!property) {
+    return undefined;
+  }
+
+  if (typeof property === "string") {
+    return property;
+  }
+
+  const candidates = Array.isArray(property.title)
+    ? property.title
+    : Array.isArray(property.rich_text)
+      ? property.rich_text
+      : [];
+
+  for (const item of candidates) {
+    if (item?.plain_text) {
+      return item.plain_text;
+    }
+    if (item?.text?.content) {
+      return item.text.content;
+    }
+  }
+
+  return undefined;
+};
+
+const resolvePageTitle = (page: Record<string, any>) => {
+  const properties = page?.properties ?? {};
+  const candidates = [
+    properties[NOTION_PROPERTIES.TITLE],
+    properties.Title,
+    properties.title,
+  ];
+
+  for (const candidate of candidates) {
+    const resolved = extractPlainText(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  const fallbackId = (page?.id ?? "page").slice(0, 8);
+  return `${FALLBACK_TITLE_PREFIX}-${fallbackId}`;
+};
+
+const resolvePageLocale = (page: Record<string, any>) => {
+  const languageProperty =
+    page?.properties?.[NOTION_PROPERTIES.LANGUAGE] ??
+    page?.properties?.Language;
+
+  const languageName = languageProperty?.select?.name;
+  if (languageName && LANGUAGE_NAME_TO_LOCALE[languageName]) {
+    return LANGUAGE_NAME_TO_LOCALE[languageName];
+  }
+
+  return DEFAULT_LOCALE;
+};
+
+const groupPagesByLang = (pages: Array<Record<string, any>>, page) => {
   const elementType = getElementTypeProperty(page);
   const sectionName =
     elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
 
-  const obj = {
-    mainTitle: page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text,
+  const grouped = {
+    mainTitle: resolvePageTitle(page),
     section: sectionName,
-    content: {},
+    content: {} as Record<string, Record<string, any>>,
   };
-  const subpagesId = page.properties["Sub-item"].relation.map((obj) => obj.id);
-  for (const subpageId of subpagesId) {
-    const subpage = pages.find((page) => page.id == subpageId);
-    if (subpage) {
-      const lang = langMap[subpage.properties["Language"].select?.name];
-      obj.content[lang] = subpage;
+
+  const subItemRelation = page?.properties?.["Sub-item"]?.relation ?? [];
+
+  for (const relation of subItemRelation) {
+    const subpage = pages.find((candidate) => candidate.id === relation?.id);
+    if (!subpage) {
+      continue;
+    }
+
+    const lang = resolvePageLocale(subpage);
+    grouped.content[lang] = subpage;
+  }
+
+  const parentLocale = resolvePageLocale(page);
+  if (!grouped.content[parentLocale]) {
+    grouped.content[parentLocale] = page;
+  }
+
+  return grouped;
+};
+
+const createStandalonePageGroup = (page: Record<string, any>) => {
+  const elementType = getElementTypeProperty(page);
+  const sectionName =
+    elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
+  const locale = resolvePageLocale(page);
+
+  return {
+    mainTitle: resolvePageTitle(page),
+    section: sectionName,
+    content: {
+      [locale]: page,
+    } as Record<string, Record<string, any>>,
+  };
+};
+
+const buildFrontmatter = (
+  pageTitle: string,
+  sidebarPosition: number,
+  tags: string[],
+  keywords: string[],
+  customProps: Record<string, unknown>,
+  relativePath: string,
+  safeSlug: string
+) => {
+  let frontmatter = `---
+id: doc-${safeSlug}
+title: ${pageTitle}
+sidebar_label: ${pageTitle}
+sidebar_position: ${sidebarPosition}
+pagination_label: ${pageTitle}
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
+keywords:
+${keywords.map((k) => `  - ${k}`).join("\n")}
+tags: [${tags.join(", ")}]
+slug: /${safeSlug}
+last_update:
+  date: ${new Date().toLocaleDateString("en-US")}
+  author: Awana Digital`;
+
+  if (Object.keys(customProps).length > 0) {
+    frontmatter += `\nsidebar_custom_props:`;
+    for (const [key, value] of Object.entries(customProps)) {
+      if (
+        typeof value === "string" &&
+        (value.includes('"') ||
+          value.includes("'") ||
+          /[^\x20-\x7E]/.test(value))
+      ) {
+        const quoteChar = value.includes('"') ? "'" : '"';
+        frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
+      } else {
+        frontmatter += `\n  ${key}: ${value}`;
+      }
     }
   }
-  return obj;
+
+  frontmatter += `\n---\n`;
+  return frontmatter;
 };
 
 function setTranslationString(
@@ -382,17 +936,51 @@ function setTranslationString(
   translated: string
 ) {
   const lPath = path.join(I18N_PATH, lang, "code.json");
-  const file = JSON.parse(fs.readFileSync(lPath, "utf8"));
-  const translationObj = { message: translated };
-  file[original] = translationObj;
-  // console.log('adding translation to: ' + lPath)
-  // console.log('with: ', translationObj)
+  const dir = path.dirname(lPath);
+  fs.mkdirSync(dir, { recursive: true });
+
+  let fileContents = "{}";
+  try {
+    const existing = fs.readFileSync(lPath, "utf8");
+    if (typeof existing === "string" && existing.trim().length > 0) {
+      fileContents = existing;
+    }
+  } catch {
+    console.warn(
+      chalk.yellow(
+        `Translation file missing for ${lang}, creating a new one at ${lPath}`
+      )
+    );
+  }
+
+  let file: Record<string, any>;
+  try {
+    file = JSON.parse(fileContents);
+  } catch (parseError) {
+    console.warn(
+      chalk.yellow(
+        `Failed to parse translation file for ${lang}, resetting content`
+      ),
+      parseError
+    );
+    file = {};
+  }
+
+  const safeKey =
+    typeof original === "string"
+      ? original.slice(0, 2000)
+      : String(original).slice(0, 2000);
+  const safeMessage =
+    typeof translated === "string"
+      ? translated.slice(0, 5000)
+      : String(translated).slice(0, 5000);
+
+  file[safeKey] = { message: safeMessage };
   fs.writeFileSync(lPath, JSON.stringify(file, null, 4));
 }
 
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
-  const totalPages = pages.length;
   let totalSaved = 0;
   let processedPages = 0;
 
@@ -406,6 +994,16 @@ export async function generateBlocks(pages, progressCallback) {
 
   const pagesByLang = [];
 
+  const subpageIdSet = new Set<string>();
+  for (const page of pages) {
+    const relations = page?.properties?.["Sub-item"]?.relation ?? [];
+    for (const relation of relations) {
+      if (relation?.id) {
+        subpageIdSet.add(relation.id);
+      }
+    }
+  }
+
   try {
     /*
      * group pages by language likeso:
@@ -416,10 +1014,22 @@ export async function generateBlocks(pages, progressCallback) {
      * }
      */
     for (const page of pages) {
-      if (page.properties["Sub-item"].relation.length !== 0) {
+      const relations = page?.properties?.["Sub-item"]?.relation ?? [];
+
+      if (subpageIdSet.has(page?.id)) {
+        continue;
+      }
+
+      if (relations.length !== 0) {
         pagesByLang.push(groupPagesByLang(pages, page));
+      } else {
+        pagesByLang.push(createStandalonePageGroup(page));
       }
     }
+
+    const totalPages = pagesByLang.reduce((count, pageGroup) => {
+      return count + Object.keys(pageGroup.content).length;
+    }, 0);
 
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
@@ -434,8 +1044,57 @@ export async function generateBlocks(pages, progressCallback) {
       for (const lang of Object.keys(pageByLang.content)) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
         const page = pageByLang.content[lang];
-        const pageTitle =
-          page.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+        const pageTitle = resolvePageTitle(page);
+        const safeFallbackId = (page?.id ?? String(i + 1)).slice(0, 8);
+        const safeFilename =
+          filename || `${FALLBACK_TITLE_PREFIX}-${safeFallbackId}`;
+
+        const fileName = `${safeFilename}.md`;
+        const filePath = currentSectionFolder[lang]
+          ? path.join(PATH, currentSectionFolder[lang], fileName)
+          : path.join(PATH, fileName);
+        const relativePath = currentSectionFolder[lang]
+          ? `${currentSectionFolder[lang]}/${fileName}`
+          : fileName;
+
+        let tags = ["comapeo"];
+        if (page.properties["Tags"] && page.properties["Tags"].multi_select) {
+          tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
+        }
+
+        let keywords = ["docs", "comapeo"];
+        if (
+          page.properties.Keywords?.multi_select &&
+          page.properties.Keywords.multi_select.length > 0
+        ) {
+          keywords = page.properties.Keywords.multi_select.map(
+            (keyword) => keyword.name
+          );
+        }
+
+        let sidebarPosition = i + 1;
+        if (page.properties["Order"] && page.properties["Order"].number) {
+          sidebarPosition = page.properties["Order"].number;
+        }
+
+        const customProps: Record<string, unknown> = {};
+        if (
+          page.properties["Icon"] &&
+          page.properties["Icon"].rich_text &&
+          page.properties["Icon"].rich_text.length > 0
+        ) {
+          customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
+        }
+
+        const frontmatter = buildFrontmatter(
+          pageTitle,
+          sidebarPosition,
+          tags,
+          keywords,
+          customProps,
+          relativePath,
+          safeFilename
+        );
 
         console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
         const pageSpinner = SpinnerManager.create(
@@ -449,8 +1108,16 @@ export async function generateBlocks(pages, progressCallback) {
 
           // TOGGLE
           if (sectionType === "Toggle") {
-            const sectionName = page.properties["Title"].title[0].plain_text;
-            const sectionFolder = filename;
+            const sectionName =
+              page.properties?.["Title"]?.title?.[0]?.plain_text ?? pageTitle;
+            if (!page.properties?.["Title"]?.title?.[0]?.plain_text) {
+              console.warn(
+                chalk.yellow(
+                  `Missing 'Title' property for toggle page ${page.id}; falling back to page title.`
+                )
+              );
+            }
+            const sectionFolder = filename || safeFilename;
             const sectionFolderPath = path.join(PATH, sectionFolder);
             fs.mkdirSync(sectionFolderPath, { recursive: true });
             currentSectionFolder[lang] = sectionFolder;
@@ -458,21 +1125,21 @@ export async function generateBlocks(pages, progressCallback) {
               chalk.green(`Section folder created: ${sectionFolder}`)
             );
             sectionCount++;
-            const categoryContent = {
-              label: sectionName,
-              position: i + 1,
-              collapsible: true,
-              collapsed: true,
-              link: {
-                type: "generated-index",
-              },
-              customProps: { title: null },
-            };
-            if (currentHeading.get(lang)) {
-              categoryContent.customProps.title = currentHeading.get(lang);
-              currentHeading.set(lang, null);
-            }
             if (lang === "en") {
+              const categoryContent = {
+                label: sectionName,
+                position: i + 1,
+                collapsible: true,
+                collapsed: true,
+                link: {
+                  type: "generated-index",
+                },
+                customProps: { title: null },
+              };
+              if (currentHeading.get(lang)) {
+                categoryContent.customProps.title = currentHeading.get(lang);
+                currentHeading.set(lang, null);
+              }
               const categoryFilePath = path.join(
                 sectionFolderPath,
                 "_category_.json"
@@ -534,168 +1201,224 @@ export async function generateBlocks(pages, progressCallback) {
                   chalk.blue(`  ↳ Processed callouts in markdown content`)
                 );
               }
-              // Process images with Promise.allSettled for better error handling
-              const imgRegex = /!\[.*?\]\((.*?)\)/g;
-              const imgPromises = [];
-              let match;
-              let imgIndex = 0;
 
-              while ((match = imgRegex.exec(markdownString.parent)) !== null) {
-                const imgUrl = match[1];
-                if (!imgUrl.startsWith("http")) continue; // Skip local images
-                const fullMatch = match[0];
+              // Enhanced image processing with comprehensive fallback handling
+              // Collect matches first without mutating the source
+              const sourceMarkdown = markdownString.parent;
+              // Improved URL pattern: match until a ')' not preceded by '\', allow spaces trimmed
+              const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+              const imageMatches: Array<{
+                full: string;
+                url: string;
+                alt: string;
+                idx: number;
+                start: number;
+                end: number;
+              }> = [];
+              let m: RegExpExecArray | null;
+              let tmpIndex = 0;
+              let safetyCounter = 0;
+              const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
 
-                imgPromises.push(
-                  downloadAndProcessImage(imgUrl, filename, imgIndex)
-                    .then(({ newPath, savedBytes }) => {
-                      const newImageMarkdown = fullMatch.replace(
-                        imgUrl,
-                        newPath
-                      );
-                      markdownString.parent = markdownString.parent.replace(
-                        fullMatch,
-                        newImageMarkdown
-                      );
-                      totalSaved += savedBytes;
-                      return { success: true, savedBytes };
-                    })
-                    .catch((error) => {
-                      console.error(
-                        chalk.red(
-                          `Failed to process image ${imgIndex} for page ${page.id}:`
-                        ),
-                        error.message
-                      );
-                      return { success: false, error: error.message };
-                    })
-                );
-                imgIndex++;
+              while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+                if (++safetyCounter > SAFETY_LIMIT) {
+                  console.warn(
+                    chalk.yellow(
+                      `⚠️  Image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
+                    )
+                  );
+                  break;
+                }
+                const start = m.index;
+                const full = m[0];
+                const end = start + full.length;
+                const rawUrl = m[2];
+                const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
+                imageMatches.push({
+                  full,
+                  url: unescapedUrl,
+                  alt: m[1],
+                  idx: tmpIndex++,
+                  start,
+                  end,
+                });
               }
 
-              // Use Promise.allSettled to handle partial failures gracefully
-              const imgResults = await Promise.allSettled(imgPromises);
-              const successfulImages = imgResults.filter(
-                (result) =>
-                  result.status === "fulfilled" && result.value.success
-              ).length;
+              const imageReplacements: Array<{
+                original: string;
+                replacement: string;
+              }> = [];
+              const pendingLogs: Promise<void>[] = [];
 
-              if (successfulImages < imgPromises.length) {
-                console.warn(
-                  chalk.yellow(
-                    `⚠️  ${imgPromises.length - successfulImages} images failed to process for page ${page.id}`
+              // Phase 1: Validate and queue all images for processing
+              const imageProcessingTasks = imageMatches.map((match) => {
+                const urlValidation = validateAndSanitizeImageUrl(match.url);
+                if (!urlValidation.isValid) {
+                  console.warn(
+                    chalk.yellow(
+                      `⚠️  Invalid image URL detected: ${urlValidation.error}`
+                    )
+                  );
+                  const fallbackMarkdown = createFallbackImageMarkdown(
+                    match.full,
+                    match.url,
+                    match.idx
+                  );
+                  imageReplacements.push({
+                    original: match.full,
+                    replacement: fallbackMarkdown,
+                  });
+
+                  pendingLogs.push(
+                    logImageFailure({
+                      timestamp: new Date().toISOString(),
+                      pageBlock: safeFilename,
+                      imageIndex: match.idx,
+                      originalUrl: match.url,
+                      error: urlValidation.error,
+                      fallbackUsed: true,
+                      validationFailed: true,
+                    })
+                  );
+
+                  return Promise.resolve({
+                    success: false,
+                    originalMarkdown: match.full,
+                    imageUrl: match.url,
+                    index: match.idx,
+                    error: urlValidation.error,
+                    fallbackUsed: true,
+                  });
+                }
+
+                if (!urlValidation.sanitizedUrl!.startsWith("http")) {
+                  console.info(
+                    chalk.blue(`ℹ️  Skipping local image: ${match.url}`)
+                  );
+                  return Promise.resolve({
+                    success: false,
+                    originalMarkdown: match.full,
+                    imageUrl: match.url,
+                    index: match.idx,
+                    error: "Local image skipped",
+                    fallbackUsed: true,
+                  });
+                }
+
+                return processImageWithFallbacks(
+                  urlValidation.sanitizedUrl!,
+                  safeFilename,
+                  match.idx,
+                  match.full
+                ).then((result) => ({
+                  ...result,
+                  originalMarkdown: match.full,
+                  imageUrl: urlValidation.sanitizedUrl!,
+                  index: match.idx,
+                }));
+              });
+
+              // Phase 2: Process all valid images concurrently
+              let successfulImages = 0;
+              let totalFailures = 0;
+
+              if (imageProcessingTasks.length > 0) {
+                const imageResults =
+                  await Promise.allSettled(imageProcessingTasks);
+
+                // Build deterministic replacements using recorded match indices
+                const indexedReplacements: Array<{
+                  start: number;
+                  end: number;
+                  text: string;
+                }> = [];
+                for (const result of imageResults) {
+                  if (result.status !== "fulfilled") {
+                    // Promise rejection - should not happen with our error handling
+                    console.error(
+                      chalk.red(
+                        `Unexpected image processing failure: ${result.reason}`
+                      )
+                    );
+                    totalFailures++;
+                    continue;
+                  }
+                  const processResult = result.value;
+                  const match = imageMatches.find(
+                    (im) => im.idx === processResult.index
+                  );
+                  if (!match) continue;
+                  let replacementText: string;
+                  if (processResult.success && processResult.newPath) {
+                    replacementText = match.full.replace(
+                      processResult.imageUrl!,
+                      processResult.newPath
+                    );
+                    totalSaved += processResult.savedBytes || 0;
+                    successfulImages++;
+                  } else {
+                    replacementText = createFallbackImageMarkdown(
+                      match.full,
+                      match.url,
+                      match.idx
+                    );
+                    totalFailures++;
+                  }
+                  indexedReplacements.push({
+                    start: match.start,
+                    end: match.end,
+                    text: replacementText,
+                  });
+                }
+                // Apply from end to start to keep indices stable
+                indexedReplacements.sort((a, b) => b.start - a.start);
+                let processedMarkdown = markdownString.parent;
+                for (const rep of indexedReplacements) {
+                  processedMarkdown =
+                    processedMarkdown.slice(0, rep.start) +
+                    rep.text +
+                    processedMarkdown.slice(rep.end);
+                }
+                // Continue with final sanitation
+                processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
+                markdownString.parent = processedMarkdown;
+              } else {
+                // Phase 3: No image replacements needed, just sanitize
+                let processedMarkdown = sanitizeMarkdownImages(
+                  markdownString.parent
+                );
+                markdownString.parent = processedMarkdown;
+              }
+
+              // Phase 2.5: Await all pending log operations
+              await Promise.allSettled(pendingLogs);
+
+              // Phase 5: Report results
+              const totalImages = imageMatches.length;
+              if (totalImages > 0) {
+                console.info(
+                  chalk.green(
+                    `📸 Processed ${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`
                   )
                 );
+                if (totalFailures > 0) {
+                  console.warn(
+                    chalk.yellow(
+                      `⚠️  ${totalFailures} images failed but have been replaced with informative placeholders`
+                    )
+                  );
+                  console.info(
+                    chalk.blue(
+                      `💡 Check 'image-failures.json' for recovery information`
+                    )
+                  );
+                }
               }
 
               // Sanitize content to fix malformed HTML/JSX tags
               markdownString.parent = sanitizeMarkdownContent(
                 markdownString.parent
               );
-
-              // Determine file path based on section folder context
-              const fileName = `${filename}.md`;
-              let filePath;
-
-              if (currentSectionFolder[lang]) {
-                filePath = path.join(
-                  PATH,
-                  currentSectionFolder[lang],
-                  fileName
-                );
-              } else {
-                filePath = path.join(PATH, fileName);
-              }
-
-              // Generate frontmatter
-              // Extract additional properties if available
-              let keywords = ["docs", "comapeo"];
-              let tags = ["comapeo"];
-              let sidebarPosition = i + 1;
-              const customProps: Record<string, unknown> = {};
-
-              // Check for Tags property
-              if (
-                page.properties["Tags"] &&
-                page.properties["Tags"].multi_select
-              ) {
-                tags = page.properties["Tags"].multi_select.map(
-                  (tag) => tag.name
-                );
-              }
-
-              // Check for Keywords property
-              if (
-                page.properties.Keywords?.multi_select &&
-                page.properties.Keywords.multi_select.length > 0
-              ) {
-                keywords = page.properties.Keywords.multi_select.map(
-                  (keyword) => keyword.name
-                );
-              }
-
-              // Check for Position property
-              if (page.properties["Order"] && page.properties["Order"].number) {
-                sidebarPosition = page.properties["Order"].number;
-              }
-
-              // Check for Icon property
-              if (
-                page.properties["Icon"] &&
-                page.properties["Icon"].rich_text &&
-                page.properties["Icon"].rich_text.length > 0
-              ) {
-                customProps.icon =
-                  page.properties["Icon"].rich_text[0].plain_text;
-              }
-
-              // Apply title from a previous title section if available
-              if (currentHeading.get(lang)) {
-                customProps.title = currentHeading.get(lang);
-                currentHeading.set(lang, null); // Reset after using it
-              }
-
-              // Determine the relative path for the custom_edit_url
-              const relativePath = currentSectionFolder[lang]
-                ? `${currentSectionFolder[lang]}/${fileName}`
-                : fileName;
-
-              // Generate frontmatter with custom properties
-              let frontmatter = `---
-id: doc-${filename}
-title: ${pageTitle}
-sidebar_label: ${pageTitle}
-sidebar_position: ${sidebarPosition}
-pagination_label: ${pageTitle}
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
-keywords:
-${keywords.map((k) => `  - ${k}`).join("\n")}
-tags: [${tags.join(", ")}]
-slug: /${filename}
-last_update:
-  date: ${new Date().toLocaleDateString("en-US")}
-  author: Awana Digital`;
-
-              // Add customProps to frontmatter if they exist
-              if (Object.keys(customProps).length > 0) {
-                frontmatter += `\nsidebar_custom_props:`;
-                for (const [key, value] of Object.entries(customProps)) {
-                  // For emoji icons or titles with special characters, wrap in quotes
-                  if (
-                    typeof value === "string" &&
-                    (value.includes('"') ||
-                      value.includes("'") ||
-                      /[^\x20-\x7E]/.test(value))
-                  ) {
-                    // If the value contains double quotes, use single quotes; otherwise use double quotes
-                    const quoteChar = value.includes('"') ? "'" : '"';
-                    frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
-                  } else {
-                    frontmatter += `\n  ${key}: ${value}`;
-                  }
-                }
-              }
-
-              frontmatter += `\n---\n`;
 
               // Remove duplicate title heading if it exists
               // The first H1 heading often duplicates the title in Notion exports
@@ -732,7 +1455,7 @@ last_update:
               );
               console.log(
                 chalk.blue(
-                  `  ↳ Added frontmatter with id: doc-${filename}, title: ${pageTitle}`
+                  `  ↳ Added frontmatter with id: doc-${safeFilename}, title: ${pageTitle}`
                 )
               );
 
@@ -754,9 +1477,17 @@ last_update:
                 );
               }
             } else {
-              pageSpinner.fail(
+              const placeholderBody = `\n<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->\n\n:::note\nContent placeholder – add blocks in Notion to replace this file.\n:::\n`;
+
+              fs.writeFileSync(
+                filePath,
+                `${frontmatter}${placeholderBody}`,
+                "utf8"
+              );
+
+              pageSpinner.warn(
                 chalk.yellow(
-                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}`
+                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}. Placeholder content generated.`
                 )
               );
             }
@@ -785,12 +1516,57 @@ last_update:
       }
     }
 
+    // Final cache cleanup and statistics
+    imageCache.cleanup();
+    const cacheStats = imageCache.getStats();
+
+    console.info(chalk.green(`\n📊 Image Processing Summary:`));
+    console.info(
+      chalk.blue(
+        `   💾 Cache: ${cacheStats.validEntries}/${cacheStats.totalEntries} entries valid`
+      )
+    );
+    console.info(
+      chalk.green(`   💰 Storage saved: ${Math.round(totalSaved / 1024)} KB`)
+    );
+    console.info(chalk.blue(`   📄 Sections created: ${sectionCount}`));
+    console.info(chalk.blue(`   📝 Title sections: ${titleSectionCount}`));
+
+    if (cacheStats.validEntries > 0) {
+      console.info(
+        chalk.green(
+          `   🚀 Future runs will be faster with ${cacheStats.validEntries} cached images`
+        )
+      );
+    }
+
     return { totalSaved, sectionCount, titleSectionCount };
   } catch (error) {
     console.error(chalk.red("Critical error in generateBlocks:"), error);
+
+    try {
+      const errObj = error instanceof Error ? error : new Error(String(error));
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        error: errObj.message,
+        stack: errObj.stack,
+        type: "generateBlocks_critical_error",
+      };
+      await logImageFailure(errorLog);
+    } catch (logError) {
+      console.warn(chalk.yellow("Failed to log critical error"));
+    }
+
     throw error;
   } finally {
     // Ensure all spinners are cleaned up
     SpinnerManager.stopAll();
+
+    // Final cache save
+    try {
+      imageCache.cleanup();
+    } catch (cacheError) {
+      console.warn(chalk.yellow("Warning: Failed to cleanup image cache"));
+    }
   }
 }

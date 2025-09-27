@@ -797,9 +797,14 @@ export class EmojiProcessor {
       const escapedPlainText = plainText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escapedPlainText, "g");
 
-      // Convert to inline HTML image with emoji-specific styling
+      // Convert to inline JSX image with emoji-specific styling
       const emojiName = plainText.replace(/:/g, "").trim();
-      const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;
+      const inlineEmoji =
+        '<img src="' +
+        localPath +
+        '" alt="' +
+        emojiName +
+        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
 
       processedContent = processedContent.replace(regex, inlineEmoji);
     }
@@ -833,7 +838,12 @@ export class EmojiProcessor {
         new RegExp(`\\[img\\]\\[${escapedEmojiName}\\]`, "gi"),
       ];
 
-      const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;
+      const inlineEmoji =
+        '<img src="' +
+        localPath +
+        '" alt="' +
+        emojiName +
+        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
 
       for (const pattern of patterns) {
         processedContent = processedContent.replace(pattern, inlineEmoji);

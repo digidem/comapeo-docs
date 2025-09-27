@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /format-testing-remove
 last_update:
-  date: 9/27/2025
+  date: 9/22/2025
   author: Awana Digital
 ---
 
@@ -159,16 +159,16 @@ Let’s get wild!! Here is inlne emojis ▶️ [play] ⏹️ [square stop] ❌
 Customized emojis for comapeo UI elements (would require better pngs)
 
 
-:comapeo-save-low: [ comapeo-save-low]
+<img src="/images/emojis/icon-save_18eadd3309cf3272_11244553.jpg" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> [ comapeo-save-low]
 
 
-:comapeo-capture-low:[comapeo-capture-low]
+<img src="/images/emojis/icon-capture_9c1ea5db8f0a2d02_11244506.jpg" alt="comapeo-capture-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />[comapeo-capture-low]
 
 
-:comapeo-add-photo-low: [ and so on]
+<img src="/images/emojis/icon-add-photo_be966fefc62a2f69_11244479.jpg" alt="comapeo-add-photo-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> [ and so on]
 
 
-:icon-map-low:, :icon---located:, :icon-add-details-low: :icon-add-audio-low: :icon-coordinates-low:
+<img src="/images/emojis/icon-map_c21704e3f6c4e1d9_11244914.jpg" alt="icon-map-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />, <img src="/images/emojis/icon_-_located_79e37697eade0178_11244926.jpg" alt="icon---located" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />, <img src="/images/emojis/icon-add-detail_520a881541996055_11244935.jpg" alt="icon-add-details-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> <img src="/images/emojis/icon-coordinate_52c0716068d31ede_11245382.jpg" alt="icon-coordinates-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />
 
 
 Screencapture of what was added above
@@ -192,7 +192,7 @@ Can  gifs work too?
 ---
 
 
-**Step 1: Select** **:icon-add-audio-low:****add Audio.** Recording will begin immediately
+**Step 1: Select** **<img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />****add Audio.** Recording will begin immediately
 
 
 ![1000029410.jpg](/images/formattestingremove_5.jpg)
@@ -213,7 +213,7 @@ If this is your first time recording audio with CoMapeo, you will need to grant 
 ---
 
 
-**Step 3. Review recording.** Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another audio, or ➡️ continue to edit the observation
+**Step 3. Review recording.** Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 
 ![1000029414.jpg](/images/formattestingremove_9.jpg)
@@ -229,7 +229,7 @@ If this is your first time recording audio with CoMapeo, you will need to grant 
 
 
 :::note Step 1
-Select :icon-add-audio-low:add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 ![1000029410.jpg](/images/formattestingremove_10.jpg)
 
@@ -247,7 +247,7 @@ Select ⏹️ stop when done
 
 
 **Step 3**
-Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 ![1000029414.jpg](/images/formattestingremove_14.jpg)
 :::
@@ -256,7 +256,7 @@ Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another 
 
 :::note
 👣 _**Step 1**_**: Start recording audio**
-Select :icon-add-audio-low:add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 ![1000029410.jpg](/images/formattestingremove_15.jpg)
 
@@ -278,7 +278,7 @@ Select ⏹️ stop when done
 
 _**Step 3**_**: Choose next step**
 
-Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 ![1000029414.jpg](/images/formattestingremove_19.jpg)
 :::
@@ -294,7 +294,7 @@ Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another 
 **Step 1: Start recording audio**
 
 
-Select :icon-add-audio-low:add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 
 ![1000029410.jpg](/images/formattestingremove_20.jpg)
@@ -327,7 +327,7 @@ Select ⏹️ stop when done
 **Step 3: Choose next step**
 
 
-Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 
 ![1000029414.jpg](/images/formattestingremove_24.jpg)
@@ -344,7 +344,7 @@ Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another 
 
 > 1. **Start recording audio**  
 >   
-> Select :icon-add-audio-low:add Audio. Recording will begin immediately  
+> Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately  
 >   
 > ![1000029410.jpg](/images/formattestingremove_25.jpg)  
 >   
@@ -364,7 +364,7 @@ Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another 
 
 > 1. **Choose next step**  
 >   
-> Choose to ▶️ listen to the recorded audio, :icon-add-audio-low:add another audio, or ➡️ continue to edit the observation  
+> Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11245390.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation  
 >   
 > ![1000029414.jpg](/images/formattestingremove_29.jpg)
 

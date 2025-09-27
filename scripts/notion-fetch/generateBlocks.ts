@@ -1312,15 +1312,18 @@ export async function generateBlocks(pages, progressCallback) {
               }
 
               // Process any remaining emoji URLs in the markdown (fallback)
-              const fallbackEmojiResult =
-                await EmojiProcessor.processPageEmojis(
-                  page.id,
-                  markdownString.parent
-                );
-              markdownString.parent = fallbackEmojiResult.content;
-              totalSaved += fallbackEmojiResult.totalSaved;
-              if (fallbackEmojiResult.totalSaved > 0) {
-                emojiCount++;
+              // Only run fallback if no emoji mappings were applied to avoid overwriting processed content
+              if (emojiMap.size === 0) {
+                const fallbackEmojiResult =
+                  await EmojiProcessor.processPageEmojis(
+                    page.id,
+                    markdownString.parent
+                  );
+                markdownString.parent = fallbackEmojiResult.content;
+                totalSaved += fallbackEmojiResult.totalSaved;
+                if (fallbackEmojiResult.totalSaved > 0) {
+                  emojiCount++;
+                }
               }
 
               // Process callouts in the markdown to convert them to Docusaurus admonitions

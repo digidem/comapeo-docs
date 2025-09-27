@@ -25,11 +25,20 @@ export function sanitizeMarkdownContent(content: string): string {
   });
 
   // Aggressively strip all curly-brace expressions by unwrapping to inner text
+  // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}
   for (let i = 0; i < 5 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, (_m, inner) =>
-      String(inner).trim()
-    );
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) => {
+      // Preserve JSX style objects in emoji img tags
+      if (
+        match.includes("display:") &&
+        match.includes("height:") &&
+        match.includes("margin:")
+      ) {
+        return match; // Keep JSX style objects unchanged
+      }
+      return String(inner).trim(); // Strip other curly braces
+    });
   }
 
   // 1. Fix malformed <link to section.> patterns (the main issue from the error)
@@ -46,9 +55,18 @@ export function sanitizeMarkdownContent(content: string): string {
 
   // 4. Fix general malformed tags with dots or spaces in attribute names
   // This catches patterns like <tag attr.name> or <tag attr value> (without quotes)
+  // BUT exclude emoji img tags which are valid HTML
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([^>]*?)([.\s]+)([^>]*?)>/g,
-    (match, tagName, before, separator) => {
+    (match, tagName, before, separator, after) => {
+      // Skip emoji img tags - they are valid JSX that should be preserved
+      if (
+        tagName.toLowerCase() === "img" &&
+        (before + after).includes('className="emoji"')
+      ) {
+        return match; // Keep emoji img tags unchanged
+      }
+
       // Only replace if the separator indicates malformed attributes
       if (
         separator.includes(".") ||
@@ -61,15 +79,36 @@ export function sanitizeMarkdownContent(content: string): string {
   );
 
   // 5. Fix unquoted attribute values in JSX (e.g., <tag attr value> -> <tag attr="value">)
+  // BUT exclude emoji img tags which are valid HTML
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+([^>\s"=]+)(\s|>)/g,
-    '<$1 $2="$3"$4'
+    (match, tagName, attrName, attrValue, suffix) => {
+      // Skip emoji img tags - they are valid JSX that should be preserved
+      if (
+        tagName.toLowerCase() === "img" &&
+        match.includes('className="emoji"')
+      ) {
+        return match; // Keep emoji img tags unchanged
+      }
+      return `<${tagName} ${attrName}="${attrValue}"${suffix}`;
+    }
   );
 
   // 6. Final hard cleanup: strip any remaining { ... } to avoid MDX/Acorn errors
+  // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}.
   for (let i = 0; i < 3 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, "$1");
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) => {
+      // Preserve JSX style objects in emoji img tags
+      if (
+        match.includes("display:") &&
+        match.includes("height:") &&
+        match.includes("margin:")
+      ) {
+        return match; // Keep JSX style objects unchanged
+      }
+      return inner; // Strip other curly braces
+    });
   }
 
   // 7. Restore masked code blocks and inline code

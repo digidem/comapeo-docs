@@ -426,10 +426,10 @@ async function downloadAndProcessImageWithCache(
 
 /**
  * Extracts published date from Notion page properties with enhanced error handling
- * 
+ *
  * @param page - The Notion page object containing properties and metadata
  * @returns A formatted date string in en-US locale format (MM/DD/YYYY)
- * 
+ *
  * Fallback strategy:
  * 1. Use Published date field if available and valid
  * 2. Fall back to last_edited_time if Published date is missing/invalid
@@ -438,26 +438,31 @@ async function downloadAndProcessImageWithCache(
 export function getPublishedDate(page: any): string {
   // Try to get the new Published date field
   const publishedDateProp = page.properties?.[NOTION_PROPERTIES.PUBLISHED_DATE];
-  
+
   if (publishedDateProp?.date?.start) {
     try {
       // Parse the date string as a local date to avoid timezone issues
       const dateString = publishedDateProp.date.start;
-      const [year, month, day] = dateString.split('-').map(Number);
-      
+      const [year, month, day] = dateString.split("-").map(Number);
+
       // Create date in local timezone to avoid UTC conversion issues
       const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
-      
+
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString("en-US");
       } else {
-        console.warn(`Invalid published date format for page ${page.id}, falling back to last_edited_time`);
+        console.warn(
+          `Invalid published date format for page ${page.id}, falling back to last_edited_time`
+        );
       }
     } catch (error) {
-      console.warn(`Error parsing published date for page ${page.id}:`, error.message);
+      console.warn(
+        `Error parsing published date for page ${page.id}:`,
+        error.message
+      );
     }
   }
-  
+
   // Fall back to last_edited_time if Published date is not available or invalid
   if (page.last_edited_time) {
     try {
@@ -465,17 +470,21 @@ export function getPublishedDate(page: any): string {
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString("en-US");
       } else {
-        console.warn(`Invalid last_edited_time format for page ${page.id}, using current date`);
+        console.warn(
+          `Invalid last_edited_time format for page ${page.id}, using current date`
+        );
       }
     } catch (error) {
-      console.warn(`Error parsing last_edited_time for page ${page.id}:`, error.message);
+      console.warn(
+        `Error parsing last_edited_time for page ${page.id}:`,
+        error.message
+      );
     }
   }
-  
+
   // Final fallback to current date
   return new Date().toLocaleDateString("en-US");
 }
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1252,37 +1261,66 @@ export async function generateBlocks(pages, progressCallback) {
 
             // PAGE
           } else if (normalizedSectionType === "page") {
+            // Fetch raw block data first for emoji and callout processing
+            let rawBlocks: any[] = [];
+            let emojiMap = new Map<string, string>();
+            try {
+              rawBlocks = await fetchNotionBlocks(page.id);
+              console.log(
+                chalk.blue(
+                  `  ↳ Fetched ${rawBlocks.length} raw blocks for processing`
+                )
+              );
+
+              // Process custom emojis from raw blocks before markdown conversion
+              const blockEmojiResult = await EmojiProcessor.processBlockEmojis(
+                page.id,
+                rawBlocks
+              );
+              emojiMap = blockEmojiResult.emojiMap;
+              totalSaved += blockEmojiResult.totalSaved;
+              if (blockEmojiResult.totalSaved > 0) {
+                emojiCount++;
+              }
+            } catch (error) {
+              const msg =
+                error && typeof error === "object" && "message" in error
+                  ? (error as any).message
+                  : String(error);
+              console.warn(
+                chalk.yellow(
+                  `  ⚠️  Failed to fetch raw blocks for processing: ${msg}`
+                )
+              );
+            }
+
             const markdown = await n2m.pageToMarkdown(page.id);
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {
-              // Process custom emojis first
-              const emojiResult = await EmojiProcessor.processPageEmojis(page.id, markdownString.parent);
-              markdownString.parent = emojiResult.content;
-              totalSaved += emojiResult.totalSaved;
-              if (emojiResult.totalSaved > 0) {
-                emojiCount++;
+              // Apply custom emoji mappings to the markdown content
+              if (emojiMap.size > 0) {
+                markdownString.parent = EmojiProcessor.applyEmojiMappings(
+                  markdownString.parent,
+                  emojiMap
+                );
+                console.log(
+                  chalk.green(
+                    `  ↳ Applied ${emojiMap.size} custom emoji mappings to markdown`
+                  )
+                );
               }
 
-              // Fetch raw block data for callout processing
-              let rawBlocks: any[] = [];
-              try {
-                rawBlocks = await fetchNotionBlocks(page.id);
-                console.log(
-                  chalk.blue(
-                    `  ↳ Fetched ${rawBlocks.length} raw blocks for callout processing`
-                  )
+              // Process any remaining emoji URLs in the markdown (fallback)
+              const fallbackEmojiResult =
+                await EmojiProcessor.processPageEmojis(
+                  page.id,
+                  markdownString.parent
                 );
-              } catch (error) {
-                const msg =
-                  error && typeof error === "object" && "message" in error
-                    ? (error as any).message
-                    : String(error);
-                console.warn(
-                  chalk.yellow(
-                    `  ⚠️  Failed to fetch raw blocks for callout processing: ${msg}`
-                  )
-                );
+              markdownString.parent = fallbackEmojiResult.content;
+              totalSaved += fallbackEmojiResult.totalSaved;
+              if (fallbackEmojiResult.totalSaved > 0) {
+                emojiCount++;
               }
 
               // Process callouts in the markdown to convert them to Docusaurus admonitions

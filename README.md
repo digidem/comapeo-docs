@@ -56,7 +56,43 @@ The resulting files are placed in the `build` directory for deployment via any s
 
 ### Deployment
 
-Deploy your site using one of the following methods:
+#### Production Deployment (Cloudflare Pages)
+
+The site automatically deploys to production at `https://docs.comapeo.app` via GitHub Actions when changes are pushed to the `main` branch. You can also trigger deployments manually:
+
+**Manual Deployment:**
+
+1. Go to the GitHub repository
+2. Click **Actions** → **Deploy to Production**
+3. Click **Run workflow** on the `main` branch
+
+**API Deployment:**
+
+```bash
+curl -X POST \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/repos/OWNER/REPO/dispatches \
+  -d '{"event_type":"deploy-production"}'
+```
+
+**What happens during deployment:**
+
+1. Site is built using `bun run build`
+2. Static files are deployed to Cloudflare Pages
+3. Notion pages with "Staging" status are updated to "Published"
+4. "Date Published" is automatically set in Notion
+
+**Required GitHub Secrets:**
+
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token for deployment
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+- `NOTION_API_KEY` - Notion integration API key
+- `DATABASE_ID` - Notion database ID
+
+#### Alternative Deployment (GitHub Pages)
+
+You can still deploy to GitHub Pages using:
 
 - Using SSH:
 
@@ -70,7 +106,27 @@ USE_SSH=true bun deploy
 GIT_USER=<Your GitHub username> bun deploy
 ```
 
-For GitHub Pages hosting, this command conveniently builds the site and pushes to the `gh-pages` branch.
+This method builds the site and pushes to the `gh-pages` branch.
+
+### Notion Status Workflows
+
+The project includes automated Notion status management workflows:
+
+```bash
+# Update translation status
+bun run notionStatus:translation
+
+# Move to draft status
+bun run notionStatus:draft
+
+# Publish content (sets published date)
+bun run notionStatus:publish
+
+# Production publishing (Staging → Published with date)
+bun run notionStatus:publish-production
+```
+
+These workflows automatically update page statuses in your Notion database and set published dates when content moves to "Published" status.
 
 ### Customizing Admonition Colors
 
@@ -87,6 +143,7 @@ The site supports custom colors for Notion callouts (admonitions). To modify the
    - `CAUTION` (orange Notion callouts): Currently `#f97316` (orange)
 
 **Example**: To change NOTE admonitions to purple:
+
 ```css
 /* NOTE admonitions (gray callouts from Notion) */
 .admonition--note,
@@ -112,18 +169,21 @@ Changes will be reflected immediately in development mode (`bun dev`).
 The repository includes several automated workflows for content management:
 
 #### Sync Notion Docs (`sync-docs.yml`)
+
 - **Trigger**: Manual dispatch or repository dispatch
 - **Purpose**: Automatically fetches content from Notion and commits changes
 - **Usage**: Production content updates and scheduled syncing
 - **Environment**: Requires `NOTION_API_KEY` and `DATABASE_ID` secrets
 
 #### Clean All Generated Content (`clean-content.yml`)
+
 - **Trigger**: Manual dispatch with confirmation
 - **Purpose**: Removes all generated content from docs, i18n, and static/images
 - **Usage**: Reset repository to clean state before fresh content generation
 - **Safety**: Requires explicit "yes" confirmation to prevent accidental deletion
 
 #### Fetch All Content for Testing (`notion-fetch-test.yml`)
+
 - **Trigger**: Manual dispatch with optional force mode
 - **Purpose**: Fetches complete content from Notion for testing and validation
 - **Usage**: Testing content changes before production deployment
@@ -135,5 +195,5 @@ All workflows automatically commit their changes to the repository using the git
 ### Roadmap & Future Enhancements
 
 - [ ] Develop a robust translation strategy to further enhance our multilingual support.
-- [ ] Integrate GitHub Actions for continuous deployment and automated publishing.
+- [x] Integrate GitHub Actions for continuous deployment and automated publishing.
 - [ ] Refine the Notion-to-Markdown integration for more dynamic updates.

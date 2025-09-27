@@ -15,6 +15,7 @@ export const NOTION_PROPERTIES = {
   ELEMENT_TYPE: "Element Type",
   READY_FOR_TRANSLATION: "Ready for translation",
   READY_TO_PUBLISH: "Ready to publish",
+  PUBLISHED_DATE: "Date Published",
 };
 
 // Translation language configurations

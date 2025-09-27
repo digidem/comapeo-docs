@@ -8,7 +8,7 @@ interface UpdateStatusOptions {
   databaseId: string;
   fromStatus: string;
   toStatus: string;
-  setPublishedCheckbox?: boolean;
+  setPublishedDate?: boolean;
 }
 
 /**
@@ -18,8 +18,7 @@ interface UpdateStatusOptions {
 export async function updateNotionPageStatus(
   options: UpdateStatusOptions
 ): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedCheckbox } =
-    options;
+  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(
@@ -55,24 +54,26 @@ export async function updateNotionPageStatus(
 
     for (const page of pages) {
       try {
-        const properties = {
+        const properties: Record<string, unknown> = {
           [NOTION_PROPERTIES.STATUS]: {
             select: {
               name: toStatus,
             },
           },
-        } as any;
+        };
 
-        // Add Published checkbox if requested
-        if (setPublishedCheckbox) {
-          properties["Published"] = {
-            checkbox: true,
+        // Add Published date if requested
+        if (setPublishedDate) {
+          properties[NOTION_PROPERTIES.PUBLISHED_DATE] = {
+            date: {
+              start: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+            }
           };
         }
 
         await notion.pages.update({
           page_id: page.id,
-          properties,
+          properties
         });
         successCount++;
       } catch (error) {
@@ -107,18 +108,23 @@ const WORKFLOWS = {
   translation: {
     from: "Ready for translation",
     to: "Reviewing translations",
-    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   draft: {
     from: "Ready to publish",
     to: "Draft published",
-    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   publish: {
     from: "Draft published",
     to: "Published",
-    setPublishedCheckbox: true,
+    setPublishedDate: true, // Set the published date when publishing
   },
+  'publish-production': {
+    from: 'Staging',
+    to: 'Published',
+    setPublishedDate: true // Set the published date when publishing
+  }
 } as const;
 
 /**
@@ -155,7 +161,7 @@ async function main() {
         console.error(chalk.red(`Unknown flag: ${flag}`));
         console.error(
           chalk.gray(
-            "Usage: updateStatus.ts [--workflow translation|publish|final-publish] [--token TOKEN] [--db-id DATABASE_ID] [--from STATUS] [--to STATUS]"
+            "Usage: updateStatus.ts [--workflow translation|draft|publish|publish-production] [--token TOKEN] [--db-id DATABASE_ID] [--from STATUS] [--to STATUS]"
           )
         );
         process.exit(1);
@@ -177,26 +183,27 @@ async function main() {
   let fromStatus: string;
   let toStatus: string;
 
-  let setPublishedCheckbox = false;
+  let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
-    setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
+    setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
     toStatus = options.toStatus;
   } else {
     console.error(
       chalk.red(
-        "Either --workflow must be specified (translation|publish|final-publish) or both --from and --to must be provided"
+        "Either --workflow must be specified (translation|draft|publish|publish-production) or both --from and --to must be provided"
       )
     );
     console.error(chalk.gray("Examples:"));
     console.error(chalk.gray("  updateStatus.ts --workflow translation"));
+    console.error(chalk.gray("  updateStatus.ts --workflow draft"));
     console.error(chalk.gray("  updateStatus.ts --workflow publish"));
-    console.error(chalk.gray("  updateStatus.ts --workflow final-publish"));
+    console.error(chalk.gray("  updateStatus.ts --workflow publish-production"));
     console.error(
       chalk.gray(
         '  updateStatus.ts --from "Custom Status" --to "Another Status"'
@@ -229,7 +236,7 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedCheckbox,
+      setPublishedDate,
     });
   } catch (error) {
     console.error(chalk.red("Status update failed:", error.message));

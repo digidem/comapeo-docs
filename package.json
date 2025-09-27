@@ -17,6 +17,7 @@
     "notionStatus:translation": "bun scripts/notion-status --workflow translation",
     "notionStatus:draft": "bun scripts/notion-status --workflow draft",
     "notionStatus:publish": "bun scripts/notion-status --workflow publish",
+    "notionStatus:publish-production": "bun scripts/notion-status --workflow publish-production",
     "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
@@ -100,7 +101,8 @@
     "ora": "^9.0.0",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.44.1",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^3.0.0"
   },
   "browserslist": {
     "production": [

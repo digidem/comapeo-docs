@@ -141,7 +141,7 @@ export const createMockTogglePage = (options: MockNotionPageOptions = {}) => {
 export const createMockHeadingPage = (options: MockNotionPageOptions = {}) => {
   return createMockNotionPage({ 
     ...options, 
-    elementType: "Heading",
+    elementType: "Title",
   });
 };
 

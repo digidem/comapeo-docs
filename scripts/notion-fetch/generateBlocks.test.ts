@@ -81,7 +81,6 @@ vi.mock("../../docusaurus.config", () => ({
       defaultLocale: "en",
     },
   },
-});
 }));
 
 describe("generateBlocks", () => {
@@ -153,6 +152,7 @@ describe("generateBlocks", () => {
     it("should use published date when available and valid", () => {
       const page = {
         id: "test-page-1",
+        last_edited_time: '2023-11-30T10:00:00.000Z', // Earlier than published date
         properties: {
           [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
             date: { start: '2023-12-01' } 

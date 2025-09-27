@@ -59,8 +59,33 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(content-test): fetch and test all content from Notion"
 
-          # Push back to the repository
-          git push
+          # Push back to the repository with retry logic
+          max_attempts=10
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            echo "🔄 Push attempt $attempt of $max_attempts"
+            
+            # Pull latest changes to avoid conflicts
+            git pull origin main --rebase
+            
+            # Try to push
+            if git push; then
+              echo "✅ Push successful on attempt $attempt"
+              break
+            else
+              echo "❌ Push failed on attempt $attempt"
+              
+              if [ $attempt -eq $max_attempts ]; then
+                echo "💥 Max attempts reached. Push failed after $max_attempts attempts."
+                exit 1
+              else
+                echo "⏳ Waiting 60 seconds before retry..."
+                sleep 60
+                attempt=$((attempt + 1))
+              fi
+            fi
+          done
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

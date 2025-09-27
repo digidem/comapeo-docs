@@ -159,39 +159,47 @@ async function processImageWithFallbacks(
   }
 }
 
+// Simple in-process mutex to serialize writes
+let imageLogWriting = Promise.resolve();
+
 /**
  * Logs image failures for manual recovery
  */
 async function logImageFailure(logEntry: any): Promise<void> {
   const logPath = path.join(process.cwd(), "image-failures.json");
   const tmpPath = `${logPath}.tmp`;
-  let existingLogs: any[] = [];
 
-  try {
-    if (fs.existsSync(logPath)) {
-      const content = fs.readFileSync(logPath, "utf-8");
-      existingLogs = JSON.parse(content);
-      if (!Array.isArray(existingLogs)) existingLogs = [];
-    }
-  } catch {
-    // Retry once with empty fallback if file was mid-write/corrupted
-    existingLogs = [];
-  }
-
-  existingLogs.push(logEntry);
-
-  try {
-    const payload = JSON.stringify(existingLogs, null, 2);
-    fs.writeFileSync(tmpPath, payload);
-    fs.renameSync(tmpPath, logPath);
-  } catch {
-    console.warn(chalk.yellow("Failed to write image failure log atomically"));
+  imageLogWriting = imageLogWriting.then(async () => {
+    let existingLogs: any[] = [];
     try {
-      fs.writeFileSync(logPath, JSON.stringify(existingLogs, null, 2));
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, "utf-8");
+        existingLogs = Array.isArray(JSON.parse(content))
+          ? JSON.parse(content)
+          : [];
+      }
     } catch {
-      console.warn(chalk.yellow("Failed to write image failure log"));
+      existingLogs = [];
     }
-  }
+    existingLogs.push(logEntry);
+    try {
+      const payload = JSON.stringify(existingLogs, null, 2);
+      fs.writeFileSync(tmpPath, payload);
+      fs.renameSync(tmpPath, logPath);
+    } catch {
+      console.warn(
+        chalk.yellow("Failed to write image failure log atomically")
+      );
+      try {
+        fs.writeFileSync(logPath, JSON.stringify(existingLogs, null, 2));
+      } catch {
+        console.warn(chalk.yellow("Failed to write image failure log"));
+      }
+    }
+    return undefined;
+  });
+
+  await imageLogWriting;
 }
 
 /**
@@ -605,13 +613,14 @@ async function downloadAndProcessImage(
       const originalBuffer = Buffer.from(response.data, "binary");
       const cleanUrl = url.split("?")[0];
 
-      // Normalize header keys to lowercase for robust access
-      const headers = response.headers as Record<string, string | string[] | undefined>;
-      const contentTypeHeader =
-        (headers["content-type"] ??
-          Object.entries(headers).find(([k]) => k.toLowerCase() === "content-type")?.[1]) as string | undefined;
+      // Axios/Node normalizes header keys to lowercase; avoid redundant scan
+      const contentTypeHeader = (
+        response.headers as Record<string, string | string[] | undefined>
+      )["content-type"];
       const headerFmt = formatFromContentType(
-        Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader
+        Array.isArray(contentTypeHeader)
+          ? contentTypeHeader[0]
+          : contentTypeHeader
       );
       const bufferFmt = detectFormatFromBuffer(originalBuffer);
       const chosenFmt = chooseFormat(bufferFmt, headerFmt);
@@ -1440,12 +1449,12 @@ export async function generateBlocks(pages, progressCallback) {
   } catch (error) {
     console.error(chalk.red("Critical error in generateBlocks:"), error);
 
-    // Log the error for debugging
     try {
+      const errObj = error instanceof Error ? error : new Error(String(error));
       const errorLog = {
         timestamp: new Date().toISOString(),
-        error: error.message,
-        stack: error.stack,
+        error: errObj.message,
+        stack: errObj.stack,
         type: "generateBlocks_critical_error",
       };
       await logImageFailure(errorLog);

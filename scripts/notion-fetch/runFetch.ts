@@ -78,6 +78,7 @@ export async function runFetchPipeline(
     fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
     throw error;
   } finally {
+    if (fetchSpinner.isSpinning) fetchSpinner.stop();
     unregisterFetchSpinner();
   }
 }

@@ -148,22 +148,18 @@ function applyFetchAllTransform(
 }
 
 function getStatusFromRawPage(page: Record<string, any>): string {
-  // Input validation
   if (!page || typeof page !== "object") return "No Status";
-  const properties = page.properties;
+  const properties = (page as any).properties;
   if (!properties || typeof properties !== "object") return "No Status";
 
   const statusProperty =
     properties[NOTION_PROPERTIES.STATUS] || properties["Status"];
 
-  if (statusProperty?.select?.name) {
-    return statusProperty.select.name;
+  const name = statusProperty?.select?.name;
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (normalized) {
+    return normalized;
   }
-
-  if (statusProperty?.select === null) {
-    return "No Status";
-  }
-
   return "No Status";
 }
 

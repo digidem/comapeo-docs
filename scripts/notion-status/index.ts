@@ -8,7 +8,6 @@ interface UpdateStatusOptions {
   databaseId: string;
   fromStatus: string;
   toStatus: string;
-  setPublishedCheckbox?: boolean;
   setPublishedDate?: boolean;
 }
 
@@ -16,8 +15,10 @@ interface UpdateStatusOptions {
  * Updates the status of Notion pages from one status to another
  * @param options Configuration options for the status update
  */
-export async function updateNotionPageStatus(options: UpdateStatusOptions): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedCheckbox, setPublishedDate } = options;
+export async function updateNotionPageStatus(
+  options: UpdateStatusOptions
+): Promise<void> {
+  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(
@@ -60,13 +61,6 @@ export async function updateNotionPageStatus(options: UpdateStatusOptions): Prom
             },
           },
         };
-
-        // Add Published checkbox if requested (legacy support)
-        if (setPublishedCheckbox) {
-          properties[NOTION_PROPERTIES.PUBLISHED_CHECKBOX] = {
-            checkbox: true
-          };
-        }
 
         // Add Published date if requested
         if (setPublishedDate) {
@@ -112,27 +106,24 @@ export async function updateNotionPageStatus(options: UpdateStatusOptions): Prom
  */
 const WORKFLOWS = {
   translation: {
-    from: 'Ready for translation',
-    to: 'Reviewing translations',
-    setPublishedCheckbox: false,
-    setPublishedDate: false
+    from: "Ready for translation",
+    to: "Reviewing translations",
+    setPublishedDate: false,
   },
   draft: {
-    from: 'Ready to publish',
-    to: 'Draft published',
-    setPublishedCheckbox: false,
-    setPublishedDate: false
+    from: "Ready to publish",
+    to: "Draft published",
+    setPublishedDate: false,
   },
   publish: {
     from: "Draft published",
     to: "Published",
-    setPublishedDate: true
+    setPublishedDate: true, // Set the published date when publishing
   },
   'publish-production': {
     from: 'Staging',
     to: 'Published',
-    setPublishedCheckbox: true, // Keep for backward compatibility
-    setPublishedDate: true // New: set the published date
+    setPublishedDate: true // Set the published date when publishing
   }
 } as const;
 
@@ -192,14 +183,12 @@ async function main() {
   let fromStatus: string;
   let toStatus: string;
 
-  let setPublishedCheckbox = false;
   let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
-    setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
     setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
@@ -247,8 +236,7 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedCheckbox,
-      setPublishedDate
+      setPublishedDate,
     });
   } catch (error) {
     console.error(chalk.red("Status update failed:", error.message));

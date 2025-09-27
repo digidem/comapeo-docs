@@ -64,7 +64,7 @@ describe("constants", () => {
         "Ready for translation"
       );
       expect(NOTION_PROPERTIES.READY_TO_PUBLISH).toBe("Ready to publish");
-      expect(NOTION_PROPERTIES.PUBLISHED_DATE).toBe("Published date");
+      expect(NOTION_PROPERTIES.PUBLISHED_DATE).toBe("Date Published");
     });
 
     it("should have all properties as strings", () => {

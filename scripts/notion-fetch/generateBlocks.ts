@@ -25,6 +25,61 @@ import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 
+/**
+ * Extracts published date from Notion page properties with enhanced error handling
+ *
+ * @param page - The Notion page object containing properties and metadata
+ * @returns A formatted date string in en-US locale format (MM/DD/YYYY)
+ *
+ * Fallback strategy:
+ * 1. Use Published date field if available and valid
+ * 2. Fall back to last_edited_time if Published date is missing/invalid
+ * 3. Final fallback to current date
+ */
+export function getPublishedDate(page: any): string {
+  // Try to get the new Published date field
+  const publishedDateProp = page.properties?.[NOTION_PROPERTIES.PUBLISHED_DATE];
+  if (publishedDateProp?.date?.start) {
+    try {
+      const date = new Date(publishedDateProp.date.start);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US");
+      } else {
+        console.warn(
+          `Invalid published date format for page ${page.id}, falling back to last_edited_time`
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `Error parsing published date for page ${page.id}:`,
+        error.message
+      );
+    }
+  }
+
+  // Fall back to last_edited_time if Published date is not available or invalid
+  if (page.last_edited_time) {
+    try {
+      const date = new Date(page.last_edited_time);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US");
+      } else {
+        console.warn(
+          `Invalid last_edited_time format for page ${page.id}, using current date`
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `Error parsing last_edited_time for page ${page.id}:`,
+        error.message
+      );
+    }
+  }
+
+  // Final fallback to current date
+  return new Date().toLocaleDateString("en-US");
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -672,7 +727,7 @@ ${keywords.map((k) => `  - ${k}`).join("\n")}
 tags: [${tags.join(", ")}]
 slug: /${filename}
 last_update:
-  date: ${new Date().toLocaleDateString("en-US")}
+  date: ${getPublishedDate(page)}
   author: Awana Digital`;
 
               // Add customProps to frontmatter if they exist

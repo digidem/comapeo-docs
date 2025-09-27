@@ -1,14 +1,14 @@
 import { Client } from "@notionhq/client";
 import ora from "ora";
 import chalk from "chalk";
-import { NOTION_PROPERTIES } from "../constants";
+import { NOTION_PROPERTIES } from "../constants.js";
 
 interface UpdateStatusOptions {
   token: string;
   databaseId: string;
   fromStatus: string;
   toStatus: string;
-  setPublishedCheckbox?: boolean;
+  setPublishedDate?: boolean;
 }
 
 /**
@@ -18,8 +18,7 @@ interface UpdateStatusOptions {
 export async function updateNotionPageStatus(
   options: UpdateStatusOptions
 ): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedCheckbox } =
-    options;
+  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(
@@ -55,18 +54,20 @@ export async function updateNotionPageStatus(
 
     for (const page of pages) {
       try {
-        const properties = {
+        const properties: Record<string, unknown> = {
           [NOTION_PROPERTIES.STATUS]: {
             select: {
               name: toStatus,
             },
           },
-        } as any;
+        };
 
-        // Add Published checkbox if requested
-        if (setPublishedCheckbox) {
-          properties["Published"] = {
-            checkbox: true,
+        // Add Published date if requested
+        if (setPublishedDate) {
+          properties[NOTION_PROPERTIES.PUBLISHED_DATE] = {
+            date: {
+              start: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
+            },
           };
         }
 
@@ -107,17 +108,17 @@ const WORKFLOWS = {
   translation: {
     from: "Ready for translation",
     to: "Reviewing translations",
-    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   draft: {
     from: "Ready to publish",
     to: "Draft published",
-    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   publish: {
     from: "Draft published",
     to: "Published",
-    setPublishedCheckbox: true,
+    setPublishedDate: true, // Set the published date when publishing
   },
 } as const;
 
@@ -177,13 +178,13 @@ async function main() {
   let fromStatus: string;
   let toStatus: string;
 
-  let setPublishedCheckbox = false;
+  let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
-    setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
+    setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
     toStatus = options.toStatus;
@@ -229,7 +230,7 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedCheckbox,
+      setPublishedDate,
     });
   } catch (error) {
     console.error(chalk.red("Status update failed:", error.message));

@@ -56,7 +56,39 @@ The resulting files are placed in the `build` directory for deployment via any s
 
 ### Deployment
 
-Deploy your site using one of the following methods:
+#### Production Deployment (Cloudflare Pages)
+
+The site automatically deploys to production at `https://docs.comapeo.app` via GitHub Actions when changes are pushed to the `main` branch. You can also trigger deployments manually:
+
+**Manual Deployment:**
+1. Go to the GitHub repository
+2. Click **Actions** → **Deploy to Production**
+3. Click **Run workflow** on the `main` branch
+
+**API Deployment:**
+```bash
+curl -X POST \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/repos/OWNER/REPO/dispatches \
+  -d '{"event_type":"deploy-production"}'
+```
+
+**What happens during deployment:**
+1. Site is built using `bun run build`
+2. Static files are deployed to Cloudflare Pages
+3. Notion pages with "Staging" status are updated to "Published" 
+4. Published date is automatically set in Notion
+
+**Required GitHub Secrets:**
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token for deployment
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+- `NOTION_API_KEY` - Notion integration API key
+- `DATABASE_ID` - Notion database ID
+
+#### Alternative Deployment (GitHub Pages)
+
+You can still deploy to GitHub Pages using:
 
 - Using SSH:
 
@@ -70,7 +102,27 @@ USE_SSH=true bun deploy
 GIT_USER=<Your GitHub username> bun deploy
 ```
 
-For GitHub Pages hosting, this command conveniently builds the site and pushes to the `gh-pages` branch.
+This method builds the site and pushes to the `gh-pages` branch.
+
+### Notion Status Workflows
+
+The project includes automated Notion status management workflows:
+
+```bash
+# Update translation status
+bun run notionStatus:translation
+
+# Move to draft status  
+bun run notionStatus:draft
+
+# Publish content (sets published date)
+bun run notionStatus:publish
+
+# Production publishing (Staging → Published with date)
+bun run notionStatus:publish-production
+```
+
+These workflows automatically update page statuses in your Notion database and set published dates when content moves to "Published" status.
 
 ### Customizing Admonition Colors
 
@@ -135,5 +187,5 @@ All workflows automatically commit their changes to the repository using the git
 ### Roadmap & Future Enhancements
 
 - [ ] Develop a robust translation strategy to further enhance our multilingual support.
-- [ ] Integrate GitHub Actions for continuous deployment and automated publishing.
+- [x] Integrate GitHub Actions for continuous deployment and automated publishing.
 - [ ] Refine the Notion-to-Markdown integration for more dynamic updates.

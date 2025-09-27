@@ -437,5 +437,125 @@
     },
     "Introducción": {
         "message": "Introducción"
+    },
+    "Preparing to Use CoMapeo": {
+        "message": "Preparación para el uso de "
+    },
+    "Understanding CoMapeo’s Core Concepts and Functions": {
+        "message": "Nueva Página"
+    },
+    "Gathering the Right Equipment for CoMapeo": {
+        "message": "Reunir el Equipo Adecuado para CoMapeo"
+    },
+    "Organizing Key Materials for Projects": {
+        "message": "Nueva Página"
+    },
+    "Installing & Uninstalling CoMapeo": {
+        "message": "Instalación y desinstalación de CoMapeo"
+    },
+    "Installing CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "Uninstalling CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "Mapping On Your Own & Next Steps": {
+        "message": "Nueva Página"
+    },
+    "Setting up a Device & Maintaining It": {
+        "message": "Nueva Página"
+    },
+    "Mapping with Collaborators": {
+        "message": "Nueva Página"
+    },
+    "Gathering Observations": {
+        "message": "Recopilación de observaciones"
+    },
+    "Creating a New Observation": {
+        "message": "Nueva Página"
+    },
+    "Creating a New Track": {
+        "message": "Nueva Página"
+    },
+    "Reviewing Observations": {
+        "message": "Revisión de observaciones"
+    },
+    "Managing the Observations List": {
+        "message": "Nueva Página"
+    },
+    "Reviewing an Observation": {
+        "message": "Nueva Página"
+    },
+    "Managing Projects": {
+        "message": "Gestión de proyectos"
+    },
+    "Creating a New Project": {
+        "message": "Nueva Página"
+    },
+    "Adjusting Categories Set": {
+        "message": "Nueva Página"
+    },
+    "Inviting Collaborators": {
+        "message": "Nueva Página"
+    },
+    "Managing a Team": {
+        "message": "Nueva Página"
+    },
+    "Managing Data & Privacy": {
+        "message": "Gestión de datos y privacidad"
+    },
+    "Adjusting Data Sharing & Privacy": {
+        "message": "Nueva Página"
+    },
+    "Working with an App Passcode": {
+        "message": "Nueva Página"
+    },
+    "Exchanging Observations": {
+        "message": "Tracar Observao…"
+    },
+    "Understanding How Exchange Works C": {
+        "message": "Nueva Página"
+    },
+    "Understanding How Exchange Works A": {
+        "message": "Nueva Página A"
+    },
+    "Exchange on Desktop (C only)": {
+        "message": "Nueva Página"
+    },
+    "Using a Remote Archive": {
+        "message": "Nueva Página"
+    },
+    "Sharing Outside Your Project": {
+        "message": "Nueva Página"
+    },
+    "Sharing individual Observation data": {
+        "message": "Nueva Página"
+    },
+    "Sharing exported project data ": {
+        "message": "Nueva Página"
+    },
+    "Ending a Project": {
+        "message": "Nueva Página"
+    },
+    "Miscellaneous": {
+        "message": "Misceláneas"
+    },
+    "FAQ": {
+        "message": "Preguntas frecuentes"
+    },
+    "Troubleshooting": {
+        "message": "Solución de problemas"
+    },
+    "I can’t start CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "I have problems with GPS in CoMapeo ": {
+        "message": "Nueva Página"
+    },
+    "I have problems with the camera in CoMapeo Mobile": {
+        "message": "Nueva Página"
+    },
+    "I want to update app permissions in CoMapeo Mobile": {
+        "message": "Nueva Página"
     }
 }

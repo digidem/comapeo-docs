@@ -32,14 +32,16 @@ export async function fetchNotionData(filter) {
       page_size: 100,
     });
 
-    results.push(...response.results);
-    hasMore = response.has_more ?? false;
+    const pageResults = Array.isArray(response.results) ? response.results : [];
+    results.push(...pageResults);
+
+    const prevCursor = startCursor;
+    hasMore = Boolean(response.has_more);
     startCursor = response.next_cursor ?? undefined;
 
-    // Validate cursor to prevent infinite loops
-    if (hasMore && !startCursor) {
+    if (hasMore && (!startCursor || startCursor === prevCursor)) {
       console.warn(
-        "Warning: Notion API reported has_more=true but provided no next_cursor"
+        "Warning: Notion API pagination anomaly detected (stalled or missing next_cursor). Terminating pagination early."
       );
       break;
     }

@@ -605,10 +605,14 @@ async function downloadAndProcessImage(
       const originalBuffer = Buffer.from(response.data, "binary");
       const cleanUrl = url.split("?")[0];
 
-      const headerCT = (
-        response.headers as Record<string, string | string[]>
-      )?.["content-type"] as string | undefined;
-      const headerFmt = formatFromContentType(headerCT);
+      // Normalize header keys to lowercase for robust access
+      const headers = response.headers as Record<string, string | string[] | undefined>;
+      const contentTypeHeader =
+        (headers["content-type"] ??
+          Object.entries(headers).find(([k]) => k.toLowerCase() === "content-type")?.[1]) as string | undefined;
+      const headerFmt = formatFromContentType(
+        Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader
+      );
       const bufferFmt = detectFormatFromBuffer(originalBuffer);
       const chosenFmt = chooseFormat(bufferFmt, headerFmt);
 
@@ -1139,9 +1143,11 @@ export async function generateBlocks(pages, progressCallback) {
               let m: RegExpExecArray | null;
               let tmpIndex = 0;
               while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+                const rawUrl = m[2];
+                const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
                 imageMatches.push({
                   full: m[0],
-                  url: m[2],
+                  url: unescapedUrl,
                   alt: m[1],
                   idx: tmpIndex++,
                 });

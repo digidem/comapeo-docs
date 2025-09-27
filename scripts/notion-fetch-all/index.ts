@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import { fetchAllNotionData, FetchAllOptions } from "./fetchAll";
-import { PreviewGenerator } from "./previewGenerator";
+import { PreviewGenerator, PreviewOptions } from "./previewGenerator";
 import { StatusAnalyzer } from "./statusAnalyzer";
 import { ComparisonEngine } from "./comparisonEngine";
 import {

@@ -41,10 +41,10 @@ async function main(): Promise<number> {
     return await gracefulShutdown(1);
   }
 
-  if (!process.env.DATABASE_ID) {
+  if (!resolvedDatabaseId) {
     console.error(
       chalk.bold.red(
-        "Error: DATABASE_ID is not defined in the environment variables."
+        "Error: DATABASE_ID (or NOTION_DATABASE_ID) is not defined in the environment variables."
       )
     );
     return await gracefulShutdown(1);

@@ -72,16 +72,21 @@ export async function fetchAllNotionData(
     generateSpinnerText:
       generateSpinnerText ?? "Exporting pages to markdown files",
     transform: (pages) => {
-      fetchedCount = Array.isArray(pages) ? pages.length : 0;
-      const transformed = applyFetchAllTransform(
-        Array.isArray(pages) ? pages : [],
-        {
-          statusFilter,
-          maxPages,
-          includeRemoved,
-        }
-      );
-      return Array.isArray(transformed) ? transformed : [];
+      try {
+        fetchedCount = Array.isArray(pages) ? pages.length : 0;
+        const transformed = applyFetchAllTransform(
+          Array.isArray(pages) ? pages : [],
+          {
+            statusFilter,
+            maxPages,
+            includeRemoved,
+          }
+        );
+        return Array.isArray(transformed) ? transformed : [];
+      } catch (e) {
+        console.warn("fetchAll transform failed, using untransformed data:", (e as Error)?.message ?? e);
+        return Array.isArray(pages) ? pages : [];
+      }
     },
     onProgress: progressLogger,
     shouldGenerate: exportFiles,

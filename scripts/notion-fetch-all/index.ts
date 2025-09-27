@@ -425,8 +425,12 @@ async function main() {
       }
 
       const outputFile = options.outputFile || defaultFilename;
-      outputPath = path.resolve(outputFile);
-      // Destination path is resolved within the workspace; flag suppressed as this is intentional CLI output.
+      const candidatePath = path.resolve(outputFile);
+      const cwd = process.cwd();
+      if (!candidatePath.startsWith(path.resolve(cwd) + path.sep)) {
+        throw new Error(`Refusing to write outside project directory: ${candidatePath}`);
+      }
+      outputPath = candidatePath;
       // eslint-disable-next-line security/detect-non-literal-fs-filename
       fs.writeFileSync(outputPath, outputContent, "utf8");
 

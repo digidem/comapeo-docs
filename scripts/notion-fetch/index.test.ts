@@ -218,7 +218,7 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("NOTION_API_KEY is not defined")
+        expect.stringContaining("Missing NOTION_API_KEY environment variable")
       );
     });
 
@@ -232,7 +232,7 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("DATABASE_ID is not defined")
+        expect.stringContaining("DATABASE_ID (or NOTION_DATABASE_ID) is not defined")
       );
     });
 

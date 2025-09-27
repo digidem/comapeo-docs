@@ -21,9 +21,8 @@ export async function fetchNotionData(filter) {
   const seenIds = new Set<string>();
   while (hasMore) {
     if (++safetyCounter > MAX_PAGES) {
-      throw new Error(
-        "Pagination safety limit exceeded when fetching Notion data"
-      );
+      console.warn("Pagination safety limit exceeded; returning partial results.");
+      break;
     }
 
     const response = await enhancedNotion.databasesQuery({
@@ -55,14 +54,10 @@ export async function fetchNotionData(filter) {
 
     if (
       hasMore &&
-      (duplicateDetected ||
-        !startCursor ||
-        startCursor === prevCursor ||
-        prevCount === 0)
+      (duplicateDetected || !startCursor || startCursor === prevCursor || prevCount === 0)
     ) {
-      throw new Error(
-        "Notion API pagination anomaly detected (duplicate/empty/stalled page)."
-      );
+      console.warn("Notion API pagination anomaly detected; stopping early with partial results.");
+      break;
     }
   }
 

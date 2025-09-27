@@ -378,7 +378,8 @@ async function downloadAndProcessImageWithCache(
 ): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
   const cachedEntry = imageCache.get(url);
   if (cachedEntry) {
-    const webPath = `/images/${path.basename(cachedEntry.localPath).replace(/\\/g, "/")}`;
+    const fileName = path.basename(cachedEntry.localPath);
+    const webPath = `/images/${fileName}`;
     console.info(chalk.green(`💾 Using cached image: ${webPath}`));
     return {
       newPath: webPath,
@@ -700,7 +701,7 @@ async function downloadAndProcessImage(
       const savedBytes = usedFallback
         ? 0
         : Math.max(0, originalSize - finalSize);
-      const imagePath = `/images/${filename.replace(/\\/g, "/")}`;
+      const imagePath = `/images/${filename}`;
       return { newPath: imagePath, savedBytes };
     } catch (error) {
       lastError = error;

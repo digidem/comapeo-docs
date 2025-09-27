@@ -662,7 +662,9 @@ if (isDirectExec && process.env.NODE_ENV !== "test") {
     } catch (error) {
       console.error(chalk.red("❌ Fatal error:"), error);
       await gracefulShutdown(1);
-      return;
     }
-  })();
+  })().catch(async (err) => {
+    console.error(chalk.red("❌ Unhandled fatal error:"), err);
+    await gracefulShutdown(1);
+  });
 }

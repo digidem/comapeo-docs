@@ -36,12 +36,16 @@ export async function fetchNotionData(filter) {
     results.push(...pageResults);
 
     const prevCursor = startCursor;
+    const prevCount = pageResults.length;
     hasMore = Boolean(response.has_more);
     startCursor = response.next_cursor ?? undefined;
 
-    if (hasMore && (!startCursor || startCursor === prevCursor)) {
+    if (
+      hasMore &&
+      (!startCursor || startCursor === prevCursor || prevCount === 0)
+    ) {
       console.warn(
-        "Warning: Notion API pagination anomaly detected (stalled or missing next_cursor). Terminating pagination early."
+        "Warning: Notion API pagination anomaly detected (stalled cursor or empty page). Terminating pagination early."
       );
       break;
     }

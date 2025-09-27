@@ -174,16 +174,16 @@ async function logImageFailure(logEntry: any): Promise<void> {
     try {
       if (fs.existsSync(logPath)) {
         const content = fs.readFileSync(logPath, "utf-8");
-        existingLogs = Array.isArray(JSON.parse(content))
-          ? JSON.parse(content)
-          : [];
+        const parsed = JSON.parse(content);
+        existingLogs = Array.isArray(parsed) ? parsed : [];
       }
     } catch {
       existingLogs = [];
     }
     existingLogs.push(logEntry);
+
+    const payload = JSON.stringify(existingLogs, null, 2);
     try {
-      const payload = JSON.stringify(existingLogs, null, 2);
       fs.writeFileSync(tmpPath, payload);
       fs.renameSync(tmpPath, logPath);
     } catch {
@@ -191,9 +191,15 @@ async function logImageFailure(logEntry: any): Promise<void> {
         chalk.yellow("Failed to write image failure log atomically")
       );
       try {
-        fs.writeFileSync(logPath, JSON.stringify(existingLogs, null, 2));
+        fs.writeFileSync(logPath, payload);
       } catch {
         console.warn(chalk.yellow("Failed to write image failure log"));
+      }
+    } finally {
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {
+        // best-effort cleanup
       }
     }
     return undefined;
@@ -206,7 +212,6 @@ async function logImageFailure(logEntry: any): Promise<void> {
  * Post-process markdown to ensure no broken image references remain
  */
 function sanitizeMarkdownImages(content: string): string {
-  // Remove any remaining empty image references
   let sanitized = content;
 
   // Pattern 1: Completely empty URLs
@@ -215,16 +220,17 @@ function sanitizeMarkdownImages(content: string): string {
     "**[Image: $1]** *(Image URL was empty)*"
   );
 
-  // Pattern 2: Invalid URLs (undefined, null, etc.)
+  // Pattern 2: Invalid literal placeholders
   sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\((undefined|null)\)/g,
+    /!\[([^\]]*)\]\(\s*(?:undefined|null)\s*\)/g,
     "**[Image: $1]** *(Image URL was invalid)*"
   );
 
-  // Pattern 3: Malformed URLs
+  // Pattern 3: URLs containing unencoded whitespace characters (likely malformed)
+  // Do not match if URL contains percent-encoded spaces (%20) or escapes.
   sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\([^)]*\s+[^)]*\)/g,
-    "**[Image: $1]** *(Image URL was malformed)*"
+    /!\[([^\]]*)\]\(\s*([^)\s][^)]*[\t\r\n ][^)]*)\)/g,
+    "**[Image: $1]** *(Image URL contained whitespace)*"
   );
 
   return sanitized;

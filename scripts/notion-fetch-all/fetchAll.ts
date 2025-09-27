@@ -87,14 +87,19 @@ export async function fetchAllNotionData(
     shouldGenerate: exportFiles,
   });
 
-  const pages = rawData.map((page) => transformPage(page));
+  // Defensive filter in case upstream filtering is bypassed
+  const defensivelyFiltered = includeRemoved
+    ? rawData
+    : rawData.filter((p) => getStatusFromRawPage(p) !== "Remove");
+
+  const pages = defensivelyFiltered.map((page) => transformPage(page));
   const sortedPages = sortPages(pages, sortBy, sortDirection);
 
   logStatusSummary(sortedPages);
 
   return {
     pages: sortedPages,
-    rawPages: rawData,
+    rawPages: defensivelyFiltered,
     metrics: exportFiles ? metrics : undefined,
     fetchedCount,
     processedCount: sortedPages.length,

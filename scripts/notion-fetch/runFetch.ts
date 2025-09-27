@@ -63,9 +63,11 @@ export async function runFetchPipeline(
 
     try {
       const metrics = await generateBlocks(data, (progress) => {
-        generateSpinner.text = chalk.blue(
-          `${generateSpinnerText}: ${progress.current}/${progress.total}`
-        );
+        if (generateSpinner.isSpinning) {
+          generateSpinner.text = chalk.blue(
+            `${generateSpinnerText}: ${progress.current}/${progress.total}`
+          );
+        }
         onProgress?.(progress);
       });
 
@@ -76,6 +78,7 @@ export async function runFetchPipeline(
       generateSpinner.fail(chalk.red("Failed to generate blocks"));
       throw error;
     } finally {
+      if (generateSpinner.isSpinning) generateSpinner.stop();
       unregisterGenerateSpinner();
     }
   } catch (error) {

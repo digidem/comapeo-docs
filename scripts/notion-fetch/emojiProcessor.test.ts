@@ -513,5 +513,39 @@ describe("EmojiProcessor", () => {
 
       expect(result).toBe(markdownContent);
     });
+
+    it("should handle [img](#img) patterns from notion-to-md conversion", () => {
+      const markdownContent = "Here is [img](#img) [ comapeo-save-low] and [img](#img)[comapeo-capture-low] in the text.";
+      const emojiMap = new Map([
+        [":comapeo-save-low:", "/images/emojis/comapeo-save-low.png"],
+        [":comapeo-capture-low:", "/images/emojis/comapeo-capture-low.png"],
+      ]);
+
+      const result = EmojiProcessor.applyEmojiMappings(
+        markdownContent,
+        emojiMap
+      );
+
+      expect(result).toBe(
+        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
+      );
+    });
+
+    it("should handle [img] patterns without (#img) links", () => {
+      const markdownContent = "Here is [img] [ comapeo-save-low] and [img][comapeo-capture-low] in the text.";
+      const emojiMap = new Map([
+        [":comapeo-save-low:", "/images/emojis/comapeo-save-low.png"],
+        [":comapeo-capture-low:", "/images/emojis/comapeo-capture-low.png"],
+      ]);
+
+      const result = EmojiProcessor.applyEmojiMappings(
+        markdownContent,
+        emojiMap
+      );
+
+      expect(result).toBe(
+        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
+      );
+    });
   });
 });

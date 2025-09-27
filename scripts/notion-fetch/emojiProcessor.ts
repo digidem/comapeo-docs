@@ -773,6 +773,13 @@ export class EmojiProcessor {
   ): string {
     let processedContent = markdownContent;
 
+    // Create a map of emoji names to their local paths for easier lookup
+    const emojiNameMap = new Map<string, string>();
+    for (const [plainText, localPath] of emojiMap.entries()) {
+      const emojiName = plainText.replace(/:/g, "").trim();
+      emojiNameMap.set(emojiName, localPath);
+    }
+
     for (const [plainText, localPath] of emojiMap.entries()) {
       // Replace all occurrences of the emoji plain text with inline HTML image
       const escapedPlainText = plainText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -783,6 +790,33 @@ export class EmojiProcessor {
       const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;
 
       processedContent = processedContent.replace(regex, inlineEmoji);
+    }
+
+    // Also handle cases where notion-to-md converts emojis to [img](#img) with surrounding context
+    // Pattern: [img](#img) [ emoji-name] or [img](#img)[emoji-name]
+    for (const [emojiName, localPath] of emojiNameMap.entries()) {
+      // Escape emoji name for use in regex
+      const escapedEmojiName = emojiName.replace(/[-\[\]\\^$*+?.()|{}]/g, "\\$&");
+      
+      // Look for patterns like "[img](#img) [ comapeo-save-low]" or "[img](#img)[comapeo-capture-low]"
+      const patterns = [
+        // Pattern: [img](#img) [ emoji-name]
+        new RegExp(`\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
+        // Pattern: [img](#img)[emoji-name]
+        new RegExp(`\\[img\\]\\(#img\\)\\[${escapedEmojiName}\\]`, "gi"),
+        // Pattern: [img](#img)  [ emoji-name] (with extra spaces)
+        new RegExp(`\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
+        // Pattern: [img] [ emoji-name] (in case the (#img) part is missing)
+        new RegExp(`\\[img\\]\\s*\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
+        // Pattern: [img][emoji-name] (in case the (#img) part is missing)
+        new RegExp(`\\[img\\]\\[${escapedEmojiName}\\]`, "gi")
+      ];
+
+      const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;
+
+      for (const pattern of patterns) {
+        processedContent = processedContent.replace(pattern, inlineEmoji);
+      }
     }
 
     return processedContent;

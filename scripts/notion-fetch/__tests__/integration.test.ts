@@ -89,7 +89,7 @@ describe("Notion Fetch Integration Tests", () => {
     expect(togglePage.properties["Element Type"].select.name).toBe("Toggle");
     
     const headingPage = createMockHeadingPage();
-    expect(headingPage.properties["Element Type"].select.name).toBe("Heading");
+    expect(headingPage.properties["Element Type"].select.name).toBe("Title");
   });
 
   it("should handle image processing mock data", async () => {

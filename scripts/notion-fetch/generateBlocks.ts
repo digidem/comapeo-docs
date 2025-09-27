@@ -841,8 +841,14 @@ const resolvePageLocale = (page: Record<string, any>) => {
 
 const groupPagesByLang = (pages: Array<Record<string, any>>, page) => {
   const elementType = getElementTypeProperty(page);
-  const sectionName =
-    elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
+  const sectionName = (
+    elementType?.select?.name ??
+    elementType?.name ??
+    elementType ??
+    ""
+  )
+    .toString()
+    .trim();
 
   const grouped = {
     mainTitle: resolvePageTitle(page),
@@ -872,8 +878,14 @@ const groupPagesByLang = (pages: Array<Record<string, any>>, page) => {
 
 const createStandalonePageGroup = (page: Record<string, any>) => {
   const elementType = getElementTypeProperty(page);
-  const sectionName =
-    elementType?.select?.name ?? elementType?.name ?? elementType ?? "";
+  const sectionName = (
+    elementType?.select?.name ??
+    elementType?.name ??
+    elementType ??
+    ""
+  )
+    .toString()
+    .trim();
   const locale = resolvePageLocale(page);
 
   return {
@@ -1009,7 +1021,7 @@ export async function generateBlocks(pages, progressCallback) {
      * group pages by language likeso:
      * {
      * mainTitle,
-     * section: "Heading" | "Toggle" | "Page"
+     * section: "Title" | "Heading" | "Toggle" | "Page"
      * content: { lang: page}
      * }
      */
@@ -1035,7 +1047,13 @@ export async function generateBlocks(pages, progressCallback) {
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
       const title = pageByLang.mainTitle;
-      const sectionType = pageByLang.section;
+      const sectionTypeRaw = pageByLang.section;
+      const sectionTypeString =
+        typeof sectionTypeRaw === "string"
+          ? sectionTypeRaw.trim()
+          : String(sectionTypeRaw ?? "").trim();
+      const sectionType = sectionTypeString;
+      const normalizedSectionType = sectionTypeString.toLowerCase();
       const filename = title
         .toLowerCase()
         .replace(/\s+/g, "-")
@@ -1086,6 +1104,14 @@ export async function generateBlocks(pages, progressCallback) {
           customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
         }
 
+        let pendingHeading: string | undefined;
+        if (normalizedSectionType === "page") {
+          pendingHeading = currentHeading.get(lang);
+          if (pendingHeading) {
+            customProps.title = pendingHeading;
+          }
+        }
+
         const frontmatter = buildFrontmatter(
           pageTitle,
           sidebarPosition,
@@ -1107,7 +1133,7 @@ export async function generateBlocks(pages, progressCallback) {
             setTranslationString(lang, pageByLang.mainTitle, pageTitle);
 
           // TOGGLE
-          if (sectionType === "Toggle") {
+          if (normalizedSectionType === "toggle") {
             const sectionName =
               page.properties?.["Title"]?.title?.[0]?.plain_text ?? pageTitle;
             if (!page.properties?.["Title"]?.title?.[0]?.plain_text) {
@@ -1153,8 +1179,11 @@ export async function generateBlocks(pages, progressCallback) {
                 chalk.green(`added _category_.json to ${sectionFolder}`)
               );
             }
-            // HEADING
-          } else if (sectionType === "Heading") {
+            // HEADING (Title)
+          } else if (
+            normalizedSectionType === "title" ||
+            normalizedSectionType === "heading"
+          ) {
             currentHeading.set(lang, pageTitle);
             titleSectionCount++; // Increment title section counter
             currentSectionFolder = {};
@@ -1165,7 +1194,7 @@ export async function generateBlocks(pages, progressCallback) {
             );
 
             // PAGE
-          } else if (sectionType === "Page") {
+          } else if (normalizedSectionType === "page") {
             const markdown = await n2m.pageToMarkdown(page.id);
             const markdownString = n2m.toMarkdownString(markdown);
 
@@ -1490,6 +1519,9 @@ export async function generateBlocks(pages, progressCallback) {
                   `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}. Placeholder content generated.`
                 )
               );
+            }
+            if (pendingHeading) {
+              currentHeading.set(lang, null);
             }
           }
 

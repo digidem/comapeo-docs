@@ -8,7 +8,6 @@ interface UpdateStatusOptions {
   databaseId: string;
   fromStatus: string;
   toStatus: string;
-  setPublishedCheckbox?: boolean;
   setPublishedDate?: boolean;
 }
 
@@ -19,14 +18,7 @@ interface UpdateStatusOptions {
 export async function updateNotionPageStatus(
   options: UpdateStatusOptions
 ): Promise<void> {
-  const {
-    token,
-    databaseId,
-    fromStatus,
-    toStatus,
-    setPublishedCheckbox,
-    setPublishedDate,
-  } = options;
+  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(
@@ -69,13 +61,6 @@ export async function updateNotionPageStatus(
             },
           },
         };
-
-        // Add Published checkbox if requested (legacy support)
-        if (setPublishedCheckbox) {
-          properties[NOTION_PROPERTIES.PUBLISHED_CHECKBOX] = {
-            checkbox: true,
-          };
-        }
 
         // Add Published date if requested
         if (setPublishedDate) {
@@ -123,20 +108,17 @@ const WORKFLOWS = {
   translation: {
     from: "Ready for translation",
     to: "Reviewing translations",
-    setPublishedCheckbox: false,
     setPublishedDate: false,
   },
   draft: {
     from: "Ready to publish",
     to: "Draft published",
-    setPublishedCheckbox: false,
     setPublishedDate: false,
   },
   publish: {
     from: "Draft published",
     to: "Published",
-    setPublishedCheckbox: true, // Keep for backward compatibility
-    setPublishedDate: true, // New: set the published date
+    setPublishedDate: true, // Set the published date when publishing
   },
 } as const;
 
@@ -189,14 +171,12 @@ async function main() {
   let fromStatus: string;
   let toStatus: string;
 
-  let setPublishedCheckbox = false;
   let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
-    setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
     setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
@@ -243,7 +223,6 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedCheckbox,
       setPublishedDate,
     });
   } catch (error) {

@@ -63,7 +63,7 @@ export async function runFetchPipeline(
 
     try {
       const metrics = await generateBlocks(data, (progress) => {
-        if (generateSpinner.isSpinning) {
+        if (generateSpinner?.isSpinning) {
           generateSpinner.text = chalk.blue(
             `${generateSpinnerText}: ${progress.current}/${progress.total}`
           );
@@ -71,14 +71,18 @@ export async function runFetchPipeline(
         onProgress?.(progress);
       });
 
-      generateSpinner.succeed(chalk.green("Blocks generated successfully"));
+      if (generateSpinner?.isSpinning) {
+        generateSpinner.succeed(chalk.green("Blocks generated successfully"));
+      }
 
       return { data, metrics };
     } catch (error) {
-      generateSpinner.fail(chalk.red("Failed to generate blocks"));
+      if (generateSpinner?.isSpinning) {
+        generateSpinner.fail(chalk.red("Failed to generate blocks"));
+      }
       throw error;
     } finally {
-      if (generateSpinner.isSpinning) generateSpinner.stop();
+      if (generateSpinner?.isSpinning) generateSpinner.stop();
       unregisterGenerateSpinner();
     }
   } catch (error) {

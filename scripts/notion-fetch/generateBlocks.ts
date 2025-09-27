@@ -168,42 +168,56 @@ let imageLogWriting = Promise.resolve();
 async function logImageFailure(logEntry: any): Promise<void> {
   const logPath = path.join(process.cwd(), "image-failures.json");
   const tmpPath = `${logPath}.tmp`;
+  const MAX_ENTRIES = 5000;
 
-  imageLogWriting = imageLogWriting.then(async () => {
-    let existingLogs: any[] = [];
-    try {
-      if (fs.existsSync(logPath)) {
-        const content = fs.readFileSync(logPath, "utf-8");
-        const parsed = JSON.parse(content);
-        existingLogs = Array.isArray(parsed) ? parsed : [];
+  imageLogWriting = imageLogWriting
+    .then(async () => {
+      let existingLogs: any[] = [];
+      try {
+        if (fs.existsSync(logPath)) {
+          const content = fs.readFileSync(logPath, "utf-8");
+          const parsed = JSON.parse(content);
+          existingLogs = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch {
+        existingLogs = [];
       }
-    } catch {
-      existingLogs = [];
-    }
-    existingLogs.push(logEntry);
+      existingLogs.push(logEntry);
+      // Prevent unbounded growth
+      if (existingLogs.length > MAX_ENTRIES) {
+        existingLogs = existingLogs.slice(-MAX_ENTRIES);
+      }
 
-    const payload = JSON.stringify(existingLogs, null, 2);
-    try {
-      fs.writeFileSync(tmpPath, payload);
-      fs.renameSync(tmpPath, logPath);
-    } catch {
+      const payload = JSON.stringify(existingLogs, null, 2);
+      try {
+        fs.writeFileSync(tmpPath, payload);
+        fs.renameSync(tmpPath, logPath);
+      } catch {
+        console.warn(
+          chalk.yellow("Failed to write image failure log atomically")
+        );
+        try {
+          fs.writeFileSync(logPath, payload);
+        } catch {
+          console.warn(chalk.yellow("Failed to write image failure log"));
+        }
+      } finally {
+        try {
+          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+      return undefined;
+    })
+    .catch((e) => {
+      // Reset mutex on failure to avoid blocking future writes
       console.warn(
-        chalk.yellow("Failed to write image failure log atomically")
+        chalk.yellow("Image failure log write error; resetting queue"),
+        e
       );
-      try {
-        fs.writeFileSync(logPath, payload);
-      } catch {
-        console.warn(chalk.yellow("Failed to write image failure log"));
-      }
-    } finally {
-      try {
-        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-      } catch {
-        // best-effort cleanup
-      }
-    }
-    return undefined;
-  });
+      return undefined;
+    });
 
   await imageLogWriting;
 }
@@ -212,7 +226,11 @@ async function logImageFailure(logEntry: any): Promise<void> {
  * Post-process markdown to ensure no broken image references remain
  */
 function sanitizeMarkdownImages(content: string): string {
-  let sanitized = content;
+  if (!content || content.indexOf("![") === -1) return content;
+  // Cap processing size to avoid ReDoS on pathological inputs
+  const MAX_LEN = 2_000_000;
+  const text = content.length > MAX_LEN ? content.slice(0, MAX_LEN) : content;
+  let sanitized = text;
 
   // Pattern 1: Completely empty URLs
   sanitized = sanitized.replace(
@@ -226,13 +244,17 @@ function sanitizeMarkdownImages(content: string): string {
     "**[Image: $1]** *(Image URL was invalid)*"
   );
 
-  // Pattern 3: URLs containing unencoded whitespace characters (likely malformed)
-  // Do not match if URL contains percent-encoded spaces (%20) or escapes.
+  // Pattern 3: Unencoded whitespace inside URL (safe regex without nested greedy scans)
+  // Matches any whitespace in the URL excluding escaped closing parens and %20
   sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*([^)\s][^)]*[\t\r\n ][^)]*)\)/g,
+    /!\[([^\]]*)\]\(\s*([^()\s][^()\r\n]*?(?:\s+)[^()\r\n]*?)\s*\)/g,
     "**[Image: $1]** *(Image URL contained whitespace)*"
   );
 
+  // If we truncated, append a notice to avoid corrupting content silently
+  if (text.length !== content.length) {
+    return sanitized + "\n\n<!-- Content truncated for sanitation safety -->";
+  }
   return sanitized;
 }
 
@@ -1262,37 +1284,14 @@ export async function generateBlocks(pages, progressCallback) {
                 const imageResults =
                   await Promise.allSettled(imageProcessingTasks);
 
+                // Build deterministic replacements using match indices
+                const indexedReplacements: Array<{
+                  start: number;
+                  end: number;
+                  text: string;
+                }> = [];
                 for (const result of imageResults) {
-                  if (result.status === "fulfilled") {
-                    const processResult = result.value;
-
-                    if (processResult.success && processResult.newPath) {
-                      // Success: Replace with new image path
-                      const newImageMarkdown =
-                        processResult.originalMarkdown!.replace(
-                          processResult.imageUrl!,
-                          processResult.newPath
-                        );
-                      imageReplacements.push({
-                        original: processResult.originalMarkdown!,
-                        replacement: newImageMarkdown,
-                      });
-                      totalSaved += processResult.savedBytes || 0;
-                      successfulImages++;
-                    } else {
-                      // Failure: Create informative fallback
-                      const fallbackMarkdown = createFallbackImageMarkdown(
-                        processResult.originalMarkdown!,
-                        processResult.imageUrl!,
-                        processResult.index!
-                      );
-                      imageReplacements.push({
-                        original: processResult.originalMarkdown!,
-                        replacement: fallbackMarkdown,
-                      });
-                      totalFailures++;
-                    }
-                  } else {
+                  if (result.status !== "fulfilled") {
                     // Promise rejection - should not happen with our error handling
                     console.error(
                       chalk.red(
@@ -1300,25 +1299,57 @@ export async function generateBlocks(pages, progressCallback) {
                       )
                     );
                     totalFailures++;
+                    continue;
                   }
+                  const processResult = result.value;
+                  const original = processResult.originalMarkdown!;
+                  const idx = markdownString.parent.indexOf(original);
+                  if (idx === -1) continue;
+                  const end = idx + original.length;
+                  let replacementText: string;
+                  if (processResult.success && processResult.newPath) {
+                    replacementText = original.replace(
+                      processResult.imageUrl!,
+                      processResult.newPath
+                    );
+                    totalSaved += processResult.savedBytes || 0;
+                    successfulImages++;
+                  } else {
+                    replacementText = createFallbackImageMarkdown(
+                      original,
+                      processResult.imageUrl!,
+                      processResult.index!
+                    );
+                    totalFailures++;
+                  }
+                  indexedReplacements.push({
+                    start: idx,
+                    end,
+                    text: replacementText,
+                  });
                 }
-              }
-
-              // Phase 2.5: Await all pending log operations before applying replacements
-              await Promise.allSettled(pendingLogs);
-
-              // Phase 3: Apply all replacements to markdown
-              let processedMarkdown = markdownString.parent;
-              for (const replacement of imageReplacements) {
-                processedMarkdown = processedMarkdown.replace(
-                  replacement.original,
-                  replacement.replacement
+                // Apply from end to start to keep indices stable
+                indexedReplacements.sort((a, b) => b.start - a.start);
+                let processedMarkdown = markdownString.parent;
+                for (const rep of indexedReplacements) {
+                  processedMarkdown =
+                    processedMarkdown.slice(0, rep.start) +
+                    rep.text +
+                    processedMarkdown.slice(rep.end);
+                }
+                // Continue with final sanitation
+                processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
+                markdownString.parent = processedMarkdown;
+              } else {
+                // Phase 3: No image replacements needed, just sanitize
+                let processedMarkdown = sanitizeMarkdownImages(
+                  markdownString.parent
                 );
+                markdownString.parent = processedMarkdown;
               }
 
-              // Phase 4: Final sanitization to catch any remaining issues
-              processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
-              markdownString.parent = processedMarkdown;
+              // Phase 2.5: Await all pending log operations
+              await Promise.allSettled(pendingLogs);
 
               // Phase 5: Report results
               const totalImages = imageMatches.length;

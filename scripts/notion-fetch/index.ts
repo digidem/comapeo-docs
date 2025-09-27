@@ -35,11 +35,9 @@ async function main(): Promise<number> {
   );
 
   if (!process.env.NOTION_API_KEY) {
-    console.error(
-      chalk.bold.red(
-        "Error: NOTION_API_KEY is not defined in the environment variables."
-      )
-    );
+    const msg = "Missing NOTION_API_KEY environment variable.";
+    // Keep concise output to avoid leaking sensitive context in logs
+    console.error(chalk.bold.red(msg));
     return await gracefulShutdown(1);
   }
 

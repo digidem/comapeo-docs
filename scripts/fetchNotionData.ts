@@ -18,6 +18,7 @@ export async function fetchNotionData(filter) {
   let safetyCounter = 0;
   const MAX_PAGES = 10_000; // Safety limit to prevent infinite loops
 
+  const seenIds = new Set<string>();
   while (hasMore) {
     if (++safetyCounter > MAX_PAGES) {
       throw new Error(
@@ -33,6 +34,18 @@ export async function fetchNotionData(filter) {
     });
 
     const pageResults = Array.isArray(response.results) ? response.results : [];
+
+    // Detect duplicate IDs to avoid stalling and data corruption
+    let duplicateDetected = false;
+    for (const r of pageResults) {
+      const id = (r as any)?.id;
+      if (id && seenIds.has(id)) {
+        duplicateDetected = true;
+        break;
+      }
+      if (id) seenIds.add(id);
+    }
+
     results.push(...pageResults);
 
     const prevCursor = startCursor;
@@ -42,12 +55,14 @@ export async function fetchNotionData(filter) {
 
     if (
       hasMore &&
-      (!startCursor || startCursor === prevCursor || prevCount === 0)
+      (duplicateDetected ||
+        !startCursor ||
+        startCursor === prevCursor ||
+        prevCount === 0)
     ) {
-      console.warn(
-        "Warning: Notion API pagination anomaly detected (stalled cursor or empty page). Terminating pagination early."
+      throw new Error(
+        "Notion API pagination anomaly detected (duplicate/empty/stalled page)."
       );
-      break;
     }
   }
 

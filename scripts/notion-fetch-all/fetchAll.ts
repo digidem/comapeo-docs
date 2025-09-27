@@ -84,7 +84,10 @@ export async function fetchAllNotionData(
         );
         return Array.isArray(transformed) ? transformed : [];
       } catch (e) {
-        console.warn("fetchAll transform failed, using untransformed data:", (e as Error)?.message ?? e);
+        console.warn(
+          "fetchAll transform failed, using untransformed data:",
+          (e as Error)?.message ?? e
+        );
         return Array.isArray(pages) ? pages : [];
       }
     },

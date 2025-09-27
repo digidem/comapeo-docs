@@ -232,7 +232,9 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("DATABASE_ID (or NOTION_DATABASE_ID) is not defined")
+        expect.stringContaining(
+          "DATABASE_ID (or NOTION_DATABASE_ID) is not defined"
+        )
       );
     });
 

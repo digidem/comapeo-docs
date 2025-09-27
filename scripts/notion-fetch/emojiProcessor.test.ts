@@ -167,8 +167,8 @@ describe("EmojiProcessor", () => {
       expect(result.reused).toBe(false);
     });
 
-    it("should reject URLs without emoji in path", async () => {
-      const url = "https://amazonaws.com/images/test.png";
+    it("should reject URLs without valid emoji/icon path", async () => {
+      const url = "https://amazonaws.com/images/test.png"; // No emoji, notion-static, or icon pattern
       const result = await EmojiProcessor.processEmoji(url, "test-page");
 
       expect(result.newPath).toBe(url); // Should fallback to original URL
@@ -185,6 +185,46 @@ describe("EmojiProcessor", () => {
 
     it("should accept valid emoji URLs", async () => {
       const url = "https://amazonaws.com/emoji/test.png";
+
+      // Mock successful download and processing
+      const mockAxiosGet = vi.mocked(axios.get);
+      const pngMagicBytes = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
+
+      mockAxiosGet.mockResolvedValueOnce({
+        data: pngMagicBytes,
+        headers: { "content-type": "image/png" },
+      });
+
+      const result = await EmojiProcessor.processEmoji(url, "test-page");
+
+      expect(result.newPath).toMatch(/^\/images\/emojis\/.+\.png$/);
+      expect(result.reused).toBe(false);
+    });
+
+    it("should accept Notion static URLs", async () => {
+      const url = "https://s3-us-west-2.amazonaws.com/public.notion-static.com/b900aefd-3951-4b85-b75f-44e28a611e8a/icon-save.jpg";
+
+      // Mock successful download and processing
+      const mockAxiosGet = vi.mocked(axios.get);
+      const jpgMagicBytes = Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46
+      ]); // Full JPEG header
+
+      mockAxiosGet.mockResolvedValueOnce({
+        data: jpgMagicBytes,
+        headers: { "content-type": "image/jpeg" },
+      });
+
+      const result = await EmojiProcessor.processEmoji(url, "test-page");
+
+      expect(result.newPath).toMatch(/^\/images\/emojis\/icon-save_.+\.(png|jpg)$/);
+      expect(result.reused).toBe(false);
+    });
+
+    it("should accept icon file URLs", async () => {
+      const url = "https://amazonaws.com/path/icon-custom-emoji.png";
 
       // Mock successful download and processing
       const mockAxiosGet = vi.mocked(axios.get);

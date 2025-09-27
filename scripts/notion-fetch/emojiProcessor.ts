@@ -119,13 +119,25 @@ export class EmojiProcessor {
         return false;
       }
 
-      // Basic path validation - must contain 'emoji' and have image extension
-      const hasEmojiInPath = parsed.pathname.includes("emoji");
+      // Path validation - must be valid emoji/icon path with image extension
       const hasImageExtension = /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(
         parsed.pathname
       );
 
-      return hasEmojiInPath && hasImageExtension;
+      // Allow paths that contain 'emoji' (generic emoji URLs)
+      const hasEmojiInPath = parsed.pathname.includes("emoji");
+      
+      // Allow Notion static URLs (for custom emojis from Notion)
+      const isNotionStaticUrl = parsed.pathname.includes("notion-static.com");
+      
+      // Allow icon files (common pattern for Notion custom emojis)
+      const isIconFile = /\/icon-[^\/]*\.(png|jpg|jpeg|gif|svg|webp)$/i.test(
+        parsed.pathname
+      );
+
+      const isValidPath = hasEmojiInPath || isNotionStaticUrl || isIconFile;
+
+      return isValidPath && hasImageExtension;
     } catch {
       return false;
     }

@@ -796,20 +796,29 @@ export class EmojiProcessor {
     // Pattern: [img](#img) [ emoji-name] or [img](#img)[emoji-name]
     for (const [emojiName, localPath] of emojiNameMap.entries()) {
       // Escape emoji name for use in regex
-      const escapedEmojiName = emojiName.replace(/[-\[\]\\^$*+?.()|{}]/g, "\\$&");
-      
+      const escapedEmojiName = emojiName.replace(
+        /[-\[\]\\^$*+?.()|{}]/g,
+        "\\$&"
+      );
+
       // Look for patterns like "[img](#img) [ comapeo-save-low]" or "[img](#img)[comapeo-capture-low]"
       const patterns = [
         // Pattern: [img](#img) [ emoji-name]
-        new RegExp(`\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
+        new RegExp(
+          `\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedEmojiName}\\s*\\]`,
+          "gi"
+        ),
         // Pattern: [img](#img)[emoji-name]
         new RegExp(`\\[img\\]\\(#img\\)\\[${escapedEmojiName}\\]`, "gi"),
         // Pattern: [img](#img)  [ emoji-name] (with extra spaces)
-        new RegExp(`\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
+        new RegExp(
+          `\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedEmojiName}\\s*\\]`,
+          "gi"
+        ),
         // Pattern: [img] [ emoji-name] (in case the (#img) part is missing)
         new RegExp(`\\[img\\]\\s*\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
         // Pattern: [img][emoji-name] (in case the (#img) part is missing)
-        new RegExp(`\\[img\\]\\[${escapedEmojiName}\\]`, "gi")
+        new RegExp(`\\[img\\]\\[${escapedEmojiName}\\]`, "gi"),
       ];
 
       const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;

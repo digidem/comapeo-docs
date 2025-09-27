@@ -515,7 +515,8 @@ describe("EmojiProcessor", () => {
     });
 
     it("should handle [img](#img) patterns from notion-to-md conversion", () => {
-      const markdownContent = "Here is [img](#img) [ comapeo-save-low] and [img](#img)[comapeo-capture-low] in the text.";
+      const markdownContent =
+        "Here is [img](#img) [ comapeo-save-low] and [img](#img)[comapeo-capture-low] in the text.";
       const emojiMap = new Map([
         [":comapeo-save-low:", "/images/emojis/comapeo-save-low.png"],
         [":comapeo-capture-low:", "/images/emojis/comapeo-capture-low.png"],
@@ -532,7 +533,8 @@ describe("EmojiProcessor", () => {
     });
 
     it("should handle [img] patterns without (#img) links", () => {
-      const markdownContent = "Here is [img] [ comapeo-save-low] and [img][comapeo-capture-low] in the text.";
+      const markdownContent =
+        "Here is [img] [ comapeo-save-low] and [img][comapeo-capture-low] in the text.";
       const emojiMap = new Map([
         [":comapeo-save-low:", "/images/emojis/comapeo-save-low.png"],
         [":comapeo-capture-low:", "/images/emojis/comapeo-capture-low.png"],

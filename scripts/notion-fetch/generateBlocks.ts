@@ -167,11 +167,34 @@ let imageLogWriting = Promise.resolve();
  */
 async function logImageFailure(logEntry: any): Promise<void> {
   const logPath = path.join(process.cwd(), "image-failures.json");
+  const logDir = path.dirname(logPath);
   const tmpPath = `${logPath}.tmp`;
   const MAX_ENTRIES = 5000;
+  const MAX_FIELD_LEN = 2000;
+
+  const safeEntry = (() => {
+    try {
+      const clone: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(logEntry ?? {})) {
+        let val = v;
+        if (typeof val === "string") val = val.slice(0, MAX_FIELD_LEN);
+        else if (typeof val === "object") val = JSON.parse(JSON.stringify(val));
+        clone[k] = val;
+      }
+      return clone;
+    } catch {
+      return { message: "non-serializable log entry" };
+    }
+  })();
 
   imageLogWriting = imageLogWriting
     .then(async () => {
+      try {
+        fs.mkdirSync(logDir, { recursive: true });
+      } catch {
+        // ignore
+      }
+
       let existingLogs: any[] = [];
       try {
         if (fs.existsSync(logPath)) {
@@ -182,8 +205,7 @@ async function logImageFailure(logEntry: any): Promise<void> {
       } catch {
         existingLogs = [];
       }
-      existingLogs.push(logEntry);
-      // Prevent unbounded growth
+      existingLogs.push(safeEntry);
       if (existingLogs.length > MAX_ENTRIES) {
         existingLogs = existingLogs.slice(-MAX_ENTRIES);
       }
@@ -211,7 +233,6 @@ async function logImageFailure(logEntry: any): Promise<void> {
       return undefined;
     })
     .catch((e) => {
-      // Reset mutex on failure to avoid blocking future writes
       console.warn(
         chalk.yellow("Image failure log write error; resetting queue"),
         e
@@ -912,7 +933,6 @@ function setTranslationString(
 ) {
   const lPath = path.join(I18N_PATH, lang, "code.json");
   const dir = path.dirname(lPath);
-  // ensure directory exists
   fs.mkdirSync(dir, { recursive: true });
 
   let fileContents = "{}";
@@ -941,7 +961,17 @@ function setTranslationString(
     );
     file = {};
   }
-  file[original] = { message: translated };
+
+  const safeKey =
+    typeof original === "string"
+      ? original.slice(0, 2000)
+      : String(original).slice(0, 2000);
+  const safeMessage =
+    typeof translated === "string"
+      ? translated.slice(0, 5000)
+      : String(translated).slice(0, 5000);
+
+  file[safeKey] = { message: safeMessage };
   fs.writeFileSync(lPath, JSON.stringify(file, null, 4));
 }
 

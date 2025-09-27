@@ -95,10 +95,13 @@ export async function fetchAllNotionData(
     shouldGenerate: exportFiles,
   });
 
-  // Defensive filter in case upstream filtering is bypassed
-  const defensivelyFiltered = includeRemoved
-    ? rawData
-    : rawData.filter((p) => getStatusFromRawPage(p) !== "Remove");
+  // Apply defensive filters for both removal and explicit status
+  const defensivelyFiltered = rawData.filter((p) => {
+    const status = getStatusFromRawPage(p);
+    if (!includeRemoved && status === "Remove") return false;
+    if (statusFilter && status !== statusFilter) return false;
+    return true;
+  });
 
   const pages = defensivelyFiltered.map((page) => transformPage(page));
   const sortedPages = sortPages(pages, sortBy, sortDirection);

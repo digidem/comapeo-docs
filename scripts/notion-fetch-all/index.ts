@@ -426,14 +426,16 @@ async function main() {
 
       const outputFile = options.outputFile || defaultFilename;
       const candidatePath = path.resolve(outputFile);
-      const cwd = process.cwd();
-      if (!candidatePath.startsWith(path.resolve(cwd) + path.sep)) {
+      const projectRoot = path.resolve(process.cwd());
+      const rel = path.relative(projectRoot, candidatePath);
+      if (rel.startsWith("..") || path.isAbsolute(rel)) {
         throw new Error(
           `Refusing to write outside project directory: ${candidatePath}`
         );
       }
       outputPath = candidatePath;
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      const outDir = path.dirname(outputPath);
+      fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(outputPath, outputContent, "utf8");
 
       outputSpinner.succeed(chalk.green(`✅ Output saved to: ${outputPath}`));

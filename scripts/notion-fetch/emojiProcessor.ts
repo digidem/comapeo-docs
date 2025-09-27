@@ -774,15 +774,15 @@ export class EmojiProcessor {
     let processedContent = markdownContent;
 
     for (const [plainText, localPath] of emojiMap.entries()) {
-      // Replace all occurrences of the emoji plain text with markdown image syntax
+      // Replace all occurrences of the emoji plain text with inline HTML image
       const escapedPlainText = plainText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escapedPlainText, "g");
 
-      // Convert to markdown image format: ![emoji-name](local-path)
+      // Convert to inline HTML image with emoji-specific styling
       const emojiName = plainText.replace(/:/g, "").trim();
-      const markdownImage = `![${emojiName}](${localPath})`;
+      const inlineEmoji = `<img src="${localPath}" alt="${emojiName}" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />`;
 
-      processedContent = processedContent.replace(regex, markdownImage);
+      processedContent = processedContent.replace(regex, inlineEmoji);
     }
 
     return processedContent;

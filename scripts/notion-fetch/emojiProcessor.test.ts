@@ -469,7 +469,7 @@ describe("EmojiProcessor", () => {
   });
 
   describe("emoji mapping application", () => {
-    it("should replace emoji plain text with markdown images", () => {
+    it("should replace emoji plain text with inline HTML images", () => {
       const markdownContent = "Here is an emoji :test-emoji: in the text.";
       const emojiMap = new Map([
         [":test-emoji:", "/images/emojis/test-emoji.png"],
@@ -481,7 +481,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        "Here is an emoji ![test-emoji](/images/emojis/test-emoji.png) in the text."
+        'Here is an emoji <img src="/images/emojis/test-emoji.png" alt="test-emoji" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
       );
     });
 
@@ -498,7 +498,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        "![emoji1](/images/emojis/emoji1.png) and ![emoji2](/images/emojis/emoji2.png) are both here"
+        '<img src="/images/emojis/emoji1.png" alt="emoji1" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/emoji2.png" alt="emoji2" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> are both here'
       );
     });
 

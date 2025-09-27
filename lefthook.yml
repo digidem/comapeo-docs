@@ -24,9 +24,9 @@ pre-commit:
       glob: "*.{js,ts,jsx,tsx}"
 
     - name: notion-fetch-tests
-      run: bunx vitest run scripts/notion-fetch/__tests__/
+      run: npx vitest --run scripts/notion-fetch/__tests__/
       stage_fixed: true
-      glob: "scripts/notion-fetch/**/*.{ts,js}"
+      glob: "scripts/notion-fetch/**/__tests__/**/*.{ts,js}"
 
     # - name: rubocop
     #   glob: "*.rb"

@@ -69,6 +69,15 @@ export async function fetchNotionData(filter) {
         start_cursor: prevCursor,
         page_size: 100,
       });
+      const retryResults = Array.isArray(retryResp.results)
+        ? retryResp.results
+        : [];
+      for (const r of retryResults) {
+        const id = (r as any)?.id;
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        results.push(r);
+      }
       const retryCursor = retryResp.next_cursor ?? undefined;
       if (retryCursor && retryCursor !== prevCursor) {
         hasMore = Boolean(retryResp.has_more);

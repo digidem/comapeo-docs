@@ -64,7 +64,7 @@ export async function fetchAllNotionData(
 
   let fetchedCount = 0;
 
-  const { data, metrics } = await runFetchPipeline({
+  const { data: rawData = [], metrics } = await runFetchPipeline({
     filter,
     fetchSpinnerText:
       fetchSpinnerText ??
@@ -72,25 +72,29 @@ export async function fetchAllNotionData(
     generateSpinnerText:
       generateSpinnerText ?? "Exporting pages to markdown files",
     transform: (pages) => {
-      fetchedCount = pages.length;
-      return applyFetchAllTransform(pages, {
-        statusFilter,
-        maxPages,
-        includeRemoved,
-      });
+      fetchedCount = Array.isArray(pages) ? pages.length : 0;
+      const transformed = applyFetchAllTransform(
+        Array.isArray(pages) ? pages : [],
+        {
+          statusFilter,
+          maxPages,
+          includeRemoved,
+        }
+      );
+      return Array.isArray(transformed) ? transformed : [];
     },
     onProgress: progressLogger,
     shouldGenerate: exportFiles,
   });
 
-  const pages = data.map((page) => transformPage(page));
+  const pages = rawData.map((page) => transformPage(page));
   const sortedPages = sortPages(pages, sortBy, sortDirection);
 
   logStatusSummary(sortedPages);
 
   return {
     pages: sortedPages,
-    rawPages: data,
+    rawPages: rawData,
     metrics: exportFiles ? metrics : undefined,
     fetchedCount,
     processedCount: sortedPages.length,

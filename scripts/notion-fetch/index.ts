@@ -77,19 +77,23 @@ async function main(): Promise<number> {
     console.log(chalk.bold.green("\n✨ All tasks completed successfully!"));
 
     if (metrics) {
+      const totalSavedKb = Number(metrics.totalSaved) / 1024;
+      const sectionCount = Number(metrics.sectionCount);
+      const titleSectionCount = Number(metrics.titleSectionCount);
+
       console.log(
         chalk.bold.cyan(
-          `A total of ${(metrics.totalSaved / 1024).toFixed(2)} KB was saved on image compression.`
+          `A total of ${isFinite(totalSavedKb) ? totalSavedKb.toFixed(2) : "0.00"} KB was saved on image compression.`
         )
       );
       console.log(
         chalk.bold.yellow(
-          `Created ${metrics.sectionCount} section folders with _category_.json files.`
+          `Created ${isFinite(sectionCount) ? sectionCount : 0} section folders with _category_.json files.`
         )
       );
       console.log(
         chalk.bold.magenta(
-          `Applied ${metrics.titleSectionCount} title sections to content items.`
+          `Applied ${isFinite(titleSectionCount) ? titleSectionCount : 0} title sections to content items.`
         )
       );
     } else {

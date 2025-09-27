@@ -42,10 +42,14 @@ export async function runFetchPipeline(
 
   try {
     let data = await fetchNotionData(filter);
+    data = Array.isArray(data) ? data : [];
+
     data = await sortAndExpandNotionData(data);
+    data = Array.isArray(data) ? data : [];
 
     if (transform) {
-      data = await transform(data);
+      const transformed = await transform(data);
+      data = Array.isArray(transformed) ? transformed : [];
     }
 
     fetchSpinner.succeed(chalk.green("Data fetched successfully"));

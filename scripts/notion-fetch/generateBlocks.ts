@@ -613,15 +613,16 @@ async function downloadAndProcessImage(
       const originalBuffer = Buffer.from(response.data, "binary");
       const cleanUrl = url.split("?")[0];
 
-      // Axios/Node normalizes header keys to lowercase; avoid redundant scan
-      const contentTypeHeader = (
-        response.headers as Record<string, string | string[] | undefined>
-      )["content-type"];
-      const headerFmt = formatFromContentType(
-        Array.isArray(contentTypeHeader)
-          ? contentTypeHeader[0]
-          : contentTypeHeader
-      );
+      const rawCT = (response.headers as Record<string, unknown>)[
+        "content-type"
+      ];
+      const normalizedCT =
+        typeof rawCT === "string"
+          ? rawCT
+          : Array.isArray(rawCT)
+            ? rawCT[0]
+            : undefined;
+      const headerFmt = formatFromContentType(normalizedCT);
       const bufferFmt = detectFormatFromBuffer(originalBuffer);
       const chosenFmt = chooseFormat(bufferFmt, headerFmt);
 
@@ -1151,7 +1152,18 @@ export async function generateBlocks(pages, progressCallback) {
               }> = [];
               let m: RegExpExecArray | null;
               let tmpIndex = 0;
+              let safetyCounter = 0;
+              const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
+
               while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+                if (++safetyCounter > SAFETY_LIMIT) {
+                  console.warn(
+                    chalk.yellow(
+                      `⚠️  Image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
+                    )
+                  );
+                  break;
+                }
                 const rawUrl = m[2];
                 const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
                 imageMatches.push({
@@ -1166,12 +1178,12 @@ export async function generateBlocks(pages, progressCallback) {
                 original: string;
                 replacement: string;
               }> = [];
+              const pendingLogs: Promise<void>[] = [];
 
               // Phase 1: Validate and queue all images for processing
               const imageProcessingTasks = imageMatches.map((match) => {
                 const urlValidation = validateAndSanitizeImageUrl(match.url);
                 if (!urlValidation.isValid) {
-                  // Log the invalid URL and create a fallback immediately
                   console.warn(
                     chalk.yellow(
                       `⚠️  Invalid image URL detected: ${urlValidation.error}`
@@ -1187,16 +1199,17 @@ export async function generateBlocks(pages, progressCallback) {
                     replacement: fallbackMarkdown,
                   });
 
-                  // Log for manual recovery
-                  logImageFailure({
-                    timestamp: new Date().toISOString(),
-                    pageBlock: safeFilename,
-                    imageIndex: match.idx,
-                    originalUrl: match.url,
-                    error: urlValidation.error,
-                    fallbackUsed: true,
-                    validationFailed: true,
-                  });
+                  pendingLogs.push(
+                    logImageFailure({
+                      timestamp: new Date().toISOString(),
+                      pageBlock: safeFilename,
+                      imageIndex: match.idx,
+                      originalUrl: match.url,
+                      error: urlValidation.error,
+                      fallbackUsed: true,
+                      validationFailed: true,
+                    })
+                  );
 
                   return Promise.resolve({
                     success: false,
@@ -1284,6 +1297,9 @@ export async function generateBlocks(pages, progressCallback) {
                   }
                 }
               }
+
+              // Phase 2.5: Await all pending log operations before applying replacements
+              await Promise.allSettled(pendingLogs);
 
               // Phase 3: Apply all replacements to markdown
               let processedMarkdown = markdownString.parent;

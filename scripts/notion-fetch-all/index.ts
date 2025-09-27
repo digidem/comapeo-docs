@@ -428,12 +428,20 @@ async function main() {
       const candidatePath = path.resolve(outputFile);
       const projectRoot = path.resolve(process.cwd());
       const rel = path.relative(projectRoot, candidatePath);
-      if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      // basic invalid chars check
+      if (/\0/.test(candidatePath)) {
+        throw new Error("Invalid output path");
+      }
+      const safeResolved = path.resolve(projectRoot, rel);
+      if (
+        !safeResolved.startsWith(projectRoot + path.sep) &&
+        safeResolved !== projectRoot // allow writing exactly in root
+      ) {
         throw new Error(
           `Refusing to write outside project directory: ${candidatePath}`
         );
       }
-      outputPath = candidatePath;
+      outputPath = safeResolved;
       const outDir = path.dirname(outputPath);
       fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(outputPath, outputContent, "utf8");

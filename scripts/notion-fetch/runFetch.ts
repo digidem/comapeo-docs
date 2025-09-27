@@ -37,10 +37,11 @@ export async function runFetchPipeline(
     shouldGenerate = true,
   } = options;
 
-  const fetchSpinner = ora(fetchSpinnerText).start();
-  const unregisterFetchSpinner = trackSpinner(fetchSpinner);
-
+  const fetchSpinner = ora(fetchSpinnerText);
+  let unregisterFetchSpinner: (() => void) | undefined;
   try {
+    fetchSpinner.start();
+    unregisterFetchSpinner = trackSpinner(fetchSpinner);
     let data = await fetchNotionData(filter);
     data = Array.isArray(data) ? data : [];
 
@@ -60,10 +61,11 @@ export async function runFetchPipeline(
       return { data };
     }
 
-    const generateSpinner = ora(generateSpinnerText).start();
-    const unregisterGenerateSpinner = trackSpinner(generateSpinner);
-
+    const generateSpinner = ora(generateSpinnerText);
+    let unregisterGenerateSpinner: (() => void) | undefined;
     try {
+      generateSpinner.start();
+      unregisterGenerateSpinner = trackSpinner(generateSpinner);
       const metrics = await generateBlocks(data, (progress) => {
         if (generateSpinner.isSpinning) {
           generateSpinner.text = chalk.blue(
@@ -84,7 +86,7 @@ export async function runFetchPipeline(
       }
       throw error;
     } finally {
-      unregisterGenerateSpinner();
+      unregisterGenerateSpinner?.();
     }
   } catch (error) {
     if (fetchSpinner.isSpinning) {
@@ -92,6 +94,6 @@ export async function runFetchPipeline(
     }
     throw error;
   } finally {
-    unregisterFetchSpinner();
+    unregisterFetchSpinner?.();
   }
 }

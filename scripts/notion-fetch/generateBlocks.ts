@@ -329,7 +329,11 @@ class ImageCache {
   }
 
   private getAbsoluteImagePath(fileNameOrWebPath: string): string {
-    const baseName = path.basename(fileNameOrWebPath);
+    const baseName = path.basename(fileNameOrWebPath || "");
+    // reject suspicious names
+    if (!baseName || baseName.includes("..") || baseName.includes(path.sep)) {
+      return path.join(IMAGES_PATH, "_invalid-image-name_");
+    }
     return path.join(IMAGES_PATH, baseName);
   }
 
@@ -349,10 +353,10 @@ class ImageCache {
   }
 
   set(url: string, localPath: string, blockName: string): void {
-    // store only the basename to avoid mixing web and fs paths
+    const safeBase = path.basename(localPath || "");
     const entry: ImageCacheEntry = {
       url,
-      localPath: path.basename(localPath),
+      localPath: safeBase,
       timestamp: new Date().toISOString(),
       blockName,
     };
@@ -1208,6 +1212,8 @@ export async function generateBlocks(pages, progressCallback) {
                 url: string;
                 alt: string;
                 idx: number;
+                start: number;
+                end: number;
               }> = [];
               let m: RegExpExecArray | null;
               let tmpIndex = 0;
@@ -1223,13 +1229,18 @@ export async function generateBlocks(pages, progressCallback) {
                   );
                   break;
                 }
+                const start = m.index;
+                const full = m[0];
+                const end = start + full.length;
                 const rawUrl = m[2];
                 const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
                 imageMatches.push({
-                  full: m[0],
+                  full,
                   url: unescapedUrl,
                   alt: m[1],
                   idx: tmpIndex++,
+                  start,
+                  end,
                 });
               }
 
@@ -1315,7 +1326,7 @@ export async function generateBlocks(pages, progressCallback) {
                 const imageResults =
                   await Promise.allSettled(imageProcessingTasks);
 
-                // Build deterministic replacements using match indices
+                // Build deterministic replacements using recorded match indices
                 const indexedReplacements: Array<{
                   start: number;
                   end: number;
@@ -1333,13 +1344,13 @@ export async function generateBlocks(pages, progressCallback) {
                     continue;
                   }
                   const processResult = result.value;
-                  const original = processResult.originalMarkdown!;
-                  const idx = markdownString.parent.indexOf(original);
-                  if (idx === -1) continue;
-                  const end = idx + original.length;
+                  const match = imageMatches.find(
+                    (im) => im.idx === processResult.index
+                  );
+                  if (!match) continue;
                   let replacementText: string;
                   if (processResult.success && processResult.newPath) {
-                    replacementText = original.replace(
+                    replacementText = match.full.replace(
                       processResult.imageUrl!,
                       processResult.newPath
                     );
@@ -1347,15 +1358,15 @@ export async function generateBlocks(pages, progressCallback) {
                     successfulImages++;
                   } else {
                     replacementText = createFallbackImageMarkdown(
-                      original,
-                      processResult.imageUrl!,
-                      processResult.index!
+                      match.full,
+                      match.url,
+                      match.idx
                     );
                     totalFailures++;
                   }
                   indexedReplacements.push({
-                    start: idx,
-                    end,
+                    start: match.start,
+                    end: match.end,
                     text: replacementText,
                   });
                 }

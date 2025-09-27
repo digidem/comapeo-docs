@@ -54,15 +54,29 @@ export async function fetchNotionData(filter) {
     hasMore = Boolean(response.has_more);
     startCursor = response.next_cursor ?? undefined;
 
-    if (
+    const anomaly =
       hasMore &&
       (duplicateDetected ||
         !startCursor ||
         startCursor === prevCursor ||
-        prevCount === 0)
-    ) {
+        prevCount === 0);
+    if (anomaly) {
+      // One retry attempt to recover from transient anomaly
+      console.warn("Notion API pagination anomaly detected; retrying once...");
+      const retryResp = await enhancedNotion.databasesQuery({
+        database_id: DATABASE_ID,
+        filter,
+        start_cursor: prevCursor,
+        page_size: 100,
+      });
+      const retryCursor = retryResp.next_cursor ?? undefined;
+      if (retryCursor && retryCursor !== prevCursor) {
+        hasMore = Boolean(retryResp.has_more);
+        startCursor = retryCursor;
+        continue;
+      }
       console.warn(
-        "Notion API pagination anomaly detected; stopping early with partial results."
+        "Anomaly persisted after retry; stopping early with partial results."
       );
       break;
     }

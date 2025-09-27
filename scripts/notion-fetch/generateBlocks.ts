@@ -20,10 +20,10 @@ import SpinnerManager from "./spinnerManager";
 
 /**
  * Extracts published date from Notion page properties with enhanced error handling
- * 
+ *
  * @param page - The Notion page object containing properties and metadata
  * @returns A formatted date string in en-US locale format (MM/DD/YYYY)
- * 
+ *
  * Fallback strategy:
  * 1. Use Published date field if available and valid
  * 2. Fall back to last_edited_time if Published date is missing/invalid
@@ -38,13 +38,18 @@ export function getPublishedDate(page: any): string {
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString("en-US");
       } else {
-        console.warn(`Invalid published date format for page ${page.id}, falling back to last_edited_time`);
+        console.warn(
+          `Invalid published date format for page ${page.id}, falling back to last_edited_time`
+        );
       }
     } catch (error) {
-      console.warn(`Error parsing published date for page ${page.id}:`, error.message);
+      console.warn(
+        `Error parsing published date for page ${page.id}:`,
+        error.message
+      );
     }
   }
-  
+
   // Fall back to last_edited_time if Published date is not available or invalid
   if (page.last_edited_time) {
     try {
@@ -52,13 +57,18 @@ export function getPublishedDate(page: any): string {
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString("en-US");
       } else {
-        console.warn(`Invalid last_edited_time format for page ${page.id}, using current date`);
+        console.warn(
+          `Invalid last_edited_time format for page ${page.id}, using current date`
+        );
       }
     } catch (error) {
-      console.warn(`Error parsing last_edited_time for page ${page.id}:`, error.message);
+      console.warn(
+        `Error parsing last_edited_time for page ${page.id}:`,
+        error.message
+      );
     }
   }
-  
+
   // Final fallback to current date
   return new Date().toLocaleDateString("en-US");
 }

@@ -1,8 +1,10 @@
+// Set up environment variables before any imports
+process.env.NOTION_API_KEY = "test-key";
+process.env.DATABASE_ID = "test-db-id";
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { installTestNotionEnv } from "../test-utils";
 import { NOTION_PROPERTIES } from "../constants.js";
 import * as scriptModule from "./generateBlocks";
-
 vi.mock("fs/promises", () => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
@@ -62,117 +64,123 @@ describe("generateBlocks", () => {
       const page = {
         id: "test-page-1",
         properties: {
-          [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
-            date: { start: '2023-12-01' } 
-          }
-        }
+          [NOTION_PROPERTIES.PUBLISHED_DATE]: {
+            date: { start: "2023-12-01" },
+          },
+        },
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
-      expect(result).toBe('12/1/2023');
+      expect(result).toBe("12/1/2023");
     });
 
     it("should fall back to last_edited_time when published date is missing", () => {
       const page = {
         id: "test-page-2",
-        last_edited_time: '2023-11-30T10:00:00.000Z',
-        properties: {}
+        last_edited_time: "2023-11-30T10:00:00.000Z",
+        properties: {},
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
-      expect(result).toBe('11/30/2023');
+      expect(result).toBe("11/30/2023");
     });
 
     it("should fall back to last_edited_time when published date is invalid", () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      
+      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       const page = {
         id: "test-page-3",
-        last_edited_time: '2023-11-30T10:00:00.000Z',
+        last_edited_time: "2023-11-30T10:00:00.000Z",
         properties: {
-          [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
-            date: { start: 'invalid-date' } 
-          }
-        }
+          [NOTION_PROPERTIES.PUBLISHED_DATE]: {
+            date: { start: "invalid-date" },
+          },
+        },
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
-      expect(result).toBe('11/30/2023');
+      expect(result).toBe("11/30/2023");
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid published date format for page test-page-3')
+        expect.stringContaining(
+          "Invalid published date format for page test-page-3"
+        )
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it("should use current date when both published date and last_edited_time are invalid", () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const currentDate = new Date().toLocaleDateString("en-US");
-      
+
       const page = {
         id: "test-page-4",
-        last_edited_time: 'invalid-timestamp',
+        last_edited_time: "invalid-timestamp",
         properties: {
-          [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
-            date: { start: 'invalid-date' } 
-          }
-        }
+          [NOTION_PROPERTIES.PUBLISHED_DATE]: {
+            date: { start: "invalid-date" },
+          },
+        },
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
       expect(result).toBe(currentDate);
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid published date format for page test-page-4')
+        expect.stringContaining(
+          "Invalid published date format for page test-page-4"
+        )
       );
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid last_edited_time format for page test-page-4')
+        expect.stringContaining(
+          "Invalid last_edited_time format for page test-page-4"
+        )
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it("should use current date when no date fields are present", () => {
       const currentDate = new Date().toLocaleDateString("en-US");
-      
+
       const page = {
         id: "test-page-5",
-        properties: {}
+        properties: {},
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
       expect(result).toBe(currentDate);
     });
 
     it("should handle empty published date object gracefully", () => {
       const currentDate = new Date().toLocaleDateString("en-US");
-      
+
       const page = {
         id: "test-page-6",
         properties: {
-          [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
-            date: {} 
-          }
-        }
+          [NOTION_PROPERTIES.PUBLISHED_DATE]: {
+            date: {},
+          },
+        },
       };
-      
+
       const result = scriptModule.getPublishedDate(page);
       expect(result).toBe(currentDate);
     });
 
     it("should not throw errors when parsing dates fails", () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      
+      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       const page = {
         id: "test-page-7",
         properties: {
-          [NOTION_PROPERTIES.PUBLISHED_DATE]: { 
-            date: { start: 'definitely-not-a-date' } 
-          }
-        }
+          [NOTION_PROPERTIES.PUBLISHED_DATE]: {
+            date: { start: "definitely-not-a-date" },
+          },
+        },
       };
-      
+
       expect(() => scriptModule.getPublishedDate(page)).not.toThrow();
-      
+
       consoleSpy.mockRestore();
     });
   });

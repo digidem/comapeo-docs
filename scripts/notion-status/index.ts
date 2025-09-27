@@ -1,13 +1,14 @@
 import { Client } from "@notionhq/client";
 import ora from "ora";
 import chalk from "chalk";
-import { NOTION_PROPERTIES } from "../constants";
+import { NOTION_PROPERTIES } from "../constants.js";
 
 interface UpdateStatusOptions {
   token: string;
   databaseId: string;
   fromStatus: string;
   toStatus: string;
+  setPublishedCheckbox?: boolean;
   setPublishedDate?: boolean;
 }
 
@@ -15,8 +16,17 @@ interface UpdateStatusOptions {
  * Updates the status of Notion pages from one status to another
  * @param options Configuration options for the status update
  */
-export async function updateNotionPageStatus(options: UpdateStatusOptions): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
+export async function updateNotionPageStatus(
+  options: UpdateStatusOptions
+): Promise<void> {
+  const {
+    token,
+    databaseId,
+    fromStatus,
+    toStatus,
+    setPublishedCheckbox,
+    setPublishedDate,
+  } = options;
 
   const notion = new Client({ auth: token });
   const spinner = ora(
@@ -60,18 +70,25 @@ export async function updateNotionPageStatus(options: UpdateStatusOptions): Prom
           },
         };
 
+        // Add Published checkbox if requested (legacy support)
+        if (setPublishedCheckbox) {
+          properties[NOTION_PROPERTIES.PUBLISHED_CHECKBOX] = {
+            checkbox: true,
+          };
+        }
+
         // Add Published date if requested
         if (setPublishedDate) {
           properties[NOTION_PROPERTIES.PUBLISHED_DATE] = {
             date: {
-              start: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-            }
+              start: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
+            },
           };
         }
 
         await notion.pages.update({
           page_id: page.id,
-          properties
+          properties,
         });
         successCount++;
       } catch (error) {
@@ -106,23 +123,21 @@ const WORKFLOWS = {
   translation: {
     from: "Ready for translation",
     to: "Reviewing translations",
-    setPublishedDate: false
+    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   draft: {
     from: "Ready to publish",
     to: "Draft published",
-    setPublishedDate: false
+    setPublishedCheckbox: false,
+    setPublishedDate: false,
   },
   publish: {
     from: "Draft published",
     to: "Published",
-    setPublishedDate: true
+    setPublishedCheckbox: true, // Keep for backward compatibility
+    setPublishedDate: true, // New: set the published date
   },
-  'publish-production': {
-    from: 'Staging',
-    to: 'Published',
-    setPublishedDate: true
-  }
 } as const;
 
 /**
@@ -159,7 +174,7 @@ async function main() {
         console.error(chalk.red(`Unknown flag: ${flag}`));
         console.error(
           chalk.gray(
-            "Usage: updateStatus.ts [--workflow translation|draft|publish|publish-production] [--token TOKEN] [--db-id DATABASE_ID] [--from STATUS] [--to STATUS]"
+            "Usage: updateStatus.ts [--workflow translation|publish|final-publish] [--token TOKEN] [--db-id DATABASE_ID] [--from STATUS] [--to STATUS]"
           )
         );
         process.exit(1);
@@ -174,12 +189,14 @@ async function main() {
   let fromStatus: string;
   let toStatus: string;
 
+  let setPublishedCheckbox = false;
   let setPublishedDate = false;
 
   if (workflow && workflow in WORKFLOWS) {
     const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
     fromStatus = options.fromStatus || workflowConfig.from;
     toStatus = options.toStatus || workflowConfig.to;
+    setPublishedCheckbox = workflowConfig.setPublishedCheckbox;
     setPublishedDate = workflowConfig.setPublishedDate;
   } else if (options.fromStatus && options.toStatus) {
     fromStatus = options.fromStatus;
@@ -187,14 +204,13 @@ async function main() {
   } else {
     console.error(
       chalk.red(
-        "Either --workflow must be specified (translation|draft|publish|publish-production) or both --from and --to must be provided"
+        "Either --workflow must be specified (translation|publish|final-publish) or both --from and --to must be provided"
       )
     );
     console.error(chalk.gray("Examples:"));
     console.error(chalk.gray("  updateStatus.ts --workflow translation"));
-    console.error(chalk.gray("  updateStatus.ts --workflow draft"));
     console.error(chalk.gray("  updateStatus.ts --workflow publish"));
-    console.error(chalk.gray("  updateStatus.ts --workflow publish-production"));
+    console.error(chalk.gray("  updateStatus.ts --workflow final-publish"));
     console.error(
       chalk.gray(
         '  updateStatus.ts --from "Custom Status" --to "Another Status"'
@@ -227,7 +243,8 @@ async function main() {
       databaseId,
       fromStatus,
       toStatus,
-      setPublishedDate
+      setPublishedCheckbox,
+      setPublishedDate,
     });
   } catch (error) {
     console.error(chalk.red("Status update failed:", error.message));

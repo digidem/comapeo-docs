@@ -1279,9 +1279,7 @@ export async function generateBlocks(pages, progressCallback) {
               );
               emojiMap = blockEmojiResult.emojiMap;
               totalSaved += blockEmojiResult.totalSaved;
-              if (blockEmojiResult.totalSaved > 0) {
-                emojiCount++;
-              }
+              emojiCount += blockEmojiResult.emojiMap.size;
             } catch (error) {
               const msg =
                 error && typeof error === "object" && "message" in error
@@ -1321,13 +1319,11 @@ export async function generateBlocks(pages, progressCallback) {
                   );
                 markdownString.parent = fallbackEmojiResult.content;
                 totalSaved += fallbackEmojiResult.totalSaved;
-                if (fallbackEmojiResult.totalSaved > 0) {
-                  emojiCount++;
-                }
+                emojiCount += fallbackEmojiResult.processedCount;
               }
 
               // Process callouts in the markdown to convert them to Docusaurus admonitions
-              if (rawBlocks.length > 0) {
+              if (rawBlocks && rawBlocks.length > 0) {
                 markdownString.parent = processCalloutsInMarkdown(
                   markdownString.parent,
                   rawBlocks

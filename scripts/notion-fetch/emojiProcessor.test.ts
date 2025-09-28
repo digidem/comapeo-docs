@@ -76,6 +76,7 @@ describe("EmojiProcessor", () => {
 
       expect(result.content).toBe(content);
       expect(result.totalSaved).toBe(0);
+      expect(result.processedCount).toBe(0);
     });
 
     it("should detect Notion emoji URLs", async () => {
@@ -96,6 +97,7 @@ describe("EmojiProcessor", () => {
       expect(EmojiProcessor.processEmoji).toHaveBeenCalledTimes(2);
       expect(result.content).toContain("/images/emojis/test-emoji.png");
       expect(result.totalSaved).toBe(2048); // 1024 * 2
+      expect(result.processedCount).toBe(2);
     });
 
     it("should return content unchanged when processing is disabled", async () => {
@@ -109,6 +111,7 @@ describe("EmojiProcessor", () => {
 
       expect(result.content).toBe(content);
       expect(result.totalSaved).toBe(0);
+      expect(result.processedCount).toBe(0);
     });
 
     it("should respect maxEmojisPerPage limit", async () => {
@@ -129,6 +132,7 @@ describe("EmojiProcessor", () => {
       // Should only process the first emoji due to limit
       expect(EmojiProcessor.processEmoji).toHaveBeenCalledTimes(1);
       expect(result.totalSaved).toBe(512);
+      expect(result.processedCount).toBe(1);
     });
 
     it("should handle emoji processing failures gracefully", async () => {
@@ -147,6 +151,7 @@ describe("EmojiProcessor", () => {
 
       expect(result.content).toBe(content); // Content unchanged on failure
       expect(result.totalSaved).toBe(0);
+      expect(result.processedCount).toBe(0);
     });
   });
 
@@ -284,7 +289,7 @@ describe("EmojiProcessor", () => {
 
   describe("configuration", () => {
     it("should use default configuration initially", () => {
-      EmojiProcessor.reset();
+      EmojiProcessor.reset({ resetConfig: true });
       const config = EmojiProcessor.getConfig();
 
       expect(config.maxEmojiSize).toBe(5 * 1024 * 1024);

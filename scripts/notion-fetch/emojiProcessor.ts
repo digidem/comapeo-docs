@@ -36,6 +36,10 @@ interface EmojiProcessorConfig {
   allowedHosts?: string[];
 }
 
+interface EmojiProcessorResetOptions {
+  resetConfig?: boolean;
+}
+
 interface ImageMagicNumbers {
   [key: string]: number[][];
 }
@@ -80,7 +84,7 @@ export class EmojiProcessor {
    * Configure the emoji processor with custom settings
    */
   static configure(userConfig: EmojiProcessorConfig): void {
-    this.config = { ...this.DEFAULT_CONFIG, ...userConfig };
+    this.config = { ...this.config, ...userConfig };
     this.initialized = false; // Force re-initialization with new config
   }
 
@@ -104,6 +108,7 @@ export class EmojiProcessor {
   private static validateEmojiUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
+      const { hostname, pathname } = parsed;
 
       // Must be HTTPS
       if (parsed.protocol !== "https:") {
@@ -112,7 +117,7 @@ export class EmojiProcessor {
 
       // Must be from allowed hosts
       const isAllowedHost = this.config.allowedHosts.some((host) =>
-        parsed.hostname.endsWith(host)
+        hostname.endsWith(host)
       );
 
       if (!isAllowedHost) {
@@ -121,18 +126,20 @@ export class EmojiProcessor {
 
       // Path validation - must be valid emoji/icon path with image extension
       const hasImageExtension = /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(
-        parsed.pathname
+        pathname
       );
 
       // Allow paths that contain 'emoji' (generic emoji URLs)
-      const hasEmojiInPath = parsed.pathname.includes("emoji");
+      const hasEmojiInPath = pathname.includes("emoji");
 
       // Allow Notion static URLs (for custom emojis from Notion)
-      const isNotionStaticUrl = parsed.pathname.includes("notion-static.com");
+      const isNotionStaticUrl =
+        hostname.includes("notion-static.com") ||
+        pathname.includes("notion-static.com");
 
       // Allow icon files (common pattern for Notion custom emojis)
       const isIconFile = /\/icon-[^\/]*\.(png|jpg|jpeg|gif|svg|webp)$/i.test(
-        parsed.pathname
+        pathname
       );
 
       const isValidPath = hasEmojiInPath || isNotionStaticUrl || isIconFile;
@@ -185,6 +192,7 @@ export class EmojiProcessor {
    */
   private static async loadCache(): Promise<void> {
     try {
+      this.emojiCache.clear();
       if (fs.existsSync(this.config.cacheFile)) {
         const cacheContent = fs.readFileSync(this.config.cacheFile, "utf8");
         const cacheData = JSON.parse(cacheContent);
@@ -686,34 +694,38 @@ export class EmojiProcessor {
   static async processPageEmojis(
     pageId: string,
     markdownContent: string
-  ): Promise<{ content: string; totalSaved: number }> {
+  ): Promise<{
+    content: string;
+    totalSaved: number;
+    processedCount: number;
+  }> {
     await this.initialize();
 
     let totalSaved = 0;
     let processedContent = markdownContent;
+    let processedCount = 0;
 
     // Check if processing is enabled
     if (!this.config.enableProcessing) {
-      return { content: processedContent, totalSaved: 0 };
+      return { content: processedContent, totalSaved: 0, processedCount: 0 };
     }
 
-    // Notion emoji pattern - look for emoji URLs in content
-    // This regex looks for typical Notion emoji URLs
-    const emojiRegex =
-      /https:\/\/[^\s\)]+\.(?:amazonaws\.com|notion\.site)[^\s\)]*emoji[^\s\)]*\.(?:png|svg|gif|webp|jpg|jpeg)/gi;
+    // Extract all HTTPS URLs and filter by emoji validation rules
+    const urlRegex = /https:\/\/[^\s\)]+/gi;
+    const emojiUrls = [...markdownContent.matchAll(urlRegex)]
+      .map((match) => match[0].replace(/[),.;:]+$/, ""))
+      .filter((candidate) => this.validateEmojiUrl(candidate));
 
-    const matches = [...markdownContent.matchAll(emojiRegex)];
-
-    if (matches.length === 0) {
-      return { content: processedContent, totalSaved: 0 };
+    if (emojiUrls.length === 0) {
+      return { content: processedContent, totalSaved: 0, processedCount: 0 };
     }
 
     // Apply emoji limit per page
-    const emojiCount = Math.min(matches.length, this.config.maxEmojisPerPage);
-    if (matches.length > this.config.maxEmojisPerPage) {
+    const emojiCount = Math.min(emojiUrls.length, this.config.maxEmojisPerPage);
+    if (emojiUrls.length > this.config.maxEmojisPerPage) {
       console.warn(
         chalk.yellow(
-          `⚠️  Page ${pageId} has ${matches.length} emojis, limiting to ${this.config.maxEmojisPerPage}`
+          `⚠️  Page ${pageId} has ${emojiUrls.length} emojis, limiting to ${this.config.maxEmojisPerPage}`
         )
       );
     }
@@ -723,7 +735,7 @@ export class EmojiProcessor {
     );
 
     // Process emojis with concurrency limit
-    const emojisToProcess = matches.slice(0, emojiCount);
+    const emojisToProcess = emojiUrls.slice(0, emojiCount);
     const results: Array<{ url: string; result: EmojiProcessingResult }> = [];
 
     // Process in batches to respect concurrency limits
@@ -738,8 +750,7 @@ export class EmojiProcessor {
       );
 
       const batchResults = await Promise.allSettled(
-        batch.map(async (match) => {
-          const emojiUrl = match[0];
+        batch.map(async (emojiUrl) => {
           const result = await this.processEmoji(emojiUrl, pageId);
           return { url: emojiUrl, result };
         })
@@ -754,6 +765,7 @@ export class EmojiProcessor {
           // Replace the emoji URL in content with the new local path
           processedContent = processedContent.replace(url, result.newPath);
           totalSaved += result.savedBytes;
+          processedCount += 1;
 
           if (result.reused) {
             console.log(
@@ -773,7 +785,7 @@ export class EmojiProcessor {
       }
     }
 
-    return { content: processedContent, totalSaved };
+    return { content: processedContent, totalSaved, processedCount };
   }
 
   /**
@@ -804,7 +816,7 @@ export class EmojiProcessor {
         localPath +
         '" alt="' +
         emojiName +
-        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
+        '" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />';
 
       processedContent = processedContent.replace(regex, inlineEmoji);
     }
@@ -843,7 +855,7 @@ export class EmojiProcessor {
         localPath +
         '" alt="' +
         emojiName +
-        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
+        '" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />';
 
       for (const pattern of patterns) {
         processedContent = processedContent.replace(pattern, inlineEmoji);
@@ -922,9 +934,11 @@ export class EmojiProcessor {
   /**
    * Reset the processor (for testing)
    */
-  static reset(): void {
+  static reset(options: EmojiProcessorResetOptions = {}): void {
     this.emojiCache.clear();
     this.initialized = false;
-    this.config = { ...this.DEFAULT_CONFIG };
+    if (options.resetConfig) {
+      this.config = { ...this.DEFAULT_CONFIG };
+    }
   }
 }

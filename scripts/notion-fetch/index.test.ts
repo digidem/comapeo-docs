@@ -38,21 +38,22 @@ vi.mock("chalk", () => ({
       green: vi.fn((text) => text),
       yellow: vi.fn((text) => text),
       magenta: vi.fn((text) => text),
+      blue: vi.fn((text) => text),
     },
     red: vi.fn((text) => text),
     yellow: vi.fn((text) => text),
     green: vi.fn((text) => text),
     blue: vi.fn((text) => text),
+    gray: vi.fn((text) => text),
   },
-}));
-
-vi.mock("../fetchNotionData", () => ({
-  fetchNotionData: vi.fn(),
-  sortAndExpandNotionData: vi.fn(),
 }));
 
 vi.mock("./generateBlocks", () => ({
   generateBlocks: vi.fn(),
+}));
+
+vi.mock("./runFetch", () => ({
+  runFetchPipeline: vi.fn(),
 }));
 
 vi.mock("../constants", () => ({
@@ -61,6 +62,18 @@ vi.mock("../constants", () => ({
     READY_TO_PUBLISH: "Ready to publish",
   },
 }));
+
+vi.mock("./runtime", async () => {
+  const actual = await vi.importActual<typeof import("./runtime")>("./runtime");
+
+  return {
+    ...actual,
+    gracefulShutdown: vi.fn().mockImplementation(async (exitCode = 0) => {
+      return exitCode;
+    }),
+    trackSpinner: vi.fn().mockReturnValue(vi.fn()),
+  };
+});
 
 describe("notion-fetch integration", () => {
   let tempDir: string;
@@ -174,14 +187,20 @@ describe("notion-fetch integration", () => {
         emojiCount: 0,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
+      const { runFetchPipeline } = await import("./runFetch");
+
+      vi.mocked(runFetchPipeline).mockImplementation(async (args) => {
+        console.log(`runFetchPipeline called with:`, args);
+        return {
+          data: mockData,
+          metrics: mockGenerateResult,
+        };
+      });
 
       // Act
       // Import the module which will execute main() automatically
@@ -190,22 +209,23 @@ describe("notion-fetch integration", () => {
 
       // Assert
       expect(actualExitCode).toBe(0);
-      expect(fetchNotionData).toHaveBeenCalledWith({
-        and: [
-          {
-            property: "Status",
-            select: { equals: "Ready to publish" },
+      expect(runFetchPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: {
+            and: [
+              {
+                property: "Status",
+                select: { equals: "Ready to publish" },
+              },
+              {
+                property: "Parent item",
+                relation: { is_empty: true },
+              },
+            ],
           },
-          {
-            property: "Parent item",
-            relation: { is_empty: true },
-          },
-        ],
-      });
-      expect(sortAndExpandNotionData).toHaveBeenCalledWith(mockData);
-      expect(generateBlocks).toHaveBeenCalledWith(
-        mockData,
-        expect.any(Function)
+          fetchSpinnerText: "Fetching data from Notion",
+          generateSpinnerText: "Generating blocks",
+        })
       );
     });
 
@@ -242,8 +262,8 @@ describe("notion-fetch integration", () => {
     it("should handle fetchNotionData errors", async () => {
       // Arrange
       const fetchError = new Error("Failed to fetch data");
-      const { fetchNotionData } = await import("../fetchNotionData");
-      vi.mocked(fetchNotionData).mockRejectedValue(fetchError);
+      const { runFetchPipeline } = await import("./runFetch");
+      vi.mocked(runFetchPipeline).mockRejectedValue(fetchError);
 
       // Act & Assert
       const mod = await import("./index");
@@ -268,14 +288,8 @@ describe("notion-fetch integration", () => {
       ];
       const generateError = new Error("Failed to generate blocks");
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
-
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(generateBlocks).mockRejectedValue(generateError);
+      const { runFetchPipeline } = await import("./runFetch");
+      vi.mocked(runFetchPipeline).mockRejectedValue(generateError);
 
       // Act & Assert
       const mod = await import("./index");
@@ -305,14 +319,17 @@ describe("notion-fetch integration", () => {
         emojiCount: 1,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
+      const { runFetchPipeline } = await import("./runFetch");
+
+      vi.mocked(runFetchPipeline).mockResolvedValue({
+        data: mockData,
+        metrics: mockGenerateResult,
+      });
 
       // Act & Assert
       const mod = await import("./index");
@@ -349,24 +366,29 @@ describe("notion-fetch integration", () => {
         emojiCount: 0,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
+      const { runFetchPipeline } = await import("./runFetch");
 
-      const ora = vi.mocked(await import("ora")).default;
+      vi.mocked(runFetchPipeline).mockResolvedValue({
+        data: mockData,
+        metrics: mockGenerateResult,
+      });
 
       // Act & Assert
       const mod = await import("./index");
       const actualExitCode = await mod.main();
 
       expect(actualExitCode).toBe(0);
-      expect(ora).toHaveBeenCalledWith("Fetching data from Notion");
-      expect(ora).toHaveBeenCalledWith("Generating blocks");
+      expect(runFetchPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fetchSpinnerText: "Fetching data from Notion",
+          generateSpinnerText: "Generating blocks",
+        })
+      );
     });
 
     it("should update spinner text during generateBlocks progress", async () => {
@@ -386,22 +408,24 @@ describe("notion-fetch integration", () => {
         emojiCount: 0,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
+      const { runFetchPipeline } = await import("./runFetch");
 
-      // Mock generateBlocks to call progress callback
-      vi.mocked(generateBlocks).mockImplementation(
-        async (data, progressCallback) => {
-          if (progressCallback) {
-            progressCallback({ current: 1, total: 2 });
-            progressCallback({ current: 2, total: 2 });
+      // Mock runFetchPipeline to call progress callback
+      vi.mocked(runFetchPipeline).mockImplementation(
+        async ({ onProgress, ...rest }) => {
+          if (onProgress) {
+            onProgress({ current: 1, total: 2 });
+            onProgress({ current: 2, total: 2 });
           }
-          return mockGenerateResult;
+          return {
+            data: mockData,
+            metrics: mockGenerateResult,
+          };
         }
       );
 
@@ -411,9 +435,10 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(0);
       // The progress callback should have been called
-      expect(generateBlocks).toHaveBeenCalledWith(
-        mockData,
-        expect.any(Function)
+      expect(runFetchPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+        })
       );
     });
   });
@@ -422,8 +447,8 @@ describe("notion-fetch integration", () => {
     it("should handle fatal errors in main", async () => {
       // Arrange
       const fatalError = new Error("Fatal error");
-      const { fetchNotionData } = await import("../fetchNotionData");
-      vi.mocked(fetchNotionData).mockRejectedValue(fatalError);
+      const { runFetchPipeline } = await import("./runFetch");
+      vi.mocked(runFetchPipeline).mockRejectedValue(fatalError);
 
       // Act & Assert
       const mod = await import("./index");
@@ -443,6 +468,9 @@ describe("notion-fetch integration", () => {
       process.on = mockOn;
 
       try {
+        vi.resetModules();
+        const runtime = await import("./runtime");
+        runtime.__resetRuntimeForTests?.();
         // Act
         await import("./index");
 
@@ -482,34 +510,41 @@ describe("notion-fetch integration", () => {
         emojiCount: 0,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
+      const { runFetchPipeline } = await import("./runFetch");
+
+      vi.mocked(runFetchPipeline).mockResolvedValue({
+        data: mockData,
+        metrics: mockGenerateResult,
+      });
 
       // Act & Assert
       const mod = await import("./index");
       const actualExitCode = await mod.main();
 
       expect(actualExitCode).toBe(0);
-      expect(fetchNotionData).toHaveBeenCalledWith({
-        and: [
-          {
-            property: "Status",
-            select: {
-              equals: "Ready to publish",
-            },
+      expect(runFetchPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: {
+            and: [
+              {
+                property: "Status",
+                select: { equals: "Ready to publish" },
+              },
+              {
+                property: "Parent item",
+                relation: { is_empty: true },
+              },
+            ],
           },
-          {
-            property: "Parent item",
-            relation: { is_empty: true },
-          },
-        ],
-      });
+          fetchSpinnerText: "Fetching data from Notion",
+          generateSpinnerText: "Generating blocks",
+        })
+      );
     });
 
     it("should process data through sortAndExpandNotionData", async () => {
@@ -537,24 +572,40 @@ describe("notion-fetch integration", () => {
         emojiCount: 0,
       };
 
-      const { fetchNotionData, sortAndExpandNotionData } = await import(
-        "../fetchNotionData"
-      );
-      const { generateBlocks } = await import("./generateBlocks");
+      // Reset modules and set environment variables to ensure fresh import
+      vi.resetModules();
+      process.env.NOTION_API_KEY = "test-api-key";
+      process.env.DATABASE_ID = "test-database-id";
 
-      vi.mocked(fetchNotionData).mockResolvedValue(mockData as any);
-      vi.mocked(sortAndExpandNotionData).mockResolvedValue(sortedData as any);
-      vi.mocked(generateBlocks).mockResolvedValue(mockGenerateResult);
+      const { runFetchPipeline } = await import("./runFetch");
+
+      vi.mocked(runFetchPipeline).mockResolvedValue({
+        data: sortedData,
+        metrics: mockGenerateResult,
+      });
 
       // Act & Assert
       const mod = await import("./index");
       const actualExitCode = await mod.main();
 
       expect(actualExitCode).toBe(0);
-      expect(sortAndExpandNotionData).toHaveBeenCalledWith(mockData);
-      expect(generateBlocks).toHaveBeenCalledWith(
-        sortedData,
-        expect.any(Function)
+      expect(runFetchPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: {
+            and: [
+              {
+                property: "Status",
+                select: { equals: "Ready to publish" },
+              },
+              {
+                property: "Parent item",
+                relation: { is_empty: true },
+              },
+            ],
+          },
+          fetchSpinnerText: "Fetching data from Notion",
+          generateSpinnerText: "Generating blocks",
+        })
       );
     });
   });

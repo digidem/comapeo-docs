@@ -22,6 +22,7 @@ export interface FetchPipelineResult {
     totalSaved: number;
     sectionCount: number;
     titleSectionCount: number;
+    emojiCount: number;
   };
 }
 

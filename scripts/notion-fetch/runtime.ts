@@ -96,3 +96,9 @@ export function initializeGracefulShutdownHandlers() {
     }
   });
 }
+
+export function __resetRuntimeForTests(): void {
+  isShuttingDown = false;
+  isInitialized = false;
+  activeSpinners = [];
+}

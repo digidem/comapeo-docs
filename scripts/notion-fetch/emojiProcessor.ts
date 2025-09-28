@@ -816,7 +816,7 @@ export class EmojiProcessor {
         localPath +
         '" alt="' +
         emojiName +
-        '" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />';
+        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
 
       processedContent = processedContent.replace(regex, inlineEmoji);
     }
@@ -855,7 +855,7 @@ export class EmojiProcessor {
         localPath +
         '" alt="' +
         emojiName +
-        '" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" />';
+        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
 
       for (const pattern of patterns) {
         processedContent = processedContent.replace(pattern, inlineEmoji);

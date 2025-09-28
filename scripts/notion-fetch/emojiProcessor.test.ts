@@ -529,7 +529,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        'Here is an emoji <img src="/images/emojis/test-emoji.png" alt="test-emoji" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
+        'Here is an emoji <img src="/images/emojis/test-emoji.png" alt="test-emoji" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> in the text.'
       );
     });
 
@@ -546,7 +546,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        '<img src="/images/emojis/emoji1.png" alt="emoji1" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/emoji2.png" alt="emoji2" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> are both here'
+        '<img src="/images/emojis/emoji1.png" alt="emoji1" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> and <img src="/images/emojis/emoji2.png" alt="emoji2" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> are both here'
       );
     });
 
@@ -576,7 +576,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
+        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> in the text.'
       );
     });
 
@@ -594,7 +594,7 @@ describe("EmojiProcessor", () => {
       );
 
       expect(result).toBe(
-        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" class="emoji" style="display: inline; height: 1.2em; width: auto; vertical-align: text-bottom; margin: 0 0.1em;" /> in the text.'
+        'Here is <img src="/images/emojis/comapeo-save-low.png" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> and <img src="/images/emojis/comapeo-capture-low.png" alt="comapeo-capture-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> in the text.'
       );
     });
   });

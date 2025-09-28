@@ -3,6 +3,14 @@
  * that cause MDX compilation errors in Docusaurus.
  */
 
+const EMOJI_STYLE_MARKERS = ["display:", "height:", "margin:"];
+
+const isEmojiStyleObject = (snippet: string): boolean =>
+  EMOJI_STYLE_MARKERS.every((marker) => snippet.includes(marker));
+
+const isEmojiImgTag = (snippet: string): boolean =>
+  snippet.includes('className="emoji"');
+
 /**
  * Sanitizes markdown content to fix malformed HTML/JSX tags that cause MDX compilation errors
  * @param content - The markdown content string
@@ -28,17 +36,9 @@ export function sanitizeMarkdownContent(content: string): string {
   // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}
   for (let i = 0; i < 5 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, (match, inner) => {
-      // Preserve JSX style objects in emoji img tags
-      if (
-        match.includes("display:") &&
-        match.includes("height:") &&
-        match.includes("margin:")
-      ) {
-        return match; // Keep JSX style objects unchanged
-      }
-      return String(inner).trim(); // Strip other curly braces
-    });
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) =>
+      isEmojiStyleObject(match) ? match : String(inner).trim()
+    );
   }
 
   // 1. Fix malformed <link to section.> patterns (the main issue from the error)
@@ -59,12 +59,8 @@ export function sanitizeMarkdownContent(content: string): string {
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([^>]*?)([.\s]+)([^>]*?)>/g,
     (match, tagName, before, separator, after) => {
-      // Skip emoji img tags - they are valid JSX that should be preserved
-      if (
-        tagName.toLowerCase() === "img" &&
-        (before + after).includes('className="emoji"')
-      ) {
-        return match; // Keep emoji img tags unchanged
+      if (tagName.toLowerCase() === "img" && isEmojiImgTag(before + after)) {
+        return match;
       }
 
       // Only replace if the separator indicates malformed attributes
@@ -82,33 +78,19 @@ export function sanitizeMarkdownContent(content: string): string {
   // BUT exclude emoji img tags which are valid HTML
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+([^>\s"=]+)(\s|>)/g,
-    (match, tagName, attrName, attrValue, suffix) => {
-      // Skip emoji img tags - they are valid JSX that should be preserved
-      if (
-        tagName.toLowerCase() === "img" &&
-        match.includes('className="emoji"')
-      ) {
-        return match; // Keep emoji img tags unchanged
-      }
-      return `<${tagName} ${attrName}="${attrValue}"${suffix}`;
-    }
+    (match, tagName, attrName, attrValue, suffix) =>
+      tagName.toLowerCase() === "img" && isEmojiImgTag(match)
+        ? match
+        : `<${tagName} ${attrName}="${attrValue}"${suffix}`
   );
 
   // 6. Final hard cleanup: strip any remaining { ... } to avoid MDX/Acorn errors
   // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}.
   for (let i = 0; i < 3 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, (match, inner) => {
-      // Preserve JSX style objects in emoji img tags
-      if (
-        match.includes("display:") &&
-        match.includes("height:") &&
-        match.includes("margin:")
-      ) {
-        return match; // Keep JSX style objects unchanged
-      }
-      return inner; // Strip other curly braces
-    });
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) =>
+      isEmojiStyleObject(match) ? match : inner
+    );
   }
 
   // 7. Restore masked code blocks and inline code

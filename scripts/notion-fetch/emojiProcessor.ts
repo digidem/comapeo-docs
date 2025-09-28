@@ -11,6 +11,18 @@ import {
   extForFormat,
 } from "./utils.js";
 
+const INLINE_EMOJI_STYLE =
+  'className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}}';
+
+const normalizeEmojiName = (plainText: string): string =>
+  plainText.replace(/:/g, "").trim();
+
+const escapeForRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildInlineEmoji = (src: string, alt: string): string =>
+  `<img src="${src}" alt="${alt}" ${INLINE_EMOJI_STYLE} />`;
+
 interface EmojiFile {
   url: string;
   filename: string;
@@ -797,68 +809,32 @@ export class EmojiProcessor {
   ): string {
     let processedContent = markdownContent;
 
-    // Create a map of emoji names to their local paths for easier lookup
-    const emojiNameMap = new Map<string, string>();
-    for (const [plainText, localPath] of emojiMap.entries()) {
-      const emojiName = plainText.replace(/:/g, "").trim();
-      emojiNameMap.set(emojiName, localPath);
+    const emojiEntries = Array.from(emojiMap.entries()).map(
+      ([plainText, localPath]) => {
+        const name = normalizeEmojiName(plainText);
+        return {
+          inline: buildInlineEmoji(localPath, name),
+          plainTextPattern: new RegExp(escapeForRegExp(plainText), "g"),
+          escapedName: escapeForRegExp(name),
+        };
+      }
+    );
+
+    for (const { inline, plainTextPattern } of emojiEntries) {
+      processedContent = processedContent.replace(plainTextPattern, inline);
     }
 
-    for (const [plainText, localPath] of emojiMap.entries()) {
-      // Replace all occurrences of the emoji plain text with inline HTML image
-      const escapedPlainText = plainText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex = new RegExp(escapedPlainText, "g");
-
-      // Convert to inline JSX image with emoji-specific styling
-      const emojiName = plainText.replace(/:/g, "").trim();
-      const inlineEmoji =
-        '<img src="' +
-        localPath +
-        '" alt="' +
-        emojiName +
-        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
-
-      processedContent = processedContent.replace(regex, inlineEmoji);
-    }
-
-    // Also handle cases where notion-to-md converts emojis to [img](#img) with surrounding context
-    // Pattern: [img](#img) [ emoji-name] or [img](#img)[emoji-name]
-    for (const [emojiName, localPath] of emojiNameMap.entries()) {
-      // Escape emoji name for use in regex
-      const escapedEmojiName = emojiName.replace(
-        /[-\[\]\\^$*+?.()|{}]/g,
-        "\\$&"
-      );
-
-      // Look for patterns like "[img](#img) [ comapeo-save-low]" or "[img](#img)[comapeo-capture-low]"
+    for (const { escapedName, inline } of emojiEntries) {
       const patterns = [
-        // Pattern: [img](#img) [ emoji-name]
-        new RegExp(
-          `\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedEmojiName}\\s*\\]`,
-          "gi"
-        ),
-        // Pattern: [img](#img)[emoji-name]
-        new RegExp(`\\[img\\]\\(#img\\)\\[${escapedEmojiName}\\]`, "gi"),
-        // Pattern: [img](#img)  [ emoji-name] (with extra spaces)
-        new RegExp(
-          `\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedEmojiName}\\s*\\]`,
-          "gi"
-        ),
-        // Pattern: [img] [ emoji-name] (in case the (#img) part is missing)
-        new RegExp(`\\[img\\]\\s*\\[\\s*${escapedEmojiName}\\s*\\]`, "gi"),
-        // Pattern: [img][emoji-name] (in case the (#img) part is missing)
-        new RegExp(`\\[img\\]\\[${escapedEmojiName}\\]`, "gi"),
+        new RegExp(`\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        new RegExp(`\\[img\\]\\(#img\\)\\[${escapedName}\\]`, "gi"),
+        new RegExp(`\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        new RegExp(`\\[img\\]\\s*\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        new RegExp(`\\[img\\]\\[${escapedName}\\]`, "gi"),
       ];
 
-      const inlineEmoji =
-        '<img src="' +
-        localPath +
-        '" alt="' +
-        emojiName +
-        '" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />';
-
       for (const pattern of patterns) {
-        processedContent = processedContent.replace(pattern, inlineEmoji);
+        processedContent = processedContent.replace(pattern, inline);
       }
     }
 

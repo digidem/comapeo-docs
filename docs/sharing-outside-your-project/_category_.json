@@ -1,0 +1,12 @@
+{
+  "label": "Sharing Outside Your Project",
+  "position": 31,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": "Sharing Observations Outside of CoMapeo"
+  }
+}

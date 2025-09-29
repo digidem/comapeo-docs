@@ -557,5 +557,8 @@
     },
     "I want to update app permissions in CoMapeo Mobile": {
         "message": "Nueva Página"
+    },
+    "Collected Data": {
+        "message": "Nuevo título de sección"
     }
 }

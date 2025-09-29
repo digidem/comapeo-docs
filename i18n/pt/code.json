@@ -599,5 +599,17 @@
     },
     "Encryption & Security": {
         "message": "Nova Página"
+    },
+    "Introduction": {
+        "message": "Introdução"
+    },
+    "Getting Started Essentials": {
+        "message": "Novo título da seção"
+    },
+    "Building a Custom Category Set": {
+        "message": "Nova Página"
+    },
+    "Understanding How Exchange Works": {
+        "message": "Nova Página A"
     }
 }

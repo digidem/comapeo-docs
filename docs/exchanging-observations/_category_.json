@@ -1,0 +1,12 @@
+{
+  "label": "Exchanging Observations",
+  "position": 34,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": null
+  }
+}

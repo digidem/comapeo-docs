@@ -1,0 +1,12 @@
+{
+  "label": "Getting Started - Essentials",
+  "position": 5,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": null
+  }
+}

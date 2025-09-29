@@ -11,8 +11,13 @@ import {
   extForFormat,
 } from "./utils.js";
 
+// Constants for emoji processing
 const INLINE_EMOJI_STYLE =
   'className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}}';
+
+const MAX_EMOJI_NAME_LENGTH = 15;
+const TIMESTAMP_LENGTH = 8;
+const HASH_LENGTH = 16;
 
 const normalizeEmojiName = (plainText: string): string =>
   plainText.replace(/:/g, "").trim();
@@ -22,6 +27,48 @@ const escapeForRegExp = (value: string): string =>
 
 const buildInlineEmoji = (src: string, alt: string): string =>
   `<img src="${src}" alt="${alt}" ${INLINE_EMOJI_STYLE} />`;
+
+/**
+ * Type guard for Node.js errors with code property
+ */
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
+
+/**
+ * Validates and sanitizes a filename to prevent path traversal
+ */
+function sanitizeFilename(filename: string): string {
+  // Remove any path separators and parent directory references
+  const sanitized = filename
+    .replace(/\.\./g, "")
+    .replace(/[/\\]/g, "")
+    .replace(/^\.+/, "");
+
+  // Ensure the filename doesn't start with a dot (hidden file)
+  if (sanitized.startsWith(".") && sanitized !== ".emoji-cache.json") {
+    return sanitized.substring(1);
+  }
+
+  return sanitized;
+}
+
+/**
+ * Safely validates a path to ensure it's within the allowed directory
+ */
+function validatePath(basePath: string, filename: string): string {
+  const sanitized = sanitizeFilename(filename);
+  const fullPath = path.join(basePath, sanitized);
+  const normalizedBase = path.normalize(basePath);
+  const normalizedFull = path.normalize(fullPath);
+
+  // Ensure the path is within the base directory
+  if (!normalizedFull.startsWith(normalizedBase)) {
+    throw new Error("Invalid path: outside of allowed directory");
+  }
+
+  return fullPath;
+}
 
 interface EmojiFile {
   url: string;
@@ -106,8 +153,10 @@ export class EmojiProcessor {
   static async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    // Ensure emoji directory exists
-    fs.mkdirSync(this.config.emojiPath, { recursive: true });
+    // Ensure emoji directory exists (emojiPath is validated in configure())
+    const normalizedPath = path.normalize(this.config.emojiPath);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path is normalized and validated
+    fs.mkdirSync(normalizedPath, { recursive: true });
 
     // Load existing cache
     await this.loadCache();
@@ -171,11 +220,12 @@ export class EmojiProcessor {
     }
 
     // Check magic numbers for supported formats
-    for (const [format, magicNumbers] of Object.entries(
+    for (const [_format, magicNumbers] of Object.entries(
       this.IMAGE_MAGIC_NUMBERS
     )) {
       for (const magic of magicNumbers) {
         if (magic.length <= buffer.length) {
+          // eslint-disable-next-line security/detect-object-injection -- index is from validated array iteration
           const matches = magic.every((byte, index) => buffer[index] === byte);
           if (matches) {
             return true;
@@ -205,8 +255,12 @@ export class EmojiProcessor {
   private static async loadCache(): Promise<void> {
     try {
       this.emojiCache.clear();
-      if (fs.existsSync(this.config.cacheFile)) {
-        const cacheContent = fs.readFileSync(this.config.cacheFile, "utf8");
+      const normalizedCacheFile = path.normalize(this.config.cacheFile);
+
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path is normalized and validated
+      if (fs.existsSync(normalizedCacheFile)) {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path is normalized and validated
+        const cacheContent = fs.readFileSync(normalizedCacheFile, "utf8");
         const cacheData = JSON.parse(cacheContent);
 
         // Validate cache structure
@@ -225,12 +279,14 @@ export class EmojiProcessor {
           }
 
           const typedFileInfo = fileInfo as EmojiFile;
-          const fullPath = path.join(
+          // Use path validation to prevent path traversal
+          const fullPath = validatePath(
             this.config.emojiPath,
             typedFileInfo.filename
           );
 
           // Only add to cache if file still exists
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path validated by validatePath()
           if (fs.existsSync(fullPath)) {
             this.emojiCache.set(url, typedFileInfo);
           } else {
@@ -277,8 +333,10 @@ export class EmojiProcessor {
   private static async saveCache(): Promise<void> {
     try {
       const cacheObject = Object.fromEntries(this.emojiCache);
+      const normalizedCacheFile = path.normalize(this.config.cacheFile);
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path is normalized and validated
       fs.writeFileSync(
-        this.config.cacheFile,
+        normalizedCacheFile,
         JSON.stringify(cacheObject, null, 2),
         "utf8"
       );
@@ -295,7 +353,7 @@ export class EmojiProcessor {
       .createHash("sha256")
       .update(buffer)
       .digest("hex")
-      .substring(0, 16);
+      .substring(0, HASH_LENGTH);
   }
 
   /**
@@ -311,16 +369,20 @@ export class EmojiProcessor {
     const originalName =
       urlParts[urlParts.length - 1]?.split(".")[0] || "emoji";
 
-    // Sanitize the name
+    // Sanitize the name to prevent path traversal and invalid characters
     const sanitizedName = originalName
       .replace(/[^a-zA-Z0-9-_]/g, "")
       .toLowerCase()
-      .substring(0, 15); // Reduced to leave room for timestamp
+      .substring(0, MAX_EMOJI_NAME_LENGTH);
+
+    // Validate the sanitized name
+    const safeName =
+      sanitizedName && !/^\.+$/.test(sanitizedName) ? sanitizedName : "emoji";
 
     // Add timestamp for uniqueness
-    const timestamp = Date.now().toString().slice(-8);
+    const timestamp = Date.now().toString().slice(-TIMESTAMP_LENGTH);
 
-    return `${sanitizedName}_${hash}_${timestamp}${extension}`;
+    return `${safeName}_${hash}_${timestamp}${extension}`;
   }
 
   /**
@@ -353,15 +415,22 @@ export class EmojiProcessor {
 
     // Check if emoji is already cached
     const cached = this.emojiCache.get(url);
-    if (
-      cached &&
-      fs.existsSync(path.join(this.config.emojiPath, cached.filename))
-    ) {
-      return {
-        newPath: `/images/emojis/${cached.filename}`,
-        savedBytes: 0,
-        reused: true,
-      };
+    if (cached) {
+      try {
+        const cachedPath = validatePath(this.config.emojiPath, cached.filename);
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path validated by validatePath()
+        if (fs.existsSync(cachedPath)) {
+          return {
+            newPath: `/images/emojis/${cached.filename}`,
+            savedBytes: 0,
+            reused: true,
+          };
+        }
+      } catch (error) {
+        console.warn(
+          chalk.yellow(`⚠️  Invalid cached file path: ${cached.filename}`)
+        );
+      }
     }
 
     const spinner = SpinnerManager.create(
@@ -403,7 +472,7 @@ export class EmojiProcessor {
 
       // Generate filename with hash for deduplication
       const filename = this.generateFilename(url, originalBuffer, extension);
-      const filePath = path.join(this.config.emojiPath, filename);
+      const filePath = validatePath(this.config.emojiPath, filename);
 
       // Check if file with same content already exists (content-based deduplication)
       const hash = this.generateHash(originalBuffer);
@@ -411,26 +480,36 @@ export class EmojiProcessor {
         ([, info]) => info.hash === hash
       );
 
-      if (
-        existingEntry &&
-        fs.existsSync(
-          path.join(this.config.emojiPath, existingEntry[1].filename)
-        )
-      ) {
-        // Update cache with new URL pointing to existing file
-        this.emojiCache.set(url, existingEntry[1]);
-        await this.saveCache();
+      if (existingEntry) {
+        try {
+          const existingPath = validatePath(
+            this.config.emojiPath,
+            existingEntry[1].filename
+          );
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path validated by validatePath()
+          if (fs.existsSync(existingPath)) {
+            // Update cache with new URL pointing to existing file
+            this.emojiCache.set(url, existingEntry[1]);
+            await this.saveCache();
 
-        spinner.succeed(
-          chalk.green(
-            `Emoji reused (content match): ${existingEntry[1].filename}`
-          )
-        );
-        return {
-          newPath: `/images/emojis/${existingEntry[1].filename}`,
-          savedBytes: 0,
-          reused: true,
-        };
+            spinner.succeed(
+              chalk.green(
+                `Emoji reused (content match): ${existingEntry[1].filename}`
+              )
+            );
+            return {
+              newPath: `/images/emojis/${existingEntry[1].filename}`,
+              savedBytes: 0,
+              reused: true,
+            };
+          }
+        } catch (error) {
+          console.warn(
+            chalk.yellow(
+              `⚠️  Invalid existing entry path: ${existingEntry[1].filename}`
+            )
+          );
+        }
       }
 
       spinner.text = `Processing emoji: ${filename}`;
@@ -481,23 +560,39 @@ export class EmojiProcessor {
         savedBytes,
         reused: false,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       let operation = "Processing emoji";
 
-      if (error.code === "ECONNABORTED") {
-        operation = "Download timeout";
-      } else if (error.response) {
-        operation = `HTTP ${error.response.status}`;
-      } else if (error.code === "ENOTFOUND") {
-        operation = "DNS resolution";
-      } else if (error.message?.includes("too large")) {
+      // Use type guard for error checking
+      if (isNodeError(error)) {
+        if (error.code === "ECONNABORTED") {
+          operation = "Download timeout";
+        } else if (error.code === "ENOTFOUND") {
+          operation = "DNS resolution";
+        }
+      } else if (
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error
+      ) {
+        const httpError = error as { response?: { status?: number } };
+        if (httpError.response?.status) {
+          operation = `HTTP ${httpError.response.status}`;
+        }
+      }
+
+      // Check error message safely
+      const errorMessage =
+        error instanceof Error && error.message ? error.message : String(error);
+
+      if (errorMessage.includes("too large")) {
         operation = "File size validation";
-      } else if (error.message?.includes("validation failed")) {
+      } else if (errorMessage.includes("validation failed")) {
         operation = "Content validation";
       }
 
-      const errorMessage = this.formatError(operation, url, error);
-      spinner.fail(chalk.red(errorMessage));
+      const formattedError = this.formatError(operation, url, error);
+      spinner.fail(chalk.red(formattedError));
       console.error(chalk.red("Emoji processing error details:"), error);
 
       // For emojis, we can be more lenient and continue with a fallback
@@ -557,23 +652,35 @@ export class EmojiProcessor {
         "to_do",
         "toggle",
         "child_page",
-      ];
+      ] as const;
 
       for (const blockType of blockTypes) {
-        if (block[blockType]?.rich_text) {
+        // Safely access block properties
+        if (
+          Object.hasOwn(block, blockType) &&
+          // eslint-disable-next-line security/detect-object-injection -- blockType is from const array
+          block[blockType]?.rich_text &&
+          // eslint-disable-next-line security/detect-object-injection -- blockType is from const array
+          Array.isArray(block[blockType].rich_text)
+        ) {
+          // eslint-disable-next-line security/detect-object-injection -- blockType is from const array
           processRichText(block[blockType].rich_text);
         }
       }
 
       // Process properties (for page properties)
-      if (block.properties) {
-        for (const [, property] of Object.entries(block.properties)) {
-          if (property && typeof property === "object") {
+      if (block.properties && typeof block.properties === "object") {
+        for (const [key, property] of Object.entries(block.properties)) {
+          if (
+            property &&
+            typeof property === "object" &&
+            Object.hasOwn(block.properties, key)
+          ) {
             const prop = property as any;
-            if (prop.rich_text) {
+            if (Array.isArray(prop.rich_text)) {
               processRichText(prop.rich_text);
             }
-            if (prop.title) {
+            if (Array.isArray(prop.title)) {
               processRichText(prop.title);
             }
           }
@@ -809,27 +916,45 @@ export class EmojiProcessor {
   ): string {
     let processedContent = markdownContent;
 
-    const emojiEntries = Array.from(emojiMap.entries()).map(
-      ([plainText, localPath]) => {
+    // Pre-validate and sanitize emoji names before creating RegExp patterns
+    const emojiEntries = Array.from(emojiMap.entries())
+      .filter(([plainText, _localPath]) => {
+        // Only process valid emoji names (alphanumeric, hyphens, underscores, colons)
+        return /^[:a-zA-Z0-9_-]+$/.test(plainText);
+      })
+      .map(([plainText, localPath]) => {
         const name = normalizeEmojiName(plainText);
+        const escapedPlainText = escapeForRegExp(plainText);
+        const escapedName = escapeForRegExp(name);
+
         return {
           inline: buildInlineEmoji(localPath, name),
-          plainTextPattern: new RegExp(escapeForRegExp(plainText), "g"),
-          escapedName: escapeForRegExp(name),
+          plainText: escapedPlainText,
+          escapedName: escapedName,
         };
-      }
-    );
+      });
 
-    for (const { inline, plainTextPattern } of emojiEntries) {
+    // Replace plain text emoji references
+    for (const { inline, plainText } of emojiEntries) {
+      // Use string replace with escaped pattern for safety
+      // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern is pre-validated and escaped
+      const plainTextPattern = new RegExp(plainText, "g");
       processedContent = processedContent.replace(plainTextPattern, inline);
     }
 
+    // Replace [img] markdown patterns
     for (const { escapedName, inline } of emojiEntries) {
+      // Build safe regex patterns with validated, escaped names
       const patterns = [
+        // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern uses pre-validated and escaped name
         new RegExp(`\\[img\\]\\(#img\\)\\s*\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern uses pre-validated and escaped name
         new RegExp(`\\[img\\]\\(#img\\)\\[${escapedName}\\]`, "gi"),
+        // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern uses pre-validated and escaped name
         new RegExp(`\\[img\\]\\(#img\\)\\s+\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern uses pre-validated and escaped name
         new RegExp(`\\[img\\]\\s*\\[\\s*${escapedName}\\s*\\]`, "gi"),
+        // eslint-disable-next-line security/detect-non-literal-regexp -- Pattern uses pre-validated and escaped name
         new RegExp(`\\[img\\]\\[${escapedName}\\]`, "gi"),
       ];
 
@@ -871,7 +996,9 @@ export class EmojiProcessor {
     await this.initialize();
 
     try {
-      const files = fs.readdirSync(this.config.emojiPath);
+      const normalizedPath = path.normalize(this.config.emojiPath);
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path is normalized and validated
+      const files = fs.readdirSync(normalizedPath);
       const cachedFiles = new Set(
         Array.from(this.emojiCache.values()).map((emoji) => emoji.filename)
       );
@@ -881,10 +1008,17 @@ export class EmojiProcessor {
         if (file === ".emoji-cache.json" || file === ".gitkeep") continue; // Skip cache file and gitkeep
 
         if (!cachedFiles.has(file)) {
-          const filePath = path.join(this.config.emojiPath, file);
-          fs.unlinkSync(filePath);
-          console.log(chalk.yellow(`Cleaned up unused emoji: ${file}`));
-          cleanedCount++;
+          try {
+            const filePath = validatePath(this.config.emojiPath, file);
+            // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path validated by validatePath()
+            fs.unlinkSync(filePath);
+            console.log(chalk.yellow(`Cleaned up unused emoji: ${file}`));
+            cleanedCount++;
+          } catch (error) {
+            console.warn(
+              chalk.yellow(`⚠️  Could not clean up file ${file}:`, error)
+            );
+          }
         }
       }
 

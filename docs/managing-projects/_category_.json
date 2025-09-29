@@ -1,0 +1,12 @@
+{
+  "label": "Managing Projects",
+  "position": 27,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": "Mapping with Collaborators"
+  }
+}

@@ -575,5 +575,29 @@
     },
     "Collected Data": {
         "message": "Novo título da seção"
+    },
+    "Getting Started - Essentials": {
+        "message": "Novo título da seção"
+    },
+    "Installation & Onboarding": {
+        "message": "Nova Página"
+    },
+    "Mapping On Your Own": {
+        "message": "Nova Página"
+    },
+    "Customizing CoMapeo": {
+        "message": "Novo Alternar\n"
+    },
+    "Building Custom a Categroy Set": {
+        "message": "Nova Página"
+    },
+    "Building Custom Background Maps": {
+        "message": "Nova Página"
+    },
+    "Data Privacy & Security": {
+        "message": "Novo título da seção"
+    },
+    "Encryption & Security": {
+        "message": "Nova Página"
     }
 }

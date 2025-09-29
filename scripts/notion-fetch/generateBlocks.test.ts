@@ -24,6 +24,30 @@ vi.mock("../notionClient", () => ({
     pageToMarkdown: vi.fn(),
     toMarkdownString: vi.fn(),
   },
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(),
+  },
+}));
+
+vi.mock("../fetchNotionData", () => ({
+  fetchNotionBlocks: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("./emojiProcessor", () => ({
+  EmojiProcessor: {
+    processBlockEmojis: vi.fn().mockResolvedValue({
+      emojiMap: new Map(),
+      totalSaved: 0,
+    }),
+    applyEmojiMappings: vi.fn((content) => content),
+    processPageEmojis: vi.fn((pageId, content) =>
+      Promise.resolve({
+        content: content || "",
+        totalSaved: 0,
+        processedCount: 0,
+      })
+    ),
+  },
 }));
 
 vi.mock("./spinnerManager", () => ({
@@ -142,6 +166,7 @@ describe("generateBlocks", () => {
         totalSaved: expect.any(Number),
         sectionCount: expect.any(Number),
         titleSectionCount: expect.any(Number),
+        emojiCount: expect.any(Number),
       });
 
       // Should complete without throwing
@@ -331,6 +356,7 @@ describe("generateBlocks", () => {
         totalSaved: expect.any(Number),
         sectionCount: expect.any(Number),
         titleSectionCount: expect.any(Number),
+        emojiCount: expect.any(Number),
       });
     });
   });

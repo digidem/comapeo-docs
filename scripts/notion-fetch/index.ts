@@ -12,12 +12,16 @@ import {
 // Load environment variables from .env file
 dotenv.config();
 
-const resolvedDatabaseId =
-  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
-
-if (resolvedDatabaseId) {
-  process.env.DATABASE_ID = resolvedDatabaseId;
+function resolveDatabaseId(): string | undefined {
+  const databaseId = process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+  if (databaseId) {
+    process.env.DATABASE_ID = databaseId;
+  }
+  return databaseId;
 }
+
+// Resolve once on module import to mirror previous behaviour
+resolveDatabaseId();
 if (process.env.DEBUG) {
   console.log("Environment variables:", process.env);
 }
@@ -34,11 +38,14 @@ async function main(): Promise<number> {
     chalk.bold.cyan("🚀 Starting Notion data fetch and processing\n")
   );
 
+  const resolvedDatabaseId = resolveDatabaseId();
+
   if (!process.env.NOTION_API_KEY) {
     const msg = "Missing NOTION_API_KEY environment variable.";
     // Keep concise output to avoid leaking sensitive context in logs
     console.error(chalk.bold.red(msg));
-    return await gracefulShutdown(1);
+    await gracefulShutdown(1);
+    return 1;
   }
 
   if (!resolvedDatabaseId) {
@@ -47,7 +54,8 @@ async function main(): Promise<number> {
         "Error: DATABASE_ID (or NOTION_DATABASE_ID) is not defined in the environment variables."
       )
     );
-    return await gracefulShutdown(1);
+    await gracefulShutdown(1);
+    return 1;
   }
 
   try {
@@ -70,6 +78,13 @@ async function main(): Promise<number> {
       filter,
       fetchSpinnerText: "Fetching data from Notion",
       generateSpinnerText: "Generating blocks",
+      onProgress: (progress) => {
+        console.log(
+          chalk.gray(
+            `Progress: ${progress.current}/${progress.total} sections generated`
+          )
+        );
+      },
     });
 
     console.log(chalk.bold.green("\n✨ All tasks completed successfully!"));
@@ -78,6 +93,7 @@ async function main(): Promise<number> {
       const totalSavedKb = Number(metrics.totalSaved) / 1024;
       const sectionCount = Number(metrics.sectionCount);
       const titleSectionCount = Number(metrics.titleSectionCount);
+      const emojiCount = Number(metrics.emojiCount);
 
       console.log(
         chalk.bold.cyan(
@@ -94,13 +110,19 @@ async function main(): Promise<number> {
           `Applied ${isFinite(titleSectionCount) ? titleSectionCount : 0} title sections to content items.`
         )
       );
+      console.log(
+        chalk.bold.blue(
+          `Processed ${isFinite(emojiCount) ? emojiCount : 0} custom emojis from Notion pages.`
+        )
+      );
     } else {
       console.log(
         chalk.gray("Generation step was skipped; no metrics to report.")
       );
     }
 
-    return await gracefulShutdown(0);
+    await gracefulShutdown(0);
+    return 0;
   } catch (error) {
     if (
       error instanceof Error &&
@@ -111,7 +133,8 @@ async function main(): Promise<number> {
 
     console.error(chalk.bold.red("❌ Fatal error in main:"), error);
     console.error(chalk.bold.red("\n❌ Error updating files:"), error);
-    return await gracefulShutdown(1);
+    await gracefulShutdown(1);
+    return 1;
   }
 }
 

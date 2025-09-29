@@ -51,3 +51,12 @@ bg.png
 favicon.ico
 favicon.svg
 /assets/
+
+# Notion emoji files (keep .emoji-cache.json but ignore actual emoji images)
+static/images/emojis/*.png
+static/images/emojis/*.jpg
+static/images/emojis/*.jpeg
+static/images/emojis/*.gif
+static/images/emojis/*.svg
+static/images/emojis/*.webp
+!static/images/emojis/.emoji-cache.json

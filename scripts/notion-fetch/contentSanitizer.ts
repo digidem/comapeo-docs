@@ -3,6 +3,14 @@
  * that cause MDX compilation errors in Docusaurus.
  */
 
+const EMOJI_STYLE_MARKERS = ["display:", "height:", "margin:"];
+
+const isEmojiStyleObject = (snippet: string): boolean =>
+  EMOJI_STYLE_MARKERS.every((marker) => snippet.includes(marker));
+
+const isEmojiImgTag = (snippet: string): boolean =>
+  snippet.includes('className="emoji"');
+
 /**
  * Sanitizes markdown content to fix malformed HTML/JSX tags that cause MDX compilation errors
  * @param content - The markdown content string
@@ -25,10 +33,11 @@ export function sanitizeMarkdownContent(content: string): string {
   });
 
   // Aggressively strip all curly-brace expressions by unwrapping to inner text
+  // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}
   for (let i = 0; i < 5 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, (_m, inner) =>
-      String(inner).trim()
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) =>
+      isEmojiStyleObject(match) ? match : String(inner).trim()
     );
   }
 
@@ -46,9 +55,14 @@ export function sanitizeMarkdownContent(content: string): string {
 
   // 4. Fix general malformed tags with dots or spaces in attribute names
   // This catches patterns like <tag attr.name> or <tag attr value> (without quotes)
+  // BUT exclude emoji img tags which are valid HTML
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([^>]*?)([.\s]+)([^>]*?)>/g,
-    (match, tagName, before, separator) => {
+    (match, tagName, before, separator, after) => {
+      if (tagName.toLowerCase() === "img" && isEmojiImgTag(before + after)) {
+        return match;
+      }
+
       // Only replace if the separator indicates malformed attributes
       if (
         separator.includes(".") ||
@@ -61,15 +75,22 @@ export function sanitizeMarkdownContent(content: string): string {
   );
 
   // 5. Fix unquoted attribute values in JSX (e.g., <tag attr value> -> <tag attr="value">)
+  // BUT exclude emoji img tags which are valid HTML
   content = content.replace(
     /<([a-zA-Z][a-zA-Z0-9]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+([^>\s"=]+)(\s|>)/g,
-    '<$1 $2="$3"$4'
+    (match, tagName, attrName, attrValue, suffix) =>
+      tagName.toLowerCase() === "img" && isEmojiImgTag(match)
+        ? match
+        : `<${tagName} ${attrName}="${attrValue}"${suffix}`
   );
 
   // 6. Final hard cleanup: strip any remaining { ... } to avoid MDX/Acorn errors
+  // BUT preserve JSX style objects for emoji images
   // Run a few passes to handle simple nesting like {{text}}.
   for (let i = 0; i < 3 && /\{[^{}]*\}/.test(content); i++) {
-    content = content.replace(/\{([^{}]*)\}/g, "$1");
+    content = content.replace(/\{([^{}]*)\}/g, (match, inner) =>
+      isEmojiStyleObject(match) ? match : inner
+    );
   }
 
   // 7. Restore masked code blocks and inline code

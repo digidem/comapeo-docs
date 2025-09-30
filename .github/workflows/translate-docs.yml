@@ -6,6 +6,11 @@ on:
     types:
       - translate-docs
 
+# Prevent concurrent content updates to avoid conflicts
+concurrency:
+  group: "content-branch-updates"
+  cancel-in-progress: false
+
 jobs:
   translate-docs:
     runs-on: ubuntu-latest

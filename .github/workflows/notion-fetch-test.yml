@@ -9,6 +9,11 @@ on:
         default: true
         type: boolean
 
+# Prevent concurrent content updates to avoid conflicts
+concurrency:
+  group: "content-branch-updates"
+  cancel-in-progress: false
+
 jobs:
   fetch-notion:
     runs-on: ubuntu-latest

@@ -15,16 +15,28 @@ jobs:
   deploy:
     name: Deploy to Cloudflare Pages and Update Notion
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout code (main branch)
         uses: actions/checkout@v4
-        
+        with:
+          ref: main
+
+      - name: Checkout content files from content branch
+        run: |
+          echo "📥 Fetching content from content branch..."
+          git fetch origin content
+
+          echo "📂 Checking out content files..."
+          git checkout origin/content -- docs/ i18n/ static/images/
+
+          echo "✅ Content merged successfully"
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      
+
       - name: Install dependencies
         run: bun install
         

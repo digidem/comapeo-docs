@@ -12,12 +12,14 @@ on:
 jobs:
   fetch-notion:
     runs-on: ubuntu-latest
-    
+
     environment: production
-    
+
     steps:
-      - name: Checkout repository
+      - name: Checkout content branch
         uses: actions/checkout@v4
+        with:
+          ref: content
         
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -65,12 +67,12 @@ jobs:
           
           while [ $attempt -le $max_attempts ]; do
             echo "🔄 Push attempt $attempt of $max_attempts"
-            
+
             # Pull latest changes to avoid conflicts
-            git pull origin main --rebase
-            
-            # Try to push
-            if git push; then
+            git pull origin content --rebase
+
+            # Try to push to content branch
+            if git push origin content; then
               echo "✅ Push successful on attempt $attempt"
               break
             else

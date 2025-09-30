@@ -10,8 +10,10 @@ jobs:
   translate-docs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout content branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: content
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
@@ -47,8 +49,8 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
-          # Push back to the repository
-          git push
+          # Push to content branch
+          git push origin content
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

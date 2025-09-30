@@ -33,10 +33,24 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code (main branch)
         uses: actions/checkout@v5
         with:
           ref: main
+
+      - name: Checkout content files from content branch
+        run: |
+          echo "📥 Fetching content from content branch..."
+          git fetch origin content
+
+          echo "📂 Checking out content files..."
+          git checkout origin/content -- docs/ i18n/ static/images/
+
+          echo "✅ Content merged successfully"
+          echo "📊 Content statistics:"
+          find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
+          find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
+          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2

@@ -15,10 +15,12 @@ on:
 jobs:
   clean-generated:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout repository
+      - name: Checkout content branch
         uses: actions/checkout@v4
+        with:
+          ref: content
         
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -51,8 +53,8 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(content-cleanup): remove all generated content from Notion"
 
-          # Push back to the repository
-          git push
+          # Push to content branch
+          git push origin content
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

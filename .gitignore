@@ -52,6 +52,15 @@ favicon.ico
 favicon.svg
 /assets/
 
+# Generated content (synced from content branch)
+# These directories are populated by checking out from the content branch
+/docs/
+/i18n/
+/static/images/
+
+# Keep .gitkeep files for directory structure
+!.gitkeep
+
 # Notion emoji files (keep .emoji-cache.json but ignore actual emoji images)
 static/images/emojis/*.png
 static/images/emojis/*.jpg

@@ -26,15 +26,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: content
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-          
+
       - name: Install dependencies
         run: bun install
-        
+
       - name: Validate confirmation
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
@@ -43,10 +43,10 @@ jobs:
             exit 1
           fi
           echo "✅ Confirmation received. Proceeding with cleanup..."
-        
+
       - name: Clean generated content
         run: bun run clean:generated --confirm=yes
-        
+
       - name: Commit cleanup results
         run: |
           git config user.name "github-actions[bot]"
@@ -63,7 +63,7 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Show cleanup results
         run: |
           echo "🧹 Generated content cleanup completed"

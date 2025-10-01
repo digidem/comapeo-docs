@@ -25,15 +25,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: content
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-          
+
       - name: Install dependencies
         run: bun install
-        
+
       - name: Setup environment
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
@@ -41,13 +41,13 @@ jobs:
           else
             echo "📥 Normal mode - will fetch and update content"
           fi
-        
+
       - name: Fetch content from Notion
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.DATABASE_ID }}
         run: bun run notion:fetch-all
-        
+
       - name: Commit fetched content
         run: |
           git config user.name "github-actions[bot]"
@@ -69,7 +69,7 @@ jobs:
           # Push back to the repository with retry logic
           max_attempts=10
           attempt=1
-          
+
           while [ $attempt -le $max_attempts ]; do
             echo "🔄 Push attempt $attempt of $max_attempts"
 
@@ -82,7 +82,7 @@ jobs:
               break
             else
               echo "❌ Push failed on attempt $attempt"
-              
+
               if [ $attempt -eq $max_attempts ]; then
                 echo "💥 Max attempts reached. Push failed after $max_attempts attempts."
                 exit 1
@@ -96,7 +96,7 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Show fetch results
         run: |
           echo "📊 Notion fetch completed"
@@ -105,7 +105,7 @@ jobs:
           find i18n -name "*.md" -type f | wc -l | xargs echo "Localized docs:"
           echo "🖼️ Generated images:"
           find static/images -name "*.jpg" -o -name "*.png" -o -name "*.gif" 2>/dev/null | wc -l | xargs echo "Images processed:"
-          
+
       - name: Create summary
         run: |
           echo "## 📋 Notion Fetch Summary" >> $GITHUB_STEP_SUMMARY

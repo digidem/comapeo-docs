@@ -12,6 +12,11 @@ on:
           - 'no'
           - 'yes'
 
+# Prevent concurrent content updates to avoid conflicts
+concurrency:
+  group: "content-branch-updates"
+  cancel-in-progress: false
+
 jobs:
   clean-generated:
     runs-on: ubuntu-latest

@@ -365,6 +365,140 @@ Before submitting PR:
 - **Documentation**: `kebab-case.md` (e.g., `contributing-guidelines.md`)
 - **Utilities**: `camelCase.ts` (e.g., `imageProcessor.ts`)
 
+## Emergency Rollback Procedures
+
+If critical issues arise after merging the two-branch architecture changes, follow these steps to rollback safely.
+
+### When to Rollback
+
+Consider rollback if:
+- Production deployments are consistently failing
+- Content is not being synced properly to `content` branch
+- Developers are blocked and cannot work around the issue
+- Data integrity is at risk
+
+### Pre-Rollback Steps
+
+Before executing rollback:
+
+1. **Assess Impact**: Determine if issue affects production, staging, or development only
+2. **Stop Workflows**: Pause all content workflows in GitHub Actions UI to prevent mid-rollback conflicts:
+   - Sync Notion Docs
+   - Translate Notion Docs
+   - Clean All Generated Content
+   - Fetch All Content from Notion for Testing
+3. **Notify Team**: Post announcement in team communication channels with:
+   - Issue description
+   - Rollback timeline
+   - Expected impact on work in progress
+
+### Rollback Procedure
+
+**Option 1: Quick Rollback (Recommended for emergencies)**
+
+```bash
+# 1. Stop all content workflows via GitHub Actions UI
+# 2. Reset main branch to backup
+git fetch origin main-backup
+git push origin main-backup:main --force
+
+# 3. Optionally delete content branch (can be recreated later)
+git push origin --delete content
+
+# 4. Verify main branch
+git fetch origin main
+git checkout main
+git pull origin main
+```
+
+**Option 2: Careful Rollback (Preserves content branch)**
+
+```bash
+# 1. Stop all content workflows via GitHub Actions UI
+# 2. Create rollback branch for investigation
+git checkout main
+git checkout -b rollback/two-branch-architecture-$(date +%Y%m%d)
+git push origin rollback/two-branch-architecture-$(date +%Y%m%d)
+
+# 3. Reset main branch to backup
+git fetch origin main-backup
+git checkout main
+git reset --hard origin/main-backup
+git push origin main --force
+
+# 4. Keep content branch for analysis
+# (Do not delete - can be examined later)
+```
+
+### Developer Cleanup After Rollback
+
+All developers must update their local repositories:
+
+```bash
+# 1. Fetch latest changes
+git fetch --all --prune
+
+# 2. If on main branch
+git checkout main
+git reset --hard origin/main
+
+# 3. If on feature branch, rebase onto new main
+git checkout your-feature-branch
+git rebase origin/main
+
+# 4. Clean up local content files (they'll be tracked again)
+git clean -fd
+
+# 5. Reinstall dependencies if needed
+bun install
+```
+
+### Post-Rollback Actions
+
+After rollback is complete:
+
+1. **Verify Systems**:
+   - [ ] Production site builds and deploys successfully
+   - [ ] Staging site builds and deploys successfully
+   - [ ] Content sync workflows run without errors
+   - [ ] Developers can run `bun dev` successfully
+
+2. **Document Failure**:
+   - Create detailed incident report in GitHub issue
+   - Document what went wrong and why rollback was necessary
+   - Collect logs and error messages for analysis
+   - Tag issue with `incident`, `rollback`, and `two-branch-architecture`
+
+3. **Plan Remediation**:
+   - Schedule team meeting to discuss failure and solutions
+   - Create new implementation plan addressing identified issues
+   - Set up testing checklist for next attempt
+   - Consider staging environment testing before production rollout
+
+### Quick Reference - Emergency Command
+
+For immediate emergencies (use with caution):
+
+```bash
+# ⚠️  WARNING: This force-pushes and may lose work
+git push origin main-backup:main --force
+```
+
+**After running this command**:
+- Notify team immediately
+- Follow "Developer Cleanup" steps above
+- Complete "Post-Rollback Actions" checklist
+
+### Rollback Prevention
+
+To minimize rollback risk in future:
+
+- Test architecture changes in staging environment first
+- Create integration tests for deployment workflows
+- Document all workflow modifications thoroughly
+- Maintain up-to-date runbooks for common issues
+- Establish monitoring and alerting for deployment failures
+
 ## Questions or Issues?
 
 - **Code/Infrastructure Issues**: [Open an issue](https://github.com/digidem/comapeo-docs/issues/new)

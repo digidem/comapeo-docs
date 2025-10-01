@@ -5,6 +5,12 @@ on:
   repository_dispatch:
     types:
       - sync-docs
+
+# Prevent concurrent content updates to avoid conflicts
+concurrency:
+  group: "content-branch-updates"
+  cancel-in-progress: false
+
 jobs:
   pull-docs:
     runs-on: ubuntu-latest

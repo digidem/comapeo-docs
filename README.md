@@ -10,12 +10,33 @@ Install all dependencies with:
 bun i
 ```
 
-Before proceeding to local development, set up your environment and fetch the latest Notion Markdown files:
+### Branch Architecture
 
-1. Rename (or copy) .env.example to .env and update it with your Notion API key and Database ID.
-2. Fetch the Notion Markdown documentation by running:
+This repository uses a **two-branch architecture** to separate code from generated content:
 
+- **`main` branch**: Source code, TypeScript scripts, workflows, and configuration (~1MB)
+- **`content` branch**: Generated documentation from Notion (docs/, i18n/, static/images/ ~29MB)
+
+**Why separate branches?**
+- Keeps main branch clean for code review and development
+- Reduces repository clone time for contributors
+- Separates content syncs from code changes
+- Improves CI/CD performance and clarity
+
+### Content Setup
+
+Before local development, you need content files. Choose one of these methods:
+
+**Option 1: Fetch from content branch** (Recommended - Fast)
+```bash
+git fetch origin content
+git checkout origin/content -- docs/ i18n/ static/images/
 ```
+
+**Option 2: Generate from Notion** (Requires API access)
+1. Copy `.env.example` to `.env` and add your Notion API key and Database ID
+2. Fetch content:
+```bash
 bun notion:fetch
 ```
 
@@ -36,13 +57,32 @@ The `bun notion:fetch` script pulls structured content from Notion and rewrites 
 
 ### Local Development
 
-Launch a local development server with live reloading by running:
+**Prerequisites**: Ensure you've fetched content using one of the methods in [Content Setup](#content-setup).
 
-```
+Launch a local development server with live reloading:
+
+```bash
 bun dev
 ```
 
 This command opens your browser automatically and reflects changes immediately.
+
+**Full local setup from scratch:**
+```bash
+# Clone repository
+git clone https://github.com/digidem/comapeo-docs.git
+cd comapeo-docs
+
+# Install dependencies
+bun i
+
+# Fetch content from content branch (fast)
+git fetch origin content
+git checkout origin/content -- docs/ i18n/ static/images/
+
+# Start development server
+bun dev
+```
 
 ### Build
 
@@ -55,6 +95,16 @@ bun build
 The resulting files are placed in the `build` directory for deployment via any static hosting service.
 
 ### Deployment
+
+#### How Deployment Works
+
+Deployments use a **checkout strategy**:
+1. Checkout `main` branch (code and scripts)
+2. Overlay content files from `content` branch (docs, i18n, images)
+3. Build the site with merged content
+4. Deploy to hosting platform
+
+This ensures deployments always use the latest code with the latest content.
 
 #### Production Deployment (Cloudflare Pages)
 
@@ -168,29 +218,43 @@ Changes will be reflected immediately in development mode (`bun dev`).
 
 The repository includes several automated workflows for content management:
 
-#### Sync Notion Docs (`sync-docs.yml`)
+#### Content Workflows (Push to `content` branch)
 
+**Sync Notion Docs** (`sync-docs.yml`)
 - **Trigger**: Manual dispatch or repository dispatch
-- **Purpose**: Automatically fetches content from Notion and commits changes
-- **Usage**: Production content updates and scheduled syncing
+- **Purpose**: Fetches content from Notion and commits to `content` branch
+- **Target Branch**: `content`
 - **Environment**: Requires `NOTION_API_KEY` and `DATABASE_ID` secrets
 
-#### Clean All Generated Content (`clean-content.yml`)
+**Translate Docs** (`translate-docs.yml`)
+- **Trigger**: Manual dispatch or repository dispatch
+- **Purpose**: Generates translations and commits to `content` branch
+- **Target Branch**: `content`
+- **Environment**: Requires `NOTION_API_KEY`, `DATABASE_ID`, `OPENAI_API_KEY`
 
-- **Trigger**: Manual dispatch with confirmation
-- **Purpose**: Removes all generated content from docs, i18n, and static/images
-- **Usage**: Reset repository to clean state before fresh content generation
-- **Safety**: Requires explicit "yes" confirmation to prevent accidental deletion
-
-#### Fetch All Content for Testing (`notion-fetch-test.yml`)
-
+**Fetch All Content for Testing** (`notion-fetch-test.yml`)
 - **Trigger**: Manual dispatch with optional force mode
-- **Purpose**: Fetches complete content from Notion for testing and validation
-- **Usage**: Testing content changes before production deployment
-- **Environment**: Uses production environment with `NOTION_API_KEY` and `NOTION_DATABASE_ID` secrets
-- **Features**: Provides detailed summary with content statistics and next steps
+- **Purpose**: Tests complete content fetch from Notion
+- **Target Branch**: `content`
+- **Features**: Retry logic, detailed statistics, content validation
 
-All workflows automatically commit their changes to the repository using the github-actions bot user.
+**Clean All Generated Content** (`clean-content.yml`)
+- **Trigger**: Manual dispatch with confirmation
+- **Purpose**: Removes all generated content from `content` branch
+- **Target Branch**: `content`
+- **Safety**: Requires explicit "yes" confirmation
+
+#### Deployment Workflows (Read from both branches)
+
+**Deploy to Staging** (`deploy-staging.yml`)
+- **Trigger**: Push to `main`, manual dispatch, or after content sync
+- **Process**: Checkout `main` + overlay `content` → build → deploy to GitHub Pages
+- **URL**: https://digidem.github.io/comapeo-docs
+
+**Deploy to Production** (`deploy-production.yml`)
+- **Trigger**: Push to `main` or manual dispatch
+- **Process**: Checkout `main` + overlay `content` → build → deploy to Cloudflare Pages
+- **URL**: https://docs.comapeo.app
 
 ### Roadmap & Future Enhancements
 

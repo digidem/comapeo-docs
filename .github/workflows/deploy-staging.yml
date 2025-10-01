@@ -33,10 +33,45 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code (main branch)
         uses: actions/checkout@v5
         with:
           ref: main
+
+      - name: Checkout content files from content branch
+        run: |
+          set -e  # Exit on error
+
+          echo "📥 Fetching content from content branch..."
+          git fetch origin content
+
+          echo "📂 Checking out content files..."
+          git checkout origin/content -- docs/ i18n/ static/images/
+
+          # Validate content exists
+          echo "🔍 Validating content..."
+
+          if [ ! -d "docs" ] || [ -z "$(ls -A docs 2>/dev/null)" ]; then
+            echo "❌ Error: docs/ directory is empty or missing"
+            echo "Cannot proceed with build - documentation content is required"
+            exit 1
+          fi
+
+          if [ ! -d "i18n" ] || [ -z "$(ls -A i18n 2>/dev/null)" ]; then
+            echo "⚠️  Warning: i18n/ directory is empty or missing"
+            echo "Build will proceed but translations may be unavailable"
+          fi
+
+          if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
+            echo "⚠️  Warning: static/images/ directory is empty or missing"
+            echo "Build will proceed but images may be unavailable"
+          fi
+
+          echo "✅ Content validation successful"
+          echo "📊 Content statistics:"
+          find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
+          find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
+          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2

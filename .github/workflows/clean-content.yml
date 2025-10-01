@@ -12,22 +12,29 @@ on:
           - 'no'
           - 'yes'
 
+# Prevent concurrent content updates to avoid conflicts
+concurrency:
+  group: "content-branch-updates"
+  cancel-in-progress: false
+
 jobs:
   clean-generated:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout repository
+      - name: Checkout content branch
         uses: actions/checkout@v4
-        
+        with:
+          ref: content
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-          
+
       - name: Install dependencies
         run: bun install
-        
+
       - name: Validate confirmation
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
@@ -36,10 +43,10 @@ jobs:
             exit 1
           fi
           echo "✅ Confirmation received. Proceeding with cleanup..."
-        
+
       - name: Clean generated content
         run: bun run clean:generated --confirm=yes
-        
+
       - name: Commit cleanup results
         run: |
           git config user.name "github-actions[bot]"
@@ -51,12 +58,12 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(content-cleanup): remove all generated content from Notion"
 
-          # Push back to the repository
-          git push
+          # Push to content branch
+          git push origin content
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Show cleanup results
         run: |
           echo "🧹 Generated content cleanup completed"

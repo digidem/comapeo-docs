@@ -197,3 +197,12 @@ div[class*="admonition"][class*="danger"] svg {
 div[class*="admonition"][class*="caution"] svg {
   fill: #f97316 !important;
 }
+
+/*
+ * Table styling improvements
+ * Issue #33: Fix vertical alignment from middle to top for better readability
+ */
+.theme-doc-markdown table td,
+.theme-doc-markdown table th {
+  vertical-align: top;
+}

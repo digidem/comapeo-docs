@@ -300,6 +300,11 @@ const config: Config = {
   themeConfig: {
     // Replace with your project's social card
     image: "img/comapeo-social-card.jpg",
+    // Table of Contents configuration for consistent heading display
+    tableOfContents: {
+      minHeadingLevel: 2,
+      maxHeadingLevel: 3,
+    },
     navbar: {
       // title: 'CoMapeo',
       logo: {

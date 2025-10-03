@@ -49,6 +49,44 @@ img.emoji {
 .navbar__logo img {
   height: 135px;
 }
+
+/* Sidebar title/branding area styling - CSS variables for theme support */
+:root {
+  --sidebar-title-bg: #838996; /* Roman Silver */
+  --sidebar-title-text: #e5e4e2; /* Platinum */
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] {
+  --sidebar-title-bg: #606570; /* Slightly darker for dark mode */
+  --sidebar-title-text: #e5e4e2; /* Keep same for consistency */
+}
+
+/* Style the custom title elements rendered by DocSidebarItem wrapper */
+aside[class*="sidebar"] > div > div > div[style*="fontSize"] {
+  background-color: var(--sidebar-title-bg) !important;
+  color: var(--sidebar-title-text) !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0.8rem 1rem !important;
+  font-family: "Franklin Gothic Medium", "Arial Narrow", Arial, sans-serif;
+  text-transform: uppercase;
+  font-size: 0.9rem !important;
+  font-weight: bold !important;
+  opacity: 1 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode border adjustment */
+[data-theme="dark"]
+  aside[class*="sidebar"]
+  > div
+  > div
+  > div[style*="fontSize"] {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Legacy class - keeping for backward compatibility but updating for better hierarchy */
 .sidebar-category-title {
   font-family: "Franklin Gothic Medium", "Arial Narrow", Arial, sans-serif;
   text-transform: uppercase;
@@ -56,8 +94,17 @@ img.emoji {
   font-size: 0.9rem;
   font-weight: bold;
   margin-bottom: 0.5rem;
-  margin-top: 0.5rem;
+  margin-top: 1rem; /* Increased from 0.5rem for more separation */
   margin-left: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ifm-toc-border-color);
+  color: var(--ifm-color-emphasis-600); /* Slightly muted for hierarchy */
+}
+
+/* First category doesn't need top border */
+.sidebar-category-title:first-of-type {
+  border-top: none;
+  margin-top: 0.5rem;
 }
 
 /* Docs content image sizing and layout */

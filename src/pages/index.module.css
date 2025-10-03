@@ -12,12 +12,36 @@
 
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 2rem;
+    padding: 2rem 1rem;
   }
 }
 
+@media screen and (max-width: 480px) {
+  .heroBanner {
+    padding: 1.5rem 0.75rem;
+  }
+}
+
+/* Button container with responsive layout */
 .buttons {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Mobile: Stack buttons vertically */
+@media screen and (max-width: 768px) {
+  .buttons {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .buttons :global(.button) {
+    width: 100%;
+    max-width: 320px;
+    min-height: 44px;
+  }
 }

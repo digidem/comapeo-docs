@@ -40,7 +40,7 @@ function HomepageHeader() {
             })}
           </Link>
           <Link
-            className="button button--success button--lg margin-left--md"
+            className="button button--success button--lg"
             href="https://wa.me/yourphonenumber"
             target="_blank"
             rel="noopener noreferrer"
@@ -52,7 +52,7 @@ function HomepageHeader() {
             })}
           </Link>
           <Link
-            className="button button--info button--lg margin-left--md"
+            className="button button--info button--lg"
             href="https://t.me/yourusername"
             target="_blank"
             rel="noopener noreferrer"

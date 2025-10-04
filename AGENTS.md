@@ -78,16 +78,45 @@ Ask first:
 - translations: see `src/pages/index.tsx` usage of `@docusaurus/Translate`
 - components: small, typed React components like `src/components/HomepageFeatures/index.tsx`
 
+### Visual Changes Workflow (CSS/Styling)
+
+**MANDATORY for all styling changes:**
+
+1. **Start dev server**: `bun run dev` and wait for it to be ready
+2. **Capture BEFORE screenshot** using Playwright:
+   ```js
+   const { chromium } = require('playwright');
+   const browser = await chromium.launch({ channel: 'chrome' });
+   const page = await browser.newPage();
+   await page.goto('http://localhost:3000/path/to/page', { waitUntil: 'networkidle' });
+   await page.screenshot({ path: 'before.png' });
+   ```
+3. **Make CSS changes** and verify they work
+4. **Capture AFTER screenshot** with same approach
+5. **Upload screenshots to PR comment** using:
+   ```bash
+   gh pr comment <PR#> --body "## Visual Comparison
+
+   ### Before
+   [Describe old state]
+
+   ### After
+   [Describe new state]
+
+   [Upload before.png and after.png by dragging into comment box]"
+   ```
+6. **DO NOT commit screenshots to git** - they're only for PR review
+
 ### PR Checklist
 
 - commit style: Conventional Commits (e.g., `feat(scope): ...`)
 - lint, format, and tests: all green locally
 - diff: small and focused with a brief summary and i18n notes if applicable
-- include screenshots for visual changes
+- **CRITICAL: For visual changes, add before/after screenshots to PR comments (not committed to repo)**
 - reference the GitHub issue being solved in the PR description and link it explicitly
 - write a short human explanation of what changed and why (1–2 paragraphs max)
 - double-check the PR title matches the scope of the changes and uses lowercase Conventional Commit style
-- add “Testing” notes summarising which commands were run (or why a test could not be executed)
+- add "Testing" notes summarising which commands were run (or why a test could not be executed)
 - update documentation or task trackers (like `TASK.md`) when the PR changes workflows or processes
 
 ### When Stuck

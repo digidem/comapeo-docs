@@ -83,29 +83,48 @@ Ask first:
 **MANDATORY for all styling changes:**
 
 1. **Start dev server**: `bun run dev` and wait for it to be ready
-2. **Capture BEFORE screenshot** using Playwright:
-   ```js
+
+2. **Capture BEFORE screenshot**:
+   ```bash
+   # Use the automated script (recommended)
+   bun scripts/screenshot-prs.ts --url /docs/page --name before
+
+   # Or manually with Playwright
    const { chromium } = require('playwright');
    const browser = await chromium.launch({ channel: 'chrome' });
    const page = await browser.newPage();
    await page.goto('http://localhost:3000/path/to/page', { waitUntil: 'networkidle' });
    await page.screenshot({ path: 'before.png' });
+   await browser.close();
    ```
+
 3. **Make CSS changes** and verify they work
+
 4. **Capture AFTER screenshot** with same approach
-5. **Upload screenshots to PR comment** using:
+
+5. **Create PR comment and MANUALLY upload screenshots**:
    ```bash
+   # Create comment with text description
    gh pr comment <PR#> --body "## Visual Comparison
 
    ### Before
-   [Describe old state]
+   [Visual state before changes]
 
    ### After
-   [Describe new state]
+   [Visual state after changes]"
 
-   [Upload before.png and after.png by dragging into comment box]"
+   # Then MANUALLY:
+   # 1. Go to the PR comment on GitHub
+   # 2. Click "Edit"
+   # 3. Drag and drop screenshot files into the comment editor
+   # 4. Save the comment
    ```
-6. **DO NOT commit screenshots to git** - they're only for PR review
+
+6. **CRITICAL: NEVER commit screenshots to git**
+   - Screenshots are ONLY for PR review comments
+   - Add `screenshots/` to `.gitignore` if needed
+   - Delete screenshot files after uploading to PR
+   - GitHub does not support automated image uploads via CLI
 
 ### PR Checklist
 

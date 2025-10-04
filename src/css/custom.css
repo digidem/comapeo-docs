@@ -63,7 +63,7 @@ img.emoji {
 }
 
 /* Style the custom title elements rendered by DocSidebarItem wrapper */
-aside[class*="sidebar"] > div > div > div[style*="fontSize"] {
+.theme-doc-sidebar-menu > div[style*="font-size"] {
   background-color: var(--sidebar-title-bg) !important;
   color: var(--sidebar-title-text) !important;
   margin-left: 0 !important;
@@ -78,11 +78,7 @@ aside[class*="sidebar"] > div > div > div[style*="fontSize"] {
 }
 
 /* Dark mode border adjustment */
-[data-theme="dark"]
-  aside[class*="sidebar"]
-  > div
-  > div
-  > div[style*="fontSize"] {
+[data-theme="dark"] .theme-doc-sidebar-menu > div[style*="font-size"] {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 

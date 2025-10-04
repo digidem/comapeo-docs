@@ -104,27 +104,36 @@ Ask first:
 
 5. **Create PR comment and MANUALLY upload screenshots**:
    ```bash
-   # Create comment with text description
+   # ONLY create text comment first (no automation for images!)
    gh pr comment <PR#> --body "## Visual Comparison
 
    ### Before
-   [Visual state before changes]
+   [Will upload screenshot]
 
    ### After
-   [Visual state after changes]"
+   [Will upload screenshot]"
 
-   # Then MANUALLY:
-   # 1. Go to the PR comment on GitHub
-   # 2. Click "Edit"
+   # Then MANUALLY (REQUIRED):
+   # 1. Go to the PR comment on GitHub web interface
+   # 2. Click "Edit" on the comment
    # 3. Drag and drop screenshot files into the comment editor
-   # 4. Save the comment
+   #    - Place 'before' screenshot under "### Before"
+   #    - Place 'after' screenshot under "### After"
+   # 4. Preview to VERIFY screenshots are visible (not "404" or broken)
+   # 5. Save the comment only after verification
    ```
 
-6. **CRITICAL: NEVER commit screenshots to git**
+6. **VERIFY screenshots before saving**:
+   - **CRITICAL**: Click "Preview" tab before saving
+   - Ensure screenshots display correctly (not "Page not found")
+   - If broken, re-upload the files
+   - Only save comment after visual confirmation
+
+7. **CRITICAL: NEVER commit screenshots to git**:
    - Screenshots are ONLY for PR review comments
-   - Add `screenshots/` to `.gitignore` if needed
-   - Delete screenshot files after uploading to PR
-   - GitHub does not support automated image uploads via CLI
+   - `screenshots/` is in .gitignore to prevent commits
+   - Delete screenshot files after successful PR upload
+   - GitHub does not support automated image uploads via CLI/API
 
 ### PR Checklist
 

@@ -69,3 +69,6 @@ static/images/emojis/*.gif
 static/images/emojis/*.svg
 static/images/emojis/*.webp
 !static/images/emojis/.emoji-cache.json
+
+# Playwright screenshots (for PR review only - never commit)
+screenshots/

@@ -78,16 +78,73 @@ Ask first:
 - translations: see `src/pages/index.tsx` usage of `@docusaurus/Translate`
 - components: small, typed React components like `src/components/HomepageFeatures/index.tsx`
 
+### Visual Changes Workflow (CSS/Styling)
+
+**MANDATORY for all styling changes:**
+
+1. **Start dev server**: `bun run dev` and wait for it to be ready
+
+2. **Capture BEFORE screenshot**:
+   ```bash
+   # Use the automated script (recommended)
+   bun scripts/screenshot-prs.ts --url /docs/page --name before
+
+   # Or manually with Playwright
+   const { chromium } = require('playwright');
+   const browser = await chromium.launch({ channel: 'chrome' });
+   const page = await browser.newPage();
+   await page.goto('http://localhost:3000/path/to/page', { waitUntil: 'networkidle' });
+   await page.screenshot({ path: 'before.png' });
+   await browser.close();
+   ```
+
+3. **Make CSS changes** and verify they work
+
+4. **Capture AFTER screenshot** with same approach
+
+5. **Create PR comment and MANUALLY upload screenshots**:
+   ```bash
+   # ONLY create text comment first (no automation for images!)
+   gh pr comment <PR#> --body "## Visual Comparison
+
+   ### Before
+   [Will upload screenshot]
+
+   ### After
+   [Will upload screenshot]"
+
+   # Then MANUALLY (REQUIRED):
+   # 1. Go to the PR comment on GitHub web interface
+   # 2. Click "Edit" on the comment
+   # 3. Drag and drop screenshot files into the comment editor
+   #    - Place 'before' screenshot under "### Before"
+   #    - Place 'after' screenshot under "### After"
+   # 4. Preview to VERIFY screenshots are visible (not "404" or broken)
+   # 5. Save the comment only after verification
+   ```
+
+6. **VERIFY screenshots before saving**:
+   - **CRITICAL**: Click "Preview" tab before saving
+   - Ensure screenshots display correctly (not "Page not found")
+   - If broken, re-upload the files
+   - Only save comment after visual confirmation
+
+7. **CRITICAL: NEVER commit screenshots to git**:
+   - Screenshots are ONLY for PR review comments
+   - `screenshots/` is in .gitignore to prevent commits
+   - Delete screenshot files after successful PR upload
+   - GitHub does not support automated image uploads via CLI/API
+
 ### PR Checklist
 
 - commit style: Conventional Commits (e.g., `feat(scope): ...`)
 - lint, format, and tests: all green locally
 - diff: small and focused with a brief summary and i18n notes if applicable
-- include screenshots for visual changes
+- **CRITICAL: For visual changes, add before/after screenshots to PR comments (not committed to repo)**
 - reference the GitHub issue being solved in the PR description and link it explicitly
 - write a short human explanation of what changed and why (1–2 paragraphs max)
 - double-check the PR title matches the scope of the changes and uses lowercase Conventional Commit style
-- add “Testing” notes summarising which commands were run (or why a test could not be executed)
+- add "Testing" notes summarising which commands were run (or why a test could not be executed)
 - update documentation or task trackers (like `TASK.md`) when the PR changes workflows or processes
 
 ### When Stuck

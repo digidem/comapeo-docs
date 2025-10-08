@@ -1,0 +1,12 @@
+{
+  "label": "New Toggle [EN]",
+  "position": 50,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": null
+  }
+}

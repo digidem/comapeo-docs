@@ -1,0 +1,12 @@
+{
+  "label": "Gathering Observations",
+  "position": 16,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": "Collected Data"
+  }
+}

@@ -240,3 +240,59 @@ div[class*="admonition"][class*="danger"] svg {
 div[class*="admonition"][class*="caution"] svg {
   fill: #f97316 !important;
 }
+
+/*
+ * Sidebar link text wrapping and description fixes
+ * Issue #31: Fix clipped titles and remove content snippets
+ */
+
+/* Enable word wrapping for sidebar item links */
+.theme-doc-sidebar-item-link,
+.menu__link,
+aside[class*="sidebar"] .menu__list-item-collapsible .menu__link {
+  /* Enable word wrapping */
+  white-space: normal !important;
+  word-break: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+
+  /* Optional hyphenation for very long words */
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+
+  /* Adjust line height for multi-line titles */
+  line-height: 1.4;
+
+  /* Ensure adequate padding for wrapped text */
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+
+  /* Allow height to expand */
+  min-height: auto;
+  height: auto;
+
+  /* Better text handling */
+  text-overflow: clip;
+  overflow: visible;
+}
+
+/* Ensure link containers can expand */
+.theme-doc-sidebar-item-link-level-2,
+.menu__list-item-collapsible .menu__list-item {
+  min-height: auto;
+  height: auto;
+}
+
+/* Hide content snippets/descriptions in sidebar links */
+.theme-doc-sidebar-item-link .menu__link-description,
+.theme-doc-sidebar-item-link .menu__link-subtext,
+.menu__link-description,
+[class*="sidebarItemDescription"],
+[class*="menu__link"] [class*="description"],
+[class*="menu__link"] p,
+.theme-doc-sidebar-item-link > p,
+.menu__link .excerpt,
+.menu__link .description {
+  display: none !important;
+}

@@ -31,6 +31,7 @@ jobs:
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          BASE_URL: /comapeo-docs/
 
       - name: Commit generated docs
         run: |

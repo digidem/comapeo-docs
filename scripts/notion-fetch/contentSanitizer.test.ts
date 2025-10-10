@@ -121,4 +121,42 @@ describe("contentSanitizer", () => {
       expect(result).toBe("[tag](#tag)");
     });
   });
+
+  describe("restoreSoftLineBreaks", () => {
+    it("should convert single newlines between text into <br /> elements", () => {
+      const input = "First line\nSecond line";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe("First line<br />\nSecond line");
+    });
+
+    it("should leave paragraph breaks (double newlines) untouched", () => {
+      const input = "First paragraph\n\nSecond paragraph";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe(input);
+    });
+
+    it("should ignore newlines that start markdown list items", () => {
+      const input = "Intro text\n- list item";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe(input);
+    });
+
+    it("should ignore newlines before numbered list items", () => {
+      const input = "Intro text\n1. First item";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe(input);
+    });
+
+    it("should not modify content inside fenced code blocks", () => {
+      const input = "```js\nconst x = 1;\nconst y = 2;\n```\nOutside";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe(input);
+    });
+
+    it("should normalize unicode line separators into <br /> line breaks", () => {
+      const input = "Line one\u2028Line two";
+      const result = scriptModule.restoreSoftLineBreaks(input);
+      expect(result).toBe("Line one<br />\nLine two");
+    });
+  });
 });

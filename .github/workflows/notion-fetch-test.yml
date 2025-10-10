@@ -62,6 +62,10 @@ jobs:
           if [ -d static/images ]; then
             git add static/images
           fi
+          # Force-add emoji files (they're gitignored for dev but needed for deployment)
+          if [ -d static/images/emojis ]; then
+            git add --force static/images/emojis/*
+          fi
 
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(content-test): fetch and test all content from Notion"

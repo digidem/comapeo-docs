@@ -130,22 +130,22 @@ PLUS ⬇️
 **Customized emojis for comapeo UI elements (would require better pngs)**
 
 
-<img src="/images/emojis/icon-save_18eadd3309cf3272_73443191.jpg" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> [ comapeo-save-low]
+<img src="/images/emojis/icon-save_18eadd3309cf3272_73940698.jpg" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> [ comapeo-save-low]
 
 
-<img src="/images/emojis/icon-capture_9c1ea5db8f0a2d02_73443201.jpg" alt="comapeo-capture-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />[comapeo-capture-low]
+<img src="/images/emojis/icon-capture_9c1ea5db8f0a2d02_73940690.jpg" alt="comapeo-capture-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />[comapeo-capture-low]
 
 
-<img src="/images/emojis/icon-add-photo_be966fefc62a2f69_73443205.jpg" alt="comapeo-add-photo-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> add photo/camera
+<img src="/images/emojis/icon-add-photo_be966fefc62a2f69_73940716.jpg" alt="comapeo-add-photo-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> add photo/camera
 
 
-<img src="/images/emojis/icon-map_c21704e3f6c4e1d9_73443325.jpg" alt="icon-map-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> map
+<img src="/images/emojis/icon-map_c21704e3f6c4e1d9_73940808.jpg" alt="icon-map-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> map
 
 
- <img src="/images/emojis/icon_-_located_79e37697eade0178_73443348.jpg" alt="icon---located" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> my location
+ <img src="/images/emojis/icon_-_located_79e37697eade0178_73940848.jpg" alt="icon---located" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> my location
 
 
- <img src="/images/emojis/icon-coordinate_52c0716068d31ede_73443371.jpg" alt="icon-coordinates-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />coordinates
+ <img src="/images/emojis/icon-coordinate_52c0716068d31ede_73940845.jpg" alt="icon-coordinates-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />coordinates
 
 
  details
@@ -214,13 +214,13 @@ back arrow
 **Samples:**
 
 
-    click <img src="/images/emojis/icon-save_18eadd3309cf3272_73443191.jpg" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> save!
+    click <img src="/images/emojis/icon-save_18eadd3309cf3272_73940698.jpg" alt="comapeo-save-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> save!
 
 
-    select <img src="/images/emojis/icon-add-photo_be966fefc62a2f69_73443205.jpg" alt="comapeo-add-photo-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> add photo to open camera
+    select <img src="/images/emojis/icon-add-photo_be966fefc62a2f69_73940716.jpg" alt="comapeo-add-photo-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> add photo to open camera
 
 
-    Precision of the <img src="/images/emojis/icon-coordinate_52c0716068d31ede_73443371.jpg" alt="icon-coordinates-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />coordinates for your observation  will improve over time.
+    Precision of the <img src="/images/emojis/icon-coordinate_52c0716068d31ede_73940845.jpg" alt="icon-coordinates-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />coordinates for your observation  will improve over time.
 
 <details>
 <summary>**emojis  we are not using**</summary>
@@ -297,7 +297,7 @@ Can  gifs work too?
 ---
 
 
-**Step 1: Select** **<img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />****add Audio.** Recording will begin immediately
+**Step 1: Select** **<img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />****add Audio.** Recording will begin immediately
 
 
 ![1000029410.jpg](/images/formattestingremove_3.jpg)
@@ -318,7 +318,7 @@ If this is your first time recording audio with CoMapeo, you will need to grant 
 ---
 
 
-**Step 3. Review recording.** Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
+**Step 3. Review recording.** Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 
 ![1000029414.jpg](/images/formattestingremove_7.jpg)
@@ -334,7 +334,7 @@ If this is your first time recording audio with CoMapeo, you will need to grant 
 
 
 :::note 👣 Step 1
-Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 ![1000029410.jpg](/images/formattestingremove_8.jpg)
 
@@ -351,7 +351,7 @@ Select ⏹️ stop when done
 
 
 👉🏽 **Step 3**
-Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 ![1000029414.jpg](/images/formattestingremove_12.jpg)
 :::
@@ -360,7 +360,7 @@ Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-ad
 
 :::note ⚠️
 👣 _**Step 1**_**: Start recording audio**
-Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 ![1000029410.jpg](/images/formattestingremove_13.jpg)
 
@@ -390,7 +390,7 @@ Select ⏹️ stop when done
 
 _**Step 3**_**: Choose next step**
 
-Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 ![1000029414.jpg](/images/formattestingremove_17.jpg)
 :::
@@ -409,7 +409,7 @@ Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-ad
 :::note ⚫
 1. **Start recording audio**
 
-Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
+Select <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add Audio. Recording will begin immediately
 
 ![1000029410.jpg](/images/formattestingremove_18.jpg)
 
@@ -433,7 +433,7 @@ Select ⏹️ stop when done
 
 1. **Choose next step**
 
-Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73443471.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
+Choose to ▶️ listen to the recorded audio, <img src="/images/emojis/icon-add-audio_64fdb41aa5ff26ba_73940968.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation
 
 ![1000029414.jpg](/images/formattestingremove_22.jpg)
 

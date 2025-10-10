@@ -420,8 +420,10 @@ export class EmojiProcessor {
         const cachedPath = validatePath(this.config.emojiPath, cached.filename);
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- Path validated by validatePath()
         if (fs.existsSync(cachedPath)) {
+          const baseUrl = process.env.BASE_URL || "/";
+          const basePath = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
           return {
-            newPath: `/images/emojis/${cached.filename}`,
+            newPath: `${basePath}/images/emojis/${cached.filename}`,
             savedBytes: 0,
             reused: true,
           };
@@ -497,8 +499,10 @@ export class EmojiProcessor {
                 `Emoji reused (content match): ${existingEntry[1].filename}`
               )
             );
+            const baseUrl = process.env.BASE_URL || "/";
+            const basePath = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
             return {
-              newPath: `/images/emojis/${existingEntry[1].filename}`,
+              newPath: `${basePath}/images/emojis/${existingEntry[1].filename}`,
               savedBytes: 0,
               reused: true,
             };
@@ -555,8 +559,10 @@ export class EmojiProcessor {
           : chalk.green(`Emoji processed and saved: ${filename}`)
       );
 
+      const baseUrl = process.env.BASE_URL || "/";
+      const basePath = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
       return {
-        newPath: `/images/emojis/${filename}`,
+        newPath: `${basePath}/images/emojis/${filename}`,
         savedBytes,
         reused: false,
       };

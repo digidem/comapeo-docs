@@ -105,3 +105,69 @@ export function sanitizeMarkdownContent(content: string): string {
 
   return content;
 }
+
+/**
+ * Restores intentional soft line breaks (Shift+Enter in Notion) by converting single
+ * newlines within paragraphs into `<br />` elements while avoiding structural markdown lines.
+ */
+export function restoreSoftLineBreaks(content: string): string {
+  if (!content) return content;
+
+  const codeBlocks: string[] = [];
+  const codeSpans: string[] = [];
+
+  const blockPlaceholder = (index: number) =>
+    `__SOFTBREAK_CODEBLOCK_${index}__`;
+  const spanPlaceholder = (index: number) => `__SOFTBREAK_CODESPAN_${index}__`;
+
+  // Protect fenced blocks and inline code so formatting is left untouched
+  let transformed = content.replace(/```[\s\S]*?```/g, (match) => {
+    codeBlocks.push(match);
+    return blockPlaceholder(codeBlocks.length - 1);
+  });
+
+  transformed = transformed.replace(/`[^`\n]*`/g, (match) => {
+    codeSpans.push(match);
+    return spanPlaceholder(codeSpans.length - 1);
+  });
+
+  // Normalize uncommon Unicode line separators that Notion may emit
+  transformed = transformed.replace(/[\u2028\u2029]/g, "\n");
+
+  transformed = transformed.replace(
+    /(?<=\S)\n(?=\S)/g,
+    (newline, offset, full) => {
+      const nextLine = full.slice(offset + newline.length);
+      const trimmedNextLine = nextLine.replace(/^[ \t]+/, "");
+
+      const before = full.slice(0, offset);
+      const prevLine = before.slice(before.lastIndexOf("\n") + 1);
+      const trimmedPrevLine = prevLine.trim();
+
+      // Skip markdown constructs that should remain as new lines
+      if (
+        /^([-*+>#|<])/.test(trimmedNextLine) ||
+        /^\d+[.)]/.test(trimmedNextLine) ||
+        /^```/.test(trimmedPrevLine) ||
+        /^---$/.test(trimmedPrevLine) ||
+        trimmedPrevLine.startsWith("__SOFTBREAK_CODEBLOCK_")
+      ) {
+        return newline;
+      }
+
+      return "<br />\n";
+    }
+  );
+
+  // Restore masked code sections
+  transformed = transformed.replace(
+    /__SOFTBREAK_CODEBLOCK_(\d+)__/g,
+    (_m, i) => codeBlocks[Number(i)]
+  );
+  transformed = transformed.replace(
+    /__SOFTBREAK_CODESPAN_(\d+)__/g,
+    (_m, i) => codeSpans[Number(i)]
+  );
+
+  return transformed;
+}

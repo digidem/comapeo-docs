@@ -13,6 +13,7 @@ import chalk from "chalk";
 import { processImage } from "./imageProcessor";
 import {
   sanitizeMarkdownContent,
+  restoreSoftLineBreaks,
   compressImageToFileWithFallback,
   detectFormatFromBuffer,
   formatFromContentType,
@@ -1548,6 +1549,9 @@ export async function generateBlocks(pages, progressCallback) {
 
               // Sanitize content to fix malformed HTML/JSX tags
               markdownString.parent = sanitizeMarkdownContent(
+                markdownString.parent
+              );
+              markdownString.parent = restoreSoftLineBreaks(
                 markdownString.parent
               );
               // Remove duplicate title heading if it exists

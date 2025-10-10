@@ -4,8 +4,11 @@ import os from "node:os";
 import chalk from "chalk";
 import { compressImage } from "./imageCompressor";
 
-// Re-export sanitize so callers have a single utils entrypoint
-export { sanitizeMarkdownContent } from "./contentSanitizer";
+// Re-export sanitize helpers so callers have a single utils entrypoint
+export {
+  sanitizeMarkdownContent,
+  restoreSoftLineBreaks,
+} from "./contentSanitizer";
 
 // Fail-open toggle: defaults to true unless explicitly set to 'false'
 export const SOFT_FAIL: boolean =

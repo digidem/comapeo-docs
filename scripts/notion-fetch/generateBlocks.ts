@@ -26,6 +26,8 @@ import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { EmojiProcessor } from "./emojiProcessor";
 
+const DOC_SPACER_COMPONENT = "<DocSpacer />";
+
 // Enhanced image handling utilities for robust processing
 interface ImageProcessingResult {
   success: boolean;
@@ -242,6 +244,27 @@ async function logImageFailure(logEntry: any): Promise<void> {
     });
 
   await imageLogWriting;
+}
+
+function trimEdgeDocSpacers(content: string): string {
+  if (!content) {
+    return content;
+  }
+
+  const lines = content.split("\n");
+
+  while (lines.length && lines[0].trim() === DOC_SPACER_COMPONENT) {
+    lines.shift();
+  }
+
+  while (
+    lines.length &&
+    lines[lines.length - 1].trim() === DOC_SPACER_COMPONENT
+  ) {
+    lines.pop();
+  }
+
+  return lines.join("\n");
 }
 
 /**
@@ -1552,7 +1575,7 @@ export async function generateBlocks(pages, progressCallback) {
               );
               // Remove duplicate title heading if it exists
               // The first H1 heading often duplicates the title in Notion exports
-              let contentBody = markdownString.parent;
+              let contentBody = trimEdgeDocSpacers(markdownString.parent);
 
               // Find the first H1 heading pattern at the beginning of the content
               const firstH1Regex = /^\s*# (.+?)(?:\n|$)/;

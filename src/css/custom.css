@@ -104,6 +104,27 @@ img.emoji {
 }
 
 /* Docs content image sizing and layout */
+.theme-doc-markdown {
+  /* Align docs typography spacing with Notion authoring */
+  --docs-block-spacing: 0.5rem;
+  --docs-list-spacing: 0.75rem;
+  --docs-list-item-spacing: 0.35rem;
+}
+.theme-doc-markdown > p,
+.theme-doc-markdown > pre {
+  margin-bottom: var(--docs-block-spacing);
+}
+.theme-doc-markdown > ul,
+.theme-doc-markdown > ol {
+  margin-bottom: var(--docs-list-spacing);
+}
+.theme-doc-markdown li + li {
+  margin-top: var(--docs-list-item-spacing);
+}
+.theme-doc-markdown li > p {
+  margin-top: var(--docs-list-item-spacing);
+}
+
 .theme-doc-markdown img:not(.no-doc-image-style) {
   max-width: 100%;
   height: auto;

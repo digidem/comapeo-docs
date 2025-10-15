@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /format-testing-remove
 last_update:
-  date: 10/13/2025
+  date: 10/15/2025
   author: Awana Digital
 ---
 
@@ -487,13 +487,13 @@ no content between h tags below
 with content below
 
 
-## Instruction formatting (H2)
+## 2nd Instruction formatting (H2)
 
 
-with content belo
+with content below
 
 
-# Choosing  format for instructions (H1)
+# 2nd Choosing  format for instructions (H1)
 
 
 <u>Example 1</u> 

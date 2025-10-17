@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: 'Version bump type'
+        description: "Version bump type"
         required: true
-        default: 'minor'
+        default: "minor"
         type: choice
         options: [patch, minor, major]
       release_type:
-        description: 'Release type'
+        description: "Release type"
         required: false
-        default: 'release'
+        default: "release"
         type: choice
         options: [release, prerelease]
 
@@ -45,7 +45,7 @@ jobs:
       - name: Setup Node.js and Bun
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2

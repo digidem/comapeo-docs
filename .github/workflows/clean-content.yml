@@ -6,11 +6,11 @@ on:
       confirm:
         description: 'Type "yes" to confirm deletion of generated content'
         required: true
-        default: 'no'
+        default: "no"
         type: choice
         options:
-          - 'no'
-          - 'yes'
+          - "no"
+          - "yes"
 
 # Prevent concurrent content updates to avoid conflicts
 concurrency:

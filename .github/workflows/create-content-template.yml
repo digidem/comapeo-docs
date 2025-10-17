@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       title:
-        description: 'Title for the new content template'
+        description: "Title for the new content template"
         required: false
         type: string
-        default: 'New Content'
+        default: "New Content"
   repository_dispatch:
     types:
       - create-content-template

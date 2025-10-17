@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Force fetch even if content exists'
+        description: "Force fetch even if content exists"
         required: false
         default: true
         type: boolean

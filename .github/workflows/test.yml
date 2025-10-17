@@ -3,7 +3,7 @@ name: Test (Bun + Vitest)
 on:
   # Avoid double-running on feature branches by only running push on main.
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
 
 jobs:

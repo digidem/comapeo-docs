@@ -64,6 +64,17 @@ Ask first:
 - running `bun run build` or `bun run notion:*` commands
 - touching CI, deploy, or secrets
 
+### PR Preview Deployments
+
+Every PR automatically gets a staging deployment on Cloudflare Pages:
+
+- **Preview URL**: `https://pr-{number}.comapeo-docs.pages.dev`
+- **Automatic**: Deployed on PR open/update, cleaned up on close
+- **Comment**: Bot comments on PR with preview link
+- **Triggers**: Pushes to PR branch (except Markdown-only changes)
+- **Content**: Uses same content from `content` branch as production
+- **Security**: Only works for PRs from the main repository (not forks)
+
 ### Project Structure Hints
 
 - `docs/`: Markdown/MDX docs (kebab-case)

@@ -2,14 +2,28 @@ name: Deploy to Production
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: false
+        default: "production"
+        type: choice
+        options:
+          - production
+          - test
+      branch_name:
+        description: "Branch name for test deployment (only used if environment=test)"
+        required: false
+        default: "test"
+        type: string
   repository_dispatch:
     types: [deploy-production]
   push:
     branches:
       - main
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
+      - "**.md"
+      - "docs/**"
 
 jobs:
   deploy:
@@ -69,13 +83,18 @@ jobs:
         run: bun run build
 
       - name: Deploy to Cloudflare Pages
+        id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build --project-name comapeo-docs --compatibility-date 2024-01-01
+          command: |
+            pages deploy build --project-name comapeo-docs \
+              ${{ inputs.environment == 'test' && format('--branch {0}', inputs.branch_name) || '' }} \
+              ${{ inputs.environment == 'test' && '--commit-dirty=true' || '--compatibility-date 2024-01-01' }}
 
       - name: Update Notion status to Published
+        if: inputs.environment != 'test'
         run: bun run notionStatus:publish-production
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -83,11 +102,22 @@ jobs:
 
       - name: Deployment summary
         run: |
-          echo "🚀 **Production Deployment Complete!**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Notion status updated: Staging → Published" >> $GITHUB_STEP_SUMMARY
-          echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.environment }}" = "test" ]; then
+            BRANCH_NAME="${{ inputs.branch_name }}"
+            echo "🧪 **Test Deployment Complete!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Deployed to Cloudflare Pages (test)" >> $GITHUB_STEP_SUMMARY
+            echo "- 🌐 Test URL: https://${BRANCH_NAME}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note**: This is a test deployment. Notion status not updated." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🚀 **Production Deployment Complete!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Notion status updated: Staging → Published" >> $GITHUB_STEP_SUMMARY
+            echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY
+          fi

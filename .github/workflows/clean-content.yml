@@ -70,3 +70,25 @@ jobs:
           echo "📁 Remaining structure:"
           ls -la docs/ || echo "No docs directory"
           ls -la i18n/*/docusaurus-plugin-content-docs/current/ || echo "No i18n content directories"
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Generated content cleanup*: ${{ job.status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Generated content cleanup*: ${{ job.status }}\nConfirm flag: `${{ github.event.inputs.confirm }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Content branch: `content`\nTrigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Reminder: All generated docs/images removed. Regenerate before next deploy."

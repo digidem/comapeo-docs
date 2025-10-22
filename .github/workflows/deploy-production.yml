@@ -124,3 +124,25 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Deploy to Cloudflare Pages*: ${{ job.status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Deploy to Cloudflare Pages*: ${{ job.status }}\nEnvironment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || github.event_name == 'repository_dispatch' && 'production' || 'production' }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nDetails: ${{ github.event_name == 'pull_request' && github.event.pull_request.html_url || github.event.head_commit.url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'test' && format('Preview URL: https://{0}.comapeo-docs.pages.dev', github.event.inputs.branch_name) || 'Production URL: https://docs.comapeo.app' }}"

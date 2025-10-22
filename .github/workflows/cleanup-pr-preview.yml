@@ -56,3 +56,25 @@ jobs:
           echo "- 🗑️  Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Cloudflare Pages will automatically clean up old deployments." >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*PR preview cleanup*: ${{ job.status }} for PR #${{ github.event.pull_request.number }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*PR preview cleanup*: ${{ job.status }}\nPR: <${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }}>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"

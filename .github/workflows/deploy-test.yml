@@ -85,3 +85,25 @@ jobs:
           echo "- 🌐 Test URL: https://${BRANCH_NAME}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Note**: This is a test deployment for verification purposes only." >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Test deploy*: ${{ job.status }} (branch: ${{ inputs.branch_name }})"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Test deploy*: ${{ job.status }}\nBranch: `${{ inputs.branch_name }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Preview URL: https://${{ inputs.branch_name }}.comapeo-docs.pages.dev"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nDispatch source: ${{ github.event_name }}"

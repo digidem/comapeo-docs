@@ -67,3 +67,21 @@ jobs:
           echo "💥 Failed to create content template '${{ steps.get-title.outputs.title }}'"
           echo "Please check the logs above for error details"
           exit 1
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Create content template*: ${{ job.status }} ('${{ steps.get-title.outputs.title || 'New Content Template' }}')"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Create content template*: ${{ job.status }}\nTitle: `${{ steps.get-title.outputs.title || 'New Content Template' }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"

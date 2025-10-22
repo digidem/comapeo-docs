@@ -198,3 +198,29 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" || true; fi
           # Clean up temporary files
           rm -f prince*.deb || true
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Docs release*: ${{ job.status }} (v${{ steps.version_bump.outputs.version_number }})"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Docs release*: ${{ job.status }}\nVersion: v${{ steps.version_bump.outputs.version_number }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Bump: `${{ github.event.inputs.bump_type }}`\nRelease type: `${{ github.event.inputs.release_type }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nTag committed: `${{ steps.version_bump.outputs.new_version }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "PDF artifact: `comapeo-docs-english-${{ steps.version_bump.outputs.version_number }}.pdf`\n<${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version_bump.outputs.new_version }}|Release notes>"

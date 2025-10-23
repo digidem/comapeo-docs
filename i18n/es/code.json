@@ -602,5 +602,20 @@
     },
     "Managing Observations": {
         "message": "Nueva Página"
+    },
+    "Initial Startup of CoMapeo": {
+        "message": "Nueva Página"
+    },
+    "Exploring the Observations List": {
+        "message": "Nueva Página"
+    },
+    "Managing Data Security & Privacy": {
+        "message": "Gestión de datos y privacidad"
+    },
+    "Using an App Passcode for Security": {
+        "message": "Nueva Página"
+    },
+    "Changing Categories Set": {
+        "message": "Nueva Página"
     }
 }

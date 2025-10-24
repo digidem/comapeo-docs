@@ -1006,6 +1006,35 @@ last_update:
   return frontmatter;
 };
 
+/**
+ * Simple rate limiter without external dependencies
+ * Limits concurrent operations to prevent API rate limiting
+ */
+async function rateLimitedPromiseAll<T>(
+  promises: (() => Promise<T>)[],
+  concurrency: number = 3
+): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (const promiseFn of promises) {
+    const p = promiseFn().then((result) => {
+      results.push(result);
+      executing.splice(executing.indexOf(p), 1);
+      return result;
+    });
+
+    executing.push(p);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.all(executing);
+  return results;
+}
+
 function setTranslationString(
   lang: string,
   original: string,
@@ -1107,6 +1136,148 @@ export async function generateBlocks(pages, progressCallback) {
     const totalPages = pagesByLang.reduce((count, pageGroup) => {
       return count + Object.keys(pageGroup.content).length;
     }, 0);
+
+    // ============================================================================
+    // PERFORMANCE OPTIMIZATION: Prefetch all blocks and markdown data
+    // This batches all Notion API calls before the main processing loop
+    // Reduces API time from sequential (N×5s) to parallel (N×5s / 3 concurrent)
+    // Expected: 3x faster for data fetching phase
+    // ============================================================================
+
+    console.log(
+      chalk.cyan(
+        `\n🚀 Prefetching blocks and markdown for ${pagesByLang.length} page groups...`
+      )
+    );
+    const prefetchStartTime = Date.now();
+
+    // Collect all "page" type page IDs that need blocks/markdown fetching
+    const pageIdsToFetch: string[] = [];
+    const pageIdToTitle = new Map<string, string>();
+
+    for (const pageGroup of pagesByLang) {
+      const sectionTypeRaw = pageGroup.section;
+      const normalizedSectionType = (
+        typeof sectionTypeRaw === "string"
+          ? sectionTypeRaw.trim()
+          : String(sectionTypeRaw ?? "").trim()
+      ).toLowerCase();
+
+      // Only prefetch for "page" types (not toggle/title/heading)
+      if (normalizedSectionType === "page") {
+        for (const page of Object.values(pageGroup.content)) {
+          if (page && page.id) {
+            pageIdsToFetch.push(page.id);
+            pageIdToTitle.set(page.id, resolvePageTitle(page));
+          }
+        }
+      }
+    }
+
+    console.log(
+      chalk.blue(
+        `  ↳ Found ${pageIdsToFetch.length} pages requiring data fetch`
+      )
+    );
+
+    // Batch-fetch all blocks with rate limiting (3 concurrent)
+    const blocksMap = new Map<string, any[]>();
+    if (pageIdsToFetch.length > 0) {
+      console.log(
+        chalk.blue(`  ↳ Fetching blocks for ${pageIdsToFetch.length} pages...`)
+      );
+      try {
+        const blockResults = await rateLimitedPromiseAll(
+          pageIdsToFetch.map((pageId, index) => async () => {
+            // Progress logging every 10 items
+            if (
+              index === 0 ||
+              index === pageIdsToFetch.length - 1 ||
+              (index + 1) % 10 === 0
+            ) {
+              console.log(
+                chalk.gray(
+                  `    Fetching blocks ${index + 1}/${pageIdsToFetch.length} for "${pageIdToTitle.get(pageId)}"`
+                )
+              );
+            }
+            return await fetchNotionBlocks(pageId);
+          }),
+          3 // Max 3 concurrent requests
+        );
+
+        // Store results in map
+        pageIdsToFetch.forEach((id, i) => {
+          blocksMap.set(id, blockResults[i] || []);
+        });
+
+        console.log(
+          chalk.green(`  ✅ Fetched blocks for ${blocksMap.size} pages`)
+        );
+      } catch (error) {
+        console.warn(
+          chalk.yellow(
+            `  ⚠️  Some block fetches failed, will retry individually during processing`
+          ),
+          error
+        );
+      }
+    }
+
+    // Batch-convert all pages to markdown with rate limiting (3 concurrent)
+    const markdownMap = new Map<string, any>();
+    if (pageIdsToFetch.length > 0) {
+      console.log(
+        chalk.blue(
+          `  ↳ Converting ${pageIdsToFetch.length} pages to markdown...`
+        )
+      );
+      try {
+        const markdownResults = await rateLimitedPromiseAll(
+          pageIdsToFetch.map((pageId, index) => async () => {
+            // Progress logging every 10 items
+            if (
+              index === 0 ||
+              index === pageIdsToFetch.length - 1 ||
+              (index + 1) % 10 === 0
+            ) {
+              console.log(
+                chalk.gray(
+                  `    Converting markdown ${index + 1}/${pageIdsToFetch.length} for "${pageIdToTitle.get(pageId)}"`
+                )
+              );
+            }
+            return await n2m.pageToMarkdown(pageId);
+          }),
+          3 // Max 3 concurrent requests
+        );
+
+        // Store results in map
+        pageIdsToFetch.forEach((id, i) => {
+          markdownMap.set(id, markdownResults[i]);
+        });
+
+        console.log(
+          chalk.green(`  ✅ Converted ${markdownMap.size} pages to markdown`)
+        );
+      } catch (error) {
+        console.warn(
+          chalk.yellow(
+            `  ⚠️  Some markdown conversions failed, will retry individually during processing`
+          ),
+          error
+        );
+      }
+    }
+
+    const prefetchDuration = ((Date.now() - prefetchStartTime) / 1000).toFixed(
+      1
+    );
+    console.log(chalk.green(`✅ Prefetch complete in ${prefetchDuration}s\n`));
+
+    // ============================================================================
+    // END PREFETCH OPTIMIZATION
+    // ============================================================================
 
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
@@ -1265,10 +1436,15 @@ export async function generateBlocks(pages, progressCallback) {
             let rawBlocks: any[] = [];
             let emojiMap = new Map<string, string>();
             try {
-              rawBlocks = await fetchNotionBlocks(page.id);
+              // Use prefetched data if available, otherwise fetch individually
+              rawBlocks =
+                blocksMap.get(page.id) || (await fetchNotionBlocks(page.id));
+              const source = blocksMap.has(page.id)
+                ? "prefetched cache"
+                : "individual fetch";
               console.log(
                 chalk.blue(
-                  `  ↳ Fetched ${rawBlocks.length} raw blocks for processing`
+                  `  ↳ Loaded ${rawBlocks.length} raw blocks for processing (${source})`
                 )
               );
 
@@ -1292,7 +1468,9 @@ export async function generateBlocks(pages, progressCallback) {
               );
             }
 
-            const markdown = await n2m.pageToMarkdown(page.id);
+            // Use prefetched markdown if available, otherwise convert individually
+            const markdown =
+              markdownMap.get(page.id) || (await n2m.pageToMarkdown(page.id));
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {

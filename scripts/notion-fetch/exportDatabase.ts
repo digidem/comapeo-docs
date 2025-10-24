@@ -213,17 +213,21 @@ function extractTextFromBlock(block: Record<string, any>): string {
   const blockContent = block[blockType];
 
   // Handle rich text arrays (most common case)
+  // Preserve manual line breaks by converting them to HTML <br /> tags
   if (blockContent.rich_text && Array.isArray(blockContent.rich_text)) {
     return blockContent.rich_text
       .map((textObj: any) => textObj.plain_text || textObj.text?.content || "")
-      .join("");
+      .join("")
+      .replace(/[\n\u2028\u2029]/g, "<br />\n");
   }
 
   // Handle title blocks
+  // Preserve manual line breaks by converting them to HTML <br /> tags
   if (blockContent.title && Array.isArray(blockContent.title)) {
     return blockContent.title
       .map((textObj: any) => textObj.plain_text || textObj.text?.content || "")
-      .join("");
+      .join("")
+      .replace(/[\n\u2028\u2029]/g, "<br />\n");
   }
 
   // Handle text property directly
@@ -237,21 +241,28 @@ function extractTextFromBlock(block: Record<string, any>): string {
   }
 
   // Handle specific block types
+  // Preserve manual line breaks in captions and code blocks
   switch (blockType) {
     case "image":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[Image]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(/[\n\u2028\u2029]/g, "<br />\n") || "[Image]"
       );
     case "video":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[Video]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(/[\n\u2028\u2029]/g, "<br />\n") || "[Video]"
       );
     case "file":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[File]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(/[\n\u2028\u2029]/g, "<br />\n") || "[File]"
       );
     case "bookmark":
       return blockContent.url || "[Bookmark]";
@@ -259,8 +270,10 @@ function extractTextFromBlock(block: Record<string, any>): string {
       return blockContent.expression || "[Equation]";
     case "code":
       return (
-        blockContent.rich_text?.map((t: any) => t.plain_text || "").join("") ||
-        "[Code]"
+        blockContent.rich_text
+          ?.map((t: any) => t.plain_text || "")
+          .join("")
+          .replace(/[\n\u2028\u2029]/g, "<br />\n") || "[Code]"
       );
     case "divider":
       return "[Divider]";

@@ -620,5 +620,20 @@
     },
     "Installing CoMapeo & Onboarding": {
         "message": "Nueva Página"
+    },
+    "Editing Observations": {
+        "message": "Nueva Página"
+    },
+    "Moving Observations Outside of CoMapeo": {
+        "message": "Compartir observaciones fuera de CoMapeo"
+    },
+    "Sharing a Single Observation & Metadata": {
+        "message": "Nueva Página"
+    },
+    "Exporting all Observations": {
+        "message": "Nueva Página"
+    },
+    "Using Observations outside of CoMapeo": {
+        "message": "Nueva Página"
     }
 }

@@ -91,10 +91,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: |
-            pages deploy build --project-name comapeo-docs \
-              ${{ inputs.environment == 'test' && format('--branch {0}', inputs.branch_name) || '' }} \
-              ${{ inputs.environment == 'test' && '--commit-dirty=true' || '--compatibility-date 2024-01-01' }}
+          command: >-
+            pages deploy build --project-name comapeo-docs
+            ${{ inputs.environment == 'test' && format('--branch {0}', inputs.branch_name) || '' }}
+            ${{ inputs.environment == 'test' && '--commit-dirty=true' || '--compatibility-date 2024-01-01' }}
 
       - name: Update Notion status to Published
         if: inputs.environment != 'test'

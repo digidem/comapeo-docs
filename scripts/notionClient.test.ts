@@ -74,6 +74,7 @@ describe("notionClient", () => {
     mockN2M = {
       pageToMarkdown: vi.fn(),
       toMarkdownString: vi.fn(),
+      setCustomTransformer: vi.fn(() => mockN2M),
     };
 
     // Set up constructor mocks
@@ -158,6 +159,49 @@ describe("notionClient", () => {
 
       // Assert
       expect(DATABASE_ID).toBe("exported-database-id");
+    });
+
+    it("should register a paragraph transformer that emits DocSpacer for empty blocks", async () => {
+      await import("./notionClient");
+
+      expect(mockN2M.setCustomTransformer).toHaveBeenCalledWith(
+        "paragraph",
+        expect.any(Function)
+      );
+
+      const transformer = mockN2M.setCustomTransformer.mock.calls[0][1];
+
+      const emptyBlock = {
+        type: "paragraph",
+        paragraph: { rich_text: [] },
+        has_children: false,
+      };
+
+      const populatedBlock = {
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              plain_text: "Hello",
+              text: { content: "Hello" },
+            },
+          ],
+        },
+        has_children: false,
+      };
+
+      const nestedBlock = {
+        type: "paragraph",
+        paragraph: { rich_text: [] },
+        has_children: true,
+      };
+
+      await expect(transformer(emptyBlock as any)).resolves.toBe(
+        "<DocSpacer />"
+      );
+      await expect(transformer(populatedBlock as any)).resolves.toBeUndefined();
+      await expect(transformer(nestedBlock as any)).resolves.toBeUndefined();
     });
   });
 

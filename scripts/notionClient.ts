@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 import chalk from "chalk";
+import type { RichTextItemResponse } from "@notionhq/client/build/src/api-endpoints";
 
 dotenv.config();
 
@@ -15,9 +16,7 @@ const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
 
 if (!resolvedDatabaseId) {
-  throw new Error(
-    "DATABASE_ID is not defined in the environment variables."
-  );
+  throw new Error("DATABASE_ID is not defined in the environment variables.");
 }
 
 process.env.DATABASE_ID = resolvedDatabaseId;
@@ -39,6 +38,58 @@ const notion = new Client({
 });
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
+
+const DOC_SPACER_COMPONENT = "<DocSpacer />";
+
+const hasVisibleRichText = (items: RichTextItemResponse[] = []): boolean =>
+  items.some((item) => {
+    if (!item) {
+      return false;
+    }
+
+    if (typeof item.plain_text === "string" && item.plain_text.trim().length) {
+      return true;
+    }
+
+    if (item.type === "text") {
+      return Boolean(item.text?.content?.trim());
+    }
+
+    if (item.type === "equation") {
+      return Boolean(item.equation?.expression?.trim());
+    }
+
+    if (item.type === "mention") {
+      return Boolean(item.plain_text?.trim());
+    }
+
+    return false;
+  });
+
+n2m.setCustomTransformer("paragraph", async (block) => {
+  if (block.type !== "paragraph") {
+    return undefined;
+  }
+
+  const paragraph = block.paragraph;
+  if (!paragraph) {
+    return undefined;
+  }
+
+  if (block.has_children) {
+    return undefined;
+  }
+
+  const richText = Array.isArray(paragraph.rich_text)
+    ? paragraph.rich_text
+    : [];
+
+  if (hasVisibleRichText(richText)) {
+    return undefined;
+  }
+
+  return DOC_SPACER_COMPONENT;
+});
 
 export const DATABASE_ID = resolvedDatabaseId;
 

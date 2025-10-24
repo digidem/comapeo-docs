@@ -95,8 +95,40 @@ export async function fetchNotionData(filter) {
 }
 
 /**
+ * Simple rate limiter without external dependencies
+ * Limits concurrent operations to prevent API rate limiting
+ */
+async function rateLimitedPromiseAll<T>(
+  promises: (() => Promise<T>)[],
+  concurrency: number = 3
+): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (const promiseFn of promises) {
+    const p = promiseFn().then((result) => {
+      results.push(result);
+      executing.splice(executing.indexOf(p), 1);
+      return result;
+    });
+
+    executing.push(p);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.all(executing);
+  return results;
+}
+
+/**
  * Sorts Notion data by the "Order" property, fetches sub-pages for each parent page,
  * and logs each item's URL. Returns the updated data array.
+ *
+ * OPTIMIZED: Uses batched fetching with rate limiting to prevent timeouts
+ *
  * @param {any[]} data - Array of Notion page objects
  * @returns {Promise<any[]>} - The updated data array including sub-pages
  */
@@ -110,17 +142,67 @@ export async function sortAndExpandNotionData(
     return orderA - orderB;
   });
 
-  // Get every sub-page for every parent page
+  // Collect all sub-item relations across ALL parent pages for batched fetching
+  const allRelations: Array<{
+    parentId: string;
+    subId: string;
+    parentTitle: string;
+  }> = [];
+
   for (const item of data) {
     const relations = item?.properties?.["Sub-item"]?.relation ?? [];
-    const subpages = await Promise.all(
-      relations.map(async (rel: { id: string }) => {
-        return await enhancedNotion.pagesRetrieve({ page_id: rel.id });
-      })
-    );
-    for (const subpage of subpages) {
-      data.push(subpage);
+    const parentTitle =
+      item?.properties?.["Title"]?.title?.[0]?.plain_text ??
+      item?.properties?.["Name"]?.title?.[0]?.plain_text ??
+      "Unknown";
+
+    for (const rel of relations) {
+      allRelations.push({
+        parentId: item.id as string,
+        subId: rel.id,
+        parentTitle,
+      });
     }
+  }
+
+  // Early return if no sub-items to fetch
+  if (allRelations.length === 0) {
+    data.forEach((item, index) => {
+      console.log(`Item ${index + 1}:`, item?.url);
+    });
+    return data;
+  }
+
+  console.log(
+    `📥 Fetching ${allRelations.length} sub-pages across ${data.length} parent pages...`
+  );
+
+  // Fetch all sub-pages in parallel with rate limiting (3 concurrent requests)
+  // This prevents sequential bottleneck while respecting API rate limits
+  const startTime = Date.now();
+  const subpages = await rateLimitedPromiseAll(
+    allRelations.map((rel, index) => async () => {
+      // Progress logging every 10 items or for first/last
+      if (
+        index === 0 ||
+        index === allRelations.length - 1 ||
+        (index + 1) % 10 === 0
+      ) {
+        console.log(
+          `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
+        );
+      }
+      return await enhancedNotion.pagesRetrieve({ page_id: rel.subId });
+    }),
+    3 // Max 3 concurrent requests to avoid rate limiting
+  );
+
+  const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`✅ Fetched ${subpages.length} sub-pages in ${fetchDuration}s`);
+
+  // Add all fetched sub-pages to data array
+  for (const subpage of subpages) {
+    data.push(subpage);
   }
 
   data.forEach((item, index) => {

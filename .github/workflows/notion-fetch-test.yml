@@ -17,6 +17,7 @@ concurrency:
 jobs:
   fetch-notion:
     runs-on: ubuntu-latest
+    timeout-minutes: 60 # Prevent indefinite runs from performance issues
 
     environment: production
 

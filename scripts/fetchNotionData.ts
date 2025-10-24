@@ -102,15 +102,22 @@ async function rateLimitedPromiseAll<T>(
   promises: (() => Promise<T>)[],
   concurrency: number = 3
 ): Promise<T[]> {
-  const results: T[] = [];
+  const results: T[] = new Array(promises.length);
   const executing: Promise<void>[] = [];
 
-  for (const promiseFn of promises) {
-    const p = promiseFn().then((result) => {
-      results.push(result);
-      executing.splice(executing.indexOf(p), 1);
-      return result;
-    });
+  for (let index = 0; index < promises.length; index++) {
+    const promiseFn = promises[index];
+    const p = promiseFn()
+      .then((result) => {
+        results[index] = result;
+        return result;
+      })
+      .finally(() => {
+        const executingIndex = executing.indexOf(p);
+        if (executingIndex !== -1) {
+          executing.splice(executingIndex, 1);
+        }
+      });
 
     executing.push(p);
 

@@ -163,8 +163,19 @@ async function processImageWithFallbacks(
 /**
  * Logs image failures for manual recovery
  * Note: Fire-and-forget async to avoid blocking image processing
+ * IMPORTANT: Disabled in CI environments to prevent script hanging due to
+ * synchronous file I/O blocking in GitHub Actions. Console logs provide
+ * sufficient debugging information for CI runs.
  */
 function logImageFailure(logEntry: any): void {
+  // Skip logging in CI to prevent hanging due to sync I/O blocking
+  // CI environments like GitHub Actions have I/O limitations that cause
+  // synchronous file operations to block the event loop indefinitely
+  if (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true") {
+    // Console output is still available in CI logs
+    return;
+  }
+
   const logPath = path.join(process.cwd(), "image-failures.json");
   const logDir = path.dirname(logPath);
   const tmpPath = `${logPath}.tmp`;

@@ -150,7 +150,7 @@ async function processImageWithFallbacks(
       fallbackUsed: true,
     };
 
-    await logImageFailure(logEntry);
+    logImageFailure(logEntry);
 
     return {
       success: false,
@@ -162,75 +162,81 @@ async function processImageWithFallbacks(
 
 /**
  * Logs image failures for manual recovery
- * Note: Simplified to use direct async/await without promise chaining to avoid deadlocks
+ * Note: Fire-and-forget async to avoid blocking image processing
  */
-async function logImageFailure(logEntry: any): Promise<void> {
+function logImageFailure(logEntry: any): void {
   const logPath = path.join(process.cwd(), "image-failures.json");
   const logDir = path.dirname(logPath);
   const tmpPath = `${logPath}.tmp`;
   const MAX_ENTRIES = 5000;
   const MAX_FIELD_LEN = 2000;
 
-  const safeEntry = (() => {
-    try {
-      const clone: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(logEntry ?? {})) {
-        let val = v;
-        if (typeof val === "string") val = val.slice(0, MAX_FIELD_LEN);
-        else if (typeof val === "object") val = JSON.parse(JSON.stringify(val));
-        clone[k] = val;
-      }
-      return clone;
-    } catch {
-      return { message: "non-serializable log entry" };
-    }
-  })();
-
-  try {
-    try {
-      fs.mkdirSync(logDir, { recursive: true });
-    } catch {
-      // ignore
-    }
-
-    let existingLogs: any[] = [];
-    try {
-      if (fs.existsSync(logPath)) {
-        const content = fs.readFileSync(logPath, "utf-8");
-        const parsed = JSON.parse(content);
-        existingLogs = Array.isArray(parsed) ? parsed : [];
-      }
-    } catch {
-      existingLogs = [];
-    }
-    existingLogs.push(safeEntry);
-    if (existingLogs.length > MAX_ENTRIES) {
-      existingLogs = existingLogs.slice(-MAX_ENTRIES);
-    }
-
-    const payload = JSON.stringify(existingLogs, null, 2);
-    try {
-      fs.writeFileSync(tmpPath, payload);
-      fs.renameSync(tmpPath, logPath);
-    } catch {
-      console.warn(
-        chalk.yellow("Failed to write image failure log atomically")
-      );
+  // Run async but don't wait for completion
+  (async () => {
+    const safeEntry = (() => {
       try {
-        fs.writeFileSync(logPath, payload);
+        const clone: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(logEntry ?? {})) {
+          let val = v;
+          if (typeof val === "string") val = val.slice(0, MAX_FIELD_LEN);
+          else if (typeof val === "object")
+            val = JSON.parse(JSON.stringify(val));
+          clone[k] = val;
+        }
+        return clone;
       } catch {
-        console.warn(chalk.yellow("Failed to write image failure log"));
+        return { message: "non-serializable log entry" };
       }
-    } finally {
+    })();
+
+    try {
       try {
-        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        fs.mkdirSync(logDir, { recursive: true });
       } catch {
-        // best-effort cleanup
+        // ignore
       }
+
+      let existingLogs: any[] = [];
+      try {
+        if (fs.existsSync(logPath)) {
+          const content = fs.readFileSync(logPath, "utf-8");
+          const parsed = JSON.parse(content);
+          existingLogs = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch {
+        existingLogs = [];
+      }
+      existingLogs.push(safeEntry);
+      if (existingLogs.length > MAX_ENTRIES) {
+        existingLogs = existingLogs.slice(-MAX_ENTRIES);
+      }
+
+      const payload = JSON.stringify(existingLogs, null, 2);
+      try {
+        fs.writeFileSync(tmpPath, payload);
+        fs.renameSync(tmpPath, logPath);
+      } catch {
+        console.warn(
+          chalk.yellow("Failed to write image failure log atomically")
+        );
+        try {
+          fs.writeFileSync(logPath, payload);
+        } catch {
+          console.warn(chalk.yellow("Failed to write image failure log"));
+        }
+      } finally {
+        try {
+          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+    } catch (e) {
+      console.warn(chalk.yellow("Image failure log write error"), e);
     }
-  } catch (e) {
-    console.warn(chalk.yellow("Image failure log write error"), e);
-  }
+  })().catch(() => {
+    // Silently ignore errors to prevent unhandled promise rejections
+  });
 }
 
 /**
@@ -1622,7 +1628,6 @@ export async function generateBlocks(pages, progressCallback) {
                 original: string;
                 replacement: string;
               }> = [];
-              const pendingLogs: Promise<void>[] = [];
 
               // Phase 1: Validate and queue all images for processing
               const imageProcessingTasks = imageMatches.map((match) => {
@@ -1643,17 +1648,15 @@ export async function generateBlocks(pages, progressCallback) {
                     replacement: fallbackMarkdown,
                   });
 
-                  pendingLogs.push(
-                    logImageFailure({
-                      timestamp: new Date().toISOString(),
-                      pageBlock: safeFilename,
-                      imageIndex: match.idx,
-                      originalUrl: match.url,
-                      error: urlValidation.error,
-                      fallbackUsed: true,
-                      validationFailed: true,
-                    })
-                  );
+                  logImageFailure({
+                    timestamp: new Date().toISOString(),
+                    pageBlock: safeFilename,
+                    imageIndex: match.idx,
+                    originalUrl: match.url,
+                    error: urlValidation.error,
+                    fallbackUsed: true,
+                    validationFailed: true,
+                  });
 
                   return Promise.resolve({
                     success: false,
@@ -1763,9 +1766,6 @@ export async function generateBlocks(pages, progressCallback) {
                 );
                 markdownString.parent = processedMarkdown;
               }
-
-              // Phase 2.5: Await all pending log operations
-              await Promise.allSettled(pendingLogs);
 
               // Phase 5: Report results
               const totalImages = imageMatches.length;
@@ -1942,7 +1942,7 @@ export async function generateBlocks(pages, progressCallback) {
         stack: errObj.stack,
         type: "generateBlocks_critical_error",
       };
-      await logImageFailure(errorLog);
+      logImageFailure(errorLog);
     } catch (logError) {
       console.warn(chalk.yellow("Failed to log critical error"));
     }

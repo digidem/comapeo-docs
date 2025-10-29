@@ -42,6 +42,10 @@ jobs:
           else
             echo "📥 Normal mode - will fetch and update content"
           fi
+          echo "NOTION_PERF_SUMMARY=1" >> $GITHUB_ENV
+          echo "NOTION_RATE_LIMIT_THRESHOLD=25" >> $GITHUB_ENV
+          echo "NOTION_RATE_LIMIT_WINDOW_MS=300000" >> $GITHUB_ENV
+          echo "NOTION_PERF_SUMMARY_PATH=$GITHUB_STEP_SUMMARY" >> $GITHUB_ENV
 
       - name: Fetch content from Notion
         env:

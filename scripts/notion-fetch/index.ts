@@ -31,6 +31,21 @@ const isDirectExec =
   !!process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(__filename);
 
+const cliArgs = process.argv.slice(2);
+const perfLogFlag = cliArgs.includes("--perf-log");
+const perfOutputArg = cliArgs.find((arg) => arg.startsWith("--perf-output="));
+
+if (perfLogFlag && !process.env.NOTION_PERF_LOG) {
+  process.env.NOTION_PERF_LOG = "1";
+}
+
+if (perfOutputArg) {
+  const [, value] = perfOutputArg.split("=");
+  if (value && !process.env.NOTION_PERF_OUTPUT) {
+    process.env.NOTION_PERF_OUTPUT = value;
+  }
+}
+
 initializeGracefulShutdownHandlers();
 
 async function main(): Promise<number> {

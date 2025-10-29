@@ -808,6 +808,7 @@ async function downloadAndProcessImage(
 
       if (attemptNumber < 3) {
         // Test-environment-aware retry delays
+        // Standardized test environment detection
         const isTestEnv =
           process.env.NODE_ENV === "test" || process.env.VITEST === "true";
         const baseDelayMs = isTestEnv ? 10 : 1000;
@@ -1007,39 +1008,99 @@ last_update:
 };
 
 /**
- * Simple rate limiter without external dependencies
- * Limits concurrent operations to prevent API rate limiting
+ * LRU Cache implementation with size limit
  */
-async function rateLimitedPromiseAll<T>(
-  promises: (() => Promise<T>)[],
-  concurrency: number = 3
-): Promise<T[]> {
-  const results: T[] = new Array(promises.length);
-  const executing: Promise<void>[] = [];
+class LRUCache<T> {
+  private cache = new Map<string, T>();
+  private readonly maxSize: number;
 
-  for (let index = 0; index < promises.length; index++) {
-    const promiseFn = promises[index];
-    const p = promiseFn()
-      .then((result) => {
-        results[index] = result;
-        return result;
-      })
-      .finally(() => {
-        const executingIndex = executing.indexOf(p);
-        if (executingIndex !== -1) {
-          executing.splice(executingIndex, 1);
-        }
-      });
-
-    executing.push(p);
-
-    if (executing.length >= concurrency) {
-      await Promise.race(executing);
-    }
+  constructor(maxSize: number = 1000) {
+    this.maxSize = Math.max(1, maxSize);
   }
 
-  await Promise.all(executing);
-  return results;
+  get(key: string): T | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: string, value: T): void {
+    // Remove if exists (will re-add at end)
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+
+    // Evict oldest if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+
+    this.cache.set(key, value);
+  }
+
+  has(key: string): boolean {
+    return this.cache.has(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+/**
+ * Validate and parse cache size from environment
+ */
+function validateCacheSize(): number {
+  const defaultSize = 1000;
+  const envValue = process.env.NOTION_CACHE_MAX_SIZE;
+
+  if (!envValue) return defaultSize;
+
+  const parsed = Number.parseInt(envValue, 10);
+
+  if (Number.isNaN(parsed) || parsed < 1) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  Invalid NOTION_CACHE_MAX_SIZE: "${envValue}", using default: ${defaultSize}`
+      )
+    );
+    return defaultSize;
+  }
+
+  if (parsed > 10000) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  NOTION_CACHE_MAX_SIZE: ${parsed} exceeds maximum 10000, using maximum`
+      )
+    );
+    return 10000;
+  }
+
+  return parsed;
+}
+
+const CACHE_MAX_SIZE = validateCacheSize();
+
+const blockPrefetchCache = new LRUCache<any[]>(CACHE_MAX_SIZE);
+const markdownPrefetchCache = new LRUCache<any>(CACHE_MAX_SIZE);
+
+const buildCacheKey = (id: string, lastEdited?: string | null) =>
+  `${id}:${lastEdited ?? "unknown"}`;
+
+export function __resetPrefetchCaches(): void {
+  blockPrefetchCache.clear();
+  markdownPrefetchCache.clear();
 }
 
 function setTranslationString(
@@ -1143,148 +1204,137 @@ export async function generateBlocks(pages, progressCallback) {
     const totalPages = pagesByLang.reduce((count, pageGroup) => {
       return count + Object.keys(pageGroup.content).length;
     }, 0);
+    let pageProcessingIndex = 0;
 
-    // ============================================================================
-    // PERFORMANCE OPTIMIZATION: Prefetch all blocks and markdown data
-    // This batches all Notion API calls before the main processing loop
-    // Reduces API time from sequential (N×5s) to parallel (N×5s / 3 concurrent)
-    // Expected: 3x faster for data fetching phase
-    // ============================================================================
+    const blocksMap = new Map<string, { key: string; data: any[] }>();
+    const markdownMap = new Map<string, { key: string; data: any }>();
+    const inFlightBlockFetches = new Map<string, Promise<any[]>>();
+    const inFlightMarkdownFetches = new Map<string, Promise<any>>();
+    let blockFetchCount = 0;
+    let blockCacheHits = 0;
+    let markdownFetchCount = 0;
+    let markdownCacheHits = 0;
 
-    console.log(
-      chalk.cyan(
-        `\n🚀 Prefetching blocks and markdown for ${pagesByLang.length} page groups...`
-      )
-    );
-    const prefetchStartTime = Date.now();
-
-    // Collect all "page" type page IDs that need blocks/markdown fetching
-    const pageIdsToFetch: string[] = [];
-    const pageIdToTitle = new Map<string, string>();
-
-    for (const pageGroup of pagesByLang) {
-      const sectionTypeRaw = pageGroup.section;
-      const normalizedSectionType = (
-        typeof sectionTypeRaw === "string"
-          ? sectionTypeRaw.trim()
-          : String(sectionTypeRaw ?? "").trim()
-      ).toLowerCase();
-
-      // Only prefetch for "page" types (not toggle/title/heading)
-      if (normalizedSectionType === "page") {
-        for (const page of Object.values(pageGroup.content)) {
-          if (page && page.id) {
-            pageIdsToFetch.push(page.id);
-            pageIdToTitle.set(page.id, resolvePageTitle(page));
-          }
-        }
-      }
-    }
-
-    console.log(
-      chalk.blue(
-        `  ↳ Found ${pageIdsToFetch.length} pages requiring data fetch`
-      )
-    );
-
-    // Batch-fetch all blocks with rate limiting (3 concurrent)
-    const blocksMap = new Map<string, any[]>();
-    if (pageIdsToFetch.length > 0) {
-      console.log(
-        chalk.blue(`  ↳ Fetching blocks for ${pageIdsToFetch.length} pages...`)
-      );
-      try {
-        const blockResults = await rateLimitedPromiseAll(
-          pageIdsToFetch.map((pageId, index) => async () => {
-            // Progress logging every 10 items
-            if (
-              index === 0 ||
-              index === pageIdsToFetch.length - 1 ||
-              (index + 1) % 10 === 0
-            ) {
-              console.log(
-                chalk.gray(
-                  `    Fetching blocks ${index + 1}/${pageIdsToFetch.length} for "${pageIdToTitle.get(pageId)}"`
-                )
-              );
-            }
-            return await fetchNotionBlocks(pageId);
-          }),
-          3 // Max 3 concurrent requests
-        );
-
-        // Store results in map
-        pageIdsToFetch.forEach((id, i) => {
-          blocksMap.set(id, blockResults[i] || []);
-        });
-
+    const logProgress = (
+      index: number,
+      total: number,
+      prefix: string,
+      title: string
+    ) => {
+      if (
+        total > 0 &&
+        (index === 0 ||
+          index === total - 1 ||
+          ((index + 1) % 10 === 0 && index + 1 < total))
+      ) {
         console.log(
-          chalk.green(`  ✅ Fetched blocks for ${blocksMap.size} pages`)
-        );
-      } catch (error) {
-        console.warn(
-          chalk.yellow(
-            `  ⚠️  Some block fetches failed, will retry individually during processing`
-          ),
-          error
+          chalk.gray(`    ${prefix} ${index + 1}/${total} for "${title}"`)
         );
       }
-    }
+    };
 
-    // Batch-convert all pages to markdown with rate limiting (3 concurrent)
-    const markdownMap = new Map<string, any>();
-    if (pageIdsToFetch.length > 0) {
-      console.log(
-        chalk.blue(
-          `  ↳ Converting ${pageIdsToFetch.length} pages to markdown...`
-        )
-      );
-      try {
-        const markdownResults = await rateLimitedPromiseAll(
-          pageIdsToFetch.map((pageId, index) => async () => {
-            // Progress logging every 10 items
-            if (
-              index === 0 ||
-              index === pageIdsToFetch.length - 1 ||
-              (index + 1) % 10 === 0
-            ) {
-              console.log(
-                chalk.gray(
-                  `    Converting markdown ${index + 1}/${pageIdsToFetch.length} for "${pageIdToTitle.get(pageId)}"`
-                )
-              );
-            }
-            return await n2m.pageToMarkdown(pageId);
-          }),
-          3 // Max 3 concurrent requests
-        );
-
-        // Store results in map
-        pageIdsToFetch.forEach((id, i) => {
-          markdownMap.set(id, markdownResults[i]);
-        });
-
-        console.log(
-          chalk.green(`  ✅ Converted ${markdownMap.size} pages to markdown`)
-        );
-      } catch (error) {
-        console.warn(
-          chalk.yellow(
-            `  ⚠️  Some markdown conversions failed, will retry individually during processing`
-          ),
-          error
-        );
+    const loadBlocksForPage = async (
+      pageRecord: Record<string, any>,
+      pageIndex: number,
+      totalCount: number,
+      title: string
+    ): Promise<{ data: any[]; source: "cache" | "fetched" }> => {
+      const pageId = pageRecord?.id;
+      if (!pageId) {
+        return { data: [], source: "cache" };
       }
-    }
 
-    const prefetchDuration = ((Date.now() - prefetchStartTime) / 1000).toFixed(
-      1
-    );
-    console.log(chalk.green(`✅ Prefetch complete in ${prefetchDuration}s\n`));
+      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
+      const existing = blocksMap.get(pageId);
+      if (existing && existing.key === cacheKey) {
+        blockCacheHits += 1;
+        return { data: existing.data, source: "cache" };
+      }
 
-    // ============================================================================
-    // END PREFETCH OPTIMIZATION
-    // ============================================================================
+      if (blockPrefetchCache.has(cacheKey)) {
+        blockCacheHits += 1;
+        const cachedRaw = blockPrefetchCache.get(cacheKey);
+        const cached = Array.isArray(cachedRaw) ? cachedRaw : [];
+        blocksMap.set(pageId, { key: cacheKey, data: cached });
+        return { data: cached, source: "cache" };
+      }
+
+      let inFlight = inFlightBlockFetches.get(cacheKey);
+      if (!inFlight) {
+        blockFetchCount += 1;
+        logProgress(pageIndex, totalCount, "Fetching blocks", title);
+        inFlight = (async () => {
+          const result = await fetchNotionBlocks(pageId);
+          const normalized = Array.isArray(result) ? result : [];
+          blockPrefetchCache.set(cacheKey, normalized);
+          return normalized;
+        })()
+          .catch((error) => {
+            blockPrefetchCache.delete(cacheKey);
+            throw error;
+          })
+          .finally(() => {
+            inFlightBlockFetches.delete(cacheKey);
+          });
+        inFlightBlockFetches.set(cacheKey, inFlight);
+      }
+
+      const result = await inFlight;
+      const normalized = Array.isArray(result) ? result : [];
+      blocksMap.set(pageId, { key: cacheKey, data: normalized });
+      return { data: normalized, source: "fetched" };
+    };
+
+    const loadMarkdownForPage = async (
+      pageRecord: Record<string, any>,
+      pageIndex: number,
+      totalCount: number,
+      title: string
+    ): Promise<{ data: any; source: "cache" | "fetched" }> => {
+      const pageId = pageRecord?.id;
+      if (!pageId) {
+        return { data: [], source: "cache" };
+      }
+
+      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
+      const existing = markdownMap.get(pageId);
+      if (existing && existing.key === cacheKey) {
+        markdownCacheHits += 1;
+        return { data: existing.data, source: "cache" };
+      }
+
+      if (markdownPrefetchCache.has(cacheKey)) {
+        markdownCacheHits += 1;
+        const cached = markdownPrefetchCache.get(cacheKey);
+        markdownMap.set(pageId, { key: cacheKey, data: cached });
+        return { data: cached, source: "cache" };
+      }
+
+      let inFlight = inFlightMarkdownFetches.get(cacheKey);
+      if (!inFlight) {
+        markdownFetchCount += 1;
+        logProgress(pageIndex, totalCount, "Converting markdown", title);
+        inFlight = (async () => {
+          const result = await n2m.pageToMarkdown(pageId);
+          const normalized = Array.isArray(result) ? result : (result ?? []);
+          markdownPrefetchCache.set(cacheKey, normalized);
+          return normalized;
+        })()
+          .catch((error) => {
+            markdownPrefetchCache.delete(cacheKey);
+            throw error;
+          })
+          .finally(() => {
+            inFlightMarkdownFetches.delete(cacheKey);
+          });
+        inFlightMarkdownFetches.set(cacheKey, inFlight);
+      }
+
+      const result = await inFlight;
+      const normalized = Array.isArray(result) ? result : (result ?? []);
+      markdownMap.set(pageId, { key: cacheKey, data: normalized });
+      return { data: normalized, source: "fetched" };
+    };
 
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
@@ -1439,19 +1489,23 @@ export async function generateBlocks(pages, progressCallback) {
 
             // PAGE
           } else if (normalizedSectionType === "page") {
+            pageProcessingIndex += 1;
+
             // Fetch raw block data first for emoji and callout processing
             let rawBlocks: any[] = [];
             let emojiMap = new Map<string, string>();
             try {
-              // Use prefetched data if available, otherwise fetch individually
-              rawBlocks =
-                blocksMap.get(page.id) || (await fetchNotionBlocks(page.id));
-              const source = blocksMap.has(page.id)
-                ? "prefetched cache"
-                : "individual fetch";
+              const { data: blockData, source: blockSource } =
+                await loadBlocksForPage(
+                  page,
+                  pageProcessingIndex - 1,
+                  totalPages,
+                  pageTitle
+                );
+              rawBlocks = blockData;
               console.log(
                 chalk.blue(
-                  `  ↳ Loaded ${rawBlocks.length} raw blocks for processing (${source})`
+                  `  ↳ Loaded ${rawBlocks.length} raw blocks for processing (${blockSource})`
                 )
               );
 
@@ -1460,9 +1514,11 @@ export async function generateBlocks(pages, progressCallback) {
                 page.id,
                 rawBlocks
               );
-              emojiMap = blockEmojiResult.emojiMap;
-              totalSaved += blockEmojiResult.totalSaved;
-              emojiCount += blockEmojiResult.emojiMap.size;
+              if (blockEmojiResult?.emojiMap instanceof Map) {
+                emojiMap = blockEmojiResult.emojiMap;
+                totalSaved += blockEmojiResult.totalSaved ?? 0;
+                emojiCount += blockEmojiResult.emojiMap.size;
+              }
             } catch (error) {
               const msg =
                 error && typeof error === "object" && "message" in error
@@ -1475,9 +1531,20 @@ export async function generateBlocks(pages, progressCallback) {
               );
             }
 
-            // Use prefetched markdown if available, otherwise convert individually
-            const markdown =
-              markdownMap.get(page.id) || (await n2m.pageToMarkdown(page.id));
+            // Load markdown lazily using the same caching mechanism
+            const { data: markdownData, source: markdownSource } =
+              await loadMarkdownForPage(
+                page,
+                pageProcessingIndex - 1,
+                totalPages,
+                pageTitle
+              );
+            const markdown = markdownData;
+            if (markdownSource === "fetched") {
+              console.log(chalk.blue(`  ↳ Markdown generated for page`));
+            } else if (markdownSource === "cache") {
+              console.log(chalk.blue(`  ↳ Markdown reused from cache`));
+            }
             const markdownString = n2m.toMarkdownString(markdown);
 
             if (markdownString?.parent) {
@@ -1502,9 +1569,11 @@ export async function generateBlocks(pages, progressCallback) {
                     page.id,
                     markdownString.parent
                   );
-                markdownString.parent = fallbackEmojiResult.content;
-                totalSaved += fallbackEmojiResult.totalSaved;
-                emojiCount += fallbackEmojiResult.processedCount;
+                if (fallbackEmojiResult) {
+                  markdownString.parent = fallbackEmojiResult.content;
+                  totalSaved += fallbackEmojiResult.totalSaved ?? 0;
+                  emojiCount += fallbackEmojiResult.processedCount ?? 0;
+                }
               }
 
               // Process callouts in the markdown to convert them to Docusaurus admonitions
@@ -1832,6 +1901,19 @@ export async function generateBlocks(pages, progressCallback) {
           SpinnerManager.remove(pageSpinner);
         }
       }
+    }
+
+    if (
+      blockFetchCount ||
+      blockCacheHits ||
+      markdownFetchCount ||
+      markdownCacheHits
+    ) {
+      console.info(
+        chalk.gray(
+          `\n📦 Prefetch cache stats → blocks fetched: ${blockFetchCount}, cache hits: ${blockCacheHits}; markdown fetched: ${markdownFetchCount}, cache hits: ${markdownCacheHits}`
+        )
+      );
     }
 
     // Final cache cleanup and statistics

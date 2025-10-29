@@ -4,6 +4,7 @@ import type { QueryDatabaseParameters } from "@notionhq/client/build/src/api-end
 import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
 import { generateBlocks } from "./generateBlocks";
 import { trackSpinner } from "./runtime";
+import { perfTelemetry } from "../perfTelemetry";
 
 export interface FetchPipelineOptions {
   filter?: QueryDatabaseParameters["filter"];
@@ -41,30 +42,39 @@ export async function runFetchPipeline(
   const fetchSpinner = ora(fetchSpinnerText);
   let unregisterFetchSpinner: (() => void) | undefined;
   try {
+    perfTelemetry.phaseStart("fetch");
     fetchSpinner.start();
     unregisterFetchSpinner = trackSpinner(fetchSpinner);
     let data = await fetchNotionData(filter);
+    perfTelemetry.recordDataset({ pages: Array.isArray(data) ? data.length : 0 });
+    perfTelemetry.phaseEnd("fetch");
     data = Array.isArray(data) ? data : [];
 
+    perfTelemetry.phaseStart("sort-expand");
     data = await sortAndExpandNotionData(data);
+    perfTelemetry.phaseEnd("sort-expand");
     data = Array.isArray(data) ? data : [];
 
+    perfTelemetry.phaseStart("transform");
     if (transform) {
       const transformed = await transform(data);
       data = Array.isArray(transformed) ? transformed : [];
     }
+    perfTelemetry.phaseEnd("transform");
 
     if (fetchSpinner.isSpinning) {
       fetchSpinner.succeed(chalk.green("Data fetched successfully"));
     }
 
     if (!shouldGenerate) {
+      perfTelemetry.flush();
       return { data };
     }
 
     const generateSpinner = ora(generateSpinnerText);
     let unregisterGenerateSpinner: (() => void) | undefined;
     try {
+      perfTelemetry.phaseStart("generate");
       generateSpinner.start();
       unregisterGenerateSpinner = trackSpinner(generateSpinner);
       const metrics = await generateBlocks(data, (progress) => {
@@ -75,11 +85,13 @@ export async function runFetchPipeline(
         }
         onProgress?.(progress);
       });
+      perfTelemetry.phaseEnd("generate");
 
       if (generateSpinner.isSpinning) {
         generateSpinner.succeed(chalk.green("Blocks generated successfully"));
       }
 
+      perfTelemetry.flush();
       return { data, metrics };
     } catch (error) {
       if (generateSpinner.isSpinning) {
@@ -93,6 +105,7 @@ export async function runFetchPipeline(
     if (fetchSpinner.isSpinning) {
       fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
     }
+    perfTelemetry.flush();
     throw error;
   } finally {
     unregisterFetchSpinner?.();

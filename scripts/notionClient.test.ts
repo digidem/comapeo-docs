@@ -286,6 +286,27 @@ describe("notionClient", () => {
         expect.stringContaining("databases.query failed after 5 attempts")
       );
     });
+
+    it("should open rate limit circuit after sustained 429 responses", async () => {
+      const rateLimitError = createMockError("Rate limited", 429);
+      const queryParams = { database_id: "test-db" };
+      mockClient.databases.query.mockRejectedValue(rateLimitError);
+
+      process.env.NOTION_RATE_LIMIT_THRESHOLD = "3";
+      process.env.NOTION_RATE_LIMIT_WINDOW_MS = "10000";
+
+      const {
+        enhancedNotion,
+        RateLimitCircuitOpenError,
+      } = await import("./notionClient");
+
+      await expect(
+        enhancedNotion.databasesQuery(queryParams)
+      ).rejects.toBeInstanceOf(RateLimitCircuitOpenError);
+
+      delete process.env.NOTION_RATE_LIMIT_THRESHOLD;
+      delete process.env.NOTION_RATE_LIMIT_WINDOW_MS;
+    });
   });
 
   describe("enhancedNotion.pagesRetrieve", () => {

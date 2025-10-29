@@ -3,6 +3,7 @@ import {
   BlockObjectResponse,
   PartialBlockObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints";
+import { perfTelemetry } from "./perfTelemetry";
 
 // Type guard to check if a block is a complete BlockObjectResponse
 function isFullBlock(
@@ -91,42 +92,7 @@ export async function fetchNotionData(filter) {
     }
   }
 
-  return results;
-}
-
-/**
- * Simple rate limiter without external dependencies
- * Limits concurrent operations to prevent API rate limiting
- */
-async function rateLimitedPromiseAll<T>(
-  promises: (() => Promise<T>)[],
-  concurrency: number = 3
-): Promise<T[]> {
-  const results: T[] = new Array(promises.length);
-  const executing: Promise<void>[] = [];
-
-  for (let index = 0; index < promises.length; index++) {
-    const promiseFn = promises[index];
-    const p = promiseFn()
-      .then((result) => {
-        results[index] = result;
-        return result;
-      })
-      .finally(() => {
-        const executingIndex = executing.indexOf(p);
-        if (executingIndex !== -1) {
-          executing.splice(executingIndex, 1);
-        }
-      });
-
-    executing.push(p);
-
-    if (executing.length >= concurrency) {
-      await Promise.race(executing);
-    }
-  }
-
-  await Promise.all(executing);
+  perfTelemetry.recordDataset({ parentPages: results.length });
   return results;
 }
 
@@ -184,24 +150,30 @@ export async function sortAndExpandNotionData(
     `📥 Fetching ${allRelations.length} sub-pages across ${data.length} parent pages...`
   );
 
-  // Fetch all sub-pages in parallel with rate limiting (3 concurrent requests)
+  // Fetch all sub-pages in parallel with shared scheduler-enforced rate limiting
   // This prevents sequential bottleneck while respecting API rate limits
   const startTime = Date.now();
-  const subpages = await rateLimitedPromiseAll(
-    allRelations.map((rel, index) => async () => {
-      // Progress logging every 10 items or for first/last
-      if (
-        index === 0 ||
-        index === allRelations.length - 1 ||
-        (index + 1) % 10 === 0
-      ) {
-        console.log(
-          `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
-        );
-      }
-      return await enhancedNotion.pagesRetrieve({ page_id: rel.subId });
-    }),
-    3 // Max 3 concurrent requests to avoid rate limiting
+  perfTelemetry.recordDataset({
+    parentPages: data.length,
+    subpageRelations: allRelations.length,
+  });
+
+  const subpages = await Promise.all(
+    allRelations.map((rel, index) =>
+      (async () => {
+        // Progress logging every 10 items or for first/last
+        if (
+          index === 0 ||
+          index === allRelations.length - 1 ||
+          (index + 1) % 10 === 0
+        ) {
+          console.log(
+            `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
+          );
+        }
+        return await enhancedNotion.pagesRetrieve({ page_id: rel.subId });
+      })()
+    )
   );
 
   const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);

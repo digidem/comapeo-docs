@@ -100,6 +100,17 @@ const parseArgs = (): CliOptions => {
         options.analysis = false;
         options.comparison = false;
         break;
+      case "--perf-log":
+        if (!process.env.NOTION_PERF_LOG) {
+          process.env.NOTION_PERF_LOG = "1";
+        }
+        break;
+      case "--perf-output":
+        const outputPath = args[++i];
+        if (outputPath && !process.env.NOTION_PERF_OUTPUT) {
+          process.env.NOTION_PERF_OUTPUT = outputPath;
+        }
+        break;
       case "--status-filter":
         options.statusFilter = args[++i];
         break;
@@ -145,6 +156,10 @@ const printHelp = () => {
   );
   console.log(
     "  --preview-only             Generate preview only, no file export"
+  );
+  console.log("  --perf-log                 Enable performance summary logging");
+  console.log(
+    "  --perf-output <file>       Write performance JSON to provided path"
   );
   console.log("  --status-filter <status>   Filter by specific status");
   console.log("  --max-pages <number>       Limit number of pages to process");

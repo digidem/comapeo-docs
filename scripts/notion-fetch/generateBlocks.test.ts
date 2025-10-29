@@ -115,6 +115,9 @@ describe("generateBlocks", () => {
     // Reset all mocks
     vi.clearAllMocks();
 
+    const { __resetPrefetchCaches } = await import("./generateBlocks");
+    __resetPrefetchCaches();
+
     // Setup default mock implementations
     const { processImage } = vi.mocked(await import("./imageProcessor"));
     processImage.mockResolvedValue(mockProcessedImageResult);
@@ -263,6 +266,42 @@ describe("generateBlocks", () => {
 
       expect(markdownCall).toBeDefined();
       expect(progressCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe("Prefetch caching", () => {
+    it("reuses cached blocks and markdown for unchanged pages", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const { fetchNotionBlocks } = vi.mocked(
+        await import("../fetchNotionData")
+      );
+      const { n2m } = vi.mocked(await import("../notionClient"));
+
+      const page = createMockNotionPage({
+        id: "cache-page",
+        lastEditedTime: "2025-01-01T00:00:00.000Z",
+        elementType: "Page",
+      });
+
+      const pages = [page];
+      const progressCallback = vi.fn();
+
+      const markdownResult: any[] = [];
+
+      fetchNotionBlocks.mockResolvedValue([]);
+      n2m.pageToMarkdown.mockResolvedValue(markdownResult);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Cached content" });
+
+      await generateBlocks(pages, progressCallback);
+      expect(fetchNotionBlocks).toHaveBeenCalledTimes(1);
+      expect(n2m.pageToMarkdown).toHaveBeenCalledTimes(1);
+
+      fetchNotionBlocks.mockClear();
+      n2m.pageToMarkdown.mockClear();
+
+      await generateBlocks(pages, progressCallback);
+      expect(fetchNotionBlocks).not.toHaveBeenCalled();
+      expect(n2m.pageToMarkdown).not.toHaveBeenCalled();
     });
   });
 

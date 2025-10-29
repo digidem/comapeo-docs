@@ -160,11 +160,9 @@ async function processImageWithFallbacks(
   }
 }
 
-// Simple in-process mutex to serialize writes
-let imageLogWriting = Promise.resolve();
-
 /**
  * Logs image failures for manual recovery
+ * Note: Simplified to use direct async/await without promise chaining to avoid deadlocks
  */
 async function logImageFailure(logEntry: any): Promise<void> {
   const logPath = path.join(process.cwd(), "image-failures.json");
@@ -188,60 +186,51 @@ async function logImageFailure(logEntry: any): Promise<void> {
     }
   })();
 
-  imageLogWriting = imageLogWriting
-    .then(async () => {
-      try {
-        fs.mkdirSync(logDir, { recursive: true });
-      } catch {
-        // ignore
-      }
+  try {
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+    } catch {
+      // ignore
+    }
 
-      let existingLogs: any[] = [];
-      try {
-        if (fs.existsSync(logPath)) {
-          const content = fs.readFileSync(logPath, "utf-8");
-          const parsed = JSON.parse(content);
-          existingLogs = Array.isArray(parsed) ? parsed : [];
-        }
-      } catch {
-        existingLogs = [];
+    let existingLogs: any[] = [];
+    try {
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, "utf-8");
+        const parsed = JSON.parse(content);
+        existingLogs = Array.isArray(parsed) ? parsed : [];
       }
-      existingLogs.push(safeEntry);
-      if (existingLogs.length > MAX_ENTRIES) {
-        existingLogs = existingLogs.slice(-MAX_ENTRIES);
-      }
+    } catch {
+      existingLogs = [];
+    }
+    existingLogs.push(safeEntry);
+    if (existingLogs.length > MAX_ENTRIES) {
+      existingLogs = existingLogs.slice(-MAX_ENTRIES);
+    }
 
-      const payload = JSON.stringify(existingLogs, null, 2);
-      try {
-        fs.writeFileSync(tmpPath, payload);
-        fs.renameSync(tmpPath, logPath);
-      } catch {
-        console.warn(
-          chalk.yellow("Failed to write image failure log atomically")
-        );
-        try {
-          fs.writeFileSync(logPath, payload);
-        } catch {
-          console.warn(chalk.yellow("Failed to write image failure log"));
-        }
-      } finally {
-        try {
-          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-        } catch {
-          // best-effort cleanup
-        }
-      }
-      return undefined;
-    })
-    .catch((e) => {
+    const payload = JSON.stringify(existingLogs, null, 2);
+    try {
+      fs.writeFileSync(tmpPath, payload);
+      fs.renameSync(tmpPath, logPath);
+    } catch {
       console.warn(
-        chalk.yellow("Image failure log write error; resetting queue"),
-        e
+        chalk.yellow("Failed to write image failure log atomically")
       );
-      return undefined;
-    });
-
-  await imageLogWriting;
+      try {
+        fs.writeFileSync(logPath, payload);
+      } catch {
+        console.warn(chalk.yellow("Failed to write image failure log"));
+      }
+    } finally {
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  } catch (e) {
+    console.warn(chalk.yellow("Image failure log write error"), e);
+  }
 }
 
 /**

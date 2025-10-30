@@ -1,8 +1,103 @@
 import imagemin from "imagemin";
 import imageminJpegtran from "imagemin-jpegtran";
-import imageminPngquant from "imagemin-pngquant";
 import imageminSvgo from "imagemin-svgo";
 import imageminWebp from "imagemin-webp";
+import { spawn } from "node:child_process";
+import pngquantBin from "pngquant-bin";
+
+const DEFAULT_PNGQUANT_TIMEOUT_MS = 30_000;
+const PNGQUANT_SPEED = process.env.PNGQUANT_SPEED ?? "3";
+const PNGQUANT_QUALITY =
+  process.env.PNGQUANT_QUALITY ??
+  (process.env.PNGQUANT_MIN_QUALITY && process.env.PNGQUANT_MAX_QUALITY
+    ? `${process.env.PNGQUANT_MIN_QUALITY}-${process.env.PNGQUANT_MAX_QUALITY}`
+    : "60-80");
+const PNGQUANT_TIMEOUT_RAW = process.env.PNGQUANT_TIMEOUT_MS;
+const PNGQUANT_TIMEOUT_MS =
+  PNGQUANT_TIMEOUT_RAW && !Number.isNaN(Number(PNGQUANT_TIMEOUT_RAW))
+    ? Math.max(Number(PNGQUANT_TIMEOUT_RAW), 1_000)
+    : DEFAULT_PNGQUANT_TIMEOUT_MS;
+
+async function compressPngWithTimeout(buffer: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "--quality",
+      PNGQUANT_QUALITY,
+      "--speed",
+      PNGQUANT_SPEED,
+      "--strip",
+      "-",
+    ];
+
+    const child = spawn(pngquantBin, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let finished = false;
+
+    const cleanup = (error?: Error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutId);
+      child.removeAllListeners();
+      child.stdout.removeAllListeners();
+      child.stderr.removeAllListeners();
+      child.stdin.removeAllListeners();
+      if (error) {
+        reject(error);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      child.kill("SIGKILL");
+      const timeoutError = new Error(
+        `pngquant timed out after ${PNGQUANT_TIMEOUT_MS}ms`
+      );
+      cleanup(timeoutError);
+    }, PNGQUANT_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutChunks.push(chunk);
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+    });
+
+    child.on("error", (error) => {
+      cleanup(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    child.stdin.on("error", (error) => {
+      cleanup(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    child.on("close", (code) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutId);
+      if (code === 0) {
+        if (stdoutChunks.length === 0) {
+          const message =
+            Buffer.concat(stderrChunks).toString().trim() ||
+            "pngquant produced no output";
+          reject(new Error(message));
+          return;
+        }
+        resolve(Buffer.concat(stdoutChunks));
+      } else {
+        const stderr = Buffer.concat(stderrChunks).toString().trim();
+        reject(
+          new Error(stderr || `pngquant exited with code ${code ?? "unknown"}`)
+        );
+      }
+    });
+
+    child.stdin.end(buffer);
+  });
+}
 
 /**
  * Best-effort sniffing of image format from buffer magic bytes.
@@ -54,7 +149,7 @@ function detectFormatFromBuffer(
 /**
  * Compress image buffer without changing its format.
  * - JPEG => jpegtran
- * - PNG  => pngquant
+ * - PNG  => pngquant (with enforced timeout + kill guard)
  * - SVG  => svgo
  * - WEBP => webp (re-encode webp only)
  * - GIF/unknown => passthrough (no conversion)
@@ -64,24 +159,49 @@ export async function compressImage(inputBuffer: Buffer) {
     const format = detectFormatFromBuffer(inputBuffer);
 
     // Choose plugins based on detected format to avoid cross-format conversions.
-    let plugins: unknown[] = [];
     switch (format) {
-      case "jpeg":
-        plugins = [imageminJpegtran()];
-        break;
-      case "png":
-        plugins = [imageminPngquant({ quality: [0.6, 0.8] })];
-        break;
-      case "svg":
-        plugins = [
-          imageminSvgo({
-            plugins: [{ name: "removeViewBox", active: false }],
-          }),
-        ];
-        break;
-      case "webp":
-        plugins = [imageminWebp({ quality: 75 })];
-        break;
+      case "jpeg": {
+        const compressedBuffer = await imagemin.buffer(inputBuffer, {
+          plugins: [imageminJpegtran()],
+        });
+        return {
+          compressedBuffer,
+          originalSize: inputBuffer.length,
+          compressedSize: compressedBuffer.length,
+        };
+      }
+      case "png": {
+        const compressedBuffer = await compressPngWithTimeout(inputBuffer);
+        return {
+          compressedBuffer,
+          originalSize: inputBuffer.length,
+          compressedSize: compressedBuffer.length,
+        };
+      }
+      case "svg": {
+        const compressedBuffer = await imagemin.buffer(inputBuffer, {
+          plugins: [
+            imageminSvgo({
+              plugins: [{ name: "removeViewBox", active: false }],
+            }),
+          ],
+        });
+        return {
+          compressedBuffer,
+          originalSize: inputBuffer.length,
+          compressedSize: compressedBuffer.length,
+        };
+      }
+      case "webp": {
+        const compressedBuffer = await imagemin.buffer(inputBuffer, {
+          plugins: [imageminWebp({ quality: 75 })],
+        });
+        return {
+          compressedBuffer,
+          originalSize: inputBuffer.length,
+          compressedSize: compressedBuffer.length,
+        };
+      }
       // For GIF or unknown formats, do not attempt optimization to avoid format changes.
       default:
         return {
@@ -90,13 +210,6 @@ export async function compressImage(inputBuffer: Buffer) {
           compressedSize: inputBuffer.length,
         };
     }
-
-    const compressedBuffer = await imagemin.buffer(inputBuffer, { plugins });
-    return {
-      compressedBuffer,
-      originalSize: inputBuffer.length,
-      compressedSize: compressedBuffer.length,
-    };
   } catch (error) {
     console.error("Error compressing image:", error);
     throw error;

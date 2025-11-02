@@ -1,4 +1,4 @@
-import { enhancedNotion, DATABASE_ID } from "./notionClient";
+import { enhancedNotion, DATABASE_ID, DATA_SOURCE_ID } from "./notionClient";
 import {
   BlockObjectResponse,
   PartialBlockObjectResponse,
@@ -29,7 +29,9 @@ export async function fetchNotionData(filter) {
     }
 
     const response = await enhancedNotion.databasesQuery({
-      database_id: DATABASE_ID,
+      // v5 API: database_id parameter is mapped to data_source_id
+      // The legacy method in notionClient.ts handles this mapping
+      database_id: DATA_SOURCE_ID || DATABASE_ID,
       filter,
       start_cursor: startCursor,
       page_size: 100,
@@ -65,7 +67,7 @@ export async function fetchNotionData(filter) {
       // One retry attempt to recover from transient anomaly
       console.warn("Notion API pagination anomaly detected; retrying once...");
       const retryResp = await enhancedNotion.databasesQuery({
-        database_id: DATABASE_ID,
+        database_id: DATA_SOURCE_ID || DATABASE_ID,
         filter,
         start_cursor: prevCursor,
         page_size: 100,

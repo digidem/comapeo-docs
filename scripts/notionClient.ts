@@ -241,15 +241,19 @@ export function resetRateLimitTracker(): void {
 // Initialize circuit breaker check for the scheduler
 setCircuitBreakerCheck(isCircuitBreakerOpen);
 
-// Create Notion client with timeout
+// Create Notion client with timeout and v5 API version
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
   timeoutMs: RETRY_CONFIG.timeout,
+  notionVersion: "2025-09-03", // Required for v5 API
 });
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
 export const DATABASE_ID = resolvedDatabaseId;
+
+// For v5 API compatibility - export data source ID when discovered
+export const DATA_SOURCE_ID = process.env.DATA_SOURCE_ID;
 
 /**
  * Sleep utility for retry delays
@@ -381,18 +385,34 @@ class EnhancedNotionClient {
     this.client = client;
   }
 
-  async databasesQuery(params: Record<string, unknown>) {
+  async dataSourcesQuery(params: Record<string, unknown>) {
     return scheduleRequest(
       () =>
         executeWithRetry(
           () =>
-            this.client.databases.query?.(
-              params as Parameters<typeof this.client.databases.query>[0]
+            this.client.dataSources.query?.(
+              params as Parameters<typeof this.client.dataSources.query>[0]
             ),
-          "databases.query"
+          "dataSources.query"
         ),
-      { label: "databases.query" }
+      { label: "dataSources.query" }
     );
+  }
+
+  // Legacy method for backward compatibility during migration
+  async databasesQuery(params: Record<string, unknown>) {
+    console.warn(
+      chalk.yellow(
+        "⚠️  databasesQuery is deprecated. Use dataSourcesQuery instead with data_source_id parameter."
+      )
+    );
+    // If params contains database_id, try to use it as data_source_id
+    const { database_id, ...rest } = params as { database_id?: string };
+    const mappedParams = {
+      data_source_id: database_id,
+      ...rest,
+    };
+    return this.dataSourcesQuery(mappedParams);
   }
 
   async pagesRetrieve(params: Record<string, unknown>) {

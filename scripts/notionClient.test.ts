@@ -65,7 +65,7 @@ describe("notionClient", () => {
 
     // Create mock client with all required methods
     mockClient = {
-      databases: { query: vi.fn() },
+      dataSources: { query: vi.fn() },
       pages: { retrieve: vi.fn() },
       blocks: { children: { list: vi.fn() } },
     };
@@ -146,6 +146,7 @@ describe("notionClient", () => {
       expect(Client).toHaveBeenCalledWith({
         auth: "test-key",
         timeoutMs: 5000,
+        notionVersion: "2025-09-03",
       });
     });
 
@@ -423,6 +424,7 @@ describe("notionClient", () => {
       expect(exports.n2m).toBeDefined();
       expect(exports.enhancedNotion).toBeDefined();
       expect(exports.DATABASE_ID).toBeDefined();
+      expect(exports.DATA_SOURCE_ID).toBeDefined();
     });
 
     it("should export enhancedNotion with all required methods", async () => {

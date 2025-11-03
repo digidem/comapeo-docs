@@ -58,6 +58,7 @@ describe("notionClient", () => {
     // Set up test environment variables
     process.env.NOTION_API_KEY = "test-api-key";
     process.env.DATABASE_ID = "test-database-id";
+    process.env.DATA_SOURCE_ID = "test-data-source-id";
     delete process.env.NOTION_DATABASE_ID;
 
     // Mock console methods
@@ -67,7 +68,7 @@ describe("notionClient", () => {
     mockClient = {
       dataSources: { query: vi.fn() },
       pages: { retrieve: vi.fn() },
-      blocks: { children: { list: vi.fn() } },
+      blocks: { children: { list: vi.fn() }, append: vi.fn(), delete: vi.fn() },
     };
 
     // Create mock NotionToMarkdown
@@ -76,9 +77,24 @@ describe("notionClient", () => {
       toMarkdownString: vi.fn(),
     };
 
-    // Set up constructor mocks
-    vi.mocked(Client).mockImplementation(() => mockClient);
-    vi.mocked(NotionToMarkdown).mockImplementation(() => mockN2M);
+    // Set up constructor mocks - create a proper constructor function
+    const MockClientClass = vi.fn().mockImplementation(function (
+      this: any,
+      config: any
+    ) {
+      return mockClient;
+    });
+
+    const MockNotionToMarkdownClass = vi.fn().mockImplementation(function (
+      this: any,
+      config: any
+    ) {
+      return mockN2M;
+    });
+
+    // Replace the Client and NotionToMarkdown with our mocks
+    (Client as any).mockImplementation(MockClientClass);
+    (NotionToMarkdown as any).mockImplementation(MockNotionToMarkdownClass);
   });
 
   afterEach(() => {
@@ -167,7 +183,7 @@ describe("notionClient", () => {
       // Arrange
       const mockData = { results: [], has_more: false };
       const queryParams = { database_id: "test-db" };
-      mockClient.databases.query.mockResolvedValue(mockData);
+      mockClient.dataSources.query.mockResolvedValue(mockData);
 
       const { enhancedNotion } = await import("./notionClient");
 
@@ -176,8 +192,11 @@ describe("notionClient", () => {
 
       // Assert
       expect(result).toBe(mockData);
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(1);
-      expect(mockClient.databases.query).toHaveBeenCalledWith(queryParams);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(1);
+      // The legacy method maps database_id to data_source_id
+      expect(mockClient.dataSources.query).toHaveBeenCalledWith({
+        data_source_id: "test-db",
+      });
     });
 
     it("should retry on rate limit error (429)", async () => {
@@ -186,7 +205,7 @@ describe("notionClient", () => {
       const successData = { results: [], has_more: false };
       const queryParams = { database_id: "test-db" };
 
-      mockClient.databases.query
+      mockClient.dataSources.query
         .mockRejectedValueOnce(rateLimitError)
         .mockResolvedValueOnce(successData);
 
@@ -197,9 +216,9 @@ describe("notionClient", () => {
 
       // Assert
       expect(result).toBe(successData);
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(2);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(2);
       expect(consoleMocks.warn).toHaveBeenCalledWith(
-        expect.stringContaining("databases.query failed (attempt 1/5)")
+        expect.stringContaining("dataSources.query failed (attempt 1/5)")
       );
     });
 
@@ -209,7 +228,7 @@ describe("notionClient", () => {
       const successData = { results: [], has_more: false };
       const queryParams = { database_id: "test-db" };
 
-      mockClient.databases.query
+      mockClient.dataSources.query
         .mockRejectedValueOnce(serverError)
         .mockResolvedValueOnce(successData);
 
@@ -220,7 +239,7 @@ describe("notionClient", () => {
 
       // Assert
       expect(result).toBe(successData);
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(2);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(2);
     });
 
     it("should retry on network error", async () => {
@@ -233,7 +252,7 @@ describe("notionClient", () => {
       const successData = { results: [], has_more: false };
       const queryParams = { database_id: "test-db" };
 
-      mockClient.databases.query
+      mockClient.dataSources.query
         .mockRejectedValueOnce(networkError)
         .mockResolvedValueOnce(successData);
 
@@ -244,7 +263,7 @@ describe("notionClient", () => {
 
       // Assert
       expect(result).toBe(successData);
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(2);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(2);
     });
 
     it("should not retry on client error (400)", async () => {
@@ -252,7 +271,7 @@ describe("notionClient", () => {
       const clientError = createMockError("Bad request", 400);
       const queryParams = { database_id: "invalid" };
 
-      mockClient.databases.query.mockRejectedValue(clientError);
+      mockClient.dataSources.query.mockRejectedValue(clientError);
 
       const { enhancedNotion } = await import("./notionClient");
 
@@ -261,9 +280,9 @@ describe("notionClient", () => {
         clientError
       );
 
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(1);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("Non-retryable error in databases.query"),
+        expect.stringContaining("Non-retryable error in dataSources.query"),
         "Bad request"
       );
     });
@@ -273,7 +292,7 @@ describe("notionClient", () => {
       const rateLimitError = createMockError("Rate limited", 429);
       const queryParams = { database_id: "test-db" };
 
-      mockClient.databases.query.mockRejectedValue(rateLimitError);
+      mockClient.dataSources.query.mockRejectedValue(rateLimitError);
 
       const { enhancedNotion } = await import("./notionClient");
 
@@ -282,24 +301,23 @@ describe("notionClient", () => {
         rateLimitError
       );
 
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(5); // 1 initial + 4 retries
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(5); // 1 initial + 4 retries
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("databases.query failed after 5 attempts")
+        expect.stringContaining("dataSources.query failed after 5 attempts")
       );
     });
 
     it("should open rate limit circuit after sustained 429 responses", async () => {
       const rateLimitError = createMockError("Rate limited", 429);
       const queryParams = { database_id: "test-db" };
-      mockClient.databases.query.mockRejectedValue(rateLimitError);
+      mockClient.dataSources.query.mockRejectedValue(rateLimitError);
 
       process.env.NOTION_RATE_LIMIT_THRESHOLD = "3";
       process.env.NOTION_RATE_LIMIT_WINDOW_MS = "10000";
 
-      const {
-        enhancedNotion,
-        RateLimitCircuitOpenError,
-      } = await import("./notionClient");
+      const { enhancedNotion, RateLimitCircuitOpenError } = await import(
+        "./notionClient"
+      );
 
       await expect(
         enhancedNotion.databasesQuery(queryParams)
@@ -397,7 +415,7 @@ describe("notionClient", () => {
       const rateLimitError = createMockError("Rate limited", 429);
       const queryParams = { database_id: "test-db" };
 
-      mockClient.databases.query.mockRejectedValue(rateLimitError);
+      mockClient.dataSources.query.mockRejectedValue(rateLimitError);
 
       const { enhancedNotion } = await import("./notionClient");
 
@@ -410,7 +428,7 @@ describe("notionClient", () => {
       const duration = Date.now() - start;
 
       expect(duration).toBeGreaterThanOrEqual(200);
-      expect(mockClient.databases.query).toHaveBeenCalledTimes(5);
+      expect(mockClient.dataSources.query).toHaveBeenCalledTimes(5);
     });
   });
 

@@ -27,8 +27,9 @@ export async function updateNotionPageStatus(
 
   try {
     // Query pages with the "from" status
-    const response = await notion.databases.query({
-      database_id: databaseId,
+    const response = await notion.dataSources.query({
+      // v5 API: use data_source_id instead of database_id
+      data_source_id: databaseId,
       filter: {
         property: NOTION_PROPERTIES.STATUS,
         select: {

@@ -572,8 +572,9 @@ export async function createNotionPageFromMarkdown(
             },
           };
 
-      const response = await notion.databases.query({
-        database_id: databaseId,
+      const response = await notion.dataSources.query({
+        // v5 API: use data_source_id instead of database_id
+        data_source_id: databaseId,
         filter: filter,
       });
 
@@ -657,9 +658,10 @@ export async function createNotionPageFromMarkdown(
 
         // Create a new page with correct parent and Parent item relation
         const newPage = await notion.pages.create({
+          // v5 API: use data_source_id in parent instead of database_id
           parent: {
-            type: "database_id",
-            database_id: databaseId,
+            type: "data_source_id",
+            data_source_id: databaseId,
           },
           // @ts-expect-error - Notion API types are not fully compatible with our types
           properties: pageProperties,

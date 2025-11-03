@@ -19,7 +19,10 @@ export async function updateNotionDatabaseTitle(
 ): Promise<void> {
   const { token, databaseId, packageJsonPath = "package.json" } = options;
 
-  const notion = new Client({ auth: token });
+  const notion = new Client({
+    auth: token,
+    notionVersion: "2025-09-03", // Required for v5 API
+  });
   const spinner = ora(
     "Updating database title with version information"
   ).start();
@@ -35,6 +38,7 @@ export async function updateNotionDatabaseTitle(
     }
 
     // Get current database information
+    // v5 API: databases.retrieve still uses database_id but returns data_sources
     const database = await notion.databases.retrieve({
       database_id: databaseId,
     });

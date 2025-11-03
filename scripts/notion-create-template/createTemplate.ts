@@ -61,8 +61,9 @@ async function getHighestOrder(
   notion: Client,
   databaseId: string
 ): Promise<number> {
-  const response = await notion.databases.query({
-    database_id: databaseId,
+  const response = await notion.dataSources.query({
+    // v5 API: use data_source_id instead of database_id
+    data_source_id: databaseId,
     sorts: [
       {
         property: NOTION_PROPERTIES.ORDER,
@@ -126,9 +127,10 @@ async function createTemplatePage(
   };
 
   const newPage = await notion.pages.create({
+    // v5 API: use data_source_id in parent instead of database_id
     parent: {
-      type: "database_id",
-      database_id: databaseId,
+      type: "data_source_id",
+      data_source_id: databaseId,
     },
     // @ts-expect-error - Notion API types are not fully compatible with our types
     properties: pageProperties,
@@ -168,9 +170,10 @@ async function createChildPage(
   };
 
   const newPage = await notion.pages.create({
+    // v5 API: use data_source_id in parent instead of database_id
     parent: {
-      type: "database_id",
-      database_id: databaseId,
+      type: "data_source_id",
+      data_source_id: databaseId,
     },
     // @ts-expect-error - Notion API types are not fully compatible with our types
     properties: pageProperties,
@@ -189,6 +192,7 @@ export async function createContentTemplate(title: string): Promise<void> {
     // Initialize Notion client
     const notion = new Client({
       auth: process.env.NOTION_API_KEY,
+      notionVersion: "2025-09-03", // Required for v5 API
     });
 
     const databaseId = process.env.DATABASE_ID;

@@ -67,14 +67,14 @@ export async function updateNotionPageStatus(
         if (setPublishedDate) {
           properties[NOTION_PROPERTIES.PUBLISHED_DATE] = {
             date: {
-              start: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-            }
+              start: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
+            },
           };
         }
 
         await notion.pages.update({
           page_id: page.id,
-          properties
+          properties,
         });
         successCount++;
       } catch (error) {
@@ -121,11 +121,11 @@ const WORKFLOWS = {
     to: "Published",
     setPublishedDate: true, // Set the published date when publishing
   },
-  'publish-production': {
-    from: 'Staging',
-    to: 'Published',
-    setPublishedDate: true // Set the published date when publishing
-  }
+  "publish-production": {
+    from: "Staging",
+    to: "Published",
+    setPublishedDate: true, // Set the published date when publishing
+  },
 } as const;
 
 /**
@@ -171,13 +171,17 @@ async function main() {
 
   // Use environment variables as fallback
   const token = options.token || process.env.NOTION_API_KEY;
-  const databaseId =
+
+  // v5 API: Prefer DATA_SOURCE_ID, fall back to DATABASE_ID for backward compatibility
+  // Note: In v5, DATABASE_ID and DATA_SOURCE_ID may be different values!
+  const dataSourceId =
     options.databaseId ||
+    process.env.DATA_SOURCE_ID ||
     process.env.DATABASE_ID ||
     process.env.NOTION_DATABASE_ID;
 
-  if (databaseId) {
-    process.env.DATABASE_ID = databaseId;
+  if (dataSourceId) {
+    process.env.DATABASE_ID = dataSourceId;
   }
 
   // Determine status values based on workflow or explicit flags
@@ -204,7 +208,9 @@ async function main() {
     console.error(chalk.gray("  updateStatus.ts --workflow translation"));
     console.error(chalk.gray("  updateStatus.ts --workflow draft"));
     console.error(chalk.gray("  updateStatus.ts --workflow publish"));
-    console.error(chalk.gray("  updateStatus.ts --workflow publish-production"));
+    console.error(
+      chalk.gray("  updateStatus.ts --workflow publish-production")
+    );
     console.error(
       chalk.gray(
         '  updateStatus.ts --from "Custom Status" --to "Another Status"'
@@ -222,10 +228,12 @@ async function main() {
     process.exit(1);
   }
 
-  if (!databaseId) {
+  if (!dataSourceId) {
     console.error(
       chalk.red(
-        "DATABASE_ID is required (use --db-id or set environment variable)"
+        "DATA_SOURCE_ID or DATABASE_ID is required (use --db-id or set environment variable)\n" +
+          "For Notion API v5, please set DATA_SOURCE_ID in your .env file.\n" +
+          "Run: bun scripts/migration/discoverDataSource.ts"
       )
     );
     process.exit(1);
@@ -234,7 +242,7 @@ async function main() {
   try {
     await updateNotionPageStatus({
       token,
-      databaseId,
+      databaseId: dataSourceId,
       fromStatus,
       toStatus,
       setPublishedDate,

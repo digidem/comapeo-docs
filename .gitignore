@@ -75,6 +75,3 @@ screenshots/
 
 # Development planning and analysis documents (never commit)
 NEXT_STEPS.md
-
-# Git worktrees (temporary isolated branches)
-/worktrees/

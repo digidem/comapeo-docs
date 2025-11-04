@@ -73,5 +73,8 @@ static/images/emojis/*.webp
 # Playwright screenshots (for PR review only - never commit)
 screenshots/
 
+# Git worktrees
+worktrees/
+
 # Development planning and analysis documents (never commit)
 NEXT_STEPS.md

@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 
-vi.mock("../notionClient", () => ({
+process.env.NOTION_API_KEY ??= "test-notion-api-key";
+process.env.DATABASE_ID ??= "test-database-id";
+
+vi.mock("../../notionClient", () => ({
   n2m: {},
 }));
 

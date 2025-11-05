@@ -291,6 +291,11 @@ const config: Config = {
               label: "Latest",
             },
           },
+          // Configure TOC to ensure consistent rendering across all pages
+          // Start from H2 (since H1 is typically the page title in frontmatter)
+          // and go up to H3 for a clean, consistent table of contents
+          showLastUpdateTime: true,
+          showLastUpdateAuthor: true,
         },
         theme: {
           customCss: "./src/css/custom.css",
@@ -302,6 +307,18 @@ const config: Config = {
   themeConfig: {
     // Replace with your project's social card
     image: "img/comapeo-social-card.jpg",
+    // Configure table of contents to ensure consistent heading levels across all pages
+    // This prevents TOC inconsistencies caused by varying heading structures
+    docs: {
+      sidebar: {
+        hideable: true,
+        autoCollapseCategories: true,
+      },
+    },
+    tableOfContents: {
+      minHeadingLevel: 2,
+      maxHeadingLevel: 4,
+    },
     navbar: {
       // title: 'CoMapeo',
       logo: {

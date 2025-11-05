@@ -1814,17 +1814,20 @@ export async function generateBlocks(pages, progressCallback) {
 
               if (firstH1Match) {
                 const firstH1Text = firstH1Match[1].trim();
-                // Check if this heading is similar to the page title (exact match or contains)
-                if (
-                  firstH1Text === pageTitle ||
-                  pageTitle.includes(firstH1Text) ||
-                  firstH1Text.includes(pageTitle)
-                ) {
+                // Use strict exact match only to avoid incorrectly removing non-duplicate headings
+                // This ensures TOC consistency across all pages
+                if (firstH1Text === pageTitle) {
                   // Remove the duplicate heading
                   contentBody = contentBody.replace(firstH1Match[0], "");
 
                   // Also remove any empty lines at the beginning
                   contentBody = contentBody.replace(/^\s+/, "");
+
+                  console.log(
+                    chalk.blue(
+                      `  ↳ Removed duplicate H1 heading: "${firstH1Text}"`
+                    )
+                  );
                 }
               }
 

@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { n2m } from "../../notionClient";
 import { ensureBlankLineAfterStandaloneBold } from "../generateBlocks";
 
 describe("Notion introduction markdown inspection", () => {
   it("prints the generated markdown for the Introduction page", async () => {
-    if (!process.env.NOTION_API_KEY || !process.env.DATABASE_ID) {
+    const hasCredentials =
+      Boolean(process.env.NOTION_API_KEY) && Boolean(process.env.DATABASE_ID);
+
+    if (!hasCredentials) {
       console.warn(
         "Skipping markdown inspection: Notion credentials are not configured."
       );
@@ -12,6 +14,8 @@ describe("Notion introduction markdown inspection", () => {
     }
 
     const INTRODUCTION_PAGE_ID = "21f1b081-62d5-8008-9ca5-fad63c1a30ac";
+
+    const { n2m } = await import("../../notionClient");
 
     const markdownBlocks = await n2m.pageToMarkdown(INTRODUCTION_PAGE_ID);
     const rawMarkdown = n2m.toMarkdownString(markdownBlocks).parent ?? "";

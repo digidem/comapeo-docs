@@ -650,5 +650,20 @@
     },
     "Using Observations outside of CoMapeo": {
         "message": "Nova Página"
+    },
+    "Observations & Tracks": {
+        "message": "Novo título da seção"
+    },
+    "Gathering Observations & Tracks": {
+        "message": "Coletando Observações"
+    },
+    "Managing Data Privacy & Security": {
+        "message": "Gerenciamento de dados e privacidade"
+    },
+    "Exchanging Project Data": {
+        "message": "Intercambiar Observaciones"
+    },
+    "Moving Observations & Tracks Outside of CoMapeo": {
+        "message": "Compartilhando observações fora do CoMapeo"
     }
 }

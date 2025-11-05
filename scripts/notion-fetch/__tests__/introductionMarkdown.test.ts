@@ -1,5 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { ensureBlankLineAfterStandaloneBold } from "../generateBlocks";
+import { describe, it, expect, beforeAll, vi } from "vitest";
+
+vi.mock("../notionClient", () => ({
+  n2m: {},
+}));
+
+let ensureBlankLineAfterStandaloneBold: (content: string) => string;
+
+beforeAll(async () => {
+  ({ ensureBlankLineAfterStandaloneBold } = await import("../generateBlocks"));
+});
 
 describe("ensureBlankLineAfterStandaloneBold", () => {
   it("inserts a blank line after standalone bold headings", () => {

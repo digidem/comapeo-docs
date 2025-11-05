@@ -300,60 +300,17 @@ aside[class*="sidebar"] .menu__list-item-collapsible .menu__link {
 /*
  * Details/Toggle Styling
  * Issue #56: Match toggle background to warm light gray (same as callouts)
+ * Only changes background - preserves Docusaurus defaults for all other styling
  */
 
 /* Details element - matches NOTE admonition background */
 .theme-doc-markdown details,
 details {
-  background-color: rgba(229, 228, 226, 0.3);
-  border: 1px solid #e5e4e2;
-  border-radius: 4px;
-  padding: 1rem;
-  margin: 1rem 0;
-}
-
-/* Summary element - the clickable toggle header */
-.theme-doc-markdown details > summary,
-details > summary {
-  cursor: pointer;
-  font-weight: 600;
-  margin: -1rem;
-  padding: 1rem;
-  border-radius: 4px;
-  user-select: none;
-  list-style: none;
-}
-
-/* Remove default marker/arrow */
-.theme-doc-markdown details > summary::-webkit-details-marker,
-details > summary::-webkit-details-marker {
-  display: none;
-}
-
-/* Add custom arrow indicator */
-.theme-doc-markdown details > summary::before,
-details > summary::before {
-  content: "▶";
-  display: inline-block;
-  margin-right: 0.5rem;
-  transition: transform 0.2s ease;
-}
-
-/* Rotate arrow when open */
-.theme-doc-markdown details[open] > summary::before,
-details[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-/* Content inside details - add top spacing when expanded */
-.theme-doc-markdown details[open] > summary,
-details[open] > summary {
-  margin-bottom: 0.5rem;
+  background-color: rgba(229, 228, 226, 0.3) !important;
 }
 
 /* Dark mode adjustments */
 [data-theme="dark"] .theme-doc-markdown details,
 [data-theme="dark"] details {
-  background-color: rgba(229, 228, 226, 0.15);
-  border-color: rgba(229, 228, 226, 0.3);
+  background-color: rgba(229, 228, 226, 0.15) !important;
 }

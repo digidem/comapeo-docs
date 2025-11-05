@@ -75,6 +75,8 @@ describe("notionClient", () => {
     mockN2M = {
       pageToMarkdown: vi.fn(),
       toMarkdownString: vi.fn(),
+      setCustomTransformer: vi.fn(),
+      blockToMarkdown: vi.fn().mockResolvedValue({ parent: "", children: [] }),
     };
 
     // Set up constructor mocks - create a proper constructor function
@@ -175,6 +177,60 @@ describe("notionClient", () => {
 
       // Assert
       expect(DATABASE_ID).toBe("exported-database-id");
+    });
+
+    it("should register a spacer transformer for empty paragraph blocks", async () => {
+      await import("./notionClient");
+
+      expect(mockN2M.setCustomTransformer).toHaveBeenCalledWith(
+        "paragraph",
+        expect.any(Function)
+      );
+
+      const transformer = mockN2M.setCustomTransformer.mock.calls.find(
+        (call) => call[0] === "paragraph"
+      )?.[1];
+
+      expect(typeof transformer).toBe("function");
+
+      const emptyParagraph = {
+        id: "empty",
+        type: "paragraph",
+        has_children: false,
+        paragraph: {
+          rich_text: [],
+        },
+      } as any;
+
+      const spacerResult = await transformer(emptyParagraph);
+      expect(spacerResult).toEqual({
+        parent: expect.stringContaining("notion-spacer"),
+        children: [],
+      });
+      expect(mockN2M.blockToMarkdown).not.toHaveBeenCalled();
+
+      const populatedParagraph = {
+        id: "content",
+        type: "paragraph",
+        has_children: false,
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: "Hello" },
+              plain_text: "Hello",
+            },
+          ],
+        },
+      } as any;
+
+      mockN2M.blockToMarkdown.mockClear();
+      const expectedMarkdown = { parent: "Hello", children: [] };
+      mockN2M.blockToMarkdown.mockResolvedValueOnce(expectedMarkdown);
+
+      const markdownResult = await transformer(populatedParagraph);
+      expect(mockN2M.blockToMarkdown).toHaveBeenCalledWith(populatedParagraph);
+      expect(markdownResult).toBe(expectedMarkdown);
     });
   });
 

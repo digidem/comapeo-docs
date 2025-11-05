@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { ensureBlankLineAfterStandaloneBold } from "../generateBlocks";
 
 describe("Notion introduction markdown inspection", () => {
   it("prints the generated markdown for the Introduction page", async () => {
@@ -15,6 +14,10 @@ describe("Notion introduction markdown inspection", () => {
 
     const INTRODUCTION_PAGE_ID = "21f1b081-62d5-8008-9ca5-fad63c1a30ac";
 
+    const { ensureBlankLineAfterStandaloneBold } =
+      (await import("../generateBlocks")) as {
+        ensureBlankLineAfterStandaloneBold: (content: string) => string;
+      };
     const { n2m } = await import("../../notionClient");
 
     const markdownBlocks = await n2m.pageToMarkdown(INTRODUCTION_PAGE_ID);

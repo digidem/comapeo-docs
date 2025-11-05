@@ -73,32 +73,59 @@ async function discoverDataSourceId() {
       )
     );
 
-    // Step 2: Try querying with dataSources.query
+    // Step 2: Get the actual data_source_id from the database
     console.log(
-      chalk.cyan("\nStep 2: Testing dataSources.query with discovered ID...")
+      chalk.cyan("\nStep 2: Extracting data_source_id from database...")
     );
 
-    // The data_source_id should be the same as database_id for existing databases
-    // but we query to verify
+    // In v5, a database has a data_sources array with the actual data source IDs
+    // We need to use this ID, not the DATABASE_ID
+    const databaseData: any = database;
+    const dataSources = databaseData.data_sources;
+
+    if (!dataSources || dataSources.length === 0) {
+      console.error(chalk.red("\nNo data sources found for this database."));
+      console.log(
+        chalk.yellow("\nThis database might not have been migrated to v5 yet.")
+      );
+      console.log(
+        chalk.yellow(
+          "Please check if this database has been converted to use data sources.\n"
+        )
+      );
+      process.exit(1);
+    }
+
+    const actualDataSourceId = dataSources[0].id;
+    console.log(chalk.green(`✓ Found data source: ${actualDataSourceId}`));
+    console.log(chalk.gray(`  Database ID: ${DATABASE_ID}`));
+    console.log(chalk.gray(`  Data Source ID: ${actualDataSourceId}`));
+
+    // Step 3: Test querying with the correct data_source_id
+    console.log(
+      chalk.cyan("\nStep 3: Testing dataSources.query with correct ID...")
+    );
+
     const queryResult = await notion.dataSources.query({
-      data_source_id: DATABASE_ID,
+      data_source_id: actualDataSourceId,
       page_size: 1, // Just get one page to verify it works
     });
 
     console.log(chalk.green("✓ Successfully queried data source"));
     console.log(chalk.gray(`  Results found: ${queryResult.results.length}`));
 
-    // Step 3: Display results
+    // Step 4: Display results
     console.log(chalk.blue("\n📋 Migration Information:\n"));
     console.log(chalk.white("Current configuration:"));
     console.log(chalk.gray(`  DATABASE_ID: ${DATABASE_ID}`));
+    console.log(chalk.gray(`  DATA_SOURCE_ID: ${actualDataSourceId}`));
 
     console.log(chalk.white("\nFor Notion API v5, use:"));
-    console.log(chalk.green(`  DATA_SOURCE_ID: ${DATABASE_ID}`));
+    console.log(chalk.green(`  DATA_SOURCE_ID=${actualDataSourceId}`));
 
     console.log(chalk.blue("\n✅ Next Steps:\n"));
     console.log(chalk.white("1. Add this line to your .env file:"));
-    console.log(chalk.cyan(`   DATA_SOURCE_ID=${DATABASE_ID}`));
+    console.log(chalk.cyan(`   DATA_SOURCE_ID=${actualDataSourceId}`));
 
     console.log(chalk.white("\n2. Verify the change works:"));
     console.log(chalk.gray("   bun notion:fetch --dry-run"));
@@ -118,12 +145,7 @@ async function discoverDataSourceId() {
 
     console.log(
       chalk.yellow(
-        "\n⚠️  Note: For this database, DATA_SOURCE_ID is the same as DATABASE_ID."
-      )
-    );
-    console.log(
-      chalk.yellow(
-        "   However, this may not be true for all databases in the future."
+        "\n⚠️  Important: DATA_SOURCE_ID is different from DATABASE_ID in v5."
       )
     );
     console.log(
@@ -132,7 +154,7 @@ async function discoverDataSourceId() {
       )
     );
 
-    return DATABASE_ID;
+    return actualDataSourceId;
   } catch (error: unknown) {
     console.error(chalk.red("\n❌ Error discovering DATA_SOURCE_ID:"));
 

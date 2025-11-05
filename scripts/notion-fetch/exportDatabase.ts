@@ -14,6 +14,9 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const LINE_BREAK_REGEX = /(?:\r\n|[\r\n\u2028\u2029])/g;
+const HTML_LINE_BREAK = "<br />\n";
+
 // CLI Options Interface
 interface ExportOptions {
   verbose: boolean;
@@ -213,17 +216,21 @@ function extractTextFromBlock(block: Record<string, any>): string {
   const blockContent = block[blockType];
 
   // Handle rich text arrays (most common case)
+  // Preserve manual line breaks (including Windows \r\n) by converting them to HTML <br /> tags
   if (blockContent.rich_text && Array.isArray(blockContent.rich_text)) {
     return blockContent.rich_text
       .map((textObj: any) => textObj.plain_text || textObj.text?.content || "")
-      .join("");
+      .join("")
+      .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK);
   }
 
   // Handle title blocks
+  // Preserve manual line breaks (including Windows \r\n) by converting them to HTML <br /> tags
   if (blockContent.title && Array.isArray(blockContent.title)) {
     return blockContent.title
       .map((textObj: any) => textObj.plain_text || textObj.text?.content || "")
-      .join("");
+      .join("")
+      .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK);
   }
 
   // Handle text property directly
@@ -237,21 +244,28 @@ function extractTextFromBlock(block: Record<string, any>): string {
   }
 
   // Handle specific block types
+  // Preserve manual line breaks in captions and code blocks
   switch (blockType) {
     case "image":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[Image]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK) || "[Image]"
       );
     case "video":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[Video]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK) || "[Video]"
       );
     case "file":
       return (
-        blockContent.caption?.map((c: any) => c.plain_text || "").join("") ||
-        "[File]"
+        blockContent.caption
+          ?.map((c: any) => c.plain_text || "")
+          .join("")
+          .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK) || "[File]"
       );
     case "bookmark":
       return blockContent.url || "[Bookmark]";
@@ -259,8 +273,10 @@ function extractTextFromBlock(block: Record<string, any>): string {
       return blockContent.expression || "[Equation]";
     case "code":
       return (
-        blockContent.rich_text?.map((t: any) => t.plain_text || "").join("") ||
-        "[Code]"
+        blockContent.rich_text
+          ?.map((t: any) => t.plain_text || "")
+          .join("")
+          .replace(LINE_BREAK_REGEX, HTML_LINE_BREAK) || "[Code]"
       );
     case "divider":
       return "[Divider]";

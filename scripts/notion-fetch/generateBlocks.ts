@@ -287,6 +287,34 @@ function sanitizeMarkdownImages(content: string): string {
 }
 
 /**
+ * Ensure standalone bold lines (`**Heading**`) are treated as their own paragraphs
+ * by inserting a blank line when missing. This preserves Notion formatting where
+ * bold text represents a section title followed by descriptive copy.
+ */
+export function ensureBlankLineAfterStandaloneBold(content: string): string {
+  if (!content) return content;
+
+  const lines = content.split("\n");
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    result.push(line);
+
+    const nextLine = lines[i + 1];
+    const isStandaloneBold = /^\s*\*\*[^*].*\*\*\s*$/.test(line.trim());
+    const nextLineHasContent =
+      nextLine !== undefined && nextLine.trim().length > 0;
+
+    if (isStandaloneBold && nextLineHasContent) {
+      result.push("");
+    }
+  }
+
+  return result.join("\n");
+}
+
+/**
  * Image cache system to prevent re-downloading and provide recovery options
  */
 interface ImageCacheEntry {
@@ -1802,6 +1830,10 @@ export async function generateBlocks(pages, progressCallback) {
 
               // Sanitize content to fix malformed HTML/JSX tags
               markdownString.parent = sanitizeMarkdownContent(
+                markdownString.parent
+              );
+
+              markdownString.parent = ensureBlankLineAfterStandaloneBold(
                 markdownString.parent
               );
               // Remove duplicate title heading if it exists

@@ -201,6 +201,16 @@ Content here.`;
         expect(result).toMatch(/## Title with.*brackets/);
       });
 
+      it("should preserve indentation when normalizing headings", () => {
+        const input = `   # Indented Title
+  # Second Title
+   ## Existing Indented H2`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("   # Indented Title");
+        expect(result).toContain("  ## Second Title");
+        expect(result).toContain("   ## Existing Indented H2");
+      });
+
       it("should not affect code blocks with # symbols", () => {
         const input = `# Title
 \`\`\`bash

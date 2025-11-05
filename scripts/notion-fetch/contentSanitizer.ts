@@ -36,11 +36,11 @@ function fixHeadingHierarchy(
     }
 
     // Match markdown headings: # Heading text
-    const headingMatch = line.match(/^(#{1,6})\s*(.*)$/);
+    const headingMatch = line.match(/^(\s{0,3})(#{1,6})\s*(.*)$/);
 
     if (!headingMatch) return line;
 
-    const [, hashes, text] = headingMatch;
+    const [, leadingWhitespace, hashes, text] = headingMatch;
     const level = hashes.length;
     const trimmedText = text.trim();
 
@@ -57,7 +57,7 @@ function fixHeadingHierarchy(
         return line;
       } else {
         // Convert subsequent H1s to H2s
-        return `## ${trimmedText}`;
+        return `${leadingWhitespace}## ${trimmedText}`;
       }
     }
 

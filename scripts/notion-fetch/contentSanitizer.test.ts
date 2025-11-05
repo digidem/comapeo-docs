@@ -120,5 +120,110 @@ describe("contentSanitizer", () => {
       const result = scriptModule.sanitizeMarkdownContent(input);
       expect(result).toBe("[tag](#tag)");
     });
+
+    describe("heading hierarchy fixes", () => {
+      it("should keep the first H1 and convert subsequent H1s to H2s", () => {
+        const input = `# First Title
+Content here
+# Second Title
+More content
+# Third Title`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# First Title");
+        expect(result).toContain("## Second Title");
+        expect(result).toContain("## Third Title");
+        expect(result.match(/^# /gm)?.length).toBe(1);
+      });
+
+      it("should remove empty headings", () => {
+        const input = `# Valid Title
+#
+## Valid H2
+###
+Content`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# Valid Title");
+        expect(result).toContain("## Valid H2");
+        expect(result).not.toContain("#\n");
+        expect(result).not.toContain("###   ");
+      });
+
+      it("should preserve H2 and H3 headings unchanged", () => {
+        const input = `# Title
+## Section
+### Subsection
+#### Deep heading
+##### Deeper
+###### Deepest`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toBe(input);
+      });
+
+      it("should handle real Notion export pattern", () => {
+        const input = `# Setting up your phone
+### Checklist
+# Related Content
+### Why is it important
+# Troubleshooting`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# Setting up your phone");
+        expect(result).toContain("## Related Content");
+        expect(result).toContain("## Troubleshooting");
+        expect(result).toContain("### Checklist");
+        expect(result).toContain("### Why is it important");
+      });
+
+      it("should handle mixed content with headings", () => {
+        const input = `# Main Title
+Some **bold** content here.
+
+## Regular Section
+# Another Title (should become H2)
+More content with [links](#).
+
+### Subsection
+Content here.`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# Main Title");
+        expect(result).toContain("## Another Title (should become H2)");
+        expect(result).toContain("## Regular Section");
+        expect(result).toContain("### Subsection");
+      });
+
+      it("should handle headings with special characters", () => {
+        const input = `# Title [H1]
+# Another Title: Subtitle
+# Title with {brackets}`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# Title [H1]");
+        expect(result).toContain("## Another Title: Subtitle");
+        // Note: brackets get removed by other sanitization rules
+        expect(result).toMatch(/## Title with.*brackets/);
+      });
+
+      it("should preserve indentation when normalizing headings", () => {
+        const input = `   # Indented Title
+  # Second Title
+   ## Existing Indented H2`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("   # Indented Title");
+        expect(result).toContain("  ## Second Title");
+        expect(result).toContain("   ## Existing Indented H2");
+      });
+
+      it("should not affect code blocks with # symbols", () => {
+        const input = `# Title
+\`\`\`bash
+# This is a comment in code
+echo "# Not a heading"
+\`\`\`
+# Second Title`;
+        const result = scriptModule.sanitizeMarkdownContent(input);
+        expect(result).toContain("# Title");
+        expect(result).toContain("## Second Title");
+        expect(result).toContain("# This is a comment in code");
+        expect(result).toContain('echo "# Not a heading"');
+      });
+    });
   });
 });

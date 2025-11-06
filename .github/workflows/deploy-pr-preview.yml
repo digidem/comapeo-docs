@@ -123,8 +123,9 @@ jobs:
 
             # Log what was generated
             if [ "$DOCS_COUNT" -eq 0 ]; then
-              echo "⚠️  Note: No English content generated (docs/ is empty)"
+              echo "⚠️  WARNING: No English content generated (docs/ is empty)"
               echo "   This is expected when --max-pages fetches only localized content"
+              echo "   NOTE: Docusaurus build may fail if default locale has no content"
             fi
 
             if [ "$I18N_COUNT" -eq 0 ]; then

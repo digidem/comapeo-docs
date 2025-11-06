@@ -64,6 +64,12 @@ jobs:
             exit 1
           fi
 
+          # Warn if default locale (English) has no content
+          if [ "$DOCS_COUNT" -eq 0 ]; then
+            echo "⚠️  WARNING: No English content in docs/ directory"
+            echo "   Docusaurus build may fail if default locale has no content"
+          fi
+
           if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
             echo "⚠️  Warning: static/images/ directory is empty or missing"
             echo "Build will proceed but images may be unavailable"

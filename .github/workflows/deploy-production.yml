@@ -49,15 +49,17 @@ jobs:
           # Validate content exists
           echo "🔍 Validating content..."
 
-          if [ ! -d "docs" ] || [ -z "$(ls -A docs 2>/dev/null)" ]; then
-            echo "❌ Error: docs/ directory is empty or missing"
+          # Count markdown files across all languages
+          DOCS_COUNT=$(find docs -name "*.md" -type f 2>/dev/null | wc -l)
+          I18N_COUNT=$(find i18n -name "*.md" -type f 2>/dev/null | wc -l)
+          TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+          if [ "$TOTAL_CONTENT" -eq 0 ]; then
+            echo "❌ Error: No documentation content found"
+            echo "   Expected: At least one .md file in docs/ or i18n/ directories"
+            echo "   Found: 0 files"
             echo "Cannot proceed with build - documentation content is required"
             exit 1
-          fi
-
-          if [ ! -d "i18n" ] || [ -z "$(ls -A i18n 2>/dev/null)" ]; then
-            echo "⚠️  Warning: i18n/ directory is empty or missing"
-            echo "Build will proceed but translations may be unavailable"
           fi
 
           if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
@@ -67,8 +69,9 @@ jobs:
 
           echo "✅ Content validation successful"
           echo "📊 Content statistics:"
-          find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
-          find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
+          echo "  - English docs: $DOCS_COUNT"
+          echo "  - Localized docs: $I18N_COUNT"
+          echo "  - Total docs: $TOTAL_CONTENT"
           find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun

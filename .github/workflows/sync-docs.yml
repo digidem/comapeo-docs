@@ -30,6 +30,7 @@ jobs:
         run: bun notion:fetch
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           BASE_URL: /comapeo-docs/
 

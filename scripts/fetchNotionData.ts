@@ -215,23 +215,48 @@ export async function fetchNotionPage() {
 
 export async function fetchNotionBlocks(blockId) {
   try {
-    const response = await enhancedNotion.blocksChildrenList({
-      block_id: blockId,
-      page_size: 100,
-    });
+    const allBlocks: any[] = [];
+    let hasMore = true;
+    let startCursor: string | undefined;
+    let safetyCounter = 0;
+    const MAX_PAGES = 100; // Safety limit for nested blocks
 
-    console.log(
-      `Fetched ${response.results.length} blocks for block ID: ${blockId}`
-    );
+    // Handle pagination to fetch all child blocks
+    while (hasMore) {
+      if (++safetyCounter > MAX_PAGES) {
+        console.warn(
+          `Block pagination safety limit exceeded for block ${blockId}; returning partial results.`
+        );
+        break;
+      }
+
+      const response = await enhancedNotion.blocksChildrenList({
+        block_id: blockId,
+        page_size: 100,
+        ...(startCursor ? { start_cursor: startCursor } : {}),
+      });
+
+      const pageResults = Array.isArray(response.results)
+        ? response.results
+        : [];
+      allBlocks.push(...pageResults);
+
+      hasMore = Boolean(response.has_more);
+      startCursor = response.next_cursor ?? undefined;
+
+      console.log(
+        `Fetched ${pageResults.length} blocks for block ID: ${blockId}${hasMore ? " (more pages available)" : ""}`
+      );
+    }
 
     // Recursively fetch nested blocks
-    for (const block of response.results) {
+    for (const block of allBlocks) {
       if (isFullBlock(block) && block.has_children) {
         (block as any).children = await fetchNotionBlocks(block.id);
       }
     }
 
-    return response.results;
+    return allBlocks;
   } catch (error) {
     console.error("Error fetching Notion blocks:", error);
     throw error;

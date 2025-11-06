@@ -298,6 +298,38 @@ aside[class*="sidebar"] .menu__list-item-collapsible .menu__link {
 }
 
 /*
+ * Paragraph and list spacing adjustments
+ * Issue #48: Match spacing with Notion layout
+ *
+ * Reduces vertical spacing between paragraphs and lists to align with
+ * Notion's visual rhythm. Scoped to .theme-doc-markdown to avoid affecting
+ * other components like landing pages, admonitions, and tables.
+ */
+
+/* Reduce paragraph spacing from default ~1rem to ~0.5rem */
+.theme-doc-markdown p {
+  margin-bottom: 0.5rem;
+}
+
+/* Reduce list spacing for better visual rhythm */
+.theme-doc-markdown ul,
+.theme-doc-markdown ol {
+  margin-bottom: 0.75rem;
+}
+
+/* Reduce spacing between list items */
+.theme-doc-markdown li {
+  margin-bottom: 0.25rem;
+}
+
+/* Ensure nested lists maintain proper spacing */
+.theme-doc-markdown li > ul,
+.theme-doc-markdown li > ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/*
  * Details/Toggle Styling
  * Issue #56: Match toggle background to warm light gray (same as callouts)
  * Only changes background - preserves Docusaurus defaults for all other styling

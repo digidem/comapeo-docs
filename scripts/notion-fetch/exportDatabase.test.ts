@@ -208,4 +208,300 @@ describe("exportNotionDatabase", () => {
       expect.stringContaining("Failed to fetch blocks for page page-2")
     );
   });
+
+  it("preserves line breaks in paragraph rich_text", async () => {
+    const blocksWithLineBreaks = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "First line\nSecond line",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithLineBreaks);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe("First line<br />\nSecond line");
+  });
+
+  it("preserves Unicode line separators (U+2028)", async () => {
+    const blocksWithUnicodeSeparator = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "First line\u2028Second line",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithUnicodeSeparator);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe("First line<br />\nSecond line");
+  });
+
+  it("preserves Unicode paragraph separators (U+2029)", async () => {
+    const blocksWithUnicodeParagraph = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "First line\u2029Second line",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithUnicodeParagraph);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe("First line<br />\nSecond line");
+  });
+
+  it("preserves Windows-style line breaks (\\r\\n) in rich_text", async () => {
+    const blocksWithWindowsBreaks = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "First line\r\nSecond line",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithWindowsBreaks);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe("First line<br />\nSecond line");
+  });
+
+  it("preserves standalone carriage returns (\\r) in rich_text", async () => {
+    const blocksWithCarriageReturns = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "First line\rSecond line",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithCarriageReturns);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe("First line<br />\nSecond line");
+  });
+
+  it("preserves line breaks in image captions", async () => {
+    const imageBlockWithLineBreaks = [
+      {
+        id: "block-1",
+        type: "image",
+        image: {
+          caption: [
+            {
+              plain_text: "Caption line 1\nCaption line 2",
+            },
+          ],
+          external: { url: "https://example.com/image.png" },
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(imageBlockWithLineBreaks);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe(
+      "Caption line 1<br />\nCaption line 2"
+    );
+  });
+
+  it("preserves line breaks in code blocks", async () => {
+    const codeBlockWithLineBreaks = [
+      {
+        id: "block-1",
+        type: "code",
+        code: {
+          rich_text: [
+            {
+              plain_text: "function test() {\n  return true;\n}",
+            },
+          ],
+          language: "javascript",
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(codeBlockWithLineBreaks);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe(
+      "function test() {<br />\n  return true;<br />\n}"
+    );
+  });
+
+  it("preserves multiple consecutive line breaks", async () => {
+    const blocksWithMultipleLineBreaks = [
+      {
+        id: "block-1",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            {
+              plain_text: "Line 1\n\nLine 2\n\n\nLine 3",
+            },
+          ],
+        },
+        has_children: false,
+        archived: false,
+        created_time: "2024-01-02T12:34:56.000Z",
+        last_edited_time: "2024-01-02T12:34:56.000Z",
+      },
+    ];
+
+    fetchNotionBlocksMock.mockResolvedValue(blocksWithMultipleLineBreaks);
+
+    const { exportNotionDatabase } = await import("./exportDatabase");
+
+    await exportNotionDatabase({
+      verbose: false,
+      quick: false,
+      includeRawData: true,
+    });
+
+    const completePayload = writeFileMock.mock.calls[0][1] as string;
+    const completeJson = JSON.parse(completePayload);
+
+    const blockAnalysis = completeJson.pages[0].blocks[0];
+    expect(blockAnalysis.textContent).toBe(
+      "Line 1<br />\n<br />\nLine 2<br />\n<br />\n<br />\nLine 3"
+    );
+  });
 });

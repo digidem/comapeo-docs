@@ -42,11 +42,97 @@ const PNGQUANT_FALLBACK_QUALITY =
 const PNGQUANT_VERBOSE =
   process.env.PNGQUANT_VERBOSE?.toLowerCase() === "true";
 
+// Minimum file size to attempt compression (bytes)
+// Files smaller than this will skip compression to save time
+// Default: 0 (no minimum, compress all files)
+const PNGQUANT_MIN_SIZE_BYTES = Number.parseInt(
+  process.env.PNGQUANT_MIN_SIZE_BYTES ?? "0",
+  10
+);
+
 const PNGQUANT_TIMEOUT_RAW = process.env.PNGQUANT_TIMEOUT_MS;
 const PNGQUANT_TIMEOUT_MS =
   PNGQUANT_TIMEOUT_RAW && !Number.isNaN(Number(PNGQUANT_TIMEOUT_RAW))
     ? Math.max(Number(PNGQUANT_TIMEOUT_RAW), 1_000)
     : DEFAULT_PNGQUANT_TIMEOUT_MS;
+
+/**
+ * Check if PNG buffer contains optimization markers indicating it's already optimized
+ */
+function hasOptimizationMarkers(buffer: Buffer): boolean {
+  const markers = [
+    "pngquant", // pngquant optimizer
+    "OptiPNG", // OptiPNG optimizer
+    "ImageOptim", // ImageOptim
+    "TinyPNG", // TinyPNG service
+    "pngcrush", // pngcrush optimizer
+  ];
+
+  // Convert buffer to string for searching (check first 4KB for performance)
+  const header = buffer.toString("latin1", 0, Math.min(buffer.length, 4096));
+
+  return markers.some((marker) => header.includes(marker));
+}
+
+/**
+ * Detect PNG bit depth from IHDR chunk
+ * Returns bit depth (1, 2, 4, 8, 16) or null if not found
+ */
+function detectPngBitDepth(buffer: Buffer): number | null {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer.length < 30) return null;
+  if (
+    buffer[0] !== 0x89 ||
+    buffer[1] !== 0x50 ||
+    buffer[2] !== 0x4e ||
+    buffer[3] !== 0x47
+  ) {
+    return null;
+  }
+
+  // IHDR chunk starts at byte 8
+  // Chunk structure: 4 bytes length, 4 bytes type, N bytes data, 4 bytes CRC
+  // IHDR type: 49 48 44 52 ("IHDR")
+  if (
+    buffer[12] === 0x49 &&
+    buffer[13] === 0x48 &&
+    buffer[14] === 0x44 &&
+    buffer[15] === 0x52
+  ) {
+    // Bit depth is at offset 24 (8 + 4 + 4 + 4 + 4)
+    // Width (4 bytes) + Height (4 bytes) + Bit depth (1 byte)
+    return buffer[24];
+  }
+
+  return null;
+}
+
+/**
+ * Determine if PNG should skip compression based on heuristics
+ * Returns reason string if should skip, null if should attempt compression
+ */
+function shouldSkipPngCompression(buffer: Buffer): string | null {
+  // Check file size threshold
+  if (
+    PNGQUANT_MIN_SIZE_BYTES > 0 &&
+    buffer.length < PNGQUANT_MIN_SIZE_BYTES
+  ) {
+    return `file too small (${buffer.length} bytes < ${PNGQUANT_MIN_SIZE_BYTES} bytes threshold)`;
+  }
+
+  // Check for optimization markers
+  if (hasOptimizationMarkers(buffer)) {
+    return "already optimized (contains optimizer markers)";
+  }
+
+  // Check bit depth - low bit depth images are typically already optimized
+  const bitDepth = detectPngBitDepth(buffer);
+  if (bitDepth !== null && bitDepth <= 4) {
+    return `already optimized (low bit depth: ${bitDepth}-bit)`;
+  }
+
+  return null; // Should attempt compression
+}
 
 async function compressPngWithTimeout(
   buffer: Buffer,
@@ -236,6 +322,19 @@ export async function compressImage(inputBuffer: Buffer) {
         };
       }
       case "png": {
+        // Check if we should skip compression based on heuristics
+        const skipReason = shouldSkipPngCompression(inputBuffer);
+        if (skipReason) {
+          if (PNGQUANT_VERBOSE) {
+            console.debug(`[pngquant] Skipping compression: ${skipReason}`);
+          }
+          return {
+            compressedBuffer: inputBuffer,
+            originalSize: inputBuffer.length,
+            compressedSize: inputBuffer.length,
+          };
+        }
+
         const compressedBuffer = await compressPngWithTimeout(inputBuffer);
         return {
           compressedBuffer,

@@ -90,6 +90,11 @@ jobs:
             echo "  - Reason: Script modifications detected"
             echo ""
 
+            # Export secrets only when needed for regeneration
+            export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+            export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+            export BASE_URL="/comapeo-docs/"
+
             # Build the command with optional --max-pages flag
             if [ "$MAX_PAGES" == "all" ]; then
               echo "Running: bun run notion:fetch-all (no limit)"
@@ -99,8 +104,24 @@ jobs:
               bun run notion:fetch-all --max-pages "$MAX_PAGES"
             fi
 
+            # Validate content was generated successfully
             echo ""
-            echo "✅ Content regenerated successfully"
+            echo "🔍 Validating generated content..."
+
+            if [ ! -d "docs" ] || [ -z "$(ls -A docs 2>/dev/null)" ]; then
+              echo "❌ Error: Content regeneration failed - docs/ directory is empty or missing"
+              exit 1
+            fi
+
+            if [ ! -d "i18n" ] || [ -z "$(ls -A i18n 2>/dev/null)" ]; then
+              echo "⚠️  Warning: i18n/ directory is empty or missing"
+            fi
+
+            if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
+              echo "⚠️  Warning: static/images/ directory is empty or missing"
+            fi
+
+            echo "✅ Content regenerated and validated successfully"
             echo "📊 Generated content statistics:"
             find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
             find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
@@ -136,10 +157,6 @@ jobs:
             find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
             find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
           fi
-        env:
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          DATABASE_ID: ${{ secrets.DATABASE_ID }}
-          BASE_URL: /comapeo-docs/
 
       - name: Build documentation
         run: bun run build

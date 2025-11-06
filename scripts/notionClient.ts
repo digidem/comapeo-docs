@@ -257,9 +257,11 @@ const notion = new Client({
 });
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
+const paragraphFallbackN2M = new NotionToMarkdown({ notionClient: notion });
+
 type BlockToMarkdown = InstanceType<typeof NotionToMarkdown>["blockToMarkdown"];
-const defaultParagraphToMarkdown = n2m.blockToMarkdown.bind(
-  n2m
+const defaultParagraphToMarkdown = paragraphFallbackN2M.blockToMarkdown.bind(
+  paragraphFallbackN2M
 ) as BlockToMarkdown;
 
 const NOTION_SPACER_HTML =
@@ -288,7 +290,7 @@ function hasVisibleParagraphContent(
   });
 }
 
-n2m.setCustomTransformer("paragraph", async (block) => {
+const paragraphTransformer: BlockToMarkdown = async (block) => {
   const paragraphBlock = block as ParagraphBlockObjectResponse;
 
   if (paragraphBlock?.type !== "paragraph") {
@@ -299,14 +301,13 @@ n2m.setCustomTransformer("paragraph", async (block) => {
   const hasContent = hasVisibleParagraphContent(paragraphBlock);
 
   if (!hasChildren && !hasContent) {
-    return {
-      parent: NOTION_SPACER_HTML,
-      children: [],
-    } as MarkdownBlock;
+    return NOTION_SPACER_HTML as MarkdownBlock;
   }
 
   return defaultParagraphToMarkdown(paragraphBlock as BlockObjectResponse);
-});
+};
+
+n2m.setCustomTransformer("paragraph", paragraphTransformer);
 
 export const DATABASE_ID = resolvedDatabaseId;
 

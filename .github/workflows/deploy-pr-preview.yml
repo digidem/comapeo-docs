@@ -64,8 +64,8 @@ jobs:
             echo "max_pages=5" >> $GITHUB_OUTPUT
             echo "📖 Label detected: Will fetch 5 pages"
           else
-            echo "max_pages=1" >> $GITHUB_OUTPUT
-            echo "📄 Default: Will fetch 1 page (format-testing-remove)"
+            echo "max_pages=5" >> $GITHUB_OUTPUT
+            echo "📄 Default: Will fetch 5 pages for script validation"
           fi
 
       - name: Setup Bun
@@ -193,7 +193,7 @@ jobs:
 
               // Add guidance for full testing if limited
               if (maxPages !== 'all') {
-                contentInfo += '\n\n> 💡 **Tip:** Add label \`fetch-all-pages\` to test with full content, or \`fetch-10-pages\` for 10 pages.';
+                contentInfo += '\n\n> 💡 **Tip:** Add label \`fetch-all-pages\` to test with full content, or \`fetch-10-pages\` for broader coverage.';
               }
             } else {
               contentInfo = '📦 **Content:** From content branch (no script changes)';

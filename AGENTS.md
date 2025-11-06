@@ -84,15 +84,14 @@ The preview workflow automatically chooses the optimal content generation strate
 
 **When script files ARE modified:**
 - Regenerates content from Notion API to validate script changes
-- Default: Fetches 1 page (`format-testing-remove` with diverse content types)
-- Takes ~60s instead of ~30s
+- Default: Fetches 5 pages (provides reliable validation coverage)
+- Takes ~90s instead of ~30s
 
 **Override via PR labels** (when script changes detected):
 
 | Label | Pages Fetched | Est. Time | When to Use |
 |-------|---------------|-----------|-------------|
-| (no label) | 1 page | ~60s | Default - validates most script changes |
-| `fetch-5-pages` | 5 pages | ~90s | Test broader content coverage |
+| (no label) | 5 pages | ~90s | Default - validates most script changes |
 | `fetch-10-pages` | 10 pages | ~2min | Test pagination, multiple content types |
 | `fetch-all-pages` | All (~50-100) | ~8min | Major refactoring, full validation |
 
@@ -104,16 +103,16 @@ gh pr edit <PR#> --add-label "fetch-10-pages"
 # Or add when creating PR
 gh pr create --label "fetch-all-pages" --title "..." --body "..."
 
-# Remove label to go back to default (1 page)
+# Remove label to go back to default (5 pages)
 gh pr edit <PR#> --remove-label "fetch-10-pages"
 ```
 
 **Label recommendations:**
-- Bug fixes → no label (1 page is sufficient)
-- New block type support → `fetch-5-pages`
+- Bug fixes → no label (5 pages is sufficient)
+- New block type support → no label (5 pages covers most cases)
 - Pagination changes → `fetch-10-pages`
 - Major refactoring → `fetch-all-pages`
-- Image processing changes → `fetch-5-pages`
+- Image processing changes → no label (5 pages is sufficient)
 
 **Important notes:**
 - Labels only affect PRs where script changes are detected

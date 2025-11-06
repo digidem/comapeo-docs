@@ -32,17 +32,37 @@ const PNGQUANT_QUALITY =
   (process.env.PNGQUANT_MIN_QUALITY && process.env.PNGQUANT_MAX_QUALITY
     ? `${process.env.PNGQUANT_MIN_QUALITY}-${process.env.PNGQUANT_MAX_QUALITY}`
     : "60-80");
+
+// Fallback quality when primary quality fails (exit code 99)
+// Set to empty string to disable fallback retry
+const PNGQUANT_FALLBACK_QUALITY =
+  process.env.PNGQUANT_FALLBACK_QUALITY ?? "0-100";
+
+// Enable verbose logging for compression details
+const PNGQUANT_VERBOSE =
+  process.env.PNGQUANT_VERBOSE?.toLowerCase() === "true";
+
 const PNGQUANT_TIMEOUT_RAW = process.env.PNGQUANT_TIMEOUT_MS;
 const PNGQUANT_TIMEOUT_MS =
   PNGQUANT_TIMEOUT_RAW && !Number.isNaN(Number(PNGQUANT_TIMEOUT_RAW))
     ? Math.max(Number(PNGQUANT_TIMEOUT_RAW), 1_000)
     : DEFAULT_PNGQUANT_TIMEOUT_MS;
 
-async function compressPngWithTimeout(buffer: Buffer): Promise<Buffer> {
+async function compressPngWithTimeout(
+  buffer: Buffer,
+  quality: string = PNGQUANT_QUALITY,
+  isRetry: boolean = false
+): Promise<Buffer> {
+  if (PNGQUANT_VERBOSE) {
+    console.debug(
+      `[pngquant] Attempting compression with quality ${quality}${isRetry ? " (retry)" : ""}`
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const args = [
       "--quality",
-      PNGQUANT_QUALITY,
+      quality,
       "--speed",
       PNGQUANT_SPEED,
       "--strip",
@@ -106,11 +126,32 @@ async function compressPngWithTimeout(buffer: Buffer): Promise<Buffer> {
           reject(new Error(message));
           return;
         }
+        if (PNGQUANT_VERBOSE) {
+          console.debug(
+            `[pngquant] Compression succeeded with quality ${quality}`
+          );
+        }
         resolve(Buffer.concat(stdoutChunks));
       } else if (code === 99) {
         // Exit code 99 = quality too low (image already well-optimized)
         const stderr = Buffer.concat(stderrChunks).toString().trim();
-        reject(new PngQualityTooLowError(PNGQUANT_QUALITY, stderr));
+
+        // Retry with fallback quality if not already retried and fallback is configured
+        if (!isRetry && PNGQUANT_FALLBACK_QUALITY) {
+          if (PNGQUANT_VERBOSE) {
+            console.debug(
+              `[pngquant] Quality too low (exit 99), retrying with fallback quality ${PNGQUANT_FALLBACK_QUALITY}`
+            );
+          }
+
+          // Retry once with more lenient quality settings
+          compressPngWithTimeout(buffer, PNGQUANT_FALLBACK_QUALITY, true)
+            .then(resolve)
+            .catch(reject);
+        } else {
+          // No retry configured or already retried - reject with quality error
+          reject(new PngQualityTooLowError(quality, stderr));
+        }
       } else {
         const stderr = Buffer.concat(stderrChunks).toString().trim();
         reject(

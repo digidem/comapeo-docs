@@ -346,3 +346,21 @@ details {
 [data-theme="dark"] details {
   background-color: rgba(229, 228, 226, 0.15) !important;
 }
+
+/* Preserve intentional gaps from Notion empty paragraph spacers */
+:root {
+  --notion-paragraph-gap-base: var(--ifm-paragraph-margin-bottom, 1.25rem);
+  --notion-spacer-gap: clamp(
+    calc(var(--notion-paragraph-gap-base) * 0.55),
+    calc(var(--notion-paragraph-gap-base) * 0.65 + 0.2rem),
+    calc(var(--notion-paragraph-gap-base) * 0.75 + 0.25rem)
+  );
+}
+
+.notion-spacer {
+  display: block;
+  width: 100%;
+  height: var(--notion-spacer-gap);
+  margin: 0;
+  pointer-events: none;
+}

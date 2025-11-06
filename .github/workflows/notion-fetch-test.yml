@@ -50,6 +50,7 @@ jobs:
       - name: Fetch content from Notion
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           NOTION_DATABASE_ID: ${{ secrets.DATABASE_ID }}
           BASE_URL: /comapeo-docs/
         run: bun run notion:fetch-all

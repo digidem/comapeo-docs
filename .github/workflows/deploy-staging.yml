@@ -52,8 +52,19 @@ jobs:
           echo "🔍 Validating content..."
 
           # Count markdown files across all languages
-          DOCS_COUNT=$(find docs -name "*.md" -type f 2>/dev/null | wc -l)
-          I18N_COUNT=$(find i18n -name "*.md" -type f 2>/dev/null | wc -l)
+          # Guard against missing directories to avoid find failures
+          if [ -d docs ]; then
+            DOCS_COUNT=$(find docs -name "*.md" -type f 2>/dev/null | wc -l)
+          else
+            DOCS_COUNT=0
+          fi
+
+          if [ -d i18n ]; then
+            I18N_COUNT=$(find i18n -name "*.md" -type f 2>/dev/null | wc -l)
+          else
+            I18N_COUNT=0
+          fi
+
           TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
 
           if [ "$TOTAL_CONTENT" -eq 0 ]; then

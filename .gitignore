@@ -78,3 +78,8 @@ worktrees/
 
 # Development planning and analysis documents (never commit)
 NEXT_STEPS.md
+
+# Transpiled TypeScript build artifacts
+# The project uses TypeScript (.ts) - compiled .js files should not be committed
+*.js
+!eslint.config.mjs

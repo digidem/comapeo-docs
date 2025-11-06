@@ -1,5 +1,9 @@
 import { NOTION_PROPERTIES } from "../constants";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
+import {
+  getStatusFromRawPage,
+  selectPagesWithPriority,
+} from "../notionPageUtils";
 
 export interface PageWithStatus {
   id: string;
@@ -146,101 +150,31 @@ function applyFetchAllTransform(
 ) {
   const { statusFilter, maxPages, includeRemoved } = options;
 
+  // Use smart page selection if maxPages is specified
+  if (typeof maxPages === "number" && maxPages > 0) {
+    return selectPagesWithPriority(pages, maxPages, {
+      includeRemoved,
+      statusFilter,
+      verbose: true,
+    });
+  }
+
+  // Otherwise, apply simple filtering
   let filtered = pages;
 
-  // First, filter out removed pages if needed
   if (!includeRemoved) {
     filtered = filtered.filter(
       (page) => getStatusFromRawPage(page) !== "Remove"
     );
   }
 
-  // Apply explicit status filter if provided
   if (statusFilter) {
     filtered = filtered.filter(
       (page) => getStatusFromRawPage(page) === statusFilter
     );
   }
 
-  // Smart page selection when maxPages is specified
-  // Prioritize pages that are most likely to generate markdown content:
-  // 1. "Ready to publish" status + "Page" element type
-  // 2. Any status (except Remove) + "Page" element type
-  // 3. Other pages as fallback
-  if (typeof maxPages === "number" && maxPages > 0) {
-    const readyToPublishPages: Array<Record<string, unknown>> = [];
-    const pageTypePages: Array<Record<string, unknown>> = [];
-    const otherPages: Array<Record<string, unknown>> = [];
-
-    for (const page of filtered) {
-      const status = getStatusFromRawPage(page);
-      const elementType = getElementTypeFromRawPage(page);
-
-      if (status === "Ready to publish" && elementType === "Page") {
-        readyToPublishPages.push(page);
-      } else if (elementType === "Page") {
-        pageTypePages.push(page);
-      } else {
-        otherPages.push(page);
-      }
-    }
-
-    // Combine in priority order and limit to maxPages
-    const prioritized = [
-      ...readyToPublishPages,
-      ...pageTypePages,
-      ...otherPages,
-    ].slice(0, maxPages);
-
-    console.log(`\n📊 Smart page selection for max ${maxPages} pages:`);
-    console.log(
-      `  ✅ Ready to publish + Page type: ${readyToPublishPages.length} pages`
-    );
-    console.log(`  📄 Other Page type: ${pageTypePages.length} pages`);
-    console.log(`  📋 Other types: ${otherPages.length} pages`);
-    console.log(`  🎯 Selected: ${prioritized.length} pages total\n`);
-
-    filtered = prioritized;
-  }
-
   return filtered;
-}
-
-/**
- * Extract element type from a raw Notion page
- */
-function getElementTypeFromRawPage(page: Record<string, any>): string {
-  if (!page || typeof page !== "object") return "Unknown";
-  const properties = (page as any).properties;
-  if (!properties || typeof properties !== "object") return "Unknown";
-
-  const elementTypeProperty =
-    properties[NOTION_PROPERTIES.ELEMENT_TYPE] ||
-    properties["Element Type"] ||
-    properties["Section"];
-
-  const name = elementTypeProperty?.select?.name;
-  const normalized = typeof name === "string" ? name.trim() : "";
-  if (normalized) {
-    return normalized;
-  }
-  return "Unknown";
-}
-
-function getStatusFromRawPage(page: Record<string, any>): string {
-  if (!page || typeof page !== "object") return "No Status";
-  const properties = (page as any).properties;
-  if (!properties || typeof properties !== "object") return "No Status";
-
-  const statusProperty =
-    properties[NOTION_PROPERTIES.STATUS] || properties["Status"];
-
-  const name = statusProperty?.select?.name;
-  const normalized = typeof name === "string" ? name.trim() : "";
-  if (normalized) {
-    return normalized;
-  }
-  return "No Status";
 }
 
 function logStatusSummary(pages: PageWithStatus[]) {

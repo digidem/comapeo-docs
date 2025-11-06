@@ -72,8 +72,54 @@ Every PR automatically gets a staging deployment on Cloudflare Pages:
 - **Automatic**: Deployed on PR open/update, cleaned up on close
 - **Comment**: Bot comments on PR with preview link
 - **Triggers**: Pushes to PR branch (except Markdown-only changes)
-- **Content**: Uses same content from `content` branch as production
 - **Security**: Only works for PRs from the main repository (not forks)
+
+#### Smart Content Generation Strategy
+
+The preview workflow automatically chooses the optimal content generation strategy:
+
+**When script files are NOT modified:**
+- Uses content from `content` branch (fast, ~30s)
+- Script paths monitored: `scripts/notion-*`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/constants.ts`
+
+**When script files ARE modified:**
+- Regenerates content from Notion API to validate script changes
+- Default: Fetches 1 page (`format-testing-remove` with diverse content types)
+- Takes ~60s instead of ~30s
+
+**Override via PR labels** (when script changes detected):
+
+| Label | Pages Fetched | Est. Time | When to Use |
+|-------|---------------|-----------|-------------|
+| (no label) | 1 page | ~60s | Default - validates most script changes |
+| `fetch-5-pages` | 5 pages | ~90s | Test broader content coverage |
+| `fetch-10-pages` | 10 pages | ~2min | Test pagination, multiple content types |
+| `fetch-all-pages` | All (~50-100) | ~8min | Major refactoring, full validation |
+
+**How to use labels:**
+```bash
+# Add label to PR to fetch more pages
+gh pr edit <PR#> --add-label "fetch-10-pages"
+
+# Or add when creating PR
+gh pr create --label "fetch-all-pages" --title "..." --body "..."
+
+# Remove label to go back to default (1 page)
+gh pr edit <PR#> --remove-label "fetch-10-pages"
+```
+
+**Label recommendations:**
+- Bug fixes → no label (1 page is sufficient)
+- New block type support → `fetch-5-pages`
+- Pagination changes → `fetch-10-pages`
+- Major refactoring → `fetch-all-pages`
+- Image processing changes → `fetch-5-pages`
+
+**Important notes:**
+- Labels only affect PRs where script changes are detected
+- Frontend-only PRs always use content branch (fast path)
+- Adding/removing labels triggers a new preview deployment
+- The PR comment will show which strategy was used
 
 ### Project Structure Hints
 
@@ -170,7 +216,7 @@ Every PR automatically gets a staging deployment on Cloudflare Pages:
 ### Database Context (when working with Notion integration)
 
 - Database overview: `./context/database/overview.md`
-- Properties & schema: `./context/database/properties.md` 
+- Properties & schema: `./context/database/properties.md`
 - Block types: `./context/database/block-types.md`
 - Content patterns: `./context/database/content-patterns.md`
 - Script targeting: `./context/database/script-targets.md`

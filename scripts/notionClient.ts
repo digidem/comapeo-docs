@@ -257,11 +257,10 @@ const notion = new Client({
 });
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
-const paragraphFallbackN2M = new NotionToMarkdown({ notionClient: notion });
 
 type BlockToMarkdown = InstanceType<typeof NotionToMarkdown>["blockToMarkdown"];
-const defaultParagraphToMarkdown = paragraphFallbackN2M.blockToMarkdown.bind(
-  paragraphFallbackN2M
+const defaultParagraphToMarkdown = n2m.blockToMarkdown.bind(
+  n2m
 ) as BlockToMarkdown;
 
 const NOTION_SPACER_HTML =
@@ -304,7 +303,29 @@ const paragraphTransformer: BlockToMarkdown = async (block) => {
     return NOTION_SPACER_HTML as MarkdownBlock;
   }
 
-  return defaultParagraphToMarkdown(paragraphBlock as BlockObjectResponse);
+  const customTransformers = (
+    n2m as unknown as {
+      customTransformers?: Record<string, BlockToMarkdown>;
+    }
+  ).customTransformers;
+
+  let previousParagraphTransformer: BlockToMarkdown | undefined;
+
+  if (customTransformers) {
+    previousParagraphTransformer = customTransformers.paragraph;
+
+    if (previousParagraphTransformer) {
+      delete customTransformers.paragraph;
+    }
+  }
+
+  try {
+    return defaultParagraphToMarkdown(paragraphBlock as BlockObjectResponse);
+  } finally {
+    if (customTransformers && previousParagraphTransformer) {
+      customTransformers.paragraph = previousParagraphTransformer;
+    }
+  }
 };
 
 n2m.setCustomTransformer("paragraph", paragraphTransformer);

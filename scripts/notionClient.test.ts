@@ -88,9 +88,18 @@ describe("notionClient", () => {
       const instance: any = {
         pageToMarkdown: vi.fn(),
         toMarkdownString: vi.fn(),
-        customTransformers: {} as Record<string, unknown>,
-        blockToMarkdown: vi.fn().mockResolvedValue(""),
+        customTransformers: {} as Record<string, any>,
       };
+
+      instance.blockToMarkdown = vi.fn(async function (this: any, block: any) {
+        const transformer = this.customTransformers?.[block.type];
+
+        if (transformer) {
+          throw new Error("paragraph transformer recursion");
+        }
+
+        return `default:${block.id ?? ""}`;
+      });
 
       instance.setCustomTransformer = vi.fn(function (
         this: any,
@@ -193,9 +202,9 @@ describe("notionClient", () => {
     it("should register a spacer transformer for empty paragraph blocks", async () => {
       await import("./notionClient");
 
-      expect(notionToMarkdownInstances.length).toBeGreaterThanOrEqual(2);
+      expect(notionToMarkdownInstances.length).toBe(1);
 
-      const [primaryN2M, fallbackN2M] = notionToMarkdownInstances;
+      const [primaryN2M] = notionToMarkdownInstances;
 
       expect(primaryN2M.setCustomTransformer).toHaveBeenCalledWith(
         "paragraph",
@@ -220,7 +229,7 @@ describe("notionClient", () => {
       const spacerResult = await transformer(emptyParagraph);
       expect(typeof spacerResult).toBe("string");
       expect(spacerResult).toContain("notion-spacer");
-      expect(fallbackN2M.blockToMarkdown).not.toHaveBeenCalled();
+      expect(primaryN2M.blockToMarkdown).not.toHaveBeenCalled();
 
       const populatedParagraph = {
         id: "content",
@@ -237,15 +246,14 @@ describe("notionClient", () => {
         },
       } as any;
 
-      fallbackN2M.blockToMarkdown.mockClear();
-      const expectedMarkdown = "Hello";
-      fallbackN2M.blockToMarkdown.mockResolvedValueOnce(expectedMarkdown);
+      primaryN2M.blockToMarkdown.mockClear();
 
       const markdownResult = await transformer(populatedParagraph);
-      expect(fallbackN2M.blockToMarkdown).toHaveBeenCalledWith(
+      expect(primaryN2M.blockToMarkdown).toHaveBeenCalledWith(
         populatedParagraph
       );
-      expect(markdownResult).toBe(expectedMarkdown);
+      expect(markdownResult).toBe(`default:${populatedParagraph.id}`);
+      expect(primaryN2M.customTransformers.paragraph).toBe(transformer);
     });
   });
 

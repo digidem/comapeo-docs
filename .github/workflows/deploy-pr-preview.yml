@@ -109,13 +109,39 @@ jobs:
             echo ""
             echo "🔍 Validating generated content..."
 
-            if [ ! -d "docs" ] || [ -z "$(ls -A docs 2>/dev/null)" ]; then
-              echo "❌ Error: Content regeneration failed - docs/ directory is empty or missing"
+            # Count generated markdown files across all languages
+            # Guard against missing directories to avoid find failures
+            # Support both .md and .mdx files (Docusaurus accepts both)
+            if [ -d docs ]; then
+              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              DOCS_COUNT=0
+            fi
+
+            if [ -d i18n ]; then
+              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              I18N_COUNT=0
+            fi
+
+            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+            if [ "$TOTAL_CONTENT" -eq 0 ]; then
+              echo "❌ Error: Content regeneration failed - no markdown files generated"
+              echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
+              echo "   Found: 0 files"
               exit 1
             fi
 
-            if [ ! -d "i18n" ] || [ -z "$(ls -A i18n 2>/dev/null)" ]; then
-              echo "⚠️  Warning: i18n/ directory is empty or missing"
+            # Log what was generated
+            if [ "$DOCS_COUNT" -eq 0 ]; then
+              echo "⚠️  WARNING: No English content generated (docs/ is empty)"
+              echo "   This is expected when --max-pages fetches only localized content"
+              echo "   NOTE: Docusaurus build may fail if default locale has no content"
+            fi
+
+            if [ "$I18N_COUNT" -eq 0 ]; then
+              echo "⚠️  Note: No localized content generated (i18n/ is empty)"
             fi
 
             if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
@@ -124,8 +150,9 @@ jobs:
 
             echo "✅ Content regenerated and validated successfully"
             echo "📊 Generated content statistics:"
-            find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
-            find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
+            echo "  - English docs: $DOCS_COUNT"
+            echo "  - Localized docs: $I18N_COUNT"
+            echo "  - Total docs: $TOTAL_CONTENT"
             find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
           else
@@ -138,14 +165,28 @@ jobs:
             git fetch origin content
             git checkout origin/content -- docs/ i18n/ static/images/
 
-            # Validation
-            if [ ! -d "docs" ] || [ -z "$(ls -A docs 2>/dev/null)" ]; then
-              echo "❌ Error: docs/ directory is empty or missing"
-              exit 1
+            # Validation - check for any content across all languages
+            # Guard against missing directories to avoid find failures
+            # Support both .md and .mdx files (Docusaurus accepts both)
+            if [ -d docs ]; then
+              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              DOCS_COUNT=0
             fi
 
-            if [ ! -d "i18n" ] || [ -z "$(ls -A i18n 2>/dev/null)" ]; then
-              echo "⚠️  Warning: i18n/ directory is empty or missing"
+            if [ -d i18n ]; then
+              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              I18N_COUNT=0
+            fi
+
+            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+            if [ "$TOTAL_CONTENT" -eq 0 ]; then
+              echo "❌ Error: Content branch has no markdown files"
+              echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
+              echo "   Found: 0 files"
+              exit 1
             fi
 
             if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
@@ -154,8 +195,9 @@ jobs:
 
             echo "✅ Content from content branch loaded successfully"
             echo "📊 Content statistics:"
-            find docs -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - English docs:"
-            find i18n -name "*.md" -type f 2>/dev/null | wc -l | xargs echo "  - Localized docs:"
+            echo "  - English docs: $DOCS_COUNT"
+            echo "  - Localized docs: $I18N_COUNT"
+            echo "  - Total docs: $TOTAL_CONTENT"
             find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
           fi
 

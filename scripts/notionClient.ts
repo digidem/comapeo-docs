@@ -1,12 +1,20 @@
 import dotenv from "dotenv";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
+import type {
+  BlockObjectResponse,
+  ParagraphBlockObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints";
 import chalk from "chalk";
 import { perfTelemetry } from "./perfTelemetry";
 import {
   scheduleRequest,
   setCircuitBreakerCheck,
 } from "./notion-fetch/requestScheduler";
+
+type MarkdownBlock = Awaited<
+  ReturnType<InstanceType<typeof NotionToMarkdown>["blockToMarkdown"]>
+>;
 
 dotenv.config();
 
@@ -249,6 +257,78 @@ const notion = new Client({
 });
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
+
+type BlockToMarkdown = InstanceType<typeof NotionToMarkdown>["blockToMarkdown"];
+const defaultParagraphToMarkdown = n2m.blockToMarkdown.bind(
+  n2m
+) as BlockToMarkdown;
+
+const NOTION_SPACER_HTML =
+  '<div class="notion-spacer" aria-hidden="true" role="presentation"></div>';
+
+function hasVisibleParagraphContent(
+  block: ParagraphBlockObjectResponse
+): boolean {
+  const richText = block.paragraph?.rich_text;
+  if (!Array.isArray(richText) || richText.length === 0) {
+    return false;
+  }
+
+  return richText.some((item) => {
+    if (item.type === "text") {
+      const content = item.text?.content ?? item.plain_text ?? "";
+      return content.trim().length > 0;
+    }
+
+    if (item.type === "equation") {
+      return (item.equation?.expression ?? "").trim().length > 0;
+    }
+
+    const plainText = item.plain_text ?? "";
+    return plainText.trim().length > 0;
+  });
+}
+
+const paragraphTransformer: BlockToMarkdown = async (block) => {
+  const paragraphBlock = block as ParagraphBlockObjectResponse;
+
+  if (paragraphBlock?.type !== "paragraph") {
+    return defaultParagraphToMarkdown(block as BlockObjectResponse);
+  }
+
+  const hasChildren = paragraphBlock.has_children === true;
+  const hasContent = hasVisibleParagraphContent(paragraphBlock);
+
+  if (!hasChildren && !hasContent) {
+    return NOTION_SPACER_HTML as MarkdownBlock;
+  }
+
+  const customTransformers = (
+    n2m as unknown as {
+      customTransformers?: Record<string, BlockToMarkdown>;
+    }
+  ).customTransformers;
+
+  let previousParagraphTransformer: BlockToMarkdown | undefined;
+
+  if (customTransformers) {
+    previousParagraphTransformer = customTransformers.paragraph;
+
+    if (previousParagraphTransformer) {
+      delete customTransformers.paragraph;
+    }
+  }
+
+  try {
+    return defaultParagraphToMarkdown(paragraphBlock as BlockObjectResponse);
+  } finally {
+    if (customTransformers && previousParagraphTransformer) {
+      customTransformers.paragraph = previousParagraphTransformer;
+    }
+  }
+};
+
+n2m.setCustomTransformer("paragraph", paragraphTransformer);
 
 export const DATABASE_ID = resolvedDatabaseId;
 

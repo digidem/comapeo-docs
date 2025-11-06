@@ -27,6 +27,8 @@ export const createMockNotionClient = () => ({
 export const createMockNotionToMarkdown = () => ({
   pageToMarkdown: vi.fn(),
   toMarkdownString: vi.fn(),
+  setCustomTransformer: vi.fn(),
+  blockToMarkdown: vi.fn(),
 });
 
 /**

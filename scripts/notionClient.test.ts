@@ -38,7 +38,7 @@ vi.mock("chalk", () => ({
 
 describe("notionClient", () => {
   let mockClient: any;
-  let mockN2M: any;
+  let notionToMarkdownInstances: any[];
   let originalEnv: NodeJS.ProcessEnv;
   let consoleMocks: ReturnType<typeof mockConsole>;
 
@@ -71,12 +71,6 @@ describe("notionClient", () => {
       blocks: { children: { list: vi.fn() }, append: vi.fn(), delete: vi.fn() },
     };
 
-    // Create mock NotionToMarkdown
-    mockN2M = {
-      pageToMarkdown: vi.fn(),
-      toMarkdownString: vi.fn(),
-    };
-
     // Set up constructor mocks - create a proper constructor function
     const MockClientClass = vi.fn().mockImplementation(function (
       this: any,
@@ -85,11 +79,39 @@ describe("notionClient", () => {
       return mockClient;
     });
 
+    notionToMarkdownInstances = [];
+
     const MockNotionToMarkdownClass = vi.fn().mockImplementation(function (
       this: any,
       config: any
     ) {
-      return mockN2M;
+      const instance: any = {
+        pageToMarkdown: vi.fn(),
+        toMarkdownString: vi.fn(),
+        customTransformers: {} as Record<string, any>,
+      };
+
+      instance.blockToMarkdown = vi.fn(async function (this: any, block: any) {
+        const transformer = this.customTransformers?.[block.type];
+
+        if (transformer) {
+          throw new Error("paragraph transformer recursion");
+        }
+
+        return `default:${block.id ?? ""}`;
+      });
+
+      instance.setCustomTransformer = vi.fn(function (
+        this: any,
+        type: string,
+        transformer: unknown
+      ) {
+        this.customTransformers[type] = transformer;
+        return this;
+      });
+
+      notionToMarkdownInstances.push(instance);
+      return instance;
     });
 
     // Replace the Client and NotionToMarkdown with our mocks
@@ -175,6 +197,63 @@ describe("notionClient", () => {
 
       // Assert
       expect(DATABASE_ID).toBe("exported-database-id");
+    });
+
+    it("should register a spacer transformer for empty paragraph blocks", async () => {
+      await import("./notionClient");
+
+      expect(notionToMarkdownInstances.length).toBe(1);
+
+      const [primaryN2M] = notionToMarkdownInstances;
+
+      expect(primaryN2M.setCustomTransformer).toHaveBeenCalledWith(
+        "paragraph",
+        expect.any(Function)
+      );
+
+      const transformer = primaryN2M.setCustomTransformer.mock.calls.find(
+        (call: any[]) => call[0] === "paragraph"
+      )?.[1];
+
+      expect(typeof transformer).toBe("function");
+
+      const emptyParagraph = {
+        id: "empty",
+        type: "paragraph",
+        has_children: false,
+        paragraph: {
+          rich_text: [],
+        },
+      } as any;
+
+      const spacerResult = await transformer(emptyParagraph);
+      expect(typeof spacerResult).toBe("string");
+      expect(spacerResult).toContain("notion-spacer");
+      expect(primaryN2M.blockToMarkdown).not.toHaveBeenCalled();
+
+      const populatedParagraph = {
+        id: "content",
+        type: "paragraph",
+        has_children: false,
+        paragraph: {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: "Hello" },
+              plain_text: "Hello",
+            },
+          ],
+        },
+      } as any;
+
+      primaryN2M.blockToMarkdown.mockClear();
+
+      const markdownResult = await transformer(populatedParagraph);
+      expect(primaryN2M.blockToMarkdown).toHaveBeenCalledWith(
+        populatedParagraph
+      );
+      expect(markdownResult).toBe(`default:${populatedParagraph.id}`);
+      expect(primaryN2M.customTransformers.paragraph).toBe(transformer);
     });
   });
 

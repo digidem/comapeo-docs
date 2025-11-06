@@ -1248,10 +1248,10 @@ export async function generateBlocks(pages, progressCallback) {
     const markdownMap = new Map<string, { key: string; data: any }>();
     const inFlightBlockFetches = new Map<string, Promise<any[]>>();
     const inFlightMarkdownFetches = new Map<string, Promise<any>>();
-    let blockFetchCount = 0;
-    let blockCacheHits = 0;
-    let markdownFetchCount = 0;
-    let markdownCacheHits = 0;
+    const blockFetchCount = { value: 0 };
+    const blockCacheHits = { value: 0 };
+    const markdownFetchCount = { value: 0 };
+    const markdownCacheHits = { value: 0 };
 
     const logProgress = (
       index: number,
@@ -1271,56 +1271,95 @@ export async function generateBlocks(pages, progressCallback) {
       }
     };
 
+    /**
+     * Generic cache loader that handles:
+     * 1. Main map cache lookup
+     * 2. Prefetch cache lookup
+     * 3. In-flight request deduplication
+     * 4. Cache hit/miss tracking
+     */
+    const loadWithCache = async <T>(
+      pageRecord: Record<string, any>,
+      pageIndex: number,
+      totalCount: number,
+      title: string,
+      config: {
+        mainMap: Map<string, { key: string; data: T }>;
+        prefetchCache: LRUCache<T>;
+        inFlightMap: Map<string, Promise<T>>;
+        cacheHits: { value: number };
+        fetchCount: { value: number };
+        fetchFn: (pageId: string) => Promise<T>;
+        normalizeResult: (result: any) => T;
+        logPrefix: string;
+      }
+    ): Promise<{ data: T; source: "cache" | "fetched" }> => {
+      const pageId = pageRecord?.id;
+      if (!pageId) {
+        return { data: config.normalizeResult([]), source: "cache" };
+      }
+
+      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
+
+      // Check main map cache
+      const existing = config.mainMap.get(pageId);
+      if (existing && existing.key === cacheKey) {
+        config.cacheHits.value += 1;
+        return { data: existing.data, source: "cache" };
+      }
+
+      // Check prefetch cache
+      if (config.prefetchCache.has(cacheKey)) {
+        config.cacheHits.value += 1;
+        const cached = config.prefetchCache.get(cacheKey);
+        const normalized = config.normalizeResult(cached);
+        config.mainMap.set(pageId, { key: cacheKey, data: normalized });
+        return { data: normalized, source: "cache" };
+      }
+
+      // Check in-flight requests or start new fetch
+      let inFlight = config.inFlightMap.get(cacheKey);
+      if (!inFlight) {
+        config.fetchCount.value += 1;
+        logProgress(pageIndex, totalCount, config.logPrefix, title);
+        inFlight = (async () => {
+          const result = await config.fetchFn(pageId);
+          const normalized = config.normalizeResult(result);
+          config.prefetchCache.set(cacheKey, normalized);
+          return normalized;
+        })()
+          .catch((error) => {
+            config.prefetchCache.delete(cacheKey);
+            throw error;
+          })
+          .finally(() => {
+            config.inFlightMap.delete(cacheKey);
+          });
+        config.inFlightMap.set(cacheKey, inFlight);
+      }
+
+      const result = await inFlight;
+      const normalized = config.normalizeResult(result);
+      config.mainMap.set(pageId, { key: cacheKey, data: normalized });
+      return { data: normalized, source: "fetched" };
+    };
+
     const loadBlocksForPage = async (
       pageRecord: Record<string, any>,
       pageIndex: number,
       totalCount: number,
       title: string
     ): Promise<{ data: any[]; source: "cache" | "fetched" }> => {
-      const pageId = pageRecord?.id;
-      if (!pageId) {
-        return { data: [], source: "cache" };
-      }
-
-      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
-      const existing = blocksMap.get(pageId);
-      if (existing && existing.key === cacheKey) {
-        blockCacheHits += 1;
-        return { data: existing.data, source: "cache" };
-      }
-
-      if (blockPrefetchCache.has(cacheKey)) {
-        blockCacheHits += 1;
-        const cachedRaw = blockPrefetchCache.get(cacheKey);
-        const cached = Array.isArray(cachedRaw) ? cachedRaw : [];
-        blocksMap.set(pageId, { key: cacheKey, data: cached });
-        return { data: cached, source: "cache" };
-      }
-
-      let inFlight = inFlightBlockFetches.get(cacheKey);
-      if (!inFlight) {
-        blockFetchCount += 1;
-        logProgress(pageIndex, totalCount, "Fetching blocks", title);
-        inFlight = (async () => {
-          const result = await fetchNotionBlocks(pageId);
-          const normalized = Array.isArray(result) ? result : [];
-          blockPrefetchCache.set(cacheKey, normalized);
-          return normalized;
-        })()
-          .catch((error) => {
-            blockPrefetchCache.delete(cacheKey);
-            throw error;
-          })
-          .finally(() => {
-            inFlightBlockFetches.delete(cacheKey);
-          });
-        inFlightBlockFetches.set(cacheKey, inFlight);
-      }
-
-      const result = await inFlight;
-      const normalized = Array.isArray(result) ? result : [];
-      blocksMap.set(pageId, { key: cacheKey, data: normalized });
-      return { data: normalized, source: "fetched" };
+      return loadWithCache<any[]>(pageRecord, pageIndex, totalCount, title, {
+        mainMap: blocksMap,
+        prefetchCache: blockPrefetchCache,
+        inFlightMap: inFlightBlockFetches,
+        cacheHits: blockCacheHits,
+        fetchCount: blockFetchCount,
+        fetchFn: fetchNotionBlocks,
+        normalizeResult: (result) => (Array.isArray(result) ? result : []),
+        logPrefix: "Fetching blocks",
+      });
     };
 
     const loadMarkdownForPage = async (
@@ -1329,49 +1368,17 @@ export async function generateBlocks(pages, progressCallback) {
       totalCount: number,
       title: string
     ): Promise<{ data: any; source: "cache" | "fetched" }> => {
-      const pageId = pageRecord?.id;
-      if (!pageId) {
-        return { data: [], source: "cache" };
-      }
-
-      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
-      const existing = markdownMap.get(pageId);
-      if (existing && existing.key === cacheKey) {
-        markdownCacheHits += 1;
-        return { data: existing.data, source: "cache" };
-      }
-
-      if (markdownPrefetchCache.has(cacheKey)) {
-        markdownCacheHits += 1;
-        const cached = markdownPrefetchCache.get(cacheKey);
-        markdownMap.set(pageId, { key: cacheKey, data: cached });
-        return { data: cached, source: "cache" };
-      }
-
-      let inFlight = inFlightMarkdownFetches.get(cacheKey);
-      if (!inFlight) {
-        markdownFetchCount += 1;
-        logProgress(pageIndex, totalCount, "Converting markdown", title);
-        inFlight = (async () => {
-          const result = await n2m.pageToMarkdown(pageId);
-          const normalized = Array.isArray(result) ? result : (result ?? []);
-          markdownPrefetchCache.set(cacheKey, normalized);
-          return normalized;
-        })()
-          .catch((error) => {
-            markdownPrefetchCache.delete(cacheKey);
-            throw error;
-          })
-          .finally(() => {
-            inFlightMarkdownFetches.delete(cacheKey);
-          });
-        inFlightMarkdownFetches.set(cacheKey, inFlight);
-      }
-
-      const result = await inFlight;
-      const normalized = Array.isArray(result) ? result : (result ?? []);
-      markdownMap.set(pageId, { key: cacheKey, data: normalized });
-      return { data: normalized, source: "fetched" };
+      return loadWithCache<any>(pageRecord, pageIndex, totalCount, title, {
+        mainMap: markdownMap,
+        prefetchCache: markdownPrefetchCache,
+        inFlightMap: inFlightMarkdownFetches,
+        cacheHits: markdownCacheHits,
+        fetchCount: markdownFetchCount,
+        fetchFn: (pageId) => n2m.pageToMarkdown(pageId),
+        normalizeResult: (result) =>
+          Array.isArray(result) ? result : (result ?? []),
+        logPrefix: "Converting markdown",
+      });
     };
 
     for (let i = 0; i < pagesByLang.length; i++) {
@@ -1940,14 +1947,25 @@ export async function generateBlocks(pages, progressCallback) {
     }
 
     if (
-      blockFetchCount ||
-      blockCacheHits ||
-      markdownFetchCount ||
-      markdownCacheHits
+      blockFetchCount.value ||
+      blockCacheHits.value ||
+      markdownFetchCount.value ||
+      markdownCacheHits.value
     ) {
+      const blockTotal = blockFetchCount.value + blockCacheHits.value;
+      const markdownTotal = markdownFetchCount.value + markdownCacheHits.value;
+      const blockHitRate =
+        blockTotal > 0
+          ? ((blockCacheHits.value / blockTotal) * 100).toFixed(1)
+          : "0.0";
+      const markdownHitRate =
+        markdownTotal > 0
+          ? ((markdownCacheHits.value / markdownTotal) * 100).toFixed(1)
+          : "0.0";
+
       console.info(
         chalk.gray(
-          `\n📦 Prefetch cache stats → blocks fetched: ${blockFetchCount}, cache hits: ${blockCacheHits}; markdown fetched: ${markdownFetchCount}, cache hits: ${markdownCacheHits}`
+          `\n📦 Prefetch cache stats → blocks: ${blockFetchCount.value} fetched, ${blockCacheHits.value} cached (${blockHitRate}% hit rate); markdown: ${markdownFetchCount.value} fetched, ${markdownCacheHits.value} cached (${markdownHitRate}% hit rate)`
         )
       );
     }

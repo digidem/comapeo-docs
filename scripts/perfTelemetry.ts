@@ -59,11 +59,43 @@ function normalizeBooleanEnv(value: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
+/**
+ * Parse and validate positive integer from environment variable
+ */
+function parsePositiveInt(
+  value: string | undefined,
+  defaultValue: number,
+  min: number = 1,
+  max: number = Number.MAX_SAFE_INTEGER
+): number {
+  if (!value) return defaultValue;
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (Number.isNaN(parsed) || parsed < min) {
+    return defaultValue;
+  }
+
+  if (parsed > max) {
+    return max;
+  }
+
+  return parsed;
+}
+
 const LOG_ENABLED = normalizeBooleanEnv(process.env.NOTION_PERF_LOG);
 const OUTPUT_PATH = process.env.NOTION_PERF_OUTPUT;
 const SUMMARY_ENABLED = normalizeBooleanEnv(process.env.NOTION_PERF_SUMMARY);
 const SUMMARY_PATH =
   process.env.NOTION_PERF_SUMMARY_PATH || process.env.GITHUB_STEP_SUMMARY;
+
+// Maximum number of queue samples to keep (circular buffer to prevent memory leak)
+const MAX_QUEUE_SAMPLES = parsePositiveInt(
+  process.env.NOTION_PERF_MAX_QUEUE_SAMPLES,
+  1000, // Default: keep last 1000 samples
+  100,  // Min: 100 samples
+  10000 // Max: 10000 samples
+);
 
 class PerfTelemetry {
   private metrics: PerfMetrics = {
@@ -146,6 +178,14 @@ class PerfTelemetry {
 
   recordQueueSample(sample: QueueSnapshot): void {
     if (!this.shouldCapture()) return;
+
+    // Implement circular buffer to prevent unbounded memory growth
+    // Keep only the most recent MAX_QUEUE_SAMPLES samples
+    if (this.metrics.queueSamples.length >= MAX_QUEUE_SAMPLES) {
+      // Remove oldest sample (FIFO)
+      this.metrics.queueSamples.shift();
+    }
+
     this.metrics.queueSamples.push(sample);
   }
 
@@ -230,6 +270,9 @@ class PerfTelemetry {
         `- Peak active requests: ${peak.active}, peak queued: ${peak.queued}`
       );
       lines.push(`- Avg queue depth: ${avgQueue.toFixed(2)}`);
+      lines.push(
+        `- Queue samples: ${queueSamples.length}${queueSamples.length >= MAX_QUEUE_SAMPLES ? ` (capped at ${MAX_QUEUE_SAMPLES})` : ""}`
+      );
     }
 
     if (events.length > 0) {

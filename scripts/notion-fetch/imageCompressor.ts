@@ -5,6 +5,26 @@ import imageminWebp from "imagemin-webp";
 import { spawn } from "node:child_process";
 import pngquantBin from "pngquant-bin";
 
+/**
+ * Custom error for pngquant exit code 99 (quality too low)
+ * This indicates the image cannot be compressed within the requested quality range,
+ * typically because it's already well-optimized.
+ */
+export class PngQualityTooLowError extends Error {
+  code = 99;
+  quality: string;
+  stderr: string;
+
+  constructor(quality: string, stderr: string) {
+    super(
+      `PNG quality too low with settings ${quality}. Image may already be optimized.${stderr ? ` Details: ${stderr}` : ""}`
+    );
+    this.name = "PngQualityTooLowError";
+    this.quality = quality;
+    this.stderr = stderr;
+  }
+}
+
 const DEFAULT_PNGQUANT_TIMEOUT_MS = 30_000;
 const PNGQUANT_SPEED = process.env.PNGQUANT_SPEED ?? "3";
 const PNGQUANT_QUALITY =
@@ -87,6 +107,10 @@ async function compressPngWithTimeout(buffer: Buffer): Promise<Buffer> {
           return;
         }
         resolve(Buffer.concat(stdoutChunks));
+      } else if (code === 99) {
+        // Exit code 99 = quality too low (image already well-optimized)
+        const stderr = Buffer.concat(stderrChunks).toString().trim();
+        reject(new PngQualityTooLowError(PNGQUANT_QUALITY, stderr));
       } else {
         const stderr = Buffer.concat(stderrChunks).toString().trim();
         reject(
@@ -155,9 +179,9 @@ function detectFormatFromBuffer(
  * - GIF/unknown => passthrough (no conversion)
  */
 export async function compressImage(inputBuffer: Buffer) {
-  try {
-    const format = detectFormatFromBuffer(inputBuffer);
+  const format = detectFormatFromBuffer(inputBuffer);
 
+  try {
     // Choose plugins based on detected format to avoid cross-format conversions.
     switch (format) {
       case "jpeg": {
@@ -211,7 +235,19 @@ export async function compressImage(inputBuffer: Buffer) {
         };
     }
   } catch (error) {
-    console.error("Error compressing image:", error);
+    // Special handling for PNG quality errors (exit code 99)
+    // These are not real errors - the image is just already well-optimized
+    if (error instanceof PngQualityTooLowError && format === "png") {
+      // Return original image without logging error (not a failure)
+      return {
+        compressedBuffer: inputBuffer,
+        originalSize: inputBuffer.length,
+        compressedSize: inputBuffer.length,
+      };
+    }
+
+    // For other errors, re-throw to be handled by fallback logic in utils.ts
+    // Don't log here to avoid double logging (utils.ts will log with full context)
     throw error;
   }
 }

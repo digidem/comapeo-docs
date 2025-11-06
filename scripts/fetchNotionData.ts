@@ -32,9 +32,9 @@ export async function fetchNotionData(filter) {
     // Note: notionClient.ts will warn if DATA_SOURCE_ID is not set
     const dataSourceId = DATA_SOURCE_ID || DATABASE_ID;
 
-    const response = await enhancedNotion.databasesQuery({
-      // v5 API: database_id parameter is mapped to data_source_id by the legacy method
-      database_id: dataSourceId,
+    const response = await enhancedNotion.dataSourcesQuery({
+      // v5 API: data_source_id parameter
+      data_source_id: dataSourceId,
       filter,
       start_cursor: startCursor,
       page_size: 100,
@@ -69,8 +69,8 @@ export async function fetchNotionData(filter) {
     if (anomaly) {
       // One retry attempt to recover from transient anomaly
       console.warn("Notion API pagination anomaly detected; retrying once...");
-      const retryResp = await enhancedNotion.databasesQuery({
-        database_id: dataSourceId,
+      const retryResp = await enhancedNotion.dataSourcesQuery({
+        data_source_id: dataSourceId,
         filter,
         start_cursor: prevCursor,
         page_size: 100,

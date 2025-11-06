@@ -1083,6 +1083,10 @@ class LRUCache<T> {
     return this.cache.has(key);
   }
 
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
   clear(): void {
     this.cache.clear();
   }

@@ -78,45 +78,50 @@ Every PR automatically gets a staging deployment on Cloudflare Pages:
 
 The preview workflow automatically chooses the optimal content generation strategy:
 
-**When script files are NOT modified:**
-- Uses content from `content` branch (fast, ~30s)
-- Script paths monitored: `scripts/notion-*`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/constants.ts`
-
-**When script files ARE modified:**
+**When Notion fetch scripts ARE modified:**
 - Regenerates content from Notion API to validate script changes
 - Default: Fetches 5 pages (provides reliable validation coverage)
-- Takes ~90s instead of ~30s
+- Takes ~90s
+- Script paths monitored: `scripts/notion-fetch/`, `scripts/notion-fetch-all/`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/notionPageUtils.ts`, `scripts/constants.ts`
 
-**Override via PR labels** (when script changes detected):
+**When Notion fetch scripts are NOT modified:**
+- Uses content from `content` branch (fast, ~30s)
+- Falls back to regenerating 5 pages if content branch is empty
+- No API calls needed (unless fallback triggered)
+
+**Override via PR labels** (forces regeneration regardless of script changes):
 
 | Label | Pages Fetched | Est. Time | When to Use |
 |-------|---------------|-----------|-------------|
-| (no label) | 5 pages | ~90s | Default - validates most script changes |
+| (no label) | Content branch or 5 pages | ~30-90s | Default - fast for frontend, tests scripts |
 | `fetch-10-pages` | 10 pages | ~2min | Test pagination, multiple content types |
 | `fetch-all-pages` | All (~50-100) | ~8min | Major refactoring, full validation |
 
 **How to use labels:**
 ```bash
-# Add label to PR to fetch more pages
+# Add label to force regeneration with more pages
 gh pr edit <PR#> --add-label "fetch-10-pages"
 
 # Or add when creating PR
 gh pr create --label "fetch-all-pages" --title "..." --body "..."
 
-# Remove label to go back to default (5 pages)
+# Remove label to go back to default behavior
 gh pr edit <PR#> --remove-label "fetch-10-pages"
 ```
 
 **Label recommendations:**
-- Bug fixes → no label (5 pages is sufficient)
-- New block type support → no label (5 pages covers most cases)
+- Frontend-only changes → no label (uses content branch, ~30s)
+- Script bug fixes → no label (auto-detects, regenerates 5 pages)
+- New block type support → no label (auto-detects changes)
 - Pagination changes → `fetch-10-pages`
-- Major refactoring → `fetch-all-pages`
-- Image processing changes → no label (5 pages is sufficient)
+- Major script refactoring → `fetch-all-pages`
+- Force fresh content → any label (overrides content branch)
 
 **Important notes:**
-- Labels only affect PRs where script changes are detected
-- Frontend-only PRs always use content branch (fast path)
+- Labels override the smart detection and always regenerate
+- Frontend-only PRs use content branch for speed (unless labeled)
+- Script changes always regenerate to test new code
+- Auto-fallback: If content branch is empty, regenerates 5 pages automatically
 - Adding/removing labels triggers a new preview deployment
 - The PR comment will show which strategy was used
 

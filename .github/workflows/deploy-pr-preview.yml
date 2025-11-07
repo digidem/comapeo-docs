@@ -36,9 +36,11 @@ jobs:
           # Fetch base branch for comparison
           git fetch origin ${{ github.event.pull_request.base.ref }}
 
-          # Check if Notion scripts were modified
+          # Check if Notion-related scripts were modified
+          # Covers: notion-fetch/, notion-fetch-all/, fetchNotionData, notionClient, notionPageUtils, constants
+          # Excludes: perfTelemetry (telemetry only), remark-fix-image-paths (build-time transform)
           SCRIPT_CHANGES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD | \
-            grep -E '^scripts/(notion-|fetchNotionData|notionClient|constants)' || true)
+            grep -E '^scripts/(notion-fetch/|notion-fetch-all/|fetchNotionData|notionClient|notionPageUtils|constants)' || true)
 
           if [ -n "$SCRIPT_CHANGES" ]; then
             echo "scripts_changed=true" >> $GITHUB_OUTPUT
@@ -48,19 +50,20 @@ jobs:
             echo "$SCRIPT_CHANGES" | sed 's/^/  - /'
           else
             echo "scripts_changed=false" >> $GITHUB_OUTPUT
-            echo "ℹ️  No script changes - will use content branch"
+            echo "ℹ️  No script changes - will use content branch (with fallback)"
           fi
 
           # Determine page limit based on PR labels
+          # Use word boundaries to avoid false positives from partial matches
           LABELS="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
 
-          if echo "$LABELS" | grep -q "fetch-all-pages"; then
+          if echo "$LABELS" | grep -qE "\bfetch-all-pages\b"; then
             echo "max_pages=all" >> $GITHUB_OUTPUT
             echo "📚 Label detected: Will fetch ALL pages"
-          elif echo "$LABELS" | grep -q "fetch-10-pages"; then
+          elif echo "$LABELS" | grep -qE "\bfetch-10-pages\b"; then
             echo "max_pages=10" >> $GITHUB_OUTPUT
             echo "📖 Label detected: Will fetch 10 pages"
-          elif echo "$LABELS" | grep -q "fetch-5-pages"; then
+          elif echo "$LABELS" | grep -qE "\bfetch-5-pages\b"; then
             echo "max_pages=5" >> $GITHUB_OUTPUT
             echo "📖 Label detected: Will fetch 5 pages"
           else
@@ -82,15 +85,31 @@ jobs:
 
           SCRIPTS_CHANGED="${{ steps.detect.outputs.scripts_changed }}"
           MAX_PAGES="${{ steps.detect.outputs.max_pages }}"
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
 
-          if [ "$SCRIPTS_CHANGED" == "true" ]; then
+          # Check if labels are present (forces regeneration)
+          # Use word boundaries to avoid false positives from partial matches
+          HAS_LABELS="false"
+          if echo "$LABELS" | grep -qE "\b(fetch-all-pages|fetch-10-pages|fetch-5-pages)\b"; then
+            HAS_LABELS="true"
+          fi
+
+          # Track content source locally for debugging (also export to env for later steps)
+          CONTENT_SOURCE=""
+
+          # Decide content strategy
+          if [ "$SCRIPTS_CHANGED" == "true" ] || [ "$HAS_LABELS" == "true" ]; then
             echo "🔄 Regenerating content from Notion API..."
             echo "📊 Configuration:"
             echo "  - Max pages: $MAX_PAGES"
-            echo "  - Reason: Script modifications detected"
+            if [ "$SCRIPTS_CHANGED" == "true" ]; then
+              echo "  - Reason: Script modifications detected"
+            else
+              echo "  - Reason: Label override requested"
+            fi
             echo ""
 
-            # Export secrets only when needed for regeneration
+            # Export Notion API credentials
             export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
             export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
             export DATABASE_ID="${{ secrets.DATABASE_ID }}"
@@ -105,55 +124,8 @@ jobs:
               bun run notion:fetch-all --max-pages "$MAX_PAGES"
             fi
 
-            # Validate content was generated successfully
-            echo ""
-            echo "🔍 Validating generated content..."
-
-            # Count generated markdown files across all languages
-            # Guard against missing directories to avoid find failures
-            # Support both .md and .mdx files (Docusaurus accepts both)
-            if [ -d docs ]; then
-              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
-            else
-              DOCS_COUNT=0
-            fi
-
-            if [ -d i18n ]; then
-              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
-            else
-              I18N_COUNT=0
-            fi
-
-            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
-
-            if [ "$TOTAL_CONTENT" -eq 0 ]; then
-              echo "❌ Error: Content regeneration failed - no markdown files generated"
-              echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
-              echo "   Found: 0 files"
-              exit 1
-            fi
-
-            # Log what was generated
-            if [ "$DOCS_COUNT" -eq 0 ]; then
-              echo "⚠️  WARNING: No English content generated (docs/ is empty)"
-              echo "   This is expected when --max-pages fetches only localized content"
-              echo "   NOTE: Docusaurus build may fail if default locale has no content"
-            fi
-
-            if [ "$I18N_COUNT" -eq 0 ]; then
-              echo "⚠️  Note: No localized content generated (i18n/ is empty)"
-            fi
-
-            if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
-              echo "⚠️  Warning: static/images/ directory is empty or missing"
-            fi
-
-            echo "✅ Content regenerated and validated successfully"
-            echo "📊 Generated content statistics:"
-            echo "  - English docs: $DOCS_COUNT"
-            echo "  - Localized docs: $I18N_COUNT"
-            echo "  - Total docs: $TOTAL_CONTENT"
-            find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
+            CONTENT_SOURCE="regenerated"
+            echo "content_source=regenerated" >> $GITHUB_ENV
 
           else
             echo "📥 Using content from content branch..."
@@ -162,44 +134,131 @@ jobs:
             echo "  - Reason: No script modifications"
             echo ""
 
-            git fetch origin content
-            git checkout origin/content -- docs/ i18n/ static/images/
+            # Track if content branch operation succeeded
+            CONTENT_BRANCH_SUCCESS="false"
 
-            # Validation - check for any content across all languages
-            # Guard against missing directories to avoid find failures
-            # Support both .md and .mdx files (Docusaurus accepts both)
-            if [ -d docs ]; then
-              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            # Try to fetch content branch (may not exist in new repos)
+            if git fetch origin content 2>&1; then
+              echo "✅ Content branch fetched successfully"
+
+              # Try to checkout content branch files
+              if git checkout origin/content -- docs/ i18n/ static/images/ 2>&1; then
+                echo "✅ Content branch checkout successful"
+                CONTENT_BRANCH_SUCCESS="true"
+              else
+                echo "⚠️  Content branch checkout failed, will use fallback"
+              fi
             else
-              DOCS_COUNT=0
+              echo "⚠️  Failed to fetch content branch (may not exist), will use fallback"
             fi
 
-            if [ -d i18n ]; then
-              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            # Only validate and use content if checkout actually succeeded
+            if [ "$CONTENT_BRANCH_SUCCESS" == "true" ]; then
+              # Validate content branch has files
+              if [ -d docs ]; then
+                DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+              else
+                DOCS_COUNT=0
+              fi
+
+              if [ -d i18n ]; then
+                I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+              else
+                I18N_COUNT=0
+              fi
+
+              TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+              if [ "$TOTAL_CONTENT" -eq 0 ]; then
+                echo "⚠️  WARNING: Content branch checkout succeeded but is empty!"
+                echo "   Falling back to regenerating 5 pages from Notion..."
+                echo ""
+
+                # Fallback: Regenerate with default 5 pages
+                export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+                export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+                export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+                export BASE_URL="/comapeo-docs/"
+
+                echo "Running: bun run notion:fetch-all --max-pages 5"
+                bun run notion:fetch-all --max-pages 5
+
+                CONTENT_SOURCE="fallback"
+                echo "content_source=fallback" >> $GITHUB_ENV
+              else
+                echo "✅ Content from content branch loaded successfully"
+                CONTENT_SOURCE="content-branch"
+                echo "content_source=content-branch" >> $GITHUB_ENV
+              fi
             else
-              I18N_COUNT=0
+              # Content branch fetch/checkout failed - force regeneration
+              echo "⚠️  Content branch unavailable, regenerating from Notion..."
+              echo ""
+
+              # Fallback: Regenerate with default 5 pages
+              export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+              export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+              export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+              export BASE_URL="/comapeo-docs/"
+
+              echo "Running: bun run notion:fetch-all --max-pages 5"
+              bun run notion:fetch-all --max-pages 5
+
+              CONTENT_SOURCE="fallback"
+              echo "content_source=fallback" >> $GITHUB_ENV
             fi
-
-            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
-
-            if [ "$TOTAL_CONTENT" -eq 0 ]; then
-              echo "❌ Error: Content branch has no markdown files"
-              echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
-              echo "   Found: 0 files"
-              exit 1
-            fi
-
-            if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
-              echo "⚠️  Warning: static/images/ directory is empty or missing"
-            fi
-
-            echo "✅ Content from content branch loaded successfully"
-            echo "📊 Content statistics:"
-            echo "  - English docs: $DOCS_COUNT"
-            echo "  - Localized docs: $I18N_COUNT"
-            echo "  - Total docs: $TOTAL_CONTENT"
-            find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
           fi
+
+          # Final validation - check for any content across all languages
+          echo ""
+          echo "🔍 Validating final content..."
+
+          if [ -d docs ]; then
+            DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+          else
+            DOCS_COUNT=0
+          fi
+
+          if [ -d i18n ]; then
+            I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+          else
+            I18N_COUNT=0
+          fi
+
+          TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+          if [ "$TOTAL_CONTENT" -eq 0 ]; then
+            echo "❌ Error: No markdown files found after provisioning"
+            echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
+            echo "   Found: 0 files"
+            echo ""
+            echo "🔍 Debugging information:"
+            echo "  - Content source attempted: ${CONTENT_SOURCE:-unknown}"
+            echo "  - Scripts changed: $SCRIPTS_CHANGED"
+            echo "  - Labels: $LABELS"
+            exit 1
+          fi
+
+          # Log what was found
+          if [ "$DOCS_COUNT" -eq 0 ]; then
+            echo "⚠️  WARNING: No English content (docs/ is empty)"
+            echo "   This may cause Docusaurus build to fail if default locale is English"
+          fi
+
+          if [ "$I18N_COUNT" -eq 0 ]; then
+            echo "⚠️  Note: No localized content (i18n/ is empty)"
+          fi
+
+          if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
+            echo "⚠️  Warning: static/images/ directory is empty or missing"
+          fi
+
+          echo "✅ Content validated successfully"
+          echo "📊 Content statistics:"
+          echo "  - English docs: $DOCS_COUNT"
+          echo "  - Localized docs: $I18N_COUNT"
+          echo "  - Total docs: $TOTAL_CONTENT"
+          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Build documentation
         run: bun run build
@@ -223,22 +282,38 @@ jobs:
             const previewUrl = `https://pr-${prNumber}.comapeo-docs.pages.dev`;
             const scriptsChanged = '${{ steps.detect.outputs.scripts_changed }}' === 'true';
             const maxPages = '${{ steps.detect.outputs.max_pages }}';
+            const contentSource = '${{ env.content_source }}' || '';
 
-            // Determine content source message
+            // Determine content info message based on source
             let contentInfo = '';
-            if (scriptsChanged) {
+
+            if (contentSource === 'regenerated') {
               const pageInfo = maxPages === 'all'
                 ? 'all pages from Notion'
                 : `${maxPages} page${maxPages === '1' ? '' : 's'} from Notion`;
 
-              contentInfo = `🔄 **Content:** Regenerated ${pageInfo} (script changes detected)`;
+              contentInfo = `🔄 **Content:** Regenerated ${pageInfo}`;
+
+              if (scriptsChanged) {
+                contentInfo += ' (script changes detected)';
+              } else {
+                contentInfo += ' (label override)';
+              }
 
               // Add guidance for full testing if limited
               if (maxPages !== 'all') {
                 contentInfo += '\n\n> 💡 **Tip:** Add label \`fetch-all-pages\` to test with full content, or \`fetch-10-pages\` for broader coverage.';
               }
-            } else {
+            } else if (contentSource === 'fallback') {
+              contentInfo = '🔄 **Content:** Regenerated 5 pages from Notion (content branch was empty, used fallback)';
+              contentInfo += '\n\n> ⚠️ **Note:** Content branch needed regeneration. Consider running the sync-docs workflow.';
+            } else if (contentSource === 'content-branch') {
               contentInfo = '📦 **Content:** From content branch (no script changes)';
+              contentInfo += '\n\n> 💡 **Tip:** Add a label to force regeneration if you want to test with fresh Notion data.';
+            } else {
+              // Fallback for empty or unknown content source
+              contentInfo = '❓ **Content:** Unknown (workflow may have encountered an error)';
+              contentInfo += '\n\n> ⚠️ **Note:** Check the workflow logs for details.';
             }
 
             const commentBody = `## 🚀 Preview Deployment
@@ -294,14 +369,41 @@ jobs:
           echo "- 🌐 Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.detect.outputs.scripts_changed }}" == "true" ]; then
+          CONTENT_SOURCE="${{ env.content_source }}"
+          if [ "$CONTENT_SOURCE" == "regenerated" ]; then
             echo "- 🔄 Content regenerated from Notion (max pages: ${{ steps.detect.outputs.max_pages }})" >> $GITHUB_STEP_SUMMARY
-          else
+          elif [ "$CONTENT_SOURCE" == "fallback" ]; then
+            echo "- 🔄 Content regenerated (fallback: content branch was empty)" >> $GITHUB_STEP_SUMMARY
+          elif [ "$CONTENT_SOURCE" == "content-branch" ]; then
             echo "- 📦 Content from content branch" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❓ Content source: unknown (check logs)" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "This preview will update automatically with new commits." >> $GITHUB_STEP_SUMMARY
+
+      - name: Prepare Slack content message
+        if: always()
+        run: |
+          CONTENT_SOURCE="${{ env.content_source }}"
+          SCRIPTS_CHANGED="${{ steps.detect.outputs.scripts_changed }}"
+          MAX_PAGES="${{ steps.detect.outputs.max_pages }}"
+
+          if [ "$CONTENT_SOURCE" == "regenerated" ]; then
+            if [ "$SCRIPTS_CHANGED" == "true" ]; then
+              echo "SLACK_CONTENT=Regenerated ($MAX_PAGES pages, script changes)" >> $GITHUB_ENV
+            else
+              echo "SLACK_CONTENT=Regenerated ($MAX_PAGES pages, label override)" >> $GITHUB_ENV
+            fi
+          elif [ "$CONTENT_SOURCE" == "fallback" ]; then
+            echo "SLACK_CONTENT=Regenerated (5 pages, fallback)" >> $GITHUB_ENV
+          elif [ "$CONTENT_SOURCE" == "content-branch" ]; then
+            echo "SLACK_CONTENT=Content branch" >> $GITHUB_ENV
+          else
+            # Fallback for empty or unknown content source
+            echo "SLACK_CONTENT=Unknown (workflow may have failed)" >> $GITHUB_ENV
+          fi
 
       - name: Notify Slack
         if: always()
@@ -323,4 +425,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Content: ${{ steps.detect.outputs.scripts_changed == 'true' && format('Regenerated ({0} pages)', steps.detect.outputs.max_pages) || 'Content branch' }}\nTrigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"
+                  text: "Content: ${{ env.SLACK_CONTENT }}\nTrigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"

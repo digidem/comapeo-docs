@@ -118,11 +118,38 @@ jobs:
             # Build the command with optional --max-pages flag
             if [ "$MAX_PAGES" == "all" ]; then
               echo "Running: bun run notion:fetch-all (no limit)"
-              bun run notion:fetch-all
+              if ! bun run notion:fetch-all; then
+                echo "❌ ERROR: Notion fetch command failed"
+                echo "   Check Notion API credentials and permissions"
+                exit 1
+              fi
             else
               echo "Running: bun run notion:fetch-all --max-pages $MAX_PAGES"
-              bun run notion:fetch-all --max-pages "$MAX_PAGES"
+              if ! bun run notion:fetch-all --max-pages "$MAX_PAGES"; then
+                echo "❌ ERROR: Notion fetch command failed"
+                echo "   Check Notion API credentials and permissions"
+                exit 1
+              fi
             fi
+
+            # Immediate validation: check if regeneration produced files
+            TEMP_DOCS=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+            TEMP_I18N=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+            TEMP_TOTAL=$((TEMP_DOCS + TEMP_I18N))
+
+            if [ "$TEMP_TOTAL" -eq 0 ]; then
+              echo "❌ ERROR: Regeneration completed but produced 0 markdown files"
+              echo "   Possible causes:"
+              echo "     - No pages match selection criteria (status/element type filters)"
+              echo "     - All fetched pages failed to generate markdown"
+              echo "     - Smart page selection returned 0 pages"
+              echo "   Debug: Check workflow logs for page selection details"
+              exit 1
+            fi
+
+            echo "✅ Regeneration successful: $TEMP_TOTAL markdown files created"
+            echo "   - English docs: $TEMP_DOCS"
+            echo "   - Localized docs: $TEMP_I18N"
 
             CONTENT_SOURCE="regenerated"
             echo "content_source=regenerated" >> $GITHUB_ENV
@@ -181,7 +208,30 @@ jobs:
                 export BASE_URL="/comapeo-docs/"
 
                 echo "Running: bun run notion:fetch-all --max-pages 5"
-                bun run notion:fetch-all --max-pages 5
+                if ! bun run notion:fetch-all --max-pages 5; then
+                  echo "❌ ERROR: Notion fetch command failed"
+                  echo "   Check Notion API credentials and permissions"
+                  exit 1
+                fi
+
+                # Immediate validation: check if regeneration produced files
+                TEMP_DOCS=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+                TEMP_I18N=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+                TEMP_TOTAL=$((TEMP_DOCS + TEMP_I18N))
+
+                if [ "$TEMP_TOTAL" -eq 0 ]; then
+                  echo "❌ ERROR: Regeneration completed but produced 0 markdown files"
+                  echo "   Possible causes:"
+                  echo "     - No pages match selection criteria (status/element type filters)"
+                  echo "     - All fetched pages failed to generate markdown"
+                  echo "     - Smart page selection returned 0 pages"
+                  echo "   Debug: Check workflow logs for page selection details"
+                  exit 1
+                fi
+
+                echo "✅ Regeneration successful: $TEMP_TOTAL markdown files created"
+                echo "   - English docs: $TEMP_DOCS"
+                echo "   - Localized docs: $TEMP_I18N"
 
                 CONTENT_SOURCE="fallback"
                 echo "content_source=fallback" >> $GITHUB_ENV
@@ -202,7 +252,30 @@ jobs:
               export BASE_URL="/comapeo-docs/"
 
               echo "Running: bun run notion:fetch-all --max-pages 5"
-              bun run notion:fetch-all --max-pages 5
+              if ! bun run notion:fetch-all --max-pages 5; then
+                echo "❌ ERROR: Notion fetch command failed"
+                echo "   Check Notion API credentials and permissions"
+                exit 1
+              fi
+
+              # Immediate validation: check if regeneration produced files
+              TEMP_DOCS=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+              TEMP_I18N=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l || echo 0)
+              TEMP_TOTAL=$((TEMP_DOCS + TEMP_I18N))
+
+              if [ "$TEMP_TOTAL" -eq 0 ]; then
+                echo "❌ ERROR: Regeneration completed but produced 0 markdown files"
+                echo "   Possible causes:"
+                echo "     - No pages match selection criteria (status/element type filters)"
+                echo "     - All fetched pages failed to generate markdown"
+                echo "     - Smart page selection returned 0 pages"
+                echo "   Debug: Check workflow logs for page selection details"
+                exit 1
+              fi
+
+              echo "✅ Regeneration successful: $TEMP_TOTAL markdown files created"
+              echo "   - English docs: $TEMP_DOCS"
+              echo "   - Localized docs: $TEMP_I18N"
 
               CONTENT_SOURCE="fallback"
               echo "content_source=fallback" >> $GITHUB_ENV

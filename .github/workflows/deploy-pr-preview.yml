@@ -134,13 +134,18 @@ jobs:
             echo "  - Reason: No script modifications"
             echo ""
 
-            git fetch origin content
+            # Try to fetch content branch (may not exist in new repos)
+            if git fetch origin content 2>&1; then
+              echo "✅ Content branch fetched successfully"
 
-            # Try to checkout content branch files
-            if git checkout origin/content -- docs/ i18n/ static/images/ 2>&1; then
-              echo "✅ Content branch checkout successful"
+              # Try to checkout content branch files
+              if git checkout origin/content -- docs/ i18n/ static/images/ 2>&1; then
+                echo "✅ Content branch checkout successful"
+              else
+                echo "⚠️  Content branch checkout had issues, will validate and use fallback if needed"
+              fi
             else
-              echo "⚠️  Content branch checkout had issues, will validate and use fallback if needed"
+              echo "⚠️  Failed to fetch content branch (may not exist), will use fallback"
             fi
 
             # Validate content branch has files
@@ -346,8 +351,10 @@ jobs:
             echo "- 🔄 Content regenerated from Notion (max pages: ${{ steps.detect.outputs.max_pages }})" >> $GITHUB_STEP_SUMMARY
           elif [ "$CONTENT_SOURCE" == "fallback" ]; then
             echo "- 🔄 Content regenerated (fallback: content branch was empty)" >> $GITHUB_STEP_SUMMARY
-          else
+          elif [ "$CONTENT_SOURCE" == "content-branch" ]; then
             echo "- 📦 Content from content branch" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❓ Content source: unknown (check logs)" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY

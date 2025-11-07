@@ -26,14 +26,31 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0  # Need full history for comparison
 
-      - name: Determine page limit for content generation
+      - name: Detect script changes and page limit
         id: detect
         run: |
           set -e
 
-          echo "🔍 Configuring content generation for PR preview..."
-          echo "ℹ️  PR previews always regenerate content from Notion to test current code"
-          echo ""
+          echo "🔍 Analyzing PR for content generation strategy..."
+
+          # Fetch base branch for comparison
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+
+          # Check if Notion-related scripts were modified
+          # Include all paths that affect content generation
+          SCRIPT_CHANGES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD | \
+            grep -E '^scripts/(notion-fetch/|notion-fetch-all/|fetchNotionData|notionClient|notionPageUtils|constants)' || true)
+
+          if [ -n "$SCRIPT_CHANGES" ]; then
+            echo "scripts_changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Script changes detected - will regenerate content"
+            echo ""
+            echo "Modified scripts:"
+            echo "$SCRIPT_CHANGES" | sed 's/^/  - /'
+          else
+            echo "scripts_changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No script changes - will use content branch (with fallback)"
+          fi
 
           # Determine page limit based on PR labels
           LABELS="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
@@ -49,7 +66,7 @@ jobs:
             echo "📖 Label detected: Will fetch 5 pages"
           else
             echo "max_pages=5" >> $GITHUB_OUTPUT
-            echo "📄 Default: Will fetch 5 pages for validation"
+            echo "📄 Default: Will fetch 5 pages for script validation"
           fi
 
       - name: Setup Bun
@@ -60,40 +77,99 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Generate content from Notion
+      - name: Smart content provisioning
         run: |
           set -e
 
+          SCRIPTS_CHANGED="${{ steps.detect.outputs.scripts_changed }}"
           MAX_PAGES="${{ steps.detect.outputs.max_pages }}"
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
 
-          echo "🔄 Regenerating content from Notion API..."
-          echo "📊 Configuration:"
-          echo "  - Max pages: $MAX_PAGES"
-          echo "  - Mode: PR preview (always regenerates to test current code)"
-          echo ""
-
-          # Export Notion API credentials
-          export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
-          export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
-          export DATABASE_ID="${{ secrets.DATABASE_ID }}"
-          export BASE_URL="/comapeo-docs/"
-
-          # Build the command with optional --max-pages flag
-          if [ "$MAX_PAGES" == "all" ]; then
-            echo "Running: bun run notion:fetch-all (no limit)"
-            bun run notion:fetch-all
-          else
-            echo "Running: bun run notion:fetch-all --max-pages $MAX_PAGES"
-            bun run notion:fetch-all --max-pages "$MAX_PAGES"
+          # Check if labels are present (forces regeneration)
+          HAS_LABELS="false"
+          if echo "$LABELS" | grep -qE "(fetch-all-pages|fetch-10-pages|fetch-5-pages)"; then
+            HAS_LABELS="true"
           fi
 
-          # Validate content was generated successfully
-          echo ""
-          echo "🔍 Validating generated content..."
+          # Decide content strategy
+          if [ "$SCRIPTS_CHANGED" == "true" ] || [ "$HAS_LABELS" == "true" ]; then
+            echo "🔄 Regenerating content from Notion API..."
+            echo "📊 Configuration:"
+            echo "  - Max pages: $MAX_PAGES"
+            if [ "$SCRIPTS_CHANGED" == "true" ]; then
+              echo "  - Reason: Script modifications detected"
+            else
+              echo "  - Reason: Label override requested"
+            fi
+            echo ""
 
-          # Count generated markdown files across all languages
-          # Guard against missing directories to avoid find failures
-          # Support both .md and .mdx files (Docusaurus accepts both)
+            # Export Notion API credentials
+            export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+            export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+            export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+            export BASE_URL="/comapeo-docs/"
+
+            # Build the command with optional --max-pages flag
+            if [ "$MAX_PAGES" == "all" ]; then
+              echo "Running: bun run notion:fetch-all (no limit)"
+              bun run notion:fetch-all
+            else
+              echo "Running: bun run notion:fetch-all --max-pages $MAX_PAGES"
+              bun run notion:fetch-all --max-pages "$MAX_PAGES"
+            fi
+
+            echo "content_source=regenerated" >> $GITHUB_ENV
+
+          else
+            echo "📥 Using content from content branch..."
+            echo "📊 Configuration:"
+            echo "  - Source: content branch"
+            echo "  - Reason: No script modifications"
+            echo ""
+
+            git fetch origin content
+            git checkout origin/content -- docs/ i18n/ static/images/ 2>/dev/null || true
+
+            # Validate content branch has files
+            if [ -d docs ]; then
+              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              DOCS_COUNT=0
+            fi
+
+            if [ -d i18n ]; then
+              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            else
+              I18N_COUNT=0
+            fi
+
+            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+            if [ "$TOTAL_CONTENT" -eq 0 ]; then
+              echo "⚠️  WARNING: Content branch is empty!"
+              echo "   Falling back to regenerating 5 pages from Notion..."
+              echo ""
+
+              # Fallback: Regenerate with default 5 pages
+              export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+              export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+              export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+              export BASE_URL="/comapeo-docs/"
+
+              echo "Running: bun run notion:fetch-all --max-pages 5"
+              bun run notion:fetch-all --max-pages 5
+
+              echo "content_source=fallback" >> $GITHUB_ENV
+            else
+              echo "✅ Content from content branch loaded successfully"
+              echo "content_source=content-branch" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Final validation - check for any content across all languages
+          echo ""
+          echo "🔍 Validating final content..."
+
           if [ -d docs ]; then
             DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
           else
@@ -109,34 +185,33 @@ jobs:
           TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
 
           if [ "$TOTAL_CONTENT" -eq 0 ]; then
-            echo "❌ Error: Content generation failed - no markdown files generated"
+            echo "❌ Error: No markdown files found after provisioning"
             echo "   Expected: At least one .md or .mdx file in docs/ or i18n/ directories"
             echo "   Found: 0 files"
             echo ""
             echo "🔍 Debugging information:"
-            echo "  - DATABASE_ID: ${DATABASE_ID:0:8}..."
-            echo "  - DATA_SOURCE_ID: ${DATA_SOURCE_ID:0:8}..."
-            echo "  - Max pages requested: $MAX_PAGES"
+            echo "  - Content source attempted: ${{ env.content_source }}"
+            echo "  - Scripts changed: $SCRIPTS_CHANGED"
+            echo "  - Labels: $LABELS"
             exit 1
           fi
 
-          # Log what was generated
+          # Log what was found
           if [ "$DOCS_COUNT" -eq 0 ]; then
-            echo "⚠️  WARNING: No English content generated (docs/ is empty)"
-            echo "   This is expected when --max-pages fetches only localized content"
-            echo "   NOTE: Docusaurus build may fail if default locale has no content"
+            echo "⚠️  WARNING: No English content (docs/ is empty)"
+            echo "   This may cause Docusaurus build to fail if default locale is English"
           fi
 
           if [ "$I18N_COUNT" -eq 0 ]; then
-            echo "⚠️  Note: No localized content generated (i18n/ is empty)"
+            echo "⚠️  Note: No localized content (i18n/ is empty)"
           fi
 
           if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
             echo "⚠️  Warning: static/images/ directory is empty or missing"
           fi
 
-          echo "✅ Content generated and validated successfully"
-          echo "📊 Generated content statistics:"
+          echo "✅ Content validated successfully"
+          echo "📊 Content statistics:"
           echo "  - English docs: $DOCS_COUNT"
           echo "  - Localized docs: $I18N_COUNT"
           echo "  - Total docs: $TOTAL_CONTENT"
@@ -162,18 +237,36 @@ jobs:
           script: |
             const prNumber = context.payload.pull_request.number;
             const previewUrl = `https://pr-${prNumber}.comapeo-docs.pages.dev`;
+            const scriptsChanged = '${{ steps.detect.outputs.scripts_changed }}' === 'true';
             const maxPages = '${{ steps.detect.outputs.max_pages }}';
+            const contentSource = '${{ env.content_source }}';
 
-            // Build content info message
-            const pageInfo = maxPages === 'all'
-              ? 'all pages from Notion'
-              : `${maxPages} page${maxPages === '1' ? '' : 's'} from Notion`;
+            // Determine content info message based on source
+            let contentInfo = '';
 
-            let contentInfo = `🔄 **Content:** Regenerated ${pageInfo} to test current code`;
+            if (contentSource === 'regenerated') {
+              const pageInfo = maxPages === 'all'
+                ? 'all pages from Notion'
+                : `${maxPages} page${maxPages === '1' ? '' : 's'} from Notion`;
 
-            // Add guidance for full testing if limited
-            if (maxPages !== 'all') {
-              contentInfo += '\n\n> 💡 **Tip:** Add label \`fetch-all-pages\` to test with full content, or \`fetch-10-pages\` for broader coverage.';
+              contentInfo = `🔄 **Content:** Regenerated ${pageInfo}`;
+
+              if (scriptsChanged) {
+                contentInfo += ' (script changes detected)';
+              } else {
+                contentInfo += ' (label override)';
+              }
+
+              // Add guidance for full testing if limited
+              if (maxPages !== 'all') {
+                contentInfo += '\n\n> 💡 **Tip:** Add label \`fetch-all-pages\` to test with full content, or \`fetch-10-pages\` for broader coverage.';
+              }
+            } else if (contentSource === 'fallback') {
+              contentInfo = '🔄 **Content:** Regenerated 5 pages from Notion (content branch was empty, used fallback)';
+              contentInfo += '\n\n> ⚠️ **Note:** Content branch needed regeneration. Consider running the sync-docs workflow.';
+            } else if (contentSource === 'content-branch') {
+              contentInfo = '📦 **Content:** From content branch (no script changes)';
+              contentInfo += '\n\n> 💡 **Tip:** Add a label to force regeneration if you want to test with fresh Notion data.';
             }
 
             const commentBody = `## 🚀 Preview Deployment
@@ -228,9 +321,37 @@ jobs:
           echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
           echo "- 🌐 Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔄 Content regenerated from Notion (max pages: ${{ steps.detect.outputs.max_pages }})" >> $GITHUB_STEP_SUMMARY
+
+          CONTENT_SOURCE="${{ env.content_source }}"
+          if [ "$CONTENT_SOURCE" == "regenerated" ]; then
+            echo "- 🔄 Content regenerated from Notion (max pages: ${{ steps.detect.outputs.max_pages }})" >> $GITHUB_STEP_SUMMARY
+          elif [ "$CONTENT_SOURCE" == "fallback" ]; then
+            echo "- 🔄 Content regenerated (fallback: content branch was empty)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 📦 Content from content branch" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "This preview will update automatically with new commits." >> $GITHUB_STEP_SUMMARY
+
+      - name: Prepare Slack content message
+        if: always()
+        run: |
+          CONTENT_SOURCE="${{ env.content_source }}"
+          SCRIPTS_CHANGED="${{ steps.detect.outputs.scripts_changed }}"
+          MAX_PAGES="${{ steps.detect.outputs.max_pages }}"
+
+          if [ "$CONTENT_SOURCE" == "regenerated" ]; then
+            if [ "$SCRIPTS_CHANGED" == "true" ]; then
+              echo "SLACK_CONTENT=Regenerated ($MAX_PAGES pages, script changes)" >> $GITHUB_ENV
+            else
+              echo "SLACK_CONTENT=Regenerated ($MAX_PAGES pages, label override)" >> $GITHUB_ENV
+            fi
+          elif [ "$CONTENT_SOURCE" == "fallback" ]; then
+            echo "SLACK_CONTENT=Regenerated (5 pages, fallback)" >> $GITHUB_ENV
+          else
+            echo "SLACK_CONTENT=Content branch" >> $GITHUB_ENV
+          fi
 
       - name: Notify Slack
         if: always()
@@ -252,4 +373,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Content: Regenerated (${{ steps.detect.outputs.max_pages }} pages)\nTrigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"
+                  text: "Content: ${{ env.SLACK_CONTENT }}\nTrigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"

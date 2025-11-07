@@ -271,7 +271,7 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("Error updating files:"),
+        expect.stringContaining("Fatal error in main:"),
         fetchError
       );
     });
@@ -297,7 +297,7 @@ describe("notion-fetch integration", () => {
 
       expect(actualExitCode).toBe(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
-        expect.stringContaining("Error updating files:"),
+        expect.stringContaining("Fatal error in main:"),
         generateError
       );
     });

@@ -1,6 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { installTestNotionEnv } from "./test-utils";
 
+// Mock notionClient to prevent real API calls
+vi.mock("./notionClient", () => ({
+  enhancedNotion: {
+    blocksChildrenList: vi.fn().mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    }),
+    dataSourcesQuery: vi.fn().mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    }),
+  },
+  DATABASE_ID: "test-db-id",
+  DATA_SOURCE_ID: "test-data-source-id",
+  n2m: {
+    pageToMarkdown: vi.fn().mockResolvedValue([]),
+    toMarkdownString: vi.fn().mockReturnValue({ parent: "" }),
+  },
+}));
+
 describe("fetchNotionData", () => {
   let restoreEnv: () => void;
   let fetchNotionData: (typeof import("./fetchNotionData"))["fetchNotionData"];

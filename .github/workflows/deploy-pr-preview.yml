@@ -134,6 +134,9 @@ jobs:
             echo "  - Reason: No script modifications"
             echo ""
 
+            # Track if content branch operation succeeded
+            CONTENT_BRANCH_SUCCESS="false"
+
             # Try to fetch content branch (may not exist in new repos)
             if git fetch origin content 2>&1; then
               echo "✅ Content branch fetched successfully"
@@ -141,31 +144,55 @@ jobs:
               # Try to checkout content branch files
               if git checkout origin/content -- docs/ i18n/ static/images/ 2>&1; then
                 echo "✅ Content branch checkout successful"
+                CONTENT_BRANCH_SUCCESS="true"
               else
-                echo "⚠️  Content branch checkout had issues, will validate and use fallback if needed"
+                echo "⚠️  Content branch checkout failed, will use fallback"
               fi
             else
               echo "⚠️  Failed to fetch content branch (may not exist), will use fallback"
             fi
 
-            # Validate content branch has files
-            if [ -d docs ]; then
-              DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+            # Only validate and use content if checkout actually succeeded
+            if [ "$CONTENT_BRANCH_SUCCESS" == "true" ]; then
+              # Validate content branch has files
+              if [ -d docs ]; then
+                DOCS_COUNT=$(find docs \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+              else
+                DOCS_COUNT=0
+              fi
+
+              if [ -d i18n ]; then
+                I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
+              else
+                I18N_COUNT=0
+              fi
+
+              TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
+
+              if [ "$TOTAL_CONTENT" -eq 0 ]; then
+                echo "⚠️  WARNING: Content branch checkout succeeded but is empty!"
+                echo "   Falling back to regenerating 5 pages from Notion..."
+                echo ""
+
+                # Fallback: Regenerate with default 5 pages
+                export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+                export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+                export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+                export BASE_URL="/comapeo-docs/"
+
+                echo "Running: bun run notion:fetch-all --max-pages 5"
+                bun run notion:fetch-all --max-pages 5
+
+                CONTENT_SOURCE="fallback"
+                echo "content_source=fallback" >> $GITHUB_ENV
+              else
+                echo "✅ Content from content branch loaded successfully"
+                CONTENT_SOURCE="content-branch"
+                echo "content_source=content-branch" >> $GITHUB_ENV
+              fi
             else
-              DOCS_COUNT=0
-            fi
-
-            if [ -d i18n ]; then
-              I18N_COUNT=$(find i18n \( -name "*.md" -o -name "*.mdx" \) -type f 2>/dev/null | wc -l)
-            else
-              I18N_COUNT=0
-            fi
-
-            TOTAL_CONTENT=$((DOCS_COUNT + I18N_COUNT))
-
-            if [ "$TOTAL_CONTENT" -eq 0 ]; then
-              echo "⚠️  WARNING: Content branch is empty!"
-              echo "   Falling back to regenerating 5 pages from Notion..."
+              # Content branch fetch/checkout failed - force regeneration
+              echo "⚠️  Content branch unavailable, regenerating from Notion..."
               echo ""
 
               # Fallback: Regenerate with default 5 pages
@@ -179,10 +206,6 @@ jobs:
 
               CONTENT_SOURCE="fallback"
               echo "content_source=fallback" >> $GITHUB_ENV
-            else
-              echo "✅ Content from content branch loaded successfully"
-              CONTENT_SOURCE="content-branch"
-              echo "content_source=content-branch" >> $GITHUB_ENV
             fi
           fi
 

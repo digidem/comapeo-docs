@@ -1,5 +1,9 @@
 import { NOTION_PROPERTIES } from "../constants";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
+import {
+  getStatusFromRawPage,
+  selectPagesWithPriority,
+} from "../notionPageUtils";
 
 export interface PageWithStatus {
   id: string;
@@ -146,6 +150,16 @@ function applyFetchAllTransform(
 ) {
   const { statusFilter, maxPages, includeRemoved } = options;
 
+  // Use smart page selection if maxPages is specified
+  if (typeof maxPages === "number" && maxPages > 0) {
+    return selectPagesWithPriority(pages, maxPages, {
+      includeRemoved,
+      statusFilter,
+      verbose: true,
+    });
+  }
+
+  // Otherwise, apply simple filtering
   let filtered = pages;
 
   if (!includeRemoved) {
@@ -160,27 +174,7 @@ function applyFetchAllTransform(
     );
   }
 
-  if (typeof maxPages === "number" && maxPages > 0) {
-    filtered = filtered.slice(0, maxPages);
-  }
-
   return filtered;
-}
-
-function getStatusFromRawPage(page: Record<string, any>): string {
-  if (!page || typeof page !== "object") return "No Status";
-  const properties = (page as any).properties;
-  if (!properties || typeof properties !== "object") return "No Status";
-
-  const statusProperty =
-    properties[NOTION_PROPERTIES.STATUS] || properties["Status"];
-
-  const name = statusProperty?.select?.name;
-  const normalized = typeof name === "string" ? name.trim() : "";
-  if (normalized) {
-    return normalized;
-  }
-  return "No Status";
 }
 
 function logStatusSummary(pages: PageWithStatus[]) {

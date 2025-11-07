@@ -74,24 +74,19 @@ Every PR automatically gets a staging deployment on Cloudflare Pages:
 - **Triggers**: Pushes to PR branch (except Markdown-only changes)
 - **Security**: Only works for PRs from the main repository (not forks)
 
-#### Smart Content Generation Strategy
+#### Content Generation for Previews
 
-The preview workflow automatically chooses the optimal content generation strategy:
+**PR previews ALWAYS regenerate content from Notion** to ensure they test the current code:
 
-**When script files are NOT modified:**
-- Uses content from `content` branch (fast, ~30s)
-- Script paths monitored: `scripts/notion-*`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/constants.ts`
+- **Default**: Fetches 5 pages from Notion (takes ~90s)
+- **Purpose**: Quick validation that current code works with real Notion data
+- **Why not use cached content?**: PRs need to test changes, not rely on stale content
 
-**When script files ARE modified:**
-- Regenerates content from Notion API to validate script changes
-- Default: Fetches 5 pages (provides reliable validation coverage)
-- Takes ~90s instead of ~30s
-
-**Override via PR labels** (when script changes detected):
+**Override page limit via PR labels:**
 
 | Label | Pages Fetched | Est. Time | When to Use |
 |-------|---------------|-----------|-------------|
-| (no label) | 5 pages | ~90s | Default - validates most script changes |
+| (no label) | 5 pages | ~90s | Default - sufficient for most PRs |
 | `fetch-10-pages` | 10 pages | ~2min | Test pagination, multiple content types |
 | `fetch-all-pages` | All (~50-100) | ~8min | Major refactoring, full validation |
 
@@ -115,10 +110,9 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 - Image processing changes → no label (5 pages is sufficient)
 
 **Important notes:**
-- Labels only affect PRs where script changes are detected
-- Frontend-only PRs always use content branch (fast path)
+- All PRs regenerate content from Notion (no cached content used)
 - Adding/removing labels triggers a new preview deployment
-- The PR comment will show which strategy was used
+- The PR comment will show how many pages were fetched
 
 ### Project Structure Hints
 

@@ -113,12 +113,20 @@ export async function fetchNotionData(filter) {
 export async function sortAndExpandNotionData(
   data: Array<Record<string, unknown>>
 ): Promise<Array<Record<string, unknown>>> {
+  console.log(
+    `🔍 [DEBUG sortAndExpandNotionData] Function entry, data length: ${data.length}`
+  );
+
   // Sort data by Order property if available to ensure proper sequencing
   data = data.sort((a, b) => {
     const orderA = a.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
     const orderB = b.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
     return orderA - orderB;
   });
+
+  console.log(
+    `🔍 [DEBUG sortAndExpandNotionData] Data sorted, length: ${data.length}`
+  );
 
   // Collect all sub-item relations across ALL parent pages for batched fetching
   const allRelations: Array<{
@@ -163,23 +171,47 @@ export async function sortAndExpandNotionData(
     subpageRelations: allRelations.length,
   });
 
-  const subpages = await Promise.all(
-    allRelations.map((rel, index) =>
-      (async () => {
-        // Progress logging every 10 items or for first/last
-        if (
-          index === 0 ||
-          index === allRelations.length - 1 ||
-          (index + 1) % 10 === 0
-        ) {
-          console.log(
-            `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
-          );
-        }
-        return await enhancedNotion.pagesRetrieve({ page_id: rel.subId });
-      })()
-    )
+  console.log(
+    `🔍 [DEBUG] Starting Promise.all for ${allRelations.length} sub-pages...`
   );
+
+  let subpages: any[];
+  try {
+    subpages = await Promise.all(
+      allRelations.map((rel, index) =>
+        (async () => {
+          try {
+            // Progress logging every 10 items or for first/last
+            if (
+              index === 0 ||
+              index === allRelations.length - 1 ||
+              (index + 1) % 10 === 0
+            ) {
+              console.log(
+                `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
+              );
+            }
+            const result = await enhancedNotion.pagesRetrieve({
+              page_id: rel.subId,
+            });
+            return result;
+          } catch (pageError) {
+            console.error(
+              `❌ Failed to fetch sub-page ${rel.subId}:`,
+              pageError
+            );
+            throw pageError;
+          }
+        })()
+      )
+    );
+    console.log(
+      `🔍 [DEBUG] Promise.all completed successfully with ${subpages.length} results`
+    );
+  } catch (promiseError) {
+    console.error(`❌ [ERROR] Promise.all failed:`, promiseError);
+    throw promiseError;
+  }
 
   const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`✅ Fetched ${subpages.length} sub-pages in ${fetchDuration}s`);
@@ -194,6 +226,9 @@ export async function sortAndExpandNotionData(
     console.log(`Item ${index + 1}:`, item?.url);
   });
 
+  console.log(
+    `🔍 [DEBUG sortAndExpandNotionData] Function exit, returning ${data.length} items`
+  );
   return data;
 }
 

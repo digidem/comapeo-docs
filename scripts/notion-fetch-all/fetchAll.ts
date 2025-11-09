@@ -168,7 +168,6 @@ function applyFetchAllTransform(
 
   console.log(`  ⚠️  Skipping smart page selection (condition not met)`);
 
-
   // Otherwise, apply simple filtering
   let filtered = pages;
 

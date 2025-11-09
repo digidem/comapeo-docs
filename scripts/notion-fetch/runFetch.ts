@@ -46,7 +46,9 @@ export async function runFetchPipeline(
     fetchSpinner.start();
     unregisterFetchSpinner = trackSpinner(fetchSpinner);
     let data = await fetchNotionData(filter);
-    perfTelemetry.recordDataset({ pages: Array.isArray(data) ? data.length : 0 });
+    perfTelemetry.recordDataset({
+      pages: Array.isArray(data) ? data.length : 0,
+    });
     perfTelemetry.phaseEnd("fetch");
     data = Array.isArray(data) ? data : [];
 
@@ -56,10 +58,20 @@ export async function runFetchPipeline(
     data = Array.isArray(data) ? data : [];
 
     perfTelemetry.phaseStart("transform");
+    console.log(`🔍 [DEBUG runFetchPipeline] Transform phase:`);
+    console.log(`  - transform provided: ${!!transform}`);
+    console.log(`  - data length before transform: ${data.length}`);
     if (transform) {
+      console.log(`  ✅ Calling transform function...`);
       const transformed = await transform(data);
+      console.log(
+        `  ✅ Transform completed, result length: ${Array.isArray(transformed) ? transformed.length : 0}`
+      );
       data = Array.isArray(transformed) ? transformed : [];
+    } else {
+      console.log(`  ⚠️  No transform function provided, skipping`);
     }
+    console.log(`  - data length after transform: ${data.length}`);
     perfTelemetry.phaseEnd("transform");
 
     if (fetchSpinner.isSpinning) {

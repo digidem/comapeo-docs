@@ -150,14 +150,24 @@ function applyFetchAllTransform(
 ) {
   const { statusFilter, maxPages, includeRemoved } = options;
 
+  console.log(`🔍 [DEBUG] applyFetchAllTransform called:`);
+  console.log(`  - Input pages: ${pages.length}`);
+  console.log(`  - maxPages: ${maxPages} (type: ${typeof maxPages})`);
+  console.log(`  - includeRemoved: ${includeRemoved}`);
+  console.log(`  - statusFilter: ${statusFilter || "none"}`);
+
   // Use smart page selection if maxPages is specified
   if (typeof maxPages === "number" && maxPages > 0) {
+    console.log(`  ✅ Using smart page selection`);
     return selectPagesWithPriority(pages, maxPages, {
       includeRemoved,
       statusFilter,
       verbose: true,
     });
   }
+
+  console.log(`  ⚠️  Skipping smart page selection (condition not met)`);
+
 
   // Otherwise, apply simple filtering
   let filtered = pages;

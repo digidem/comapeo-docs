@@ -60,9 +60,16 @@ export async function runFetchPipeline(
     data = Array.isArray(data) ? data : [];
 
     perfTelemetry.phaseStart("sort-expand");
+    console.log(
+      `🔍 [DEBUG] Before sortAndExpandNotionData, data length: ${data.length}`
+    );
     data = await sortAndExpandNotionData(data);
+    console.log(
+      `🔍 [DEBUG] After sortAndExpandNotionData, data length: ${data.length}`
+    );
     perfTelemetry.phaseEnd("sort-expand");
     data = Array.isArray(data) ? data : [];
+    console.log(`🔍 [DEBUG] After array check, data length: ${data.length}`);
 
     perfTelemetry.phaseStart("transform");
     console.log(`🔍 [DEBUG runFetchPipeline] Transform phase:`);

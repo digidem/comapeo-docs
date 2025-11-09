@@ -30,6 +30,11 @@ export interface FetchPipelineResult {
 export async function runFetchPipeline(
   options: FetchPipelineOptions = {}
 ): Promise<FetchPipelineResult> {
+  console.log(`🔍 [DEBUG runFetchPipeline] Starting pipeline with options:`);
+  console.log(`  - shouldGenerate: ${options.shouldGenerate ?? true}`);
+  console.log(`  - transform provided: ${!!options.transform}`);
+  console.log(`  - filter provided: ${!!options.filter}`);
+
   const {
     filter,
     fetchSpinnerText = "Fetching data from Notion",
@@ -38,6 +43,8 @@ export async function runFetchPipeline(
     transform,
     shouldGenerate = true,
   } = options;
+
+  console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
 
   const fetchSpinner = ora(fetchSpinnerText);
   let unregisterFetchSpinner: (() => void) | undefined;

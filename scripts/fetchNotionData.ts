@@ -163,54 +163,78 @@ export async function sortAndExpandNotionData(
     `📥 Fetching ${allRelations.length} sub-pages across ${data.length} parent pages...`
   );
 
-  // Fetch all sub-pages in parallel with shared scheduler-enforced rate limiting
-  // This prevents sequential bottleneck while respecting API rate limits
+  // Fetch sub-pages in controlled batches to prevent overwhelming the API or environment
+  // GitHub Actions can struggle with 100+ concurrent connections
   const startTime = Date.now();
   perfTelemetry.recordDataset({
     parentPages: data.length,
     subpageRelations: allRelations.length,
   });
 
+  const BATCH_SIZE = 10; // Process 10 concurrent requests at a time
+  const subpages: any[] = [];
+  let processedCount = 0;
+
   console.log(
-    `🔍 [DEBUG] Starting Promise.all for ${allRelations.length} sub-pages...`
+    `🔍 [DEBUG] Starting batched fetch (${BATCH_SIZE} concurrent) for ${allRelations.length} sub-pages...`
   );
 
-  let subpages: any[];
   try {
-    subpages = await Promise.all(
-      allRelations.map((rel, index) =>
-        (async () => {
+    // Process in batches
+    for (let i = 0; i < allRelations.length; i += BATCH_SIZE) {
+      const batch = allRelations.slice(
+        i,
+        Math.min(i + BATCH_SIZE, allRelations.length)
+      );
+      const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(allRelations.length / BATCH_SIZE);
+
+      console.log(
+        `  📦 Batch ${batchIndex}/${totalBatches}: fetching ${batch.length} sub-pages...`
+      );
+
+      const batchResults = await Promise.all(
+        batch.map(async (rel) => {
           try {
-            // Progress logging every 10 items or for first/last
-            if (
-              index === 0 ||
-              index === allRelations.length - 1 ||
-              (index + 1) % 10 === 0
-            ) {
-              console.log(
-                `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
-              );
-            }
             const result = await enhancedNotion.pagesRetrieve({
               page_id: rel.subId,
             });
+            processedCount++;
+            // Progress logging every 10 items
+            if (
+              processedCount % 10 === 0 ||
+              processedCount === allRelations.length
+            ) {
+              console.log(
+                `    ✓ Fetched ${processedCount}/${allRelations.length} sub-pages`
+              );
+            }
             return result;
           } catch (pageError) {
             console.error(
-              `❌ Failed to fetch sub-page ${rel.subId}:`,
+              `❌ Failed to fetch sub-page ${rel.subId} (parent: "${rel.parentTitle}"):`,
               pageError
             );
             throw pageError;
           }
-        })()
-      )
-    );
+        })
+      );
+
+      subpages.push(...batchResults);
+      console.log(
+        `  ✅ Batch ${batchIndex}/${totalBatches} complete (${batch.length} pages)`
+      );
+    }
+
     console.log(
-      `🔍 [DEBUG] Promise.all completed successfully with ${subpages.length} results`
+      `🔍 [DEBUG] Batched fetch completed successfully with ${subpages.length} results`
     );
-  } catch (promiseError) {
-    console.error(`❌ [ERROR] Promise.all failed:`, promiseError);
-    throw promiseError;
+  } catch (batchError) {
+    console.error(
+      `❌ [ERROR] Batched fetch failed at ${processedCount}/${allRelations.length}:`,
+      batchError
+    );
+    throw batchError;
   }
 
   const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);

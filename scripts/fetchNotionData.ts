@@ -194,11 +194,27 @@ export async function sortAndExpandNotionData(
       );
 
       const batchResults = await Promise.all(
-        batch.map(async (rel) => {
+        batch.map(async (rel, idx) => {
           try {
+            console.log(
+              `    🔍 [${processedCount + idx + 1}/${allRelations.length}] Calling pagesRetrieve for ${rel.subId}...`
+            );
+
             const result = await enhancedNotion.pagesRetrieve({
               page_id: rel.subId,
             });
+
+            // Validate response
+            if (!result || typeof result !== "object") {
+              throw new Error(
+                `Invalid response from pagesRetrieve: ${JSON.stringify(result)}`
+              );
+            }
+
+            console.log(
+              `    ✅ [${processedCount + idx + 1}/${allRelations.length}] Received response for ${rel.subId}`
+            );
+
             processedCount++;
             // Progress logging every 10 items
             if (
@@ -214,6 +230,10 @@ export async function sortAndExpandNotionData(
             console.error(
               `❌ Failed to fetch sub-page ${rel.subId} (parent: "${rel.parentTitle}"):`,
               pageError
+            );
+            console.error(
+              `❌ Error details:`,
+              JSON.stringify(pageError, null, 2)
             );
             throw pageError;
           }

@@ -200,9 +200,21 @@ export async function sortAndExpandNotionData(
               `    🔍 [${processedCount + idx + 1}/${allRelations.length}] Calling pagesRetrieve for ${rel.subId}...`
             );
 
-            const result = await enhancedNotion.pagesRetrieve({
-              page_id: rel.subId,
-            });
+            // Add explicit timeout to prevent hanging indefinitely
+            // GitHub Actions seems to have issues with Notion API calls hanging
+            const TIMEOUT_MS = 10000; // 10 second timeout
+            const timeoutPromise = new Promise((_resolve, reject) =>
+              setTimeout(
+                () =>
+                  reject(new Error(`API call timeout after ${TIMEOUT_MS}ms`)),
+                TIMEOUT_MS
+              )
+            );
+
+            const result = await Promise.race([
+              enhancedNotion.pagesRetrieve({ page_id: rel.subId }),
+              timeoutPromise,
+            ]);
 
             // Validate response
             if (!result || typeof result !== "object") {

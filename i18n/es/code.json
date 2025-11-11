@@ -544,7 +544,7 @@
         "message": "Preguntas frecuentes"
     },
     "Troubleshooting": {
-        "message": "Nueva Página"
+        "message": "Nueva Palanca"
     },
     "I can’t start CoMapeo": {
         "message": "Nueva Página"
@@ -650,5 +650,23 @@
     },
     "Moving Observations & Tracks Outside of CoMapeo": {
         "message": "Compartir observaciones fuera de CoMapeo"
+    },
+    "Common Solutions": {
+        "message": "Nueva Página"
+    },
+    "Troubleshooting: Setup & Customization": {
+        "message": "Nueva Página"
+    },
+    "Troubleshooting:  Observations & Tracks": {
+        "message": "Nueva Página"
+    },
+    "Troubleshooting: Data Privacy & Security": {
+        "message": "Nueva Página"
+    },
+    "Troubleshooting: Mapping with Collaborators": {
+        "message": "Nueva Página"
+    },
+    "Troubleshooting: Moving Observations & Tracks outside of CoMapeo": {
+        "message": "Nueva Página"
     }
 }

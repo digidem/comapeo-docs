@@ -995,6 +995,26 @@ const createStandalonePageGroup = (page: Record<string, any>) => {
   };
 };
 
+/**
+ * Helper function to safely quote YAML values that contain special characters
+ * YAML special characters that need quoting: & : [ ] { } , | > * ! % @ ` # - and quotes
+ */
+const quoteYamlValue = (value: string): string => {
+  if (!value || typeof value !== "string") {
+    return value;
+  }
+
+  // Check if the value contains any YAML special characters that require quoting
+  const needsQuoting = /[&:[\]{}|>*!%@`#-]|^\s|^['"]|['"]$/.test(value);
+
+  if (needsQuoting) {
+    // Use double quotes and escape any existing double quotes
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  return value;
+};
+
 const buildFrontmatter = (
   pageTitle: string,
   sidebarPosition: number,
@@ -1005,12 +1025,15 @@ const buildFrontmatter = (
   safeSlug: string,
   page: any
 ) => {
+  // Quote the title to handle special characters like & : etc.
+  const quotedTitle = quoteYamlValue(pageTitle);
+
   let frontmatter = `---
 id: doc-${safeSlug}
-title: ${pageTitle}
-sidebar_label: ${pageTitle}
+title: ${quotedTitle}
+sidebar_label: ${quotedTitle}
 sidebar_position: ${sidebarPosition}
-pagination_label: ${pageTitle}
+pagination_label: ${quotedTitle}
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
 keywords:
 ${keywords.map((k) => `  - ${k}`).join("\n")}

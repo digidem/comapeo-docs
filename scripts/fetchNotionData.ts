@@ -155,34 +155,103 @@ export async function sortAndExpandNotionData(
     `📥 Fetching ${allRelations.length} sub-pages across ${data.length} parent pages...`
   );
 
-  // Fetch all sub-pages in parallel with shared scheduler-enforced rate limiting
-  // This prevents sequential bottleneck while respecting API rate limits
+  // Fetch sub-pages in controlled batches to prevent overwhelming the API or environment
+  // GitHub Actions can struggle with 100+ concurrent connections
   const startTime = Date.now();
   perfTelemetry.recordDataset({
     parentPages: data.length,
     subpageRelations: allRelations.length,
   });
 
-  const subpages = await Promise.all(
-    allRelations.map((rel, index) =>
-      (async () => {
-        // Progress logging every 10 items or for first/last
-        if (
-          index === 0 ||
-          index === allRelations.length - 1 ||
-          (index + 1) % 10 === 0
-        ) {
-          console.log(
-            `  ↳ Fetching sub-page ${index + 1}/${allRelations.length} for parent "${rel.parentTitle}"`
-          );
-        }
-        return await enhancedNotion.pagesRetrieve({ page_id: rel.subId });
-      })()
-    )
-  );
+  const BATCH_SIZE = 10; // Process 10 concurrent requests at a time
+  const subpages: any[] = [];
+  let processedCount = 0;
+
+  try {
+    // Process in batches
+    for (let i = 0; i < allRelations.length; i += BATCH_SIZE) {
+      const batch = allRelations.slice(
+        i,
+        Math.min(i + BATCH_SIZE, allRelations.length)
+      );
+      const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(allRelations.length / BATCH_SIZE);
+
+      console.log(
+        `  📦 Batch ${batchIndex}/${totalBatches}: fetching ${batch.length} sub-pages...`
+      );
+
+      const batchResults = await Promise.all(
+        batch.map(async (rel, idx) => {
+          try {
+            // Add explicit timeout to prevent hanging indefinitely
+            // GitHub Actions seems to have issues with Notion API calls hanging
+            const TIMEOUT_MS = 10000; // 10 second timeout
+            const timeoutPromise = new Promise((_resolve, reject) =>
+              setTimeout(
+                () =>
+                  reject(new Error(`API call timeout after ${TIMEOUT_MS}ms`)),
+                TIMEOUT_MS
+              )
+            );
+
+            const result = await Promise.race([
+              enhancedNotion.pagesRetrieve({ page_id: rel.subId }),
+              timeoutPromise,
+            ]);
+
+            // Validate response
+            if (!result || typeof result !== "object") {
+              throw new Error(
+                `Invalid response from pagesRetrieve: ${JSON.stringify(result)}`
+              );
+            }
+
+            processedCount++;
+            // Progress logging every 10 items
+            if (
+              processedCount % 10 === 0 ||
+              processedCount === allRelations.length
+            ) {
+              console.log(
+                `    ✓ Fetched ${processedCount}/${allRelations.length} sub-pages`
+              );
+            }
+            return result;
+          } catch (pageError) {
+            // Log the error but don't let it fail the entire batch
+            // Timeouts and individual page failures should be handled gracefully
+            console.warn(
+              `⚠️  Skipping sub-page ${rel.subId} (parent: "${rel.parentTitle}"): ${pageError.message}`
+            );
+            return null; // Return null for failed pages, filter them out later
+          }
+        })
+      );
+
+      // Filter out null results from failed/timed-out pages
+      const validResults = batchResults.filter((result) => result !== null);
+      const failedCount = batch.length - validResults.length;
+      subpages.push(...validResults);
+      console.log(
+        `  ✅ Batch ${batchIndex}/${totalBatches} complete (${validResults.length}/${batch.length} pages, ${failedCount} skipped)`
+      );
+    }
+  } catch (batchError) {
+    console.error(
+      `❌ [ERROR] Batched fetch failed at ${processedCount}/${allRelations.length}:`,
+      batchError
+    );
+    throw batchError;
+  }
 
   const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`✅ Fetched ${subpages.length} sub-pages in ${fetchDuration}s`);
+  const successRate = ((subpages.length / allRelations.length) * 100).toFixed(
+    1
+  );
+  console.log(
+    `✅ Fetched ${subpages.length}/${allRelations.length} sub-pages (${successRate}%) in ${fetchDuration}s`
+  );
 
   // Add all fetched sub-pages to data array
   for (const subpage of subpages) {

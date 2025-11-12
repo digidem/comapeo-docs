@@ -113,20 +113,12 @@ export async function fetchNotionData(filter) {
 export async function sortAndExpandNotionData(
   data: Array<Record<string, unknown>>
 ): Promise<Array<Record<string, unknown>>> {
-  console.log(
-    `🔍 [DEBUG sortAndExpandNotionData] Function entry, data length: ${data.length}`
-  );
-
   // Sort data by Order property if available to ensure proper sequencing
   data = data.sort((a, b) => {
     const orderA = a.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
     const orderB = b.properties?.["Order"]?.number ?? Number.MAX_SAFE_INTEGER;
     return orderA - orderB;
   });
-
-  console.log(
-    `🔍 [DEBUG sortAndExpandNotionData] Data sorted, length: ${data.length}`
-  );
 
   // Collect all sub-item relations across ALL parent pages for batched fetching
   const allRelations: Array<{
@@ -175,10 +167,6 @@ export async function sortAndExpandNotionData(
   const subpages: any[] = [];
   let processedCount = 0;
 
-  console.log(
-    `🔍 [DEBUG] Starting batched fetch (${BATCH_SIZE} concurrent) for ${allRelations.length} sub-pages...`
-  );
-
   try {
     // Process in batches
     for (let i = 0; i < allRelations.length; i += BATCH_SIZE) {
@@ -196,10 +184,6 @@ export async function sortAndExpandNotionData(
       const batchResults = await Promise.all(
         batch.map(async (rel, idx) => {
           try {
-            console.log(
-              `    🔍 [${processedCount + idx + 1}/${allRelations.length}] Calling pagesRetrieve for ${rel.subId}...`
-            );
-
             // Add explicit timeout to prevent hanging indefinitely
             // GitHub Actions seems to have issues with Notion API calls hanging
             const TIMEOUT_MS = 10000; // 10 second timeout
@@ -222,10 +206,6 @@ export async function sortAndExpandNotionData(
                 `Invalid response from pagesRetrieve: ${JSON.stringify(result)}`
               );
             }
-
-            console.log(
-              `    ✅ [${processedCount + idx + 1}/${allRelations.length}] Received response for ${rel.subId}`
-            );
 
             processedCount++;
             // Progress logging every 10 items
@@ -257,10 +237,6 @@ export async function sortAndExpandNotionData(
         `  ✅ Batch ${batchIndex}/${totalBatches} complete (${batch.length} pages)`
       );
     }
-
-    console.log(
-      `🔍 [DEBUG] Batched fetch completed successfully with ${subpages.length} results`
-    );
   } catch (batchError) {
     console.error(
       `❌ [ERROR] Batched fetch failed at ${processedCount}/${allRelations.length}:`,
@@ -282,9 +258,6 @@ export async function sortAndExpandNotionData(
     console.log(`Item ${index + 1}:`, item?.url);
   });
 
-  console.log(
-    `🔍 [DEBUG sortAndExpandNotionData] Function exit, returning ${data.length} items`
-  );
   return data;
 }
 

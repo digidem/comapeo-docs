@@ -219,22 +219,22 @@ export async function sortAndExpandNotionData(
             }
             return result;
           } catch (pageError) {
-            console.error(
-              `❌ Failed to fetch sub-page ${rel.subId} (parent: "${rel.parentTitle}"):`,
-              pageError
+            // Log the error but don't let it fail the entire batch
+            // Timeouts and individual page failures should be handled gracefully
+            console.warn(
+              `⚠️  Skipping sub-page ${rel.subId} (parent: "${rel.parentTitle}"): ${pageError.message}`
             );
-            console.error(
-              `❌ Error details:`,
-              JSON.stringify(pageError, null, 2)
-            );
-            throw pageError;
+            return null; // Return null for failed pages, filter them out later
           }
         })
       );
 
-      subpages.push(...batchResults);
+      // Filter out null results from failed/timed-out pages
+      const validResults = batchResults.filter((result) => result !== null);
+      const failedCount = batch.length - validResults.length;
+      subpages.push(...validResults);
       console.log(
-        `  ✅ Batch ${batchIndex}/${totalBatches} complete (${batch.length} pages)`
+        `  ✅ Batch ${batchIndex}/${totalBatches} complete (${validResults.length}/${batch.length} pages, ${failedCount} skipped)`
       );
     }
   } catch (batchError) {
@@ -246,7 +246,12 @@ export async function sortAndExpandNotionData(
   }
 
   const fetchDuration = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`✅ Fetched ${subpages.length} sub-pages in ${fetchDuration}s`);
+  const successRate = ((subpages.length / allRelations.length) * 100).toFixed(
+    1
+  );
+  console.log(
+    `✅ Fetched ${subpages.length}/${allRelations.length} sub-pages (${successRate}%) in ${fetchDuration}s`
+  );
 
   // Add all fetched sub-pages to data array
   for (const subpage of subpages) {

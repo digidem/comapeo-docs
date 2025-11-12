@@ -1001,7 +1001,7 @@ const createStandalonePageGroup = (page: Record<string, any>) => {
  */
 const quoteYamlValue = (value: string): string => {
   if (!value || typeof value !== "string") {
-    return value;
+    return "";
   }
 
   // Check if the value contains any YAML special characters that require quoting

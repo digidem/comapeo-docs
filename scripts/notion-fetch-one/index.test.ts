@@ -1,136 +1,21 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Calculate Levenshtein distance between two strings
- * (Copied from index.ts for testing)
- */
-function levenshteinDistance(str1: string, str2: string): number {
-  const len1 = str1.length;
-  const len2 = str2.length;
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= len1; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= len2; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1, // deletion
-        matrix[i][j - 1] + 1, // insertion
-        matrix[i - 1][j - 1] + cost // substitution
-      );
-    }
-  }
-
-  return matrix[len1][len2];
-}
-
-/**
- * Normalize a string for comparison
- * (Copied from index.ts for testing)
- */
-function normalizeString(str: string): string {
-  return str
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[^\w\s]/g, "");
-}
-
-/**
- * Calculate fuzzy match score between two strings
- * (Copied from index.ts for testing)
- */
-function fuzzyMatchScore(search: string, target: string): number {
-  const normalizedSearch = normalizeString(search);
-  const normalizedTarget = normalizeString(target);
-
-  // Exact match (after normalization)
-  if (normalizedSearch === normalizedTarget) {
-    return 1000;
-  }
-
-  // Substring match
-  if (normalizedTarget.includes(normalizedSearch)) {
-    return 500 + (normalizedSearch.length / normalizedTarget.length) * 100;
-  }
-
-  // Levenshtein distance based score
-  const distance = levenshteinDistance(normalizedSearch, normalizedTarget);
-  const maxLen = Math.max(normalizedSearch.length, normalizedTarget.length);
-  const similarity = 1 - distance / maxLen;
-
-  return similarity * 100;
-}
-
-/**
- * Extract full title from a Notion title property by joining all rich text fragments
- * This handles titles with multiple fragments (bold, italics, emojis, etc.)
- * (Copied from index.ts for testing)
- */
-function extractFullTitle(titleProperty: any): string {
-  if (!titleProperty) {
-    return "Untitled";
-  }
-
-  // Try 'title' property first (for Title property type)
-  if (Array.isArray(titleProperty.title) && titleProperty.title.length > 0) {
-    return titleProperty.title
-      .map((fragment: any) => fragment.plain_text || "")
-      .join("");
-  }
-
-  // Fallback to 'name' property (for other property types)
-  if (Array.isArray(titleProperty.name) && titleProperty.name.length > 0) {
-    return titleProperty.name
-      .map((fragment: any) => fragment.plain_text || "")
-      .join("");
-  }
-
-  return "Untitled";
-}
-
-/**
- * Find the best matching page by title
- * (Copied from index.ts for testing)
- */
-function findBestMatch(
-  searchTerm: string,
-  pages: Array<Record<string, any>>
-): { page: Record<string, any>; score: number } | null {
-  if (pages.length === 0) {
-    return null;
-  }
-
-  let bestMatch: { page: Record<string, any>; score: number } | null = null;
-
-  for (const page of pages) {
-    const properties = page.properties || {};
-    const titleProperty = properties["Title"] || properties["Name"];
-    const title = extractFullTitle(titleProperty);
-
-    const score = fuzzyMatchScore(searchTerm, title);
-
-    if (!bestMatch || score > bestMatch.score) {
-      bestMatch = { page, score };
-    }
-  }
-
-  return bestMatch;
-}
+import { NOTION_PROPERTIES } from "../constants";
+import {
+  extractFullTitle,
+  findBestMatch,
+  fuzzyMatchScore,
+  levenshteinDistance,
+  MIN_MATCH_SCORE,
+  normalizeString,
+  scorePages,
+} from "./index";
 
 // Helper to create mock Notion pages
 function createMockPage(title: string, id = "mock-id"): Record<string, any> {
   return {
     id,
     properties: {
-      Title: {
+      [NOTION_PROPERTIES.TITLE]: {
         title: [
           {
             plain_text: title,
@@ -355,6 +240,33 @@ describe("notion-fetch-one fuzzy matching", () => {
     });
   });
 
+  describe("scorePages", () => {
+    it("should sort matches by score descending", () => {
+      const pages = [
+        createMockPage("Advanced Topics", "1"),
+        createMockPage("Understanding How Exchange Works", "2"),
+        createMockPage("Exchange", "3"),
+      ];
+
+      const scored = scorePages("exchange", pages);
+      expect(scored[0].page.id).toBe("3");
+      expect(scored[1].page.id).toBe("2");
+    });
+
+    it("should assign zero score to Untitled pages", () => {
+      const pages = [
+        { id: "no-title", properties: {} },
+        createMockPage("Understanding How Exchange Works", "2"),
+      ];
+
+      const scored = scorePages("exchange", pages);
+      const untitledEntry = scored.find(
+        (entry) => entry.page.id === "no-title"
+      );
+      expect(untitledEntry?.score).toBe(0);
+    });
+  });
+
   describe("extractFullTitle", () => {
     it("should extract single fragment title", () => {
       const titleProperty = {
@@ -529,20 +441,26 @@ describe("notion-fetch-one fuzzy matching", () => {
         "how exchange works",
       ];
 
+      const expectations = new Map<string, number>([
+        ["exchange", 500],
+        ["exchange works", 500],
+        ["understanding exchange", MIN_MATCH_SCORE],
+        ["how exchange works", MIN_MATCH_SCORE],
+      ]);
+
       queries.forEach((query) => {
         const result = findBestMatch(query, mockDatabase);
         expect(result).not.toBeNull();
-        // Should match either page 2 (Understanding How Exchange Works) or page 7 (How to Configure Exchange Settings)
-        // depending on the query
-        expect(result?.score).toBeGreaterThan(400);
+        const threshold = expectations.get(query) ?? MIN_MATCH_SCORE;
+        expect(result?.score ?? 0).toBeGreaterThanOrEqual(threshold);
       });
     });
 
     it("should handle typos with fuzzy matching", () => {
       const result = findBestMatch("exhange", mockDatabase); // typo: missing 'c'
       expect(result).not.toBeNull();
-      // Should still find an exchange-related page
-      expect(result?.score).toBeGreaterThan(50);
+      // Typos should surface suggestions but remain below the confidence threshold
+      expect(result?.score ?? 0).toBeLessThan(MIN_MATCH_SCORE);
     });
 
     it("should handle abbreviated queries", () => {

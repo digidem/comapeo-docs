@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { fetchNotionData } from "../fetchNotionData";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
+import { NOTION_PROPERTIES } from "../constants";
 import {
   gracefulShutdown,
   initializeGracefulShutdownHandlers,
@@ -24,7 +25,11 @@ initializeGracefulShutdownHandlers();
 /**
  * Calculate Levenshtein distance between two strings
  * Used for fuzzy matching page names
+ *
+ * Matrix index access triggers eslint-security false positives, so we
+ * disable the rule for this function only.
  */
+/* eslint-disable security/detect-object-injection */
 function levenshteinDistance(str1: string, str2: string): number {
   const len1 = str1.length;
   const len2 = str2.length;
@@ -51,6 +56,7 @@ function levenshteinDistance(str1: string, str2: string): number {
 
   return matrix[len1][len2];
 }
+/* eslint-enable security/detect-object-injection */
 
 /**
  * Normalize a string for comparison
@@ -126,29 +132,32 @@ function extractFullTitle(titleProperty: any): string {
 /**
  * Find the best matching page by title
  */
+const MIN_MATCH_SCORE = 50;
+
+type ScoredPage = { page: Record<string, any>; score: number; title: string };
+
+function scorePages(
+  searchTerm: string,
+  pages: Array<Record<string, any>>
+): ScoredPage[] {
+  return pages
+    .map((page) => {
+      const title = getPageTitle(page);
+      const comparableTitle = title === "Untitled" ? "" : title;
+      const score = comparableTitle
+        ? fuzzyMatchScore(searchTerm, comparableTitle)
+        : 0;
+      return { page, score, title };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 function findBestMatch(
   searchTerm: string,
   pages: Array<Record<string, any>>
-): { page: Record<string, any>; score: number } | null {
-  if (pages.length === 0) {
-    return null;
-  }
-
-  let bestMatch: { page: Record<string, any>; score: number } | null = null;
-
-  for (const page of pages) {
-    const properties = page.properties || {};
-    const titleProperty = properties["Title"] || properties["Name"];
-    const title = extractFullTitle(titleProperty);
-
-    const score = fuzzyMatchScore(searchTerm, title);
-
-    if (!bestMatch || score > bestMatch.score) {
-      bestMatch = { page, score };
-    }
-  }
-
-  return bestMatch;
+): ScoredPage | null {
+  const scoredPages = scorePages(searchTerm, pages);
+  return scoredPages.length > 0 ? scoredPages[0] : null;
 }
 
 /**
@@ -156,7 +165,10 @@ function findBestMatch(
  */
 function getPageTitle(page: Record<string, any>): string {
   const properties = page.properties || {};
-  const titleProperty = properties["Title"] || properties["Name"];
+  const titleProperty =
+    properties[NOTION_PROPERTIES.TITLE] ||
+    properties["Title"] ||
+    properties["Name"];
   return extractFullTitle(titleProperty);
 }
 
@@ -213,15 +225,47 @@ async function main(): Promise<number> {
     );
 
     // Step 2: Find the best matching page using fuzzy search
-    const match = findBestMatch(pageName, allPages);
+    const scoredPages = scorePages(pageName, allPages);
+    const match = scoredPages[0] ?? null;
 
-    if (!match) {
-      console.error(chalk.red(`❌ No matching page found for "${pageName}"`));
+    if (!match || match.score < MIN_MATCH_SCORE) {
+      console.error(
+        chalk.red(
+          `❌ Could not find a confident match for "${pageName}" (best score ${match?.score.toFixed(2) ?? "0.00"})`
+        )
+      );
+
+      const suggestions = scoredPages
+        .filter((entry) => entry.score > 0)
+        .slice(0, 5);
+
+      if (suggestions.length > 0) {
+        console.log(chalk.bold.yellow("📎 Closest matches:"));
+        suggestions.forEach((entry, index) => {
+          console.log(
+            chalk.gray(
+              `  ${index + 1}. ${entry.title || "Untitled"} (score ${entry.score.toFixed(2)})`
+            )
+          );
+        });
+        console.log(
+          chalk.gray(
+            `  Tip: Try searching with the exact Notion title or copy it from the database.`
+          )
+        );
+      } else {
+        console.log(
+          chalk.gray(
+            "  No similarly named pages were found in the database. Double-check the spelling or ensure the page exists."
+          )
+        );
+      }
+
       await gracefulShutdown(1);
       return 1;
     }
 
-    const matchedTitle = getPageTitle(match.page);
+    const matchedTitle = match.title;
     const matchedId = match.page.id;
 
     console.log(chalk.bold.green("✅ Best match found:"));
@@ -336,7 +380,17 @@ function printHelp() {
   );
 }
 
-export { main };
+export {
+  extractFullTitle,
+  findBestMatch,
+  fuzzyMatchScore,
+  getPageTitle,
+  levenshteinDistance,
+  main,
+  MIN_MATCH_SCORE,
+  normalizeString,
+  scorePages,
+};
 
 // Run if executed directly
 const __filename = fileURLToPath(import.meta.url);

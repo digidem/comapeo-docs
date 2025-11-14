@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import ora from "ora";
 
-import { enhancedNotion, DATABASE_ID } from "../notionClient";
+import { enhancedNotion, DATABASE_ID, DATA_SOURCE_ID } from "../notionClient";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { NOTION_PROPERTIES } from "../constants";
 
@@ -562,9 +562,12 @@ async function fetchAllPages(): Promise<Array<Record<string, unknown>>> {
   const allResults: Array<Record<string, unknown>> = [];
   let cursor: string | undefined;
 
+  // Use DATA_SOURCE_ID with fallback to DATABASE_ID for v5 API compatibility
+  const dataSourceId = DATA_SOURCE_ID || DATABASE_ID;
+
   do {
-    const response = (await enhancedNotion.databasesQuery({
-      database_id: DATABASE_ID,
+    const response = (await enhancedNotion.dataSourcesQuery({
+      data_source_id: dataSourceId,
       ...(cursor ? { start_cursor: cursor } : {}),
     })) as NotionQueryResponse;
 

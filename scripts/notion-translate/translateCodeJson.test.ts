@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import "./test-openai-mock";
 import { installTestNotionEnv } from "../test-utils";
 
 describe("notion-translate translateCodeJson", () => {

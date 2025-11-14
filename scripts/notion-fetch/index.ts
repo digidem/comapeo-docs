@@ -147,7 +147,6 @@ async function main(): Promise<number> {
     }
 
     console.error(chalk.bold.red("❌ Fatal error in main:"), error);
-    console.error(chalk.bold.red("\n❌ Error updating files:"), error);
     await gracefulShutdown(1);
     return 1;
   }

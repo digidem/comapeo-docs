@@ -1,5 +1,52 @@
 import { perfTelemetry } from "../perfTelemetry";
 
+/**
+ * Parse and validate positive integer from environment variable
+ */
+function parsePositiveInt(
+  value: string | undefined,
+  defaultValue: number,
+  min: number = 1,
+  max: number = Number.MAX_SAFE_INTEGER
+): number {
+  if (!value) return defaultValue;
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (Number.isNaN(parsed) || parsed < min) {
+    return defaultValue;
+  }
+
+  if (parsed > max) {
+    return max;
+  }
+
+  return parsed;
+}
+
+// Configurable scheduler limits from environment variables
+// Increased defaults from 2 to 3 for better performance while staying conservative
+const DEFAULT_MAX_CONCURRENT = parsePositiveInt(
+  process.env.NOTION_MAX_CONCURRENT,
+  3, // Default: 3 concurrent requests (was 2)
+  1, // Min: 1 concurrent request
+  10 // Max: 10 concurrent requests (safety limit)
+);
+
+const DEFAULT_MAX_PER_INTERVAL = parsePositiveInt(
+  process.env.NOTION_MAX_PER_INTERVAL,
+  3, // Default: 3 requests per interval (was 2)
+  1, // Min: 1 request per interval
+  20 // Max: 20 requests per interval (safety limit)
+);
+
+const DEFAULT_INTERVAL_MS = parsePositiveInt(
+  process.env.NOTION_INTERVAL_MS,
+  1000, // Default: 1 second interval
+  100,  // Min: 100ms
+  10000 // Max: 10 seconds
+);
+
 interface SchedulerOptions {
   maxConcurrent?: number;
   maxPerInterval?: number;
@@ -38,9 +85,19 @@ class RequestScheduler {
   private destroyed = false;
 
   constructor(options: SchedulerOptions = {}) {
-    this.maxConcurrent = Math.max(1, options.maxConcurrent ?? 2);
-    this.maxPerInterval = Math.max(1, options.maxPerInterval ?? 2);
-    this.intervalMs = Math.max(100, options.intervalMs ?? 1000);
+    // Use environment-configured defaults if options not provided
+    this.maxConcurrent = Math.max(
+      1,
+      options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
+    );
+    this.maxPerInterval = Math.max(
+      1,
+      options.maxPerInterval ?? DEFAULT_MAX_PER_INTERVAL
+    );
+    this.intervalMs = Math.max(
+      100,
+      options.intervalMs ?? DEFAULT_INTERVAL_MS
+    );
     this.circuitBreakerCheck = options.circuitBreakerCheck;
     this.tokens = this.maxPerInterval;
 

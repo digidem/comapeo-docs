@@ -3,7 +3,7 @@ import path from "node:path";
 import { mockConsole } from "../test-utils";
 
 const writeFileMock = vi.fn();
-const databasesQueryMock = vi.fn();
+const dataSourcesQueryMock = vi.fn();
 const fetchNotionBlocksMock = vi.fn();
 
 vi.mock("node:fs/promises", () => ({
@@ -51,9 +51,10 @@ vi.mock("chalk", () => {
 
 vi.mock("../notionClient", () => ({
   enhancedNotion: {
-    databasesQuery: databasesQueryMock,
+    dataSourcesQuery: dataSourcesQueryMock,
   },
   DATABASE_ID: "test-database-id",
+  DATA_SOURCE_ID: "test-data-source-id",
 }));
 
 vi.mock("../fetchNotionData", () => ({
@@ -122,8 +123,9 @@ describe("exportNotionDatabase", () => {
 
     process.env.NOTION_API_KEY = "test-key";
     process.env.DATABASE_ID = "test-database-id";
+    process.env.DATA_SOURCE_ID = "test-data-source-id";
 
-    databasesQueryMock.mockResolvedValue({
+    dataSourcesQueryMock.mockResolvedValue({
       results: [samplePage],
       has_more: false,
     });
@@ -145,8 +147,8 @@ describe("exportNotionDatabase", () => {
       includeRawData: true,
     });
 
-    expect(databasesQueryMock).toHaveBeenCalledWith({
-      database_id: "test-database-id",
+    expect(dataSourcesQueryMock).toHaveBeenCalledWith({
+      data_source_id: "test-data-source-id",
     });
 
     expect(fetchNotionBlocksMock).toHaveBeenCalledWith("page-1");
@@ -175,7 +177,7 @@ describe("exportNotionDatabase", () => {
   });
 
   it("omits raw data and tolerates block fetch failures", async () => {
-    databasesQueryMock.mockResolvedValueOnce({
+    dataSourcesQueryMock.mockResolvedValueOnce({
       results: [samplePage, { ...samplePage, id: "page-2" }],
       has_more: false,
     });

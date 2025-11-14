@@ -70,6 +70,33 @@ function fuzzyMatchScore(search: string, target: string): number {
 }
 
 /**
+ * Extract full title from a Notion title property by joining all rich text fragments
+ * This handles titles with multiple fragments (bold, italics, emojis, etc.)
+ * (Copied from index.ts for testing)
+ */
+function extractFullTitle(titleProperty: any): string {
+  if (!titleProperty) {
+    return "Untitled";
+  }
+
+  // Try 'title' property first (for Title property type)
+  if (Array.isArray(titleProperty.title) && titleProperty.title.length > 0) {
+    return titleProperty.title
+      .map((fragment: any) => fragment.plain_text || "")
+      .join("");
+  }
+
+  // Fallback to 'name' property (for other property types)
+  if (Array.isArray(titleProperty.name) && titleProperty.name.length > 0) {
+    return titleProperty.name
+      .map((fragment: any) => fragment.plain_text || "")
+      .join("");
+  }
+
+  return "Untitled";
+}
+
+/**
  * Find the best matching page by title
  * (Copied from index.ts for testing)
  */
@@ -86,10 +113,7 @@ function findBestMatch(
   for (const page of pages) {
     const properties = page.properties || {};
     const titleProperty = properties["Title"] || properties["Name"];
-    const title =
-      titleProperty?.title?.[0]?.plain_text ||
-      titleProperty?.name?.[0]?.plain_text ||
-      "Untitled";
+    const title = extractFullTitle(titleProperty);
 
     const score = fuzzyMatchScore(searchTerm, title);
 
@@ -328,6 +352,161 @@ describe("notion-fetch-one fuzzy matching", () => {
       const result = findBestMatch("getting started", pages);
       expect(result).not.toBeNull();
       expect(result?.score).toBe(1000); // Exact match after normalization
+    });
+  });
+
+  describe("extractFullTitle", () => {
+    it("should extract single fragment title", () => {
+      const titleProperty = {
+        title: [{ plain_text: "Simple Title" }],
+      };
+      expect(extractFullTitle(titleProperty)).toBe("Simple Title");
+    });
+
+    it("should join multiple fragments into single title", () => {
+      const titleProperty = {
+        title: [
+          { plain_text: "Bold " },
+          { plain_text: "and " },
+          { plain_text: "italic" },
+        ],
+      };
+      expect(extractFullTitle(titleProperty)).toBe("Bold and italic");
+    });
+
+    it("should handle title with emoji fragments", () => {
+      const titleProperty = {
+        title: [
+          { plain_text: "🎉 " },
+          { plain_text: "Celebrate " },
+          { plain_text: "with emoji" },
+        ],
+      };
+      expect(extractFullTitle(titleProperty)).toBe("🎉 Celebrate with emoji");
+    });
+
+    it("should handle mixed formatting (bold, italic, emoji)", () => {
+      const titleProperty = {
+        title: [
+          { plain_text: "Understanding " },
+          { plain_text: "How " },
+          { plain_text: "Exchange " },
+          { plain_text: "Works" },
+        ],
+      };
+      expect(extractFullTitle(titleProperty)).toBe(
+        "Understanding How Exchange Works"
+      );
+    });
+
+    it("should fallback to name property", () => {
+      const titleProperty = {
+        name: [{ plain_text: "Name Property" }],
+      };
+      expect(extractFullTitle(titleProperty)).toBe("Name Property");
+    });
+
+    it("should return Untitled for null property", () => {
+      expect(extractFullTitle(null)).toBe("Untitled");
+    });
+
+    it("should return Untitled for empty title array", () => {
+      const titleProperty = { title: [] };
+      expect(extractFullTitle(titleProperty)).toBe("Untitled");
+    });
+  });
+
+  describe("findBestMatch with multi-fragment titles", () => {
+    it("should match pages with multi-fragment titles correctly", () => {
+      const pages = [
+        {
+          id: "1",
+          properties: {
+            Title: {
+              title: [
+                { plain_text: "Understanding " },
+                { plain_text: "How " },
+                { plain_text: "Exchange " },
+                { plain_text: "Works" },
+              ],
+            },
+          },
+        },
+        {
+          id: "2",
+          properties: {
+            Title: {
+              title: [{ plain_text: "Exchange Tutorial" }],
+            },
+          },
+        },
+      ];
+
+      const result = findBestMatch("Understanding How Exchange Works", pages);
+      expect(result).not.toBeNull();
+      expect(result?.page.id).toBe("1");
+      expect(result?.score).toBe(1000); // Exact match
+    });
+
+    it("should handle partial matches with multi-fragment titles", () => {
+      const pages = [
+        {
+          id: "1",
+          properties: {
+            Title: {
+              title: [
+                { plain_text: "🎉 " },
+                { plain_text: "Getting " },
+                { plain_text: "Started" },
+              ],
+            },
+          },
+        },
+      ];
+
+      const result = findBestMatch("getting started", pages);
+      expect(result).not.toBeNull();
+      // Substring match due to emoji prefix, but still a strong match
+      expect(result?.score).toBeGreaterThan(500);
+    });
+
+    it("should handle titles with only first fragment matching (old bug scenario)", () => {
+      // This test verifies the fix for the Codex review issue
+      // If we only read [0], we'd only see "Bold"
+      // With the fix, we see "Bold text with more content"
+      const pages = [
+        {
+          id: "1",
+          properties: {
+            Title: {
+              title: [
+                { plain_text: "Bold" },
+                { plain_text: " text with more content" },
+              ],
+            },
+          },
+        },
+        {
+          id: "2",
+          properties: {
+            Title: {
+              title: [{ plain_text: "Bold" }],
+            },
+          },
+        },
+      ];
+
+      // Search for full title - should match page 1 exactly
+      const result = findBestMatch("Bold text with more content", pages);
+      expect(result).not.toBeNull();
+      expect(result?.page.id).toBe("1");
+      expect(result?.score).toBe(1000); // Exact match
+
+      // Search for just "Bold" - should match page 2 exactly
+      const result2 = findBestMatch("Bold", pages);
+      expect(result2).not.toBeNull();
+      expect(result2?.page.id).toBe("2");
+      expect(result2?.score).toBe(1000); // Exact match
     });
   });
 

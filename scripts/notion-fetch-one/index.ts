@@ -98,6 +98,32 @@ function fuzzyMatchScore(search: string, target: string): number {
 }
 
 /**
+ * Extract full title from a Notion title property by joining all rich text fragments
+ * This handles titles with multiple fragments (bold, italics, emojis, etc.)
+ */
+function extractFullTitle(titleProperty: any): string {
+  if (!titleProperty) {
+    return "Untitled";
+  }
+
+  // Try 'title' property first (for Title property type)
+  if (Array.isArray(titleProperty.title) && titleProperty.title.length > 0) {
+    return titleProperty.title
+      .map((fragment: any) => fragment.plain_text || "")
+      .join("");
+  }
+
+  // Fallback to 'name' property (for other property types)
+  if (Array.isArray(titleProperty.name) && titleProperty.name.length > 0) {
+    return titleProperty.name
+      .map((fragment: any) => fragment.plain_text || "")
+      .join("");
+  }
+
+  return "Untitled";
+}
+
+/**
  * Find the best matching page by title
  */
 function findBestMatch(
@@ -113,10 +139,7 @@ function findBestMatch(
   for (const page of pages) {
     const properties = page.properties || {};
     const titleProperty = properties["Title"] || properties["Name"];
-    const title =
-      titleProperty?.title?.[0]?.plain_text ||
-      titleProperty?.name?.[0]?.plain_text ||
-      "Untitled";
+    const title = extractFullTitle(titleProperty);
 
     const score = fuzzyMatchScore(searchTerm, title);
 
@@ -134,11 +157,7 @@ function findBestMatch(
 function getPageTitle(page: Record<string, any>): string {
   const properties = page.properties || {};
   const titleProperty = properties["Title"] || properties["Name"];
-  return (
-    titleProperty?.title?.[0]?.plain_text ||
-    titleProperty?.name?.[0]?.plain_text ||
-    "Untitled"
-  );
+  return extractFullTitle(titleProperty);
 }
 
 /**

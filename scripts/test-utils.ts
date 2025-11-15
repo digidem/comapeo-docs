@@ -308,10 +308,32 @@ export function mockConsole() {
  */
 export function createMockAxios() {
   const mockGet = vi.fn();
+  const urlMocks = new Map<
+    string,
+    { type: "success"; data: Buffer; contentType?: string } | { type: "error"; error: Error }
+  >();
 
   const axios = {
     get: mockGet,
   };
+
+  // Set up the mock implementation to use the urlMocks map
+  mockGet.mockImplementation(async (requestUrl: string) => {
+    const mock = urlMocks.get(requestUrl);
+    if (!mock) {
+      throw new Error(`No mock for URL: ${requestUrl}`);
+    }
+
+    if (mock.type === "error") {
+      throw mock.error;
+    }
+
+    return {
+      data: mock.data,
+      headers: { "content-type": mock.contentType || "image/jpeg" },
+      status: 200,
+    };
+  });
 
   return {
     axios,
@@ -320,32 +342,24 @@ export function createMockAxios() {
       data: Buffer,
       contentType = "image/jpeg"
     ) => {
-      mockGet.mockImplementation(async (requestUrl: string) => {
-        if (requestUrl === url) {
-          return {
-            data,
-            headers: { "content-type": contentType },
-            status: 200,
-          };
-        }
-        throw new Error(`No mock for URL: ${requestUrl}`);
-      });
+      urlMocks.set(url, { type: "success", data, contentType });
     },
     mockImageDownloadFailure: (url: string, error: Error) => {
-      mockGet.mockImplementation(async (requestUrl: string) => {
-        if (requestUrl === url) {
-          throw error;
-        }
-        throw new Error(`No mock for URL: ${requestUrl}`);
-      });
+      urlMocks.set(url, { type: "error", error });
+    },
+    mockMultipleImageDownloads: (
+      downloads: Array<{ url: string; buffer: Buffer; contentType?: string }>
+    ) => {
+      for (const { url, buffer, contentType } of downloads) {
+        urlMocks.set(url, {
+          type: "success",
+          data: buffer,
+          contentType: contentType || "image/jpeg",
+        });
+      }
     },
     mockError: (url: string, error: Error) => {
-      mockGet.mockImplementation(async (requestUrl: string) => {
-        if (requestUrl === url) {
-          throw error;
-        }
-        throw new Error(`No mock for URL: ${requestUrl}`);
-      });
+      urlMocks.set(url, { type: "error", error });
     },
   };
 }
@@ -587,10 +601,17 @@ export function createMockTogglePage() {
 /**
  * Create mock heading page
  */
-export function createMockHeadingPage() {
+export function createMockHeadingPage(
+  overrides?: Partial<{
+    title: string;
+    elementType: string;
+    hasSubItems: boolean;
+  }>
+) {
   return createMockNotionPage({
     elementType: "Title",
     title: "Heading Item",
+    ...overrides,
   });
 }
 

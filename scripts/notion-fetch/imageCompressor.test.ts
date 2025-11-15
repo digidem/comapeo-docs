@@ -4,7 +4,8 @@ import { EventEmitter } from "node:events";
 type SpawnScenario =
   | { type: "success"; stdout?: Buffer | string }
   | { type: "quality"; stderr?: string }
-  | { type: "error"; code?: number; stderr?: string };
+  | { type: "error"; code?: number; stderr?: string }
+  | { type: "spawn-error"; error: Error }; // Emits error event
 
 const spawnScenarios: SpawnScenario[] = [];
 const enqueueSpawnScenario = (scenario: SpawnScenario) =>
@@ -69,6 +70,13 @@ function createFakeChildProcess(scenario?: SpawnScenario) {
   child.kill = vi.fn();
 
   process.nextTick(() => {
+    // Handle spawn-error scenario (emits error event)
+    if (scenario.type === "spawn-error") {
+      child.emit("error", scenario.error);
+      return;
+    }
+
+    // Normal scenarios emit data and close
     if ("stderr" in scenario && scenario.stderr) {
       stderr.emit("data", Buffer.from(scenario.stderr));
     }
@@ -229,5 +237,316 @@ describe("notion-fetch imageCompressor", () => {
     expect(error.quality).toBe("60-80");
     expect(error.stderr).toBe("too low");
     expect(error.message).toContain("PNG quality too low");
+  });
+
+  describe("Edge cases and error scenarios", () => {
+    // Note: Testing pngquant timeout with fake timers is complex due to interactions
+    // between setTimeout, process.nextTick, and event emitters in Vitest 4.x.
+    // The timeout logic is straightforward (setTimeout + child.kill) and is covered
+    // by manual testing. The timeout constant (PNGQUANT_TIMEOUT_MS) defaults to 30s
+    // and is configurable via environment variables.
+
+    it("should handle pngquant process error", async () => {
+      const buffer = createPngBuffer(2048);
+      // Enqueue spawn-error scenario - emits error event
+      enqueueSpawnScenario({
+        type: "spawn-error",
+        error: new Error("pngquant binary not found"),
+      });
+
+      const { compressImage } = await import("./imageCompressor");
+
+      await expect(compressImage(buffer)).rejects.toThrow(
+        "pngquant binary not found"
+      );
+    });
+
+    it("should handle pngquant with exit code 0 but no output", async () => {
+      const buffer = createPngBuffer(2048);
+      enqueueSpawnScenario({ type: "success" }); // No stdout
+
+      const { compressImage } = await import("./imageCompressor");
+
+      await expect(compressImage(buffer)).rejects.toThrow(
+        "pngquant produced no output"
+      );
+    });
+
+    it("should handle pngquant non-zero exit code (not 99)", async () => {
+      const buffer = createPngBuffer(2048);
+      enqueueSpawnScenario({
+        type: "error",
+        code: 1,
+        stderr: "Invalid arguments",
+      });
+
+      const { compressImage } = await import("./imageCompressor");
+
+      await expect(compressImage(buffer)).rejects.toThrow("Invalid arguments");
+    });
+
+    it("should return original buffer when PNG quality too low (exit 99)", async () => {
+      const buffer = createPngBuffer(4096);
+      // Exit 99 triggers retry with fallback quality (module default is "0-100")
+      // Enqueue 2 scenarios: first for quality error, second for fallback retry
+      enqueueSpawnScenario({ type: "quality", stderr: "quality too low" });
+      enqueueSpawnScenario({ type: "quality", stderr: "still too low" }); // Retry also fails
+
+      const { compressImage } = await import("./imageCompressor");
+
+      // compressImage catches PngQualityTooLowError after retry fails and returns original
+      const result = await compressImage(buffer);
+
+      expect(result.compressedBuffer).toBe(buffer);
+      expect(result.originalSize).toBe(buffer.length);
+      expect(result.compressedSize).toBe(buffer.length);
+    });
+
+    it("should handle empty buffer", async () => {
+      const buffer = Buffer.alloc(0);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(buffer);
+
+      // Should passthrough (unknown format)
+      expect(result.compressedBuffer).toBe(buffer);
+      expect(result.originalSize).toBe(0);
+      expect(result.compressedSize).toBe(0);
+    });
+
+    it("should handle very small buffer (<12 bytes)", async () => {
+      const buffer = Buffer.from([0x01, 0x02, 0x03]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(buffer);
+
+      // Should passthrough (unknown format)
+      expect(result.compressedBuffer).toBe(buffer);
+      expect(result.originalSize).toBe(3);
+    });
+
+    it("should handle malformed PNG header", async () => {
+      // Invalid PNG signature
+      const buffer = Buffer.from([
+        0xff,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        ...Array(100).fill(0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(buffer);
+
+      // Should passthrough (unknown format due to invalid signature)
+      expect(result.compressedBuffer).toBe(buffer);
+    });
+  });
+
+  describe("JPEG compression", () => {
+    it("should compress JPEG images using jpegtran", async () => {
+      // JPEG magic bytes: FF D8 FF
+      const jpegBuffer = Buffer.from([
+        0xff,
+        0xd8,
+        0xff,
+        0xe0,
+        ...Array(500).fill(0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(jpegBuffer);
+
+      expect(imageminBufferMock).toHaveBeenCalledWith(
+        jpegBuffer,
+        expect.objectContaining({
+          plugins: expect.arrayContaining([
+            expect.objectContaining({ name: "jpegtran" }),
+          ]),
+        })
+      );
+      expect(result.originalSize).toBe(jpegBuffer.length);
+    });
+  });
+
+  describe("SVG compression", () => {
+    it("should compress SVG images using svgo", async () => {
+      const svgBuffer = Buffer.from(
+        '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>'
+      );
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(svgBuffer);
+
+      expect(imageminBufferMock).toHaveBeenCalledWith(
+        svgBuffer,
+        expect.objectContaining({
+          plugins: expect.arrayContaining([
+            expect.objectContaining({ name: "svgo" }),
+          ]),
+        })
+      );
+      expect(result.originalSize).toBe(svgBuffer.length);
+    });
+  });
+
+  describe("WebP compression", () => {
+    it("should compress WebP images", async () => {
+      // WebP magic bytes: RIFF....WEBP
+      const webpBuffer = Buffer.from([
+        0x52,
+        0x49,
+        0x46,
+        0x46, // RIFF
+        0x00,
+        0x00,
+        0x00,
+        0x00, // file size
+        0x57,
+        0x45,
+        0x42,
+        0x50, // WEBP
+        ...Array(500).fill(0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(webpBuffer);
+
+      expect(imageminBufferMock).toHaveBeenCalledWith(
+        webpBuffer,
+        expect.objectContaining({
+          plugins: expect.arrayContaining([
+            expect.objectContaining({ name: "webp" }),
+          ]),
+        })
+      );
+      expect(result.originalSize).toBe(webpBuffer.length);
+    });
+  });
+
+  describe("GIF and unknown formats", () => {
+    it("should passthrough GIF images without compression", async () => {
+      // GIF magic bytes: "GIF8"
+      const gifBuffer = Buffer.from([
+        0x47,
+        0x49,
+        0x46,
+        0x38,
+        0x39,
+        0x61, // GIF89a
+        ...Array(500).fill(0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(gifBuffer);
+
+      // Should not call imagemin for GIF
+      expect(imageminBufferMock).not.toHaveBeenCalled();
+      expect(result.compressedBuffer).toBe(gifBuffer);
+      expect(result.originalSize).toBe(gifBuffer.length);
+      expect(result.compressedSize).toBe(gifBuffer.length);
+    });
+
+    it("should passthrough unknown format buffers", async () => {
+      const unknownBuffer = Buffer.from([
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        ...Array(500).fill(0xbb),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(unknownBuffer);
+
+      expect(result.compressedBuffer).toBe(unknownBuffer);
+      expect(result.originalSize).toBe(unknownBuffer.length);
+      expect(result.compressedSize).toBe(unknownBuffer.length);
+    });
+  });
+
+  describe("PNG skip logic", () => {
+    it("should skip PNG compression when already optimized (contains markers)", async () => {
+      // Create PNG with pngquant marker
+      const optimizedPng = Buffer.concat([
+        MINIMAL_PNG_HEADER,
+        Buffer.from("pngquant optimized"),
+        Buffer.alloc(1000, 0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(optimizedPng);
+
+      // Should skip compression and return original
+      expect(spawnMock).not.toHaveBeenCalled();
+      expect(result.compressedBuffer).toBe(optimizedPng);
+      expect(result.originalSize).toBe(optimizedPng.length);
+    });
+
+    it("should skip PNG compression when bit depth is low (<=4)", async () => {
+      // Create PNG with 4-bit depth
+      const lowBitDepthPng = Buffer.from([
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        0x00,
+        0x00,
+        0x00,
+        0x0d,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x10,
+        0x00,
+        0x00,
+        0x00,
+        0x10,
+        0x04, // 4-bit depth
+        0x02,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        ...Array(1000).fill(0xaa),
+      ]);
+
+      const { compressImage } = await import("./imageCompressor");
+
+      const result = await compressImage(lowBitDepthPng);
+
+      // Should skip compression
+      expect(spawnMock).not.toHaveBeenCalled();
+      expect(result.compressedBuffer).toBe(lowBitDepthPng);
+    });
+
+    // Note: Testing PNGQUANT_MIN_SIZE_BYTES with non-default values is not possible
+    // in Vitest 4.x due to module caching limitations. The constant is evaluated once
+    // at module load time. The default behavior (threshold=0, compress all files)
+    // is tested in the "compresses PNG when buffer exceeds minimum threshold" test.
   });
 });

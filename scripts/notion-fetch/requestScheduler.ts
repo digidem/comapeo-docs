@@ -43,7 +43,7 @@ const DEFAULT_MAX_PER_INTERVAL = parsePositiveInt(
 const DEFAULT_INTERVAL_MS = parsePositiveInt(
   process.env.NOTION_INTERVAL_MS,
   1000, // Default: 1 second interval
-  100,  // Min: 100ms
+  100, // Min: 100ms
   10000 // Max: 10 seconds
 );
 
@@ -94,10 +94,7 @@ export class RequestScheduler {
       1,
       options.maxPerInterval ?? DEFAULT_MAX_PER_INTERVAL
     );
-    this.intervalMs = Math.max(
-      100,
-      options.intervalMs ?? DEFAULT_INTERVAL_MS
-    );
+    this.intervalMs = Math.max(100, options.intervalMs ?? DEFAULT_INTERVAL_MS);
     this.circuitBreakerCheck = options.circuitBreakerCheck;
     this.tokens = this.maxPerInterval;
 

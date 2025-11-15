@@ -137,7 +137,13 @@ describe("notionPageUtils", () => {
     });
 
     it("should handle various status values", () => {
-      const statuses = ["Draft", "Review", "Ready to publish", "Published", "Remove"];
+      const statuses = [
+        "Draft",
+        "Review",
+        "Ready to publish",
+        "Published",
+        "Remove",
+      ];
 
       statuses.forEach((statusName) => {
         const page = {

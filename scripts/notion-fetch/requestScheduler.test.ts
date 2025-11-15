@@ -148,8 +148,9 @@ describe("requestScheduler", () => {
     });
 
     it("should respect maxConcurrent limit", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 2, // Only 2 concurrent
@@ -183,8 +184,9 @@ describe("requestScheduler", () => {
     });
 
     it("should process queue as tasks complete", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 1,
@@ -223,9 +225,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Circuit breaker integration", () => {
     it("should reject tasks when circuit breaker is open", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const circuitBreakerCheck = vi.fn().mockReturnValue(true); // Circuit open
 
@@ -249,8 +251,9 @@ describe("requestScheduler", () => {
     });
 
     it("should allow tasks when circuit breaker is closed", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const circuitBreakerCheck = vi.fn().mockReturnValue(false); // Circuit closed
 
@@ -273,8 +276,9 @@ describe("requestScheduler", () => {
     });
 
     it("should check circuit breaker before queuing each task", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       let circuitOpen = false;
       const circuitBreakerCheck = vi.fn().mockImplementation(() => circuitOpen);
@@ -309,8 +313,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Lifecycle and cleanup", () => {
     it("should destroy cleanly and clear interval", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         intervalMs: 1000,
@@ -326,8 +331,9 @@ describe("requestScheduler", () => {
     });
 
     it("should reject pending tasks when destroyed", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 1,
@@ -364,8 +370,9 @@ describe("requestScheduler", () => {
     });
 
     it("should reject new tasks after destroyed", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler();
 
@@ -381,8 +388,9 @@ describe("requestScheduler", () => {
     });
 
     it("should be idempotent when destroy called multiple times", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler();
 
@@ -399,8 +407,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Token bucket algorithm", () => {
     it("should refill tokens after interval elapses", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 10,
@@ -449,8 +458,9 @@ describe("requestScheduler", () => {
     });
 
     it("should handle rapid task scheduling within same interval", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 10,
@@ -499,8 +509,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Error handling", () => {
     it("should propagate task errors correctly", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler();
 
@@ -521,8 +532,9 @@ describe("requestScheduler", () => {
     });
 
     it("should continue processing queue after task error", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 1,
@@ -551,8 +563,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Label tracking", () => {
     it("should accept and pass through label option", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler();
 
@@ -634,8 +647,9 @@ describe("requestScheduler", () => {
 
   describe("RequestScheduler - Edge cases", () => {
     it("should handle empty queue gracefully", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler();
 
@@ -648,8 +662,9 @@ describe("requestScheduler", () => {
     });
 
     it("should handle maxConcurrent = 1 correctly", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler({
         maxConcurrent: 1,
@@ -679,8 +694,9 @@ describe("requestScheduler", () => {
     });
 
     it("should handle constructor with minimal options", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       const scheduler = new RequestScheduler(); // No options
 
@@ -697,8 +713,9 @@ describe("requestScheduler", () => {
     });
 
     it("should enforce minimum values for config", async () => {
-      const { RequestScheduler, CircuitBreakerOpenError } = await import("./requestScheduler");
-      
+      const { RequestScheduler, CircuitBreakerOpenError } = await import(
+        "./requestScheduler"
+      );
 
       // Try to set values below minimums
       const scheduler = new RequestScheduler({

@@ -8,32 +8,6 @@ import ExecutionEnvironment from "@docusaurus/ExecutionEnvironment";
 if (ExecutionEnvironment.canUseDOM) {
   let observer: MutationObserver | null = null;
 
-  // Get the base URL from the site config
-  const getBaseUrl = (): string => {
-    // Docusaurus provides the base URL in the HTML base tag
-    const baseTag = document.querySelector("base");
-    return baseTag?.getAttribute("href") || "/";
-  };
-
-  // Check if a link is a home link
-  const isHomeLink = (href: string | null): boolean => {
-    if (!href) return false;
-
-    const baseUrl = getBaseUrl();
-    const normalizedHref = href.endsWith("/") ? href : href + "/";
-    const normalizedBase = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
-
-    // Check for home link patterns
-    return (
-      href === "/" ||
-      href === baseUrl ||
-      normalizedHref === normalizedBase ||
-      href === "/docs" ||
-      href === `${baseUrl}docs` ||
-      href.endsWith("breadcrumbs__link--home")
-    );
-  };
-
   // Add click handler to breadcrumbs after DOM is loaded
   const addBreadcrumbsClickHandler = () => {
     const breadcrumbs = document.querySelector(".theme-doc-breadcrumbs");
@@ -48,20 +22,17 @@ if (ExecutionEnvironment.canUseDOM) {
         // Check if the click originated from within an anchor tag
         const clickedLink = target.closest("a");
 
-        // Allow home link to navigate normally
+        // If clicking on ANY link (home or intermediate breadcrumbs), let it navigate
+        // Breadcrumbs are navigation controls - they must work!
         if (clickedLink) {
-          const href = clickedLink.getAttribute("href");
-          const hasHomeClass = clickedLink.classList.contains(
-            "breadcrumbs__link--home"
-          );
-
-          if (isHomeLink(href) || hasHomeClass) {
-            // Let the home link work normally
-            return;
-          }
+          // Let all breadcrumb links work normally for hierarchical navigation
+          return;
         }
 
-        // For all other clicks (including other breadcrumb links), scroll to top
+        // Only scroll to top when clicking on:
+        // - The breadcrumb container itself
+        // - The current page text (usually a <span>, not a link)
+        // - Empty space in the breadcrumbs area
         event.preventDefault();
         window.scrollTo({
           top: 0,

@@ -1,14 +1,44 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { NOTION_PROPERTIES } from "../constants";
-import {
-  extractFullTitle,
-  findBestMatch,
-  fuzzyMatchScore,
-  levenshteinDistance,
-  MIN_MATCH_SCORE,
-  normalizeString,
-  scorePages,
-} from "./index";
+
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+    };
+    return pipeline;
+  };
+
+  const sharpMock = vi.fn(() => createPipeline());
+
+  return {
+    default: sharpMock,
+  };
+});
+
+let extractFullTitle!: (typeof import("./index"))["extractFullTitle"];
+let findBestMatch!: (typeof import("./index"))["findBestMatch"];
+let fuzzyMatchScore!: (typeof import("./index"))["fuzzyMatchScore"];
+let levenshteinDistance!: (typeof import("./index"))["levenshteinDistance"];
+let minMatchScore!: (typeof import("./index"))["MIN_MATCH_SCORE"];
+let normalizeString!: (typeof import("./index"))["normalizeString"];
+let scorePages!: (typeof import("./index"))["scorePages"];
+
+beforeAll(async () => {
+  ({
+    extractFullTitle,
+    findBestMatch,
+    fuzzyMatchScore,
+    levenshteinDistance,
+    MIN_MATCH_SCORE: minMatchScore,
+    normalizeString,
+    scorePages,
+  } = await import("./index"));
+});
 
 // Helper to create mock Notion pages
 function createMockPage(title: string, id = "mock-id"): Record<string, any> {
@@ -465,14 +495,14 @@ describe("notion-fetch-one fuzzy matching", () => {
       const expectations = new Map<string, number>([
         ["exchange", 500],
         ["exchange works", 500],
-        ["understanding exchange", MIN_MATCH_SCORE],
-        ["how exchange works", MIN_MATCH_SCORE],
+        ["understanding exchange", minMatchScore],
+        ["how exchange works", minMatchScore],
       ]);
 
       queries.forEach((query) => {
         const result = findBestMatch(query, mockDatabase);
         expect(result).not.toBeNull();
-        const threshold = expectations.get(query) ?? MIN_MATCH_SCORE;
+        const threshold = expectations.get(query) ?? minMatchScore;
         expect(result?.score ?? 0).toBeGreaterThanOrEqual(threshold);
       });
     });
@@ -481,7 +511,7 @@ describe("notion-fetch-one fuzzy matching", () => {
       const result = findBestMatch("exhange", mockDatabase); // typo: missing 'c'
       expect(result).not.toBeNull();
       // Typos should surface suggestions but remain below the confidence threshold
-      expect(result?.score ?? 0).toBeLessThan(MIN_MATCH_SCORE);
+      expect(result?.score ?? 0).toBeLessThan(minMatchScore);
     });
 
     it("should handle abbreviated queries", () => {

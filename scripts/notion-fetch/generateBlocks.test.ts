@@ -602,22 +602,38 @@ describe("generateBlocks", () => {
     });
   });
 
-  describe.skip("getPublishedDate", () => {
-    // Note: These tests use vi.setSystemTime which is not available in Vitest 4.x
-    const fixedDate = new Date("2024-01-02T12:00:00Z");
+  describe("getPublishedDate", () => {
     let getPublishedDate: (page: any) => string;
+    const fixedDate = new Date("2024-01-02T12:00:00Z");
+    let OriginalDate: typeof Date;
 
     beforeAll(async () => {
       ({ getPublishedDate } = await import("./generateBlocks"));
     });
 
     beforeEach(() => {
-      vi.useFakeTimers();
-      vi.setSystemTime(fixedDate);
+      // Mock Date constructor to return fixed date when called without arguments
+      // This is needed because vi.setSystemTime is unavailable in Vitest 4.x
+      OriginalDate = global.Date;
+      global.Date = class extends OriginalDate {
+        constructor(...args: any[]) {
+          if (args.length === 0) {
+            // new Date() without arguments should return fixed date
+            super(fixedDate.getTime());
+          } else {
+            // new Date(value) with arguments should work normally
+            super(...args);
+          }
+        }
+        static now() {
+          return fixedDate.getTime();
+        }
+      } as any;
     });
 
     afterEach(() => {
-      vi.useRealTimers();
+      // Restore original Date
+      global.Date = OriginalDate;
     });
 
     it("should use published date when available and valid", () => {

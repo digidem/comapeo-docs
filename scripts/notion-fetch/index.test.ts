@@ -449,36 +449,6 @@ describe("notion-fetch integration", () => {
         fatalError
       );
     });
-
-    it.skip("should register signal handlers on module load", async () => {
-      // Note: Same module caching issue - tests module initialization side effects
-      // Arrange
-      const originalOn = process.on;
-      const mockOn = vi.fn();
-      process.on = mockOn;
-
-      try {
-        const runtime = await import("./runtime");
-        runtime.__resetRuntimeForTests?.();
-        // Act
-        await import("./index");
-
-        // Assert
-        expect(mockOn).toHaveBeenCalledWith("SIGINT", expect.any(Function));
-        expect(mockOn).toHaveBeenCalledWith("SIGTERM", expect.any(Function));
-        expect(mockOn).toHaveBeenCalledWith(
-          "uncaughtException",
-          expect.any(Function)
-        );
-        expect(mockOn).toHaveBeenCalledWith(
-          "unhandledRejection",
-          expect.any(Function)
-        );
-      } finally {
-        // Restore
-        process.on = originalOn;
-      }
-    });
   });
 
   describe("workflow integration", () => {

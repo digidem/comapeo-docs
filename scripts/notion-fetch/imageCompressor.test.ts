@@ -167,19 +167,22 @@ describe("notion-fetch imageCompressor", () => {
     expect(module.PngQualityTooLowError).toBeDefined();
   });
 
-  it.skip("skips PNG compression when the buffer is smaller than the configured threshold", async () => {
-    // Note: This test requires dynamic module configuration which doesn't work
-    // with module caching (vi.resetModules unavailable in Vitest 4)
-    // The module config is read at import time and cached
+  it("compresses PNG when buffer exceeds minimum threshold (default: 0)", async () => {
+    // Test with actual default: PNGQUANT_MIN_SIZE_BYTES = 0 (compress all files)
+    // With default config, even small buffers should be compressed
     const buffer = createPngBuffer(64);
-    const { compressImage } = await loadImageCompressor({
-      PNGQUANT_MIN_SIZE_BYTES: "1024",
+    enqueueSpawnScenario({
+      type: "success",
+      stdout: Buffer.concat([MINIMAL_PNG_HEADER, Buffer.alloc(32, 0xcc)]),
     });
+    const { compressImage } = await import("./imageCompressor");
 
     const result = await compressImage(buffer);
 
-    expect(result.compressedBuffer).toBe(buffer);
-    expect(spawnMock).not.toHaveBeenCalled();
+    // Should have attempted compression (not skipped due to size)
+    expect(spawnMock).toHaveBeenCalled();
+    expect(result.originalSize).toBe(buffer.length);
+    expect(result.compressedBuffer.length).toBeGreaterThan(0);
   });
 
   it("retries PNG compression when pngquant exits with code 99 and returns fallback output", async () => {
@@ -200,19 +203,23 @@ describe("notion-fetch imageCompressor", () => {
     expect(result.originalSize).toBe(buffer.length);
   });
 
-  it.skip("returns the original buffer when pngquant signals code 99 and fallback retries are disabled", async () => {
-    // Note: Same module caching issue as above
+  it("uses fallback quality when pngquant signals code 99 (default: enabled)", async () => {
+    // Test with actual default: PNGQUANT_FALLBACK_QUALITY = "0-100" (retry enabled)
+    // When quality is too low, should retry with fallback quality settings
     const buffer = createPngBuffer(4096);
-    enqueueSpawnScenario({ type: "quality", stderr: "already optimized" });
-    const { compressImage } = await loadImageCompressor({
-      PNGQUANT_FALLBACK_QUALITY: "",
+    enqueueSpawnScenario({ type: "quality", stderr: "quality too low" });
+    enqueueSpawnScenario({
+      type: "success",
+      stdout: Buffer.concat([MINIMAL_PNG_HEADER, Buffer.alloc(256, 0xdd)]),
     });
+    const { compressImage } = await import("./imageCompressor");
 
     const result = await compressImage(buffer);
 
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-    expect(result.compressedBuffer).toBe(buffer);
-    expect(result.compressedSize).toBe(buffer.length);
+    // Should have retried with fallback quality (2 calls total)
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+    expect(result.compressedBuffer.length).toBeGreaterThan(0);
+    expect(result.originalSize).toBe(buffer.length);
   });
 
   it("exposes PngQualityTooLowError with helpful metadata", async () => {

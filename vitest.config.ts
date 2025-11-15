@@ -17,7 +17,7 @@ export default defineConfig({
     globals: true,
     pool: "threads",
     // Setup files for global mocking
-    setupFiles: [],
+    setupFiles: ["./scripts/vitest.setup.ts"],
 
     // Coverage configuration
     coverage: {

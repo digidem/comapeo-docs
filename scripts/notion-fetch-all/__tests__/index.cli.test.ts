@@ -1,11 +1,58 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { 
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
+import {
   installTestNotionEnv,
   captureConsoleOutput,
   createMockNotionPage,
   createMockPageFamily,
   mockProcessedImageResult,
 } from "../../test-utils";
+import { fetchAllNotionData } from "../fetchAll";
+import { PreviewGenerator } from "../previewGenerator";
+import { StatusAnalyzer } from "../statusAnalyzer";
+import { ComparisonEngine } from "../comparisonEngine";
+import {
+  initializeGracefulShutdownHandlers,
+  trackSpinner,
+  gracefulShutdown,
+} from "../../notion-fetch/runtime";
+
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
+
+// Mock notionClient to avoid environment variable requirements
+vi.mock("../../notionClient", () => ({
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(),
+  },
+}));
 
 // Mock all CLI dependencies
 vi.mock("../fetchAll", () => ({
@@ -75,9 +122,7 @@ describe("CLI index", () => {
 
   describe("Basic CLI functionality", () => {
     it("should import and initialize CLI without errors", async () => {
-      const { fetchAllNotionData } = vi.mocked(await import("../fetchAll"));
-      
-      fetchAllNotionData.mockResolvedValue({
+      (fetchAllNotionData as Mock).mockResolvedValue({
         results: [],
         summary: {
           totalPages: 0,
@@ -85,7 +130,7 @@ describe("CLI index", () => {
           languages: [],
         },
       });
-      
+
       // Should be able to import without throwing
       expect(async () => {
         await import("../index");
@@ -93,10 +138,8 @@ describe("CLI index", () => {
     });
 
     it("should handle environment setup correctly", async () => {
-      const { initializeGracefulShutdownHandlers } = vi.mocked(await import("../../notion-fetch/runtime"));
-      
       await import("../index");
-      
+
       // Verify graceful shutdown handlers were initialized
       expect(initializeGracefulShutdownHandlers).toHaveBeenCalled();
     });
@@ -105,16 +148,17 @@ describe("CLI index", () => {
       // Temporarily remove environment variables
       const originalNotionKey = process.env.NOTION_API_KEY;
       const originalDatabaseId = process.env.DATABASE_ID;
-      
+
       delete process.env.NOTION_API_KEY;
       delete process.env.DATABASE_ID;
-      
+
       try {
         await import("../index");
-        
+
         // Should still work but may log warnings
-        expect(consoleCapture.errors.length + consoleCapture.logs.length).toBeGreaterThanOrEqual(0);
-        
+        expect(
+          consoleCapture.errors.length + consoleCapture.logs.length
+        ).toBeGreaterThanOrEqual(0);
       } finally {
         if (originalNotionKey) process.env.NOTION_API_KEY = originalNotionKey;
         if (originalDatabaseId) process.env.DATABASE_ID = originalDatabaseId;
@@ -125,30 +169,28 @@ describe("CLI index", () => {
   describe("CLI components", () => {
     it("should have PreviewGenerator available", async () => {
       const { PreviewGenerator } = await import("../previewGenerator");
-      
+
       expect(PreviewGenerator).toBeDefined();
       expect(PreviewGenerator.generatePreview).toBeDefined();
     });
 
     it("should have StatusAnalyzer available", async () => {
       const { StatusAnalyzer } = await import("../statusAnalyzer");
-      
+
       expect(StatusAnalyzer).toBeDefined();
       expect(StatusAnalyzer.analyzePublicationStatus).toBeDefined();
     });
 
     it("should have ComparisonEngine available", async () => {
       const { ComparisonEngine } = await import("../comparisonEngine");
-      
+
       expect(ComparisonEngine).toBeDefined();
       expect(ComparisonEngine.compareWithPublished).toBeDefined();
     });
 
     it("should handle spinner tracking correctly", async () => {
-      const { trackSpinner } = vi.mocked(await import("../../notion-fetch/runtime"));
-      
       await import("../index");
-      
+
       // Runtime should be initialized
       expect(trackSpinner).toBeDefined();
     });

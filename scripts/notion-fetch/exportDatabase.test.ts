@@ -117,7 +117,6 @@ describe("exportNotionDatabase", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
 
     consoleMocks = mockConsole();
 

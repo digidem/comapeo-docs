@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  vi,
+  type Mock,
+} from "vitest";
 import {
   installTestNotionEnv,
   createMockFileSystem,
@@ -17,8 +26,35 @@ import { NOTION_PROPERTIES } from "../constants";
 import path from "path";
 import fs from "node:fs";
 
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
+
 // Mock external dependencies
-vi.mock("axios");
+vi.mock("axios", () => ({
+  default: {
+    get: vi.fn(),
+  },
+}));
 vi.mock("../notionClient", () => ({
   n2m: {
     pageToMarkdown: vi.fn(),
@@ -106,6 +142,10 @@ describe("generateBlocks", () => {
   let restoreEnv: () => void;
   let mockFS: ReturnType<typeof createMockFileSystem>;
   let mockAxios: ReturnType<typeof createMockAxios>;
+  let n2m: any;
+  let fetchNotionBlocks: Mock;
+  let processImage: Mock;
+  let compressImageToFileWithFallback: Mock;
 
   beforeEach(async () => {
     restoreEnv = installTestNotionEnv();
@@ -118,13 +158,22 @@ describe("generateBlocks", () => {
     const { __resetPrefetchCaches } = await import("./generateBlocks");
     __resetPrefetchCaches();
 
-    // Setup default mock implementations
-    const { processImage } = vi.mocked(await import("./imageProcessor"));
-    processImage.mockResolvedValue(mockProcessedImageResult);
+    // Get mocked functions
+    const notionClient = await import("../notionClient");
+    n2m = notionClient.n2m;
 
-    const { compressImageToFileWithFallback } = vi.mocked(
-      await import("./utils")
-    );
+    const fetchData = await import("../fetchNotionData");
+    fetchNotionBlocks = fetchData.fetchNotionBlocks as Mock;
+
+    const imageProc = await import("./imageProcessor");
+    processImage = imageProc.processImage as Mock;
+
+    const utils = await import("./utils");
+    compressImageToFileWithFallback =
+      utils.compressImageToFileWithFallback as Mock;
+
+    // Setup default mock implementations
+    processImage.mockResolvedValue(mockProcessedImageResult);
     compressImageToFileWithFallback.mockResolvedValue({
       finalSize: 512,
       usedFallback: false,
@@ -148,7 +197,6 @@ describe("generateBlocks", () => {
 
   describe("Toggle pages without Title property", () => {
     it("should fall back safely when Title property is missing", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
 
       const pageFamily = createMockPageFamily("Test Section", "Toggle");
@@ -179,9 +227,8 @@ describe("generateBlocks", () => {
 
   describe("Pages without Website Block", () => {
     it("should write placeholder markdown when Website Block is absent", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockWriteFileSync = fs.writeFileSync as Mock;
 
       const pageWithoutWebsiteBlock = createMockNotionPageWithoutWebsiteBlock({
         title: "Test Page",
@@ -213,10 +260,9 @@ describe("generateBlocks", () => {
 
   describe("Translation string updates", () => {
     it("should update translation strings only for non-EN locales", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockReadFileSync = vi.mocked(fs.readFileSync);
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockReadFileSync = fs.readFileSync as Mock;
+      const mockWriteFileSync = fs.writeFileSync as Mock;
 
       // Mock existing translation file
       mockReadFileSync.mockReturnValue("{}");
@@ -241,9 +287,8 @@ describe("generateBlocks", () => {
 
   describe("Title fallbacks", () => {
     it("should fallback to legacy Title property when Content elements is missing", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockWriteFileSync = fs.writeFileSync as Mock;
 
       const legacyTitlePage = createMockNotionPage({
         title: "Legacy Title Page",
@@ -272,10 +317,6 @@ describe("generateBlocks", () => {
   describe("Prefetch caching", () => {
     it("reuses cached blocks and markdown for unchanged pages", async () => {
       const { generateBlocks } = await import("./generateBlocks");
-      const { fetchNotionBlocks } = vi.mocked(
-        await import("../fetchNotionData")
-      );
-      const { n2m } = vi.mocked(await import("../notionClient"));
 
       const page = createMockNotionPage({
         id: "cache-page",
@@ -307,7 +348,6 @@ describe("generateBlocks", () => {
 
   describe("Image processing", () => {
     it("should capture image processing success/failure totals with retry metrics", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
 
       const imageUrls = [
@@ -354,7 +394,6 @@ describe("generateBlocks", () => {
     });
 
     it("should handle multiple concurrent image downloads with proper error handling", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
 
       const imageUrls = Array.from(
@@ -402,9 +441,8 @@ describe("generateBlocks", () => {
 
   describe("Toggle sections", () => {
     it("should create section folders for Toggle type pages", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockMkdirSync = vi.mocked(fs.mkdirSync);
+      const mockMkdirSync = fs.mkdirSync as Mock;
 
       const togglePage = createMockTogglePage({
         title: "Test Section",
@@ -422,7 +460,7 @@ describe("generateBlocks", () => {
       expect(mockMkdirSync).toHaveBeenCalled();
 
       // Check if _category_.json was created
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockWriteFileSync = fs.writeFileSync as Mock;
       const categoryCall = mockWriteFileSync.mock.calls.find(
         (call) =>
           typeof call[0] === "string" && call[0].includes("_category_.json")
@@ -434,9 +472,8 @@ describe("generateBlocks", () => {
 
   describe("Heading sections", () => {
     it("should apply heading titles to subsequent sections", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockWriteFileSync = fs.writeFileSync as Mock;
 
       const headingPage = createMockHeadingPage({
         title: "Section Heading",
@@ -472,9 +509,8 @@ describe("generateBlocks", () => {
 
   describe("Page content generation", () => {
     it("should generate proper frontmatter for Page type entries", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
-      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockWriteFileSync = fs.writeFileSync as Mock;
 
       const page = createMockNotionPage({
         title: "Test Article",
@@ -516,7 +552,6 @@ describe("generateBlocks", () => {
 
   describe("Error handling", () => {
     it("should continue processing other pages when individual page fails", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
 
       const goodPage = createMockNotionPage({ title: "Good Page" });
@@ -545,7 +580,6 @@ describe("generateBlocks", () => {
 
   describe("Progress tracking", () => {
     it("should call progress callback with correct values throughout processing", async () => {
-      const { n2m } = vi.mocked(await import("../notionClient"));
       const { generateBlocks } = await import("./generateBlocks");
 
       const pages = [
@@ -569,20 +603,37 @@ describe("generateBlocks", () => {
   });
 
   describe("getPublishedDate", () => {
-    const fixedDate = new Date("2024-01-02T12:00:00Z");
     let getPublishedDate: (page: any) => string;
+    const fixedDate = new Date("2024-01-02T12:00:00Z");
+    let OriginalDate: typeof Date;
 
     beforeAll(async () => {
       ({ getPublishedDate } = await import("./generateBlocks"));
     });
 
     beforeEach(() => {
-      vi.useFakeTimers();
-      vi.setSystemTime(fixedDate);
+      // Mock Date constructor to return fixed date when called without arguments
+      // This is needed because vi.setSystemTime is unavailable in Vitest 4.x
+      OriginalDate = global.Date;
+      global.Date = class extends OriginalDate {
+        constructor(...args: any[]) {
+          if (args.length === 0) {
+            // new Date() without arguments should return fixed date
+            super(fixedDate.getTime());
+          } else {
+            // new Date(value) with arguments should work normally
+            super(...args);
+          }
+        }
+        static now() {
+          return fixedDate.getTime();
+        }
+      } as any;
     });
 
     afterEach(() => {
-      vi.useRealTimers();
+      // Restore original Date
+      global.Date = OriginalDate;
     });
 
     it("should use published date when available and valid", () => {
@@ -697,6 +748,118 @@ describe("generateBlocks", () => {
       expect(() => getPublishedDate(page)).not.toThrow();
 
       warnSpy.mockRestore();
+    });
+  });
+
+  describe("Critical error handling", () => {
+    it("should log and rethrow critical errors in generateBlocks", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      // Create a page that will cause an error during the grouping phase
+      // by having malformed properties
+      const malformedPage = {
+        id: "malformed-page",
+        properties: null, // This will cause errors when accessing properties
+      };
+
+      const progressCallback = vi.fn();
+
+      await expect(
+        generateBlocks([malformedPage as any], progressCallback)
+      ).rejects.toThrow();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Critical error in generateBlocks:"),
+        expect.anything()
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should handle non-Error objects in critical error catch", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      // Create page that will trigger string error by making progressCallback throw
+      const page = createMockNotionPage({ title: "Test Page" });
+      const pages = [page];
+      const progressCallback = vi.fn().mockImplementation(() => {
+        throw "String error thrown";
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await expect(generateBlocks(pages, progressCallback)).rejects.toThrow(
+        "String error thrown"
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe("ensureBlankLineAfterStandaloneBold", () => {
+    let ensureBlankLineAfterStandaloneBold: (content: string) => string;
+
+    beforeAll(async () => {
+      ({ ensureBlankLineAfterStandaloneBold } = await import(
+        "./generateBlocks"
+      ));
+    });
+
+    it("should add blank line after standalone bold text", () => {
+      const input = "**Bold Title**\nRegular text";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n\nRegular text");
+    });
+
+    it("should not add blank line if already present", () => {
+      const input = "**Bold Title**\n\nRegular text";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n\nRegular text");
+    });
+
+    it("should not add blank line if next line is empty", () => {
+      const input = "**Bold Title**\n";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n");
+    });
+
+    it("should handle empty content", () => {
+      const result = ensureBlankLineAfterStandaloneBold("");
+      expect(result).toBe("");
+    });
+
+    it("should not add blank line for inline bold", () => {
+      const input = "This is **bold** inline\nNext line";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("This is **bold** inline\nNext line");
+    });
+
+    it("should handle multiple standalone bold sections", () => {
+      const input =
+        "**First Bold**\nText 1\n**Second Bold**\nText 2\n**Third Bold**";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe(
+        "**First Bold**\n\nText 1\n**Second Bold**\n\nText 2\n**Third Bold**"
+      );
+    });
+
+    it("should handle bold with spaces", () => {
+      const input = "  **Bold with leading spaces**  \nText";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("  **Bold with leading spaces**  \n\nText");
     });
   });
 });

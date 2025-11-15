@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installTestNotionEnv } from "../test-utils";
 
+// Mock sharp to avoid installation issues
 vi.mock("sharp", () => {
   const createPipeline = () => {
     const pipeline: any = {
@@ -9,14 +10,17 @@ vi.mock("sharp", () => {
       png: vi.fn(() => pipeline),
       webp: vi.fn(() => pipeline),
       toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
     };
     return pipeline;
   };
-
-  const sharpMock = vi.fn(() => createPipeline());
-
   return {
-    default: sharpMock,
+    default: vi.fn(() => createPipeline()),
   };
 });
 

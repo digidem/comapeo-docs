@@ -393,7 +393,9 @@ article {
 .theme-doc-breadcrumbs {
   position: -webkit-sticky; /* Safari */
   position: sticky;
-  top: var(--ifm-navbar-height, 60px);
+  top: calc(
+    var(--ifm-navbar-height, 60px) + 2px
+  ); /* Small offset to show navbar shadow */
   z-index: 200; /* Higher than navbar to prevent logo overflow interference */
   background-color: #ffffff;
   cursor: pointer;

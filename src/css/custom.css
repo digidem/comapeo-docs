@@ -368,20 +368,41 @@ details {
 /*
  * Sticky Breadcrumbs with Scroll-to-Top
  * Issue #61: Make breadcrumbs stay fixed at top when scrolling
+ *
+ * Implementation: Breadcrumbs start in normal document flow, but when user
+ * scrolls down and they would go out of view, they stick to the top of the
+ * viewport (below the navbar) and remain visible.
  */
+
+/* Ensure parent containers allow sticky positioning */
+.theme-doc-page,
+.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-theme-DocPage-Layout-Main-styles-module,
+article {
+  overflow: visible !important;
+}
 
 /* Make breadcrumbs sticky at the top of the page */
 .theme-doc-breadcrumbs {
+  position: -webkit-sticky; /* Safari */
   position: sticky;
-  top: 0;
+  top: var(--ifm-navbar-height, 60px);
   z-index: 100;
   background-color: var(--ifm-background-color);
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
+  margin-left: calc(
+    -1 * var(--ifm-spacing-horizontal)
+  ); /* Extend to page edges */
+  margin-right: calc(-1 * var(--ifm-spacing-horizontal));
+  padding-left: var(--ifm-spacing-horizontal);
+  padding-right: var(--ifm-spacing-horizontal);
   border-bottom: 1px solid var(--ifm-toc-border-color);
   cursor: pointer;
   transition: background-color 0.2s ease;
+
+  /* Create a subtle shadow when sticky */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 /* Add hover effect to indicate clickability */
@@ -389,7 +410,7 @@ details {
   background-color: var(--ifm-background-surface-color);
 }
 
-/* Ensure breadcrumbs appear above other content */
+/* Ensure breadcrumbs nav doesn't have conflicting margins */
 .theme-doc-breadcrumbs nav {
   margin: 0;
 }
@@ -398,6 +419,7 @@ details {
 [data-theme="dark"] .theme-doc-breadcrumbs {
   background-color: var(--ifm-background-color);
   border-bottom-color: var(--ifm-toc-border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 [data-theme="dark"] .theme-doc-breadcrumbs:hover {

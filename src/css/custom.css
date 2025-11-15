@@ -388,27 +388,20 @@ article {
   top: var(--ifm-navbar-height, 60px);
   z-index: 100;
   background-color: #ffffff;
-  width: 100%;
-  padding-top: 0.5rem;
+  cursor: pointer;
+
+  /* Keep original padding/margins for alignment with content */
+  padding-top: 0;
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
-  margin-left: calc(
-    -1 * var(--ifm-spacing-horizontal)
-  ); /* Extend to page edges */
-  margin-right: calc(-1 * var(--ifm-spacing-horizontal));
-  padding-left: var(--ifm-spacing-horizontal);
-  padding-right: var(--ifm-spacing-horizontal);
-  border-bottom: 1px solid var(--ifm-toc-border-color);
-  cursor: pointer;
-  transition: background-color 0.2s ease;
 
-  /* Create a subtle shadow when sticky */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  /* Simple border for separation - cleaner than shadows */
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
 }
 
-/* Add hover effect to indicate clickability */
+/* Subtle hover effect - just a slight background tint */
 .theme-doc-breadcrumbs:hover {
-  background-color: #f5f5f5;
+  background-color: rgba(0, 0, 0, 0.02);
 }
 
 /* Ensure breadcrumbs nav doesn't have conflicting margins */
@@ -419,10 +412,9 @@ article {
 /* Dark mode adjustments */
 [data-theme="dark"] .theme-doc-breadcrumbs {
   background-color: #1b1b1d;
-  border-bottom-color: var(--ifm-toc-border-color);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-bottom-color: var(--ifm-color-emphasis-200);
 }
 
 [data-theme="dark"] .theme-doc-breadcrumbs:hover {
-  background-color: #242526;
+  background-color: rgba(255, 255, 255, 0.05);
 }

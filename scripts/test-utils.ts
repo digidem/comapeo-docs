@@ -283,11 +283,18 @@ export function mockConsole() {
   const originalError = console.error;
   const originalWarn = console.warn;
 
-  console.log = vi.fn();
-  console.error = vi.fn();
-  console.warn = vi.fn();
+  const logMock = vi.fn();
+  const errorMock = vi.fn();
+  const warnMock = vi.fn();
+
+  console.log = logMock;
+  console.error = errorMock;
+  console.warn = warnMock;
 
   return {
+    log: logMock,
+    error: errorMock,
+    warn: warnMock,
     restore: () => {
       console.log = originalLog;
       console.error = originalError;
@@ -380,10 +387,18 @@ export function createMockFileSystem() {
 /**
  * Create mock error with proper properties
  */
-export function createMockError(message: string, code?: string) {
-  const error = new Error(message);
-  if (code) {
-    (error as any).code = code;
+export function createMockError(
+  message: string,
+  statusCode?: number,
+  errorCode?: string
+) {
+  const error: any = new Error(message);
+  if (statusCode !== undefined) {
+    error.code = statusCode;
+    error.status = statusCode;
+  }
+  if (errorCode) {
+    error.code = errorCode;
   }
   return error;
 }

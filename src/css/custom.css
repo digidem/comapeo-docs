@@ -45,9 +45,11 @@ img.emoji {
 /* Custom */
 .navbar__logo {
   margin-top: -100px;
+  pointer-events: none; /* Prevent overflow from blocking clicks */
 }
 .navbar__logo img {
   height: 135px;
+  pointer-events: auto; /* Re-enable clicks on the actual logo */
 }
 
 /* Sidebar title/branding area styling - CSS variables for theme support */
@@ -386,7 +388,7 @@ article {
   position: -webkit-sticky; /* Safari */
   position: sticky;
   top: var(--ifm-navbar-height, 60px);
-  z-index: 100;
+  z-index: 200; /* Higher than navbar to prevent logo overflow interference */
   background-color: #ffffff;
   cursor: pointer;
 

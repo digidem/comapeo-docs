@@ -750,4 +750,116 @@ describe("generateBlocks", () => {
       warnSpy.mockRestore();
     });
   });
+
+  describe("Critical error handling", () => {
+    it("should log and rethrow critical errors in generateBlocks", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      // Create a page that will cause an error during the grouping phase
+      // by having malformed properties
+      const malformedPage = {
+        id: "malformed-page",
+        properties: null, // This will cause errors when accessing properties
+      };
+
+      const progressCallback = vi.fn();
+
+      await expect(
+        generateBlocks([malformedPage as any], progressCallback)
+      ).rejects.toThrow();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Critical error in generateBlocks:"),
+        expect.anything()
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should handle non-Error objects in critical error catch", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      // Create page that will trigger string error by making progressCallback throw
+      const page = createMockNotionPage({ title: "Test Page" });
+      const pages = [page];
+      const progressCallback = vi.fn().mockImplementation(() => {
+        throw "String error thrown";
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await expect(generateBlocks(pages, progressCallback)).rejects.toThrow(
+        "String error thrown"
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe("ensureBlankLineAfterStandaloneBold", () => {
+    let ensureBlankLineAfterStandaloneBold: (content: string) => string;
+
+    beforeAll(async () => {
+      ({ ensureBlankLineAfterStandaloneBold } = await import(
+        "./generateBlocks"
+      ));
+    });
+
+    it("should add blank line after standalone bold text", () => {
+      const input = "**Bold Title**\nRegular text";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n\nRegular text");
+    });
+
+    it("should not add blank line if already present", () => {
+      const input = "**Bold Title**\n\nRegular text";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n\nRegular text");
+    });
+
+    it("should not add blank line if next line is empty", () => {
+      const input = "**Bold Title**\n";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("**Bold Title**\n");
+    });
+
+    it("should handle empty content", () => {
+      const result = ensureBlankLineAfterStandaloneBold("");
+      expect(result).toBe("");
+    });
+
+    it("should not add blank line for inline bold", () => {
+      const input = "This is **bold** inline\nNext line";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("This is **bold** inline\nNext line");
+    });
+
+    it("should handle multiple standalone bold sections", () => {
+      const input =
+        "**First Bold**\nText 1\n**Second Bold**\nText 2\n**Third Bold**";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe(
+        "**First Bold**\n\nText 1\n**Second Bold**\n\nText 2\n**Third Bold**"
+      );
+    });
+
+    it("should handle bold with spaces", () => {
+      const input = "  **Bold with leading spaces**  \nText";
+      const result = ensureBlankLineAfterStandaloneBold(input);
+      expect(result).toBe("  **Bold with leading spaces**  \n\nText");
+    });
+  });
 });

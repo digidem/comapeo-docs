@@ -42,7 +42,12 @@ img.emoji {
   background: transparent !important;
 }
 
-/* Custom */
+/* Custom navbar overflow containment */
+.navbar,
+nav.navbar {
+  overflow: hidden; /* Clip logo overflow within navbar bounds */
+}
+
 .navbar__logo {
   margin-top: -100px;
   pointer-events: none; /* Prevent overflow from blocking clicks */

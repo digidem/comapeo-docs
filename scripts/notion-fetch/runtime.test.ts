@@ -501,4 +501,216 @@ describe("notion-fetch runtime", () => {
       expect(spinner2.stop).toHaveBeenCalled();
     });
   });
+
+  describe("signal handler implementations", () => {
+    let originalNodeEnv: string | undefined;
+    let processExitSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      // Save original NODE_ENV
+      originalNodeEnv = process.env.NODE_ENV;
+
+      // Spy on process.exit to prevent actual exit and track calls
+      processExitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        return undefined as never;
+      });
+    });
+
+    afterEach(() => {
+      // Restore NODE_ENV
+      process.env.NODE_ENV = originalNodeEnv;
+
+      // Restore process.exit
+      processExitSpy.mockRestore();
+    });
+
+    it("should invoke gracefulShutdown with SIGTERM exit code", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      // Temporarily set NODE_ENV to production to enable handler logic
+      process.env.NODE_ENV = "production";
+
+      initializeGracefulShutdownHandlers();
+
+      // Find the SIGTERM handler
+      const sigtermCall = mockOn.mock.calls.find(
+        ([event]) => event === "SIGTERM"
+      );
+      expect(sigtermCall).toBeDefined();
+
+      const sigtermHandler = sigtermCall![1];
+
+      // Invoke the SIGTERM handler (returns void, kicks off async operation)
+      sigtermHandler();
+
+      // Wait for async gracefulShutdown to complete
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Verify it logged shutdown message with signal
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Received SIGTERM")
+      );
+
+      // Verify it called process.exit with correct exit code
+      expect(processExitSpy).toHaveBeenCalledWith(143);
+    });
+
+    it("should invoke gracefulShutdown with SIGINT exit code", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      process.env.NODE_ENV = "production";
+
+      initializeGracefulShutdownHandlers();
+
+      const sigintCall = mockOn.mock.calls.find(
+        ([event]) => event === "SIGINT"
+      );
+      expect(sigintCall).toBeDefined();
+
+      const sigintHandler = sigintCall![1];
+
+      // Invoke the SIGINT handler (returns void, kicks off async operation)
+      sigintHandler();
+
+      // Wait for async gracefulShutdown to complete
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Received SIGINT")
+      );
+      expect(processExitSpy).toHaveBeenCalledWith(130);
+    });
+
+    it("should handle uncaughtException and invoke gracefulShutdown", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      process.env.NODE_ENV = "production";
+
+      initializeGracefulShutdownHandlers();
+
+      const uncaughtExceptionCall = mockOn.mock.calls.find(
+        ([event]) => event === "uncaughtException"
+      );
+      expect(uncaughtExceptionCall).toBeDefined();
+
+      const uncaughtExceptionHandler = uncaughtExceptionCall![1];
+
+      const testError = new Error("Test uncaught exception");
+
+      // Invoke the uncaughtException handler (returns void promise)
+      const promise = uncaughtExceptionHandler(testError);
+
+      // Wait for async gracefulShutdown to complete
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Should log error
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Uncaught exception"),
+        testError
+      );
+
+      // Should call process.exit with exit code 1
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it("should handle unhandledRejection and invoke gracefulShutdown", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      process.env.NODE_ENV = "production";
+
+      initializeGracefulShutdownHandlers();
+
+      const unhandledRejectionCall = mockOn.mock.calls.find(
+        ([event]) => event === "unhandledRejection"
+      );
+      expect(unhandledRejectionCall).toBeDefined();
+
+      const unhandledRejectionHandler = unhandledRejectionCall![1];
+
+      const testReason = "Test unhandled rejection reason";
+      const testPromise = Promise.reject(testReason);
+
+      // Catch the rejection to prevent test error
+      testPromise.catch(() => {});
+
+      // Invoke the unhandledRejection handler
+      unhandledRejectionHandler(testReason, testPromise);
+
+      // Wait for async gracefulShutdown to complete
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Should log error with reason and promise
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Unhandled rejection"),
+        testPromise,
+        "reason:",
+        testReason
+      );
+
+      // Should call process.exit with exit code 1
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it("should not invoke gracefulShutdown in test mode for SIGTERM", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      // Keep NODE_ENV as "test" (default)
+      process.env.NODE_ENV = "test";
+
+      initializeGracefulShutdownHandlers();
+
+      const sigtermCall = mockOn.mock.calls.find(
+        ([event]) => event === "SIGTERM"
+      );
+      const sigtermHandler = sigtermCall![1];
+
+      sigtermHandler();
+
+      // Should NOT call process.exit in test mode
+      expect(processExitSpy).not.toHaveBeenCalled();
+    });
+
+    it("should not invoke gracefulShutdown in test mode for uncaughtException", async () => {
+      const { initializeGracefulShutdownHandlers, __resetRuntimeForTests } =
+        await import("./runtime");
+
+      __resetRuntimeForTests();
+
+      process.env.NODE_ENV = "test";
+
+      initializeGracefulShutdownHandlers();
+
+      const uncaughtExceptionCall = mockOn.mock.calls.find(
+        ([event]) => event === "uncaughtException"
+      );
+      const uncaughtExceptionHandler = uncaughtExceptionCall![1];
+
+      const testError = new Error("Test error");
+      uncaughtExceptionHandler(testError);
+
+      // Should still log the error
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Uncaught exception"),
+        testError
+      );
+
+      // But should NOT call process.exit in test mode
+      expect(processExitSpy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -21,7 +21,10 @@ vi.mock("@notionhq/client", () => ({
 const notionToMarkdownInstances: any[] = [];
 
 vi.mock("notion-to-md", () => ({
-  NotionToMarkdown: vi.fn().mockImplementation(function (this: any, config: any) {
+  NotionToMarkdown: vi.fn().mockImplementation(function (
+    this: any,
+    config: any
+  ) {
     const instance: any = {
       pageToMarkdown: vi.fn(),
       toMarkdownString: vi.fn(),
@@ -91,7 +94,10 @@ describe("notionClient", () => {
     mockClient = {
       dataSources: { query: vi.fn() },
       pages: { retrieve: vi.fn() },
-      blocks: { children: { list: vi.fn() }, append: vi.fn(), delete: vi.fn() },
+      blocks: {
+        children: { list: vi.fn(), append: vi.fn() },
+        delete: vi.fn(),
+      },
     };
 
     // Set up Client mock to return our mockClient
@@ -238,8 +244,6 @@ describe("notionClient", () => {
       const queryParams = { database_id: "test-db" };
       mockClient.dataSources.query.mockResolvedValue(mockData);
 
-      
-
       // Act
       const result = await enhancedNotion.databasesQuery(queryParams);
 
@@ -262,8 +266,6 @@ describe("notionClient", () => {
         .mockRejectedValueOnce(rateLimitError)
         .mockResolvedValueOnce(successData);
 
-      
-
       // Act
       const result = await enhancedNotion.databasesQuery(queryParams);
 
@@ -284,8 +286,6 @@ describe("notionClient", () => {
       mockClient.dataSources.query
         .mockRejectedValueOnce(serverError)
         .mockResolvedValueOnce(successData);
-
-      
 
       // Act
       const result = await enhancedNotion.databasesQuery(queryParams);
@@ -309,8 +309,6 @@ describe("notionClient", () => {
         .mockRejectedValueOnce(networkError)
         .mockResolvedValueOnce(successData);
 
-      
-
       // Act
       const result = await enhancedNotion.databasesQuery(queryParams);
 
@@ -325,8 +323,6 @@ describe("notionClient", () => {
       const queryParams = { database_id: "invalid" };
 
       mockClient.dataSources.query.mockRejectedValue(clientError);
-
-      
 
       // Act & Assert
       await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
@@ -383,6 +379,18 @@ describe("notionClient", () => {
       // Total attempts: 5 from request 1 + 1 from request 2 = 6
       expect(mockClient.dataSources.query).toHaveBeenCalledTimes(6);
     });
+
+    it("should throw error when database_id is missing", async () => {
+      // Arrange
+      const queryParams = {} as any; // No database_id
+
+      // Act & Assert
+      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
+        "databasesQuery: database_id parameter is required for backward compatibility"
+      );
+      // Should not call the underlying API
+      expect(mockClient.dataSources.query).not.toHaveBeenCalled();
+    });
   });
 
   describe("enhancedNotion.pagesRetrieve", () => {
@@ -391,8 +399,6 @@ describe("notionClient", () => {
       const pageData = { id: "page-123", properties: {} };
       const pageParams = { page_id: "page-123" };
       mockClient.pages.retrieve.mockResolvedValue(pageData);
-
-      
 
       // Act
       const result = await enhancedNotion.pagesRetrieve(pageParams);
@@ -414,8 +420,6 @@ describe("notionClient", () => {
         .mockRejectedValueOnce(rateLimitError)
         .mockResolvedValueOnce(pageData);
 
-      
-
       // Act
       const result = await enhancedNotion.pagesRetrieve(pageParams);
 
@@ -432,8 +436,6 @@ describe("notionClient", () => {
       const blocksData = { results: [], has_more: false };
       const blocksParams = { block_id: "block-123" };
       mockClient.blocks.children.list.mockResolvedValue(blocksData);
-
-      
 
       // Act
       const result = await enhancedNotion.blocksChildrenList(blocksParams);
@@ -456,14 +458,94 @@ describe("notionClient", () => {
         .mockRejectedValueOnce(timeoutError)
         .mockResolvedValueOnce(blocksData);
 
-      
-
       // Act
       const result = await enhancedNotion.blocksChildrenList(blocksParams);
 
       // Assert
       expect(result).toBe(blocksData);
       expect(mockClient.blocks.children.list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("enhancedNotion.blocksChildrenAppend", () => {
+    it("should append children blocks successfully", async () => {
+      // Arrange
+      const appendResult = { results: [], has_more: false };
+      const appendParams = {
+        block_id: "parent-block-123",
+        children: [{ type: "paragraph", paragraph: { rich_text: [] } }],
+      };
+      mockClient.blocks.children.append.mockResolvedValue(appendResult);
+
+      // Act
+      const result = await enhancedNotion.blocksChildrenAppend(appendParams);
+
+      // Assert
+      expect(result).toBe(appendResult);
+      expect(mockClient.blocks.children.append).toHaveBeenCalledTimes(1);
+      expect(mockClient.blocks.children.append).toHaveBeenCalledWith(
+        appendParams
+      );
+    });
+
+    it("should retry on server error (500)", async () => {
+      // Arrange
+      const serverError = createMockError("Server error", 500);
+      const appendResult = { results: [], has_more: false };
+      const appendParams = {
+        block_id: "parent-block-123",
+        children: [{ type: "paragraph", paragraph: { rich_text: [] } }],
+      };
+
+      mockClient.blocks.children.append
+        .mockRejectedValueOnce(serverError)
+        .mockResolvedValueOnce(appendResult);
+
+      // Act
+      const result = await enhancedNotion.blocksChildrenAppend(appendParams);
+
+      // Assert
+      expect(result).toBe(appendResult);
+      expect(mockClient.blocks.children.append).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("enhancedNotion.blocksDelete", () => {
+    it("should delete block successfully", async () => {
+      // Arrange
+      const deleteResult = { id: "block-123", archived: true };
+      const deleteParams = { block_id: "block-123" };
+      mockClient.blocks.delete.mockResolvedValue(deleteResult);
+
+      // Act
+      const result = await enhancedNotion.blocksDelete(deleteParams);
+
+      // Assert
+      expect(result).toBe(deleteResult);
+      expect(mockClient.blocks.delete).toHaveBeenCalledTimes(1);
+      expect(mockClient.blocks.delete).toHaveBeenCalledWith(deleteParams);
+    });
+
+    it("should retry on network error", async () => {
+      // Arrange
+      const networkError = createMockError(
+        "Network timeout",
+        undefined,
+        "ETIMEDOUT"
+      );
+      const deleteResult = { id: "block-123", archived: true };
+      const deleteParams = { block_id: "block-123" };
+
+      mockClient.blocks.delete
+        .mockRejectedValueOnce(networkError)
+        .mockResolvedValueOnce(deleteResult);
+
+      // Act
+      const result = await enhancedNotion.blocksDelete(deleteParams);
+
+      // Assert
+      expect(result).toStrictEqual(deleteResult);
+      expect(mockClient.blocks.delete).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -503,12 +585,13 @@ describe("notionClient", () => {
 
     it("should export enhancedNotion with all required methods", async () => {
       // Act
-      
 
       // Assert
       expect(typeof enhancedNotion.databasesQuery).toBe("function");
       expect(typeof enhancedNotion.pagesRetrieve).toBe("function");
       expect(typeof enhancedNotion.blocksChildrenList).toBe("function");
+      expect(typeof enhancedNotion.blocksChildrenAppend).toBe("function");
+      expect(typeof enhancedNotion.blocksDelete).toBe("function");
     });
   });
 });

@@ -18,18 +18,29 @@ if (ExecutionEnvironment.canUseDOM) {
         const target = event.target as HTMLElement;
 
         // Check if the click originated from within an anchor tag
-        const isAnchorClick = target.closest("a") !== null;
+        const clickedLink = target.closest("a");
 
-        // Only scroll to top if NOT clicking on a link
-        // This allows breadcrumb text and empty space to trigger scroll
-        if (!isAnchorClick) {
-          event.preventDefault();
-          window.scrollTo({
-            top: 0,
-            behavior: "smooth",
-          });
+        // Allow home link to navigate normally
+        // Home link is typically the first breadcrumb or has specific attributes
+        if (clickedLink) {
+          const href = clickedLink.getAttribute("href");
+          // Only allow navigation for home links (/, /docs, or base path)
+          if (
+            href === "/" ||
+            href === "/docs" ||
+            clickedLink.classList.contains("breadcrumbs__link--home")
+          ) {
+            // Let the home link work normally
+            return;
+          }
         }
-        // If it is an anchor click, let the default navigation happen
+
+        // For all other clicks (including other breadcrumb links), scroll to top
+        event.preventDefault();
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
       });
     }
   };

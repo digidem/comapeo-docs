@@ -499,13 +499,12 @@ article {
  *
  * Only applies to desktop viewports (≥997px) where the TOC is in the right sidebar.
  * Mobile TOC uses a different layout (dropdown/drawer) and doesn't need this spacing.
+ *
+ * Targets only the outer container to avoid padding stacking on nested elements.
  */
 
 /* Desktop TOC in right sidebar - only apply on desktop viewports */
 @media (min-width: 997px) {
-  .table-of-contents,
-  .theme-doc-toc-desktop,
-  aside.theme-doc-toc-desktop,
   .col--3.theme-doc-toc-desktop {
     padding-top: 2rem;
   }

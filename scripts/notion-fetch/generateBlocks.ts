@@ -1028,6 +1028,10 @@ const buildFrontmatter = (
   // Quote the title to handle special characters like & : etc.
   const quotedTitle = quoteYamlValue(pageTitle);
 
+  // Quote keywords and tags to prevent YAML parsing errors
+  const quotedKeywords = keywords.map((k) => quoteYamlValue(k));
+  const quotedTags = tags.map((t) => quoteYamlValue(t));
+
   let frontmatter = `---
 id: doc-${safeSlug}
 title: ${quotedTitle}
@@ -1036,8 +1040,8 @@ sidebar_position: ${sidebarPosition}
 pagination_label: ${quotedTitle}
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
 keywords:
-${keywords.map((k) => `  - ${k}`).join("\n")}
-tags: [${tags.join(", ")}]
+${quotedKeywords.map((k) => `  - ${k}`).join("\n")}
+tags: [${quotedTags.join(", ")}]
 slug: /${safeSlug}
 last_update:
   date: ${getPublishedDate(page)}

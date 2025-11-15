@@ -3,6 +3,29 @@ import { captureConsoleOutput } from "../test-utils";
 import { PreviewGenerator, type PreviewOptions } from "./previewGenerator";
 import type { PageWithStatus } from "./fetchAll";
 
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
+
 // Mock Notion client
 vi.mock("../notionClient", () => ({
   enhancedNotion: {
@@ -53,9 +76,7 @@ describe("PreviewGenerator", () => {
     });
 
     it("should skip markdown when not requested", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const result = await PreviewGenerator.generatePreview(pages, {
         generateMarkdown: false,
@@ -251,7 +272,12 @@ describe("PreviewGenerator", () => {
     });
 
     it("should detect placeholder titles as empty", async () => {
-      const placeholders = ["Nueva Página", "Nova Página", "New Page", "Untitled"];
+      const placeholders = [
+        "Nueva Página",
+        "Nova Página",
+        "New Page",
+        "Untitled",
+      ];
 
       for (const title of placeholders) {
         const pages: PageWithStatus[] = [
@@ -437,9 +463,7 @@ describe("PreviewGenerator", () => {
 
   describe("Export Preview", () => {
     it("should export markdown format", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const preview = await PreviewGenerator.generatePreview(pages);
 
@@ -454,9 +478,7 @@ describe("PreviewGenerator", () => {
     });
 
     it("should export json format", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const preview = await PreviewGenerator.generatePreview(pages);
 
@@ -470,9 +492,7 @@ describe("PreviewGenerator", () => {
     });
 
     it("should export html format", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const preview = await PreviewGenerator.generatePreview(pages);
 
@@ -486,9 +506,7 @@ describe("PreviewGenerator", () => {
     });
 
     it("should use custom output path when provided", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const preview = await PreviewGenerator.generatePreview(pages);
 
@@ -504,9 +522,7 @@ describe("PreviewGenerator", () => {
     });
 
     it("should throw error for unsupported format", async () => {
-      const pages: PageWithStatus[] = [
-        createMockPage({ title: "Test Page" }),
-      ];
+      const pages: PageWithStatus[] = [createMockPage({ title: "Test Page" })];
 
       const preview = await PreviewGenerator.generatePreview(pages);
 
@@ -589,7 +605,7 @@ describe("PreviewGenerator", () => {
 
     it("should handle special characters in page titles", async () => {
       const pages: PageWithStatus[] = [
-        createMockPage({ title: "Page with <html> & \"quotes\"" }),
+        createMockPage({ title: 'Page with <html> & "quotes"' }),
         createMockPage({ title: "Page with 中文 characters" }),
         createMockPage({ title: "Page with émojis 🎉🎊" }),
       ];
@@ -598,7 +614,7 @@ describe("PreviewGenerator", () => {
         generateMarkdown: true,
       });
 
-      expect(result.markdown).toContain("Page with <html> & \"quotes\"");
+      expect(result.markdown).toContain('Page with <html> & "quotes"');
       expect(result.markdown).toContain("Page with 中文 characters");
       expect(result.markdown).toContain("Page with émojis 🎉🎊");
     });
@@ -669,9 +685,7 @@ describe("PreviewGenerator", () => {
 });
 
 // Helper function to create mock PageWithStatus
-function createMockPage(
-  options: Partial<PageWithStatus> = {}
-): PageWithStatus {
+function createMockPage(options: Partial<PageWithStatus> = {}): PageWithStatus {
   return {
     id: options.id || "page-" + Math.random().toString(36).substr(2, 9),
     url:

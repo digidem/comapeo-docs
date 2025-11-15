@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 import {
   installTestNotionEnv,
   captureConsoleOutput,
@@ -6,6 +14,45 @@ import {
   createMockPageFamily,
   mockProcessedImageResult,
 } from "../../test-utils";
+import { fetchAllNotionData } from "../fetchAll";
+import { PreviewGenerator } from "../previewGenerator";
+import { StatusAnalyzer } from "../statusAnalyzer";
+import { ComparisonEngine } from "../comparisonEngine";
+import {
+  initializeGracefulShutdownHandlers,
+  trackSpinner,
+  gracefulShutdown,
+} from "../../notion-fetch/runtime";
+
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
+
+// Mock notionClient to avoid environment variable requirements
+vi.mock("../../notionClient", () => ({
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(),
+  },
+}));
 
 // Mock all CLI dependencies
 vi.mock("../fetchAll", () => ({
@@ -75,9 +122,7 @@ describe("CLI index", () => {
 
   describe("Basic CLI functionality", () => {
     it("should import and initialize CLI without errors", async () => {
-      const { fetchAllNotionData } = vi.mocked(await import("../fetchAll"));
-
-      fetchAllNotionData.mockResolvedValue({
+      (fetchAllNotionData as Mock).mockResolvedValue({
         results: [],
         summary: {
           totalPages: 0,
@@ -93,10 +138,6 @@ describe("CLI index", () => {
     });
 
     it("should handle environment setup correctly", async () => {
-      const { initializeGracefulShutdownHandlers } = vi.mocked(
-        await import("../../notion-fetch/runtime")
-      );
-
       await import("../index");
 
       // Verify graceful shutdown handlers were initialized
@@ -148,10 +189,6 @@ describe("CLI index", () => {
     });
 
     it("should handle spinner tracking correctly", async () => {
-      const { trackSpinner } = vi.mocked(
-        await import("../../notion-fetch/runtime")
-      );
-
       await import("../index");
 
       // Runtime should be initialized

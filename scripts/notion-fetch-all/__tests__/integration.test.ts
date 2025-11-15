@@ -1,10 +1,43 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
 import {
   installTestNotionEnv,
   createMockNotionPage,
   createMockPageFamily,
   captureConsoleOutput,
 } from "../../test-utils";
+import { runFetchPipeline } from "../../notion-fetch/runFetch";
+import { selectPagesWithPriority } from "../../notionPageUtils";
+
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
 
 // Mock dependencies
 vi.mock("../../notion-fetch/runFetch", () => ({
@@ -79,7 +112,7 @@ describe("Notion Fetch-All Integration Tests", () => {
 
       const allMockPages = [...parentFamily.allPages, ...additionalPages];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: allMockPages,
         metrics: {
           totalSaved: 2048,
@@ -167,7 +200,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -219,7 +252,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -249,7 +282,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ status: "Not started" }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -283,7 +316,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ status: "Remove" }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -311,7 +344,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ title: "Page 4", status: "In progress" }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -339,7 +372,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ title: "Getting Started", status: "Draft" }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -371,7 +404,7 @@ describe("Notion Fetch-All Integration Tests", () => {
       const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
       const { fetchAllNotionData } = await import("../fetchAll");
 
-      vi.mocked(runFetchPipeline).mockRejectedValue(
+      (runFetchPipeline as Mock).mockRejectedValue(
         new Error("Notion API Error")
       );
 
@@ -384,7 +417,7 @@ describe("Notion Fetch-All Integration Tests", () => {
       const { StatusAnalyzer } = await import("../statusAnalyzer");
       const { PreviewGenerator } = await import("../previewGenerator");
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: [],
       });
 
@@ -413,7 +446,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         },
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: malformedPages,
       });
 
@@ -437,7 +470,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         })
       );
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: largeMockPages,
       });
 
@@ -467,13 +500,13 @@ describe("Notion Fetch-All Integration Tests", () => {
       );
 
       // Update mock to properly simulate page selection
-      vi.mocked(selectPagesWithPriority).mockImplementation(
+      (selectPagesWithPriority as Mock).mockImplementation(
         (pages, maxPages) => {
           return pages.slice(0, maxPages);
         }
       );
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -499,7 +532,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         // Missing common sections like Getting Started, Installation, etc.
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 
@@ -521,7 +554,7 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ status: "In progress" }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
+      (runFetchPipeline as Mock).mockResolvedValue({
         data: mockPages,
       });
 

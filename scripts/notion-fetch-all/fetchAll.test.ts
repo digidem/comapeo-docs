@@ -15,6 +15,36 @@ import {
   type FetchAllOptions,
 } from "./fetchAll";
 
+// Mock sharp to avoid installation issues
+vi.mock("sharp", () => {
+  const createPipeline = () => {
+    const pipeline: any = {
+      resize: vi.fn(() => pipeline),
+      jpeg: vi.fn(() => pipeline),
+      png: vi.fn(() => pipeline),
+      webp: vi.fn(() => pipeline),
+      toBuffer: vi.fn(async () => Buffer.from("")),
+      toFile: vi.fn(async () => ({ size: 1000 })),
+      metadata: vi.fn(async () => ({
+        width: 100,
+        height: 100,
+        format: "jpeg",
+      })),
+    };
+    return pipeline;
+  };
+  return {
+    default: vi.fn(() => createPipeline()),
+  };
+});
+
+// Mock notionClient to avoid environment variable requirements
+vi.mock("../notionClient", () => ({
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(),
+  },
+}));
+
 // Mock dependencies
 vi.mock("../notion-fetch/runFetch", () => ({
   runFetchPipeline: vi.fn(),
@@ -139,9 +169,11 @@ describe("fetchAll - Core Functions", () => {
       );
 
       // Update mock to properly limit pages
-      vi.mocked(selectPagesWithPriority).mockImplementation((pages, maxPages) => {
-        return pages.slice(0, maxPages);
-      });
+      vi.mocked(selectPagesWithPriority).mockImplementation(
+        (pages, maxPages) => {
+          return pages.slice(0, maxPages);
+        }
+      );
 
       vi.mocked(runFetchPipeline).mockResolvedValue({
         data: mockPages,
@@ -404,9 +436,15 @@ describe("fetchAll - Core Functions", () => {
   describe("groupPagesByStatus", () => {
     it("should group pages by status correctly", () => {
       const pages: PageWithStatus[] = [
-        createMockPageWithStatus({ title: "Page 1", status: "Ready to publish" }),
+        createMockPageWithStatus({
+          title: "Page 1",
+          status: "Ready to publish",
+        }),
         createMockPageWithStatus({ title: "Page 2", status: "Draft" }),
-        createMockPageWithStatus({ title: "Page 3", status: "Ready to publish" }),
+        createMockPageWithStatus({
+          title: "Page 3",
+          status: "Ready to publish",
+        }),
         createMockPageWithStatus({ title: "Page 4", status: "In progress" }),
       ];
 
@@ -421,7 +459,10 @@ describe("fetchAll - Core Functions", () => {
     it("should handle pages with no status", () => {
       const pages: PageWithStatus[] = [
         createMockPageWithStatus({ title: "Page 1", status: "No Status" }),
-        createMockPageWithStatus({ title: "Page 2", status: "Ready to publish" }),
+        createMockPageWithStatus({
+          title: "Page 2",
+          status: "Ready to publish",
+        }),
       ];
 
       const grouped = groupPagesByStatus(pages);
@@ -440,7 +481,10 @@ describe("fetchAll - Core Functions", () => {
     it("should group pages by element type correctly", () => {
       const pages: PageWithStatus[] = [
         createMockPageWithStatus({ title: "Page 1", elementType: "Page" }),
-        createMockPageWithStatus({ title: "Section 1", elementType: "Section" }),
+        createMockPageWithStatus({
+          title: "Section 1",
+          elementType: "Section",
+        }),
         createMockPageWithStatus({ title: "Page 2", elementType: "Page" }),
         createMockPageWithStatus({ title: "Toggle 1", elementType: "Toggle" }),
       ];

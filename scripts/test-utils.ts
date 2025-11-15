@@ -11,9 +11,9 @@ import type { Mock } from "vitest";
 export function installTestNotionEnv(): () => void {
   const originalEnv = { ...process.env };
 
-  process.env.NOTION_API_KEY = "test-notion-api-key-123456789";
-  process.env.DATABASE_ID = "12345678-1234-1234-1234-123456789abc";
-  process.env.NOTION_DATABASE_ID = "12345678-1234-1234-1234-123456789abc";
+  process.env.NOTION_API_KEY = "test-api-key";
+  process.env.DATABASE_ID = "test-database-id";
+  process.env.NOTION_DATABASE_ID = "test-database-id";
   process.env.NODE_ENV = "test";
 
   return () => {
@@ -36,6 +36,11 @@ export function createMockNotionPage(
     subItems?: string[];
     lastEdited?: string;
     createdTime?: string;
+    hasTitle?: boolean;
+    hasWebsiteBlock?: boolean;
+    tags?: string[];
+    keywords?: string[];
+    icon?: string;
   } = {}
 ) {
   const {
@@ -49,7 +54,81 @@ export function createMockNotionPage(
     subItems = [],
     lastEdited = new Date().toISOString(),
     createdTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    hasTitle = true,
+    hasWebsiteBlock = true,
+    tags = [],
+    keywords = [],
+    icon,
   } = options;
+
+  const properties: any = {
+    "Content elements": {
+      title: [{ plain_text: title }],
+    },
+    "Publish Status": {
+      select: status ? { name: status } : null,
+    },
+    Status: {
+      select: status ? { name: status } : null,
+    },
+    "Element Type": {
+      select: elementType ? { name: elementType } : null,
+    },
+    Section: {
+      select: elementType ? { name: elementType } : null,
+    },
+    Order: {
+      number: order,
+    },
+    Language: language
+      ? {
+          select: { name: language },
+        }
+      : { select: null },
+    "Parent item": parentItem
+      ? {
+          relation: [{ id: parentItem }],
+        }
+      : { relation: [] },
+    "Sub-item": {
+      relation: subItems.map((id) => ({ id })),
+    },
+  };
+
+  // Add Title if hasTitle
+  if (hasTitle) {
+    properties.Title = {
+      title: [{ plain_text: title }],
+    };
+  }
+
+  // Add Website Block if hasWebsiteBlock
+  if (hasWebsiteBlock) {
+    properties["Website Block"] = {
+      url: "https://example.com",
+    };
+  }
+
+  // Add Tags if provided
+  if (tags.length > 0) {
+    properties.Tags = {
+      multi_select: tags.map((tag) => ({ name: tag })),
+    };
+  }
+
+  // Add Keywords if provided
+  if (keywords.length > 0) {
+    properties.Keywords = {
+      multi_select: keywords.map((keyword) => ({ name: keyword })),
+    };
+  }
+
+  // Add Icon if provided
+  if (icon) {
+    properties.Icon = {
+      rich_text: [{ plain_text: icon }],
+    };
+  }
 
   return {
     id,
@@ -57,56 +136,75 @@ export function createMockNotionPage(
     last_edited_time: lastEdited,
     created_time: createdTime,
     archived: false,
-    properties: {
-      "Content elements": {
-        title: [{ plain_text: title }],
-      },
-      Title: {
-        title: [{ plain_text: title }],
-      },
-      "Publish Status": {
-        select: status ? { name: status } : null,
-      },
-      Status: {
-        select: status ? { name: status } : null,
-      },
-      "Element Type": {
-        select: elementType ? { name: elementType } : null,
-      },
-      Section: {
-        select: elementType ? { name: elementType } : null,
-      },
-      Order: {
-        number: order,
-      },
-      Language: language
-        ? {
-            select: { name: language },
-          }
-        : { select: null },
-      "Parent item": parentItem
-        ? {
-            relation: [{ id: parentItem }],
-          }
-        : { relation: [] },
-      "Sub-item": {
-        relation: subItems.map((id) => ({ id })),
-      },
-    },
+    properties,
   };
 }
 
 /**
  * Create a family of related mock pages (parent with children)
+ * Supports two signatures:
+ * 1. createMockPageFamily(title, elementType) - creates pages in multiple languages
+ * 2. createMockPageFamily(options) - creates custom parent-child structure
  */
 export function createMockPageFamily(
-  options: {
-    parentTitle?: string;
-    parentStatus?: string;
-    childCount?: number;
-    childStatus?: string;
-  } = {}
-) {
+  titleOrOptions:
+    | string
+    | {
+        parentTitle?: string;
+        parentStatus?: string;
+        childCount?: number;
+        childStatus?: string;
+      },
+  elementType?: string
+): any {
+  // Handle (title, elementType) signature
+  if (typeof titleOrOptions === "string") {
+    const title = titleOrOptions;
+    const type = elementType || "Page";
+    const mainId = "main-" + Math.random().toString(36).substr(2, 9);
+
+    const mainPage = createMockNotionPage({
+      id: mainId,
+      title,
+      elementType: type,
+      status: "Ready to publish",
+    });
+
+    const enPage = createMockNotionPage({
+      id: "en-" + Math.random().toString(36).substr(2, 9),
+      title,
+      elementType: type,
+      language: "English",
+      status: "Ready to publish",
+    });
+
+    const ptPage = createMockNotionPage({
+      id: "pt-" + Math.random().toString(36).substr(2, 9),
+      title,
+      elementType: type,
+      language: "Portuguese",
+      status: "Ready to publish",
+    });
+
+    const esPage = createMockNotionPage({
+      id: "es-" + Math.random().toString(36).substr(2, 9),
+      title,
+      elementType: type,
+      language: "Spanish",
+      status: "Ready to publish",
+    });
+
+    return {
+      mainPage,
+      enPage,
+      ptPage,
+      esPage,
+      pages: [mainPage, enPage, ptPage, esPage],
+    };
+  }
+
+  // Handle options object signature
+  const options = titleOrOptions || {};
   const {
     parentTitle = "Parent Section",
     parentStatus = "Ready to publish",
@@ -222,6 +320,14 @@ export function createMockAxios() {
             headers: { "content-type": contentType },
             status: 200,
           };
+        }
+        throw new Error(`No mock for URL: ${requestUrl}`);
+      });
+    },
+    mockImageDownloadFailure: (url: string, error: Error) => {
+      mockGet.mockImplementation(async (requestUrl: string) => {
+        if (requestUrl === url) {
+          throw error;
         }
         throw new Error(`No mock for URL: ${requestUrl}`);
       });
@@ -369,5 +475,91 @@ export function createMockHeadingBlock(text: string, level: 1 | 2 | 3 = 1) {
         },
       ],
     },
+  };
+}
+
+/**
+ * Create mock page without title (for testing edge cases)
+ */
+export function createMockNotionPageWithoutTitle() {
+  const id = "page-" + Math.random().toString(36).substr(2, 9);
+  return {
+    id,
+    url: `https://notion.so/${id.replace(/-/g, "")}`,
+    last_edited_time: new Date().toISOString(),
+    created_time: new Date().toISOString(),
+    archived: false,
+    properties: {
+      "Element Type": {
+        select: { name: "Page" },
+      },
+      Order: {
+        number: 0,
+      },
+    },
+  };
+}
+
+/**
+ * Create mock page without website block
+ */
+export function createMockNotionPageWithoutWebsiteBlock() {
+  const id = "page-" + Math.random().toString(36).substr(2, 9);
+  return {
+    id,
+    url: `https://notion.so/${id.replace(/-/g, "")}`,
+    last_edited_time: new Date().toISOString(),
+    created_time: new Date().toISOString(),
+    archived: false,
+    properties: {
+      Title: {
+        title: [{ plain_text: "Test Page" }],
+      },
+      "Element Type": {
+        select: { name: "Page" },
+      },
+      Order: {
+        number: 0,
+      },
+    },
+  };
+}
+
+/**
+ * Create mock toggle page
+ */
+export function createMockTogglePage() {
+  return createMockNotionPage({
+    elementType: "Toggle",
+    title: "Toggle Item",
+  });
+}
+
+/**
+ * Create mock heading page
+ */
+export function createMockHeadingPage() {
+  return createMockNotionPage({
+    elementType: "Title",
+    title: "Heading Item",
+  });
+}
+
+/**
+ * Mock image buffer for testing
+ */
+export const mockImageBuffer = Buffer.from("mock-image-data");
+
+/**
+ * Create mock markdown with embedded images
+ */
+export function createMockMarkdownWithImages(imageUrls: string[]) {
+  const images = imageUrls
+    .map((url, i) => `![Test Image ${i + 1}](${url})`)
+    .join("\n\n");
+
+  return {
+    parent: `# Test Content\n\n${images}\n\nSome text after images.`,
+    toFile: () => `# Test Content\n\n${images}\n\nSome text after images.`,
   };
 }

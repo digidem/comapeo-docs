@@ -66,11 +66,13 @@ function levenshteinDistance(str1: string, str2: string): number {
  * - Remove special characters
  */
 function normalizeString(str: string): string {
-  return str
-    .toLowerCase()
+  const lowerCased = str.normalize("NFKD").toLowerCase();
+  const withoutMarks = lowerCased.replace(/\p{M}/gu, "");
+
+  return withoutMarks
     .trim()
     .replace(/\s+/g, " ")
-    .replace(/[^\w\s]/g, "");
+    .replace(/[^\p{L}\p{N}\s_]/gu, "");
 }
 
 /**
@@ -84,6 +86,10 @@ function normalizeString(str: string): string {
 function fuzzyMatchScore(search: string, target: string): number {
   const normalizedSearch = normalizeString(search);
   const normalizedTarget = normalizeString(target);
+
+  if (normalizedSearch.length === 0 || normalizedTarget.length === 0) {
+    return 0;
+  }
 
   // Exact match (after normalization)
   if (normalizedSearch === normalizedTarget) {

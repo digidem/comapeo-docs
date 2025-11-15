@@ -80,6 +80,17 @@ describe("notion-fetch-one fuzzy matching", () => {
         "understanding how exchange works"
       );
     });
+
+    it("should preserve non-Latin scripts", () => {
+      expect(normalizeString("中文標題")).toBe("中文標題");
+      expect(normalizeString("مرحبا بالعالم")).toBe("مرحبا بالعالم");
+    });
+
+    it("should strip diacritics but keep base characters", () => {
+      expect(normalizeString("Crème Brûlée à la carte")).toBe(
+        "creme brulee a la carte"
+      );
+    });
   });
 
   describe("fuzzyMatchScore", () => {
@@ -120,6 +131,16 @@ describe("notion-fetch-one fuzzy matching", () => {
     it("should give lower score to very different strings", () => {
       const score = fuzzyMatchScore("abc", "xyz");
       expect(score).toBeLessThan(50);
+    });
+
+    it("should handle non-Latin scripts", () => {
+      const score = fuzzyMatchScore("مرحبا", "مرحبا");
+      expect(score).toBe(1000);
+    });
+
+    it("should return zero score when normalization removes everything", () => {
+      const score = fuzzyMatchScore("!!!", "???");
+      expect(score).toBe(0);
     });
   });
 

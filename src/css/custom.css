@@ -390,18 +390,18 @@ article {
   background-color: #ffffff;
   cursor: pointer;
 
-  /* Keep original padding/margins for alignment with content */
-  padding-top: 0;
-  padding-bottom: 0.5rem;
+  /* Add padding for breathing room when sticky */
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
   margin-bottom: 1rem;
 
-  /* Simple border for separation - cleaner than shadows */
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  /* Professional border for clean separation */
+  border-bottom: 1px solid #e8e8e8;
 }
 
-/* Subtle hover effect - just a slight background tint */
+/* Refined hover effect - subtle but visible */
 .theme-doc-breadcrumbs:hover {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: #f8f9fa;
 }
 
 /* Ensure breadcrumbs nav doesn't have conflicting margins */
@@ -412,9 +412,9 @@ article {
 /* Dark mode adjustments */
 [data-theme="dark"] .theme-doc-breadcrumbs {
   background-color: #1b1b1d;
-  border-bottom-color: var(--ifm-color-emphasis-200);
+  border-bottom-color: #2e2e2e;
 }
 
 [data-theme="dark"] .theme-doc-breadcrumbs:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: #242526;
 }

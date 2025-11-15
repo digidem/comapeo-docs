@@ -6,6 +6,34 @@
 import ExecutionEnvironment from "@docusaurus/ExecutionEnvironment";
 
 if (ExecutionEnvironment.canUseDOM) {
+  let observer: MutationObserver | null = null;
+
+  // Get the base URL from the site config
+  const getBaseUrl = (): string => {
+    // Docusaurus provides the base URL in the HTML base tag
+    const baseTag = document.querySelector("base");
+    return baseTag?.getAttribute("href") || "/";
+  };
+
+  // Check if a link is a home link
+  const isHomeLink = (href: string | null): boolean => {
+    if (!href) return false;
+
+    const baseUrl = getBaseUrl();
+    const normalizedHref = href.endsWith("/") ? href : href + "/";
+    const normalizedBase = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+
+    // Check for home link patterns
+    return (
+      href === "/" ||
+      href === baseUrl ||
+      normalizedHref === normalizedBase ||
+      href === "/docs" ||
+      href === `${baseUrl}docs` ||
+      href.endsWith("breadcrumbs__link--home")
+    );
+  };
+
   // Add click handler to breadcrumbs after DOM is loaded
   const addBreadcrumbsClickHandler = () => {
     const breadcrumbs = document.querySelector(".theme-doc-breadcrumbs");
@@ -21,15 +49,13 @@ if (ExecutionEnvironment.canUseDOM) {
         const clickedLink = target.closest("a");
 
         // Allow home link to navigate normally
-        // Home link is typically the first breadcrumb or has specific attributes
         if (clickedLink) {
           const href = clickedLink.getAttribute("href");
-          // Only allow navigation for home links (/, /docs, or base path)
-          if (
-            href === "/" ||
-            href === "/docs" ||
-            clickedLink.classList.contains("breadcrumbs__link--home")
-          ) {
+          const hasHomeClass = clickedLink.classList.contains(
+            "breadcrumbs__link--home"
+          );
+
+          if (isHomeLink(href) || hasHomeClass) {
             // Let the home link work normally
             return;
           }
@@ -49,27 +75,38 @@ if (ExecutionEnvironment.canUseDOM) {
   addBreadcrumbsClickHandler();
 
   // Re-run when navigation occurs (for SPA navigation)
-  const observer = new MutationObserver(() => {
-    addBreadcrumbsClickHandler();
-  });
-
-  // Observe the main content area for changes
+  // Use a more targeted observation to improve performance
   const startObserving = () => {
-    const mainContent = document.querySelector("main");
-    if (mainContent) {
-      observer.observe(mainContent, {
+    const docRoot =
+      document.querySelector('[class*="docRoot"]') ||
+      document.querySelector("main");
+
+    if (docRoot) {
+      observer = new MutationObserver(() => {
+        addBreadcrumbsClickHandler();
+      });
+
+      observer.observe(docRoot, {
         childList: true,
-        subtree: true,
+        subtree: false, // Only observe direct children, not deep subtree
       });
     }
   };
 
-  // Start observing after a short delay to ensure DOM is ready
+  // Start observing after DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", startObserving);
   } else {
     startObserving();
   }
+
+  // Cleanup observer when page unloads
+  window.addEventListener("beforeunload", () => {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  });
 }
 
 export default function breadcrumbsScrollToTop(): void {

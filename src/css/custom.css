@@ -42,10 +42,11 @@ img.emoji {
   background: transparent !important;
 }
 
-/* Custom navbar overflow containment */
+/* Custom navbar overflow containment - only clip vertically */
 .navbar,
 nav.navbar {
-  overflow: hidden; /* Clip logo overflow within navbar bounds */
+  overflow-x: visible; /* Allow horizontal overflow for dropdowns */
+  overflow-y: hidden; /* Clip vertical overflow (logo) within navbar bounds */
 }
 
 .navbar__logo {

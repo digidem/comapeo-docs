@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { NOTION_PROPERTIES } from "../constants";
+import { installTestNotionEnv } from "../test-utils";
 
 vi.mock("sharp", () => {
   const createPipeline = () => {
@@ -27,8 +28,10 @@ let levenshteinDistance!: (typeof import("./index"))["levenshteinDistance"];
 let minMatchScore!: (typeof import("./index"))["MIN_MATCH_SCORE"];
 let normalizeString!: (typeof import("./index"))["normalizeString"];
 let scorePages!: (typeof import("./index"))["scorePages"];
+let restoreEnv: (() => void) | undefined;
 
 beforeAll(async () => {
+  restoreEnv = installTestNotionEnv();
   ({
     extractFullTitle,
     findBestMatch,
@@ -38,6 +41,10 @@ beforeAll(async () => {
     normalizeString,
     scorePages,
   } = await import("./index"));
+});
+
+afterAll(() => {
+  restoreEnv?.();
 });
 
 // Helper to create mock Notion pages

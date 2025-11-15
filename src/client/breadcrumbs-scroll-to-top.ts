@@ -15,21 +15,21 @@ if (ExecutionEnvironment.canUseDOM) {
       breadcrumbs.setAttribute("data-scroll-handler", "true");
 
       breadcrumbs.addEventListener("click", (event) => {
-        // Prevent default if clicking on the container itself (not on links)
         const target = event.target as HTMLElement;
 
-        // Only scroll to top if clicking on the breadcrumbs container itself
-        // not on the actual breadcrumb links
-        if (
-          target.classList.contains("theme-doc-breadcrumbs") ||
-          target.tagName === "NAV"
-        ) {
+        // Check if the click originated from within an anchor tag
+        const isAnchorClick = target.closest("a") !== null;
+
+        // Only scroll to top if NOT clicking on a link
+        // This allows breadcrumb text and empty space to trigger scroll
+        if (!isAnchorClick) {
           event.preventDefault();
           window.scrollTo({
             top: 0,
             behavior: "smooth",
           });
         }
+        // If it is an anchor click, let the default navigation happen
       });
     }
   };

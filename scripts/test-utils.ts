@@ -344,6 +344,40 @@ export function createMockAxios() {
 }
 
 /**
+ * Create mock file system for testing file operations
+ */
+export function createMockFileSystem() {
+  const files = new Map<string, string>();
+  const directories = new Set<string>();
+
+  return {
+    files,
+    directories,
+    writeFile: vi.fn((path: string, content: string) => {
+      files.set(path, content);
+      return Promise.resolve();
+    }),
+    readFile: vi.fn((path: string) => {
+      if (files.has(path)) {
+        return Promise.resolve(files.get(path));
+      }
+      throw new Error(`File not found: ${path}`);
+    }),
+    mkdir: vi.fn((path: string) => {
+      directories.add(path);
+      return Promise.resolve();
+    }),
+    exists: vi.fn((path: string) => {
+      return files.has(path) || directories.has(path);
+    }),
+    reset: () => {
+      files.clear();
+      directories.clear();
+    },
+  };
+}
+
+/**
  * Create mock error with proper properties
  */
 export function createMockError(message: string, code?: string) {

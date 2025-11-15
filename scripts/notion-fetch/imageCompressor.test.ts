@@ -131,7 +131,6 @@ const createPngBuffer = (size: number) =>
   Buffer.concat([MINIMAL_PNG_HEADER, Buffer.alloc(size, 0xaa)]);
 
 async function loadImageCompressor(envOverrides: Record<string, string>) {
-  vi.resetModules();
   const previousValues = new Map<string, string | undefined>();
   /* eslint-disable security/detect-object-injection */
   for (const [key, value] of Object.entries(envOverrides)) {
@@ -160,9 +159,7 @@ describe("notion-fetch imageCompressor", () => {
     spawnScenarios.length = 0;
   });
 
-  afterEach(() => {
-    vi.resetModules();
-  });
+  afterEach(() => {});
 
   it("exports the expected surface", async () => {
     const module = await import("./imageCompressor");

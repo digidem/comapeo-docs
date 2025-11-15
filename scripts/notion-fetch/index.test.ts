@@ -122,7 +122,6 @@ describe("notion-fetch integration", () => {
 
   afterEach(() => {
     consoleMocks.restore();
-    vi.resetModules();
   });
 
   describe("module initialization", () => {
@@ -188,7 +187,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 
@@ -320,7 +318,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 
@@ -367,7 +364,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 
@@ -409,7 +405,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 
@@ -468,7 +463,6 @@ describe("notion-fetch integration", () => {
       process.on = mockOn;
 
       try {
-        vi.resetModules();
         const runtime = await import("./runtime");
         runtime.__resetRuntimeForTests?.();
         // Act
@@ -511,7 +505,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 
@@ -573,7 +566,6 @@ describe("notion-fetch integration", () => {
       };
 
       // Reset modules and set environment variables to ensure fresh import
-      vi.resetModules();
       process.env.NOTION_API_KEY = "test-api-key";
       process.env.DATABASE_ID = "test-database-id";
 

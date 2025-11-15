@@ -122,7 +122,6 @@ describe("notionClient", () => {
   afterEach(() => {
     consoleMocks.restore();
     // Clear module cache to ensure fresh imports
-    vi.resetModules();
   });
 
   describe("module initialization", () => {

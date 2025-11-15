@@ -364,3 +364,42 @@ details {
   margin: 0;
   pointer-events: none;
 }
+
+/*
+ * Sticky Breadcrumbs with Scroll-to-Top
+ * Issue #61: Make breadcrumbs stay fixed at top when scrolling
+ */
+
+/* Make breadcrumbs sticky at the top of the page */
+.theme-doc-breadcrumbs {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--ifm-background-color);
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+/* Add hover effect to indicate clickability */
+.theme-doc-breadcrumbs:hover {
+  background-color: var(--ifm-background-surface-color);
+}
+
+/* Ensure breadcrumbs appear above other content */
+.theme-doc-breadcrumbs nav {
+  margin: 0;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .theme-doc-breadcrumbs {
+  background-color: var(--ifm-background-color);
+  border-bottom-color: var(--ifm-toc-border-color);
+}
+
+[data-theme="dark"] .theme-doc-breadcrumbs:hover {
+  background-color: var(--ifm-background-surface-color);
+}

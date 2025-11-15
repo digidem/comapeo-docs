@@ -496,17 +496,17 @@ article {
  * Adds top padding to the right-sidebar table of contents to create
  * visual vertical hierarchy with the breadcrumbs. The TOC should rest
  * visually lower than the breadcrumb path.
+ *
+ * Only applies to desktop viewports (≥997px) where the TOC is in the right sidebar.
+ * Mobile TOC uses a different layout (dropdown/drawer) and doesn't need this spacing.
  */
 
-/* Desktop TOC in right sidebar */
-.table-of-contents,
-.theme-doc-toc-desktop,
-aside.theme-doc-toc-desktop {
-  padding-top: 2rem;
-}
-
-/* Ensure consistent spacing in the TOC container */
-.col--3.theme-doc-toc-mobile,
-.col--3.theme-doc-toc-desktop {
-  padding-top: 2rem;
+/* Desktop TOC in right sidebar - only apply on desktop viewports */
+@media (min-width: 997px) {
+  .table-of-contents,
+  .theme-doc-toc-desktop,
+  aside.theme-doc-toc-desktop,
+  .col--3.theme-doc-toc-desktop {
+    padding-top: 2rem;
+  }
 }

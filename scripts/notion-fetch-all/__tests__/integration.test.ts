@@ -15,6 +15,10 @@ import {
 } from "../../test-utils";
 import { runFetchPipeline } from "../../notion-fetch/runFetch";
 import { selectPagesWithPriority } from "../../notionPageUtils";
+import { fetchAllNotionData } from "../fetchAll";
+import { StatusAnalyzer } from "../statusAnalyzer";
+import { PreviewGenerator } from "../previewGenerator";
+import { ComparisonEngine } from "../comparisonEngine";
 
 // Mock sharp to avoid installation issues
 vi.mock("sharp", () => {
@@ -75,12 +79,6 @@ describe("Notion Fetch-All Integration Tests", () => {
 
   describe("Full Pipeline: Fetch → Analyze → Preview → Compare", () => {
     it("should complete full pipeline with realistic data", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-      const { PreviewGenerator } = await import("../previewGenerator");
-      const { ComparisonEngine } = await import("../comparisonEngine");
-
       // Create realistic test data
       const parentFamily = createMockPageFamily({
         parentTitle: "User Guide",
@@ -172,11 +170,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle multi-language content correctly", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-      const { PreviewGenerator } = await import("../previewGenerator");
-
       const mockPages = [
         createMockNotionPage({
           title: "Getting Started",
@@ -218,10 +211,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle hierarchical content structure", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { PreviewGenerator } = await import("../previewGenerator");
-
       // Create hierarchical structure: Section → Subsection → Pages
       const sectionId = "section-123";
       const subsectionId = "subsection-456";
@@ -268,10 +257,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle mixed status content appropriately", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-
       const mockPages = [
         createMockNotionPage({ status: "Ready to publish" }),
         createMockNotionPage({ status: "Ready to publish" }),
@@ -305,10 +290,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should filter pages correctly throughout pipeline", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-
       const mockPages = [
         createMockNotionPage({ status: "Ready to publish" }),
         createMockNotionPage({ status: "Ready to publish" }),
@@ -334,9 +315,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle status filter correctly", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-
       const mockPages = [
         createMockNotionPage({ title: "Page 1", status: "Ready to publish" }),
         createMockNotionPage({ title: "Page 2", status: "Ready to publish" }),
@@ -359,11 +337,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should generate complete comparison report", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { PreviewGenerator } = await import("../previewGenerator");
-      const { ComparisonEngine } = await import("../comparisonEngine");
-
       const mockPages = [
         createMockNotionPage({
           title: "New Feature",
@@ -401,9 +374,6 @@ describe("Notion Fetch-All Integration Tests", () => {
 
   describe("Error Handling and Edge Cases", () => {
     it("should handle API errors gracefully", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-
       (runFetchPipeline as Mock).mockRejectedValue(
         new Error("Notion API Error")
       );
@@ -412,11 +382,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle empty database", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-      const { PreviewGenerator } = await import("../previewGenerator");
-
       (runFetchPipeline as Mock).mockResolvedValue({
         data: [],
       });
@@ -433,9 +398,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle malformed page data", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-
       const malformedPages = [
         {
           id: "test-1",
@@ -458,11 +420,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle large dataset efficiently", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-      const { PreviewGenerator } = await import("../previewGenerator");
-
       const largeMockPages = Array.from({ length: 500 }, (_, i) =>
         createMockNotionPage({
           title: `Page ${i}`,
@@ -491,10 +448,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should handle maxPages limit correctly", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { selectPagesWithPriority } = await import("../../notionPageUtils");
-
       const mockPages = Array.from({ length: 50 }, (_, i) =>
         createMockNotionPage({ title: `Page ${i}` })
       );
@@ -523,10 +476,6 @@ describe("Notion Fetch-All Integration Tests", () => {
 
   describe("Content Quality and Gaps", () => {
     it("should identify content gaps correctly", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-
       const mockPages = [
         createMockNotionPage({ title: "Random Page" }),
         // Missing common sections like Getting Started, Installation, etc.
@@ -544,10 +493,6 @@ describe("Notion Fetch-All Integration Tests", () => {
     });
 
     it("should generate readiness report with recommendations", async () => {
-      const { runFetchPipeline } = await import("../../notion-fetch/runFetch");
-      const { fetchAllNotionData } = await import("../fetchAll");
-      const { StatusAnalyzer } = await import("../statusAnalyzer");
-
       const mockPages = [
         createMockNotionPage({ status: "Ready to publish" }),
         createMockNotionPage({ status: "Draft" }),

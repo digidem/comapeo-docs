@@ -609,7 +609,7 @@ describe("generateBlocks", () => {
     let OriginalDate: typeof Date;
 
     beforeAll(async () => {
-      ({ getPublishedDate } = await import("./generateBlocks"));
+      ({ getPublishedDate } = await import("./frontmatterBuilder"));
     });
 
     beforeEach(() => {

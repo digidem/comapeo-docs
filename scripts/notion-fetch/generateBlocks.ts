@@ -25,6 +25,28 @@ import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { EmojiProcessor } from "./emojiProcessor";
+import {
+  quoteYamlValue,
+  getPublishedDate,
+  buildFrontmatter,
+} from "./frontmatterBuilder";
+import {
+  sanitizeMarkdownImages,
+  ensureBlankLineAfterStandaloneBold,
+  processCalloutsInMarkdown,
+} from "./markdownTransform";
+import {
+  validateAndSanitizeImageUrl,
+  createFallbackImageMarkdown,
+} from "./imageValidation";
+import {
+  getElementTypeProperty,
+  resolvePageTitle,
+  resolvePageLocale,
+  groupPagesByLang,
+  createStandalonePageGroup,
+} from "./pageGrouping";
+import { LRUCache, validateCacheSize, buildCacheKey } from "./cacheStrategies";
 
 // Enhanced image handling utilities for robust processing
 interface ImageProcessingResult {
@@ -41,59 +63,9 @@ interface ImageUrlValidationResult {
   error?: string;
 }
 
-/**
- * Validates and sanitizes image URLs to prevent broken references
- */
-function validateAndSanitizeImageUrl(url: string): ImageUrlValidationResult {
-  if (!url || typeof url !== "string") {
-    return { isValid: false, error: "URL is empty or not a string" };
-  }
+// validateAndSanitizeImageUrl moved to imageValidation.ts
 
-  const trimmedUrl = url.trim();
-  if (trimmedUrl === "") {
-    return { isValid: false, error: "URL is empty after trimming" };
-  }
-
-  // Check for obvious invalid patterns
-  if (trimmedUrl === "undefined" || trimmedUrl === "null") {
-    return { isValid: false, error: "URL contains literal undefined/null" };
-  }
-
-  // Validate URL format
-  try {
-    const urlObj = new URL(trimmedUrl);
-    // Ensure it's a reasonable protocol
-    if (!["http:", "https:"].includes(urlObj.protocol)) {
-      return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
-    }
-    return { isValid: true, sanitizedUrl: trimmedUrl };
-  } catch (err: unknown) {
-    const message =
-      err && typeof err === "object" && "message" in err
-        ? String((err as any).message)
-        : "Unknown URL parse error";
-    return { isValid: false, error: `Invalid URL format: ${message}` };
-  }
-}
-
-/**
- * Creates a fallback image reference when download fails
- */
-function createFallbackImageMarkdown(
-  originalMarkdown: string,
-  imageUrl: string,
-  index: number
-): string {
-  // Extract alt text from original markdown
-  const altMatch = originalMarkdown.match(/!\[(.*?)\]/);
-  const altText = altMatch?.[1] || `Image ${index + 1}`;
-
-  // Create a placeholder that documents the original URL for recovery
-  const fallbackComment = `<!-- Failed to download image: ${imageUrl} -->`;
-  const placeholderText = `**[Image ${index + 1}: ${altText}]** *(Image failed to download)*`;
-
-  return `${fallbackComment}\n${placeholderText}`;
-}
+// createFallbackImageMarkdown moved to imageValidation.ts
 
 /**
  * Enhanced image processing with comprehensive fallback handling
@@ -250,69 +222,8 @@ function logImageFailure(logEntry: any): void {
   });
 }
 
-/**
- * Post-process markdown to ensure no broken image references remain
- */
-function sanitizeMarkdownImages(content: string): string {
-  if (!content || content.indexOf("![") === -1) return content;
-  // Cap processing size to avoid ReDoS on pathological inputs
-  const MAX_LEN = 2_000_000;
-  const text = content.length > MAX_LEN ? content.slice(0, MAX_LEN) : content;
-  let sanitized = text;
-
-  // Pattern 1: Completely empty URLs
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*\)/g,
-    "**[Image: $1]** *(Image URL was empty)*"
-  );
-
-  // Pattern 2: Invalid literal placeholders
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*(?:undefined|null)\s*\)/g,
-    "**[Image: $1]** *(Image URL was invalid)*"
-  );
-
-  // Pattern 3: Unencoded whitespace inside URL (safe regex without nested greedy scans)
-  // Matches any whitespace in the URL excluding escaped closing parens and %20
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*([^()\s][^()\r\n]*?(?:\s+)[^()\r\n]*?)\s*\)/g,
-    "**[Image: $1]** *(Image URL contained whitespace)*"
-  );
-
-  // If we truncated, append a notice to avoid corrupting content silently
-  if (text.length !== content.length) {
-    return sanitized + "\n\n<!-- Content truncated for sanitation safety -->";
-  }
-  return sanitized;
-}
-
-/**
- * Ensure standalone bold lines (`**Heading**`) are treated as their own paragraphs
- * by inserting a blank line when missing. This preserves Notion formatting where
- * bold text represents a section title followed by descriptive copy.
- */
-export function ensureBlankLineAfterStandaloneBold(content: string): string {
-  if (!content) return content;
-
-  const lines = content.split("\n");
-  const result: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    result.push(line);
-
-    const nextLine = lines[i + 1];
-    const isStandaloneBold = /^\s*\*\*[^*].*\*\*\s*$/.test(line.trim());
-    const nextLineHasContent =
-      nextLine !== undefined && nextLine.trim().length > 0;
-
-    if (isStandaloneBold && nextLineHasContent) {
-      result.push("");
-    }
-  }
-
-  return result.join("\n");
-}
+// sanitizeMarkdownImages moved to markdownTransform.ts
+// ensureBlankLineAfterStandaloneBold moved to markdownTransform.ts
 
 /**
  * Image cache system to prevent re-downloading and provide recovery options

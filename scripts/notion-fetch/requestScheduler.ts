@@ -72,7 +72,7 @@ interface QueueEntry<T> {
   label?: string;
 }
 
-class RequestScheduler {
+export class RequestScheduler {
   private readonly maxConcurrent: number;
   private readonly maxPerInterval: number;
   private readonly intervalMs: number;

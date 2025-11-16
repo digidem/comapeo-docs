@@ -158,18 +158,71 @@ Break down the 2,054-line file into focused modules:
 - Multi-locale support
 - File I/O error handling
 
-#### 8. `generateBlocks.ts` (930 lines → target ~500-600 lines)
-**Current Status:**
-- 55% size reduction from original 2,054 lines
-- Imports 7 new modules
-- Main orchestration logic remains
-- Phase 4 will further reduce to 500-600 lines
+#### 8. ✅ `cacheLoaders.ts` (182 lines) - COMPLETED
+**Responsibilities:**
+- Generic cache loading with LRU integration
+- In-flight request deduplication
+- Cache hit/miss tracking
+- Progress logging
 
-**Final Responsibilities (after Phase 4):**
+**Test Coverage:** 48 tests (2.64:1 ratio)
+- Cache loading scenarios (hit/miss, deduplication, errors)
+- Prefetch cache integration
+- Main map cache coordination
+- Normalization correctness
+
+#### 9. ✅ `imageReplacer.ts` (286 lines) - COMPLETED
+**Responsibilities:**
+- Image regex matching with safety limits
+- Concurrent image processing
+- Deterministic markdown replacement
+- Comprehensive fallback handling
+
+**Test Coverage:** 32 tests (1.12:1 ratio)
+- Image extraction and matching
+- URL validation integration
+- Concurrent processing
+- Replacement ordering
+
+#### 10. ✅ `sectionProcessors.ts` (130 lines) - COMPLETED
+**Responsibilities:**
+- Toggle section creation
+- Heading/Title section handling
+- Multi-language support
+- Docusaurus category generation
+
+**Test Coverage:** 20 tests (1.54:1 ratio)
+- Toggle section folder creation
+- Category JSON generation
+- Heading metadata tracking
+- Multi-locale support
+
+#### 11. ✅ `contentWriter.ts` (137 lines) - COMPLETED
+**Responsibilities:**
+- Duplicate title removal
+- Markdown file writing
+- Placeholder generation
+- Progress reporting
+
+**Test Coverage:** 28 tests (2.04:1 ratio)
+- Title deduplication logic
+- File writing operations
+- Placeholder content generation
+- Custom property logging
+
+#### 12. ✅ `generateBlocks.ts` (534 lines) - COMPLETED
+**Final Status:**
+- 74% size reduction from original 2,054 lines
+- Imports 11 extracted modules
+- Thin orchestration layer achieved
+- Phase 4 complete
+
+**Final Responsibilities:**
 - Main orchestration logic
-- Section/toggle/page/heading handling
+- Page processing workflow coordination
 - Progress tracking
 - Spinner management
+- Cache initialization
 
 ### emojiProcessor.ts → Smaller Modules
 

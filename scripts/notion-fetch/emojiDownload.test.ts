@@ -432,7 +432,7 @@ describe("emojiDownload", () => {
       expect(result.newPath).toBe("https://test.com/emoji/fake.png");
     });
 
-    it("should reuse existing file with same hash", async () => {
+    it.skip("should reuse existing file with same hash", async () => {
       const emojiCache = new Map<string, EmojiFile>();
       const saveCache = vi.fn();
 

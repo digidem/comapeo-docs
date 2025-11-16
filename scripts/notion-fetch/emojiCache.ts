@@ -28,15 +28,15 @@ export interface EmojiFile {
  */
 export function sanitizeFilename(filename: string): string {
   // Remove any path separators and parent directory references
-  const sanitized = filename
-    .replace(/\.\./g, "")
-    .replace(/[/\\]/g, "")
-    .replace(/^\.+/, "");
+  let sanitized = filename.replace(/\.\./g, "").replace(/[/\\]/g, "");
 
-  // Ensure the filename doesn't start with a dot (hidden file)
-  if (sanitized.startsWith(".") && sanitized !== ".emoji-cache.json") {
-    return sanitized.substring(1);
+  // Special case: preserve .emoji-cache.json
+  if (sanitized === ".emoji-cache.json") {
+    return sanitized;
   }
+
+  // Remove leading dots (hidden files)
+  sanitized = sanitized.replace(/^\.+/, "");
 
   return sanitized;
 }

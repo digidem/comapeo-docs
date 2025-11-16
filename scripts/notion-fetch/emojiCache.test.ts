@@ -41,11 +41,11 @@ describe("emojiCache", () => {
       expect(sanitizeFilename("../../test.png")).toBe("test.png");
     });
 
-    it("should remove all leading dots", () => {
+    it("should remove leading dots except for special files", () => {
       expect(sanitizeFilename(".hidden")).toBe("hidden");
       expect(sanitizeFilename("..hidden")).toBe("hidden");
-      // Note: The special case for .emoji-cache.json doesn't work due to regex order
-      expect(sanitizeFilename(".emoji-cache.json")).toBe("emoji-cache.json");
+      // Special case: preserve .emoji-cache.json
+      expect(sanitizeFilename(".emoji-cache.json")).toBe(".emoji-cache.json");
     });
 
     it("should handle valid filenames unchanged", () => {

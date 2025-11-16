@@ -92,9 +92,9 @@ export async function loadWithCache<T>(
   if (config.prefetchCache.has(cacheKey)) {
     config.cacheHits.value += 1;
     const cached = config.prefetchCache.get(cacheKey);
-    const normalized = config.normalizeResult(cached);
-    config.mainMap.set(pageId, { key: cacheKey, data: normalized });
-    return { data: normalized, source: "cache" };
+    // Data is already normalized when stored in prefetchCache (line 108)
+    config.mainMap.set(pageId, { key: cacheKey, data: cached });
+    return { data: cached, source: "cache" };
   }
 
   // Check in-flight requests or start new fetch

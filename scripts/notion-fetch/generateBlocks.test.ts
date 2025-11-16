@@ -369,7 +369,8 @@ describe("generateBlocks", () => {
 
       // Mock retry scenario - fail twice then succeed
       let retryAttempts = 0;
-      mockAxios.axios.get.mockImplementation((url) => {
+      const originalImplementation = mockAxios.axios.get.getMockImplementation();
+      mockAxios.axios.get.mockImplementation((url, config) => {
         if (url === imageUrls[2]) {
           retryAttempts++;
           if (retryAttempts <= 2) {
@@ -380,8 +381,8 @@ describe("generateBlocks", () => {
             headers: { "content-type": "image/jpeg" },
           });
         }
-        // Handle other URLs normally
-        return mockAxios.axios.get.getMockImplementation()(url);
+        // Handle other URLs normally using the original implementation
+        return originalImplementation ? originalImplementation(url, config) : Promise.reject(new Error(`No mock for URL: ${url}`));
       });
 
       n2m.pageToMarkdown.mockResolvedValue([]);
@@ -608,7 +609,7 @@ describe("generateBlocks", () => {
     let OriginalDate: typeof Date;
 
     beforeAll(async () => {
-      ({ getPublishedDate } = await import("./generateBlocks"));
+      ({ getPublishedDate } = await import("./frontmatterBuilder"));
     });
 
     beforeEach(() => {
@@ -814,7 +815,7 @@ describe("generateBlocks", () => {
 
     beforeAll(async () => {
       ({ ensureBlankLineAfterStandaloneBold } = await import(
-        "./generateBlocks"
+        "./markdownTransform"
       ));
     });
 

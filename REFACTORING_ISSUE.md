@@ -1,10 +1,40 @@
 # Refactor generateBlocks.ts and emojiProcessor.ts for better testability
 
+## Progress Update
+
+### ✅ Phase 1 & 2 Completed (PR #TBD)
+
+**Branch**: `claude/refactor-issue-md-01JpWHDGU4qfX51sHWjMATCe`
+
+Successfully extracted 5 focused modules from generateBlocks.ts with comprehensive test coverage:
+
+| Module | Lines | Tests | Test-to-Code Ratio | Status |
+|--------|-------|-------|-------------------|--------|
+| frontmatterBuilder.ts | 149 | 27 | 1.81:1 | ✅ |
+| markdownTransform.ts | 272 | 31 | 1.14:1 | ✅ |
+| imageValidation.ts | 72 | 24 | 3.33:1 | ✅ |
+| pageGrouping.ts | 167 | 63 | 3.77:1 | ✅ |
+| cacheStrategies.ts | 101 | 48 | 4.75:1 | ✅ |
+| **Total** | **761** | **193** | **2.54:1** | ✅ |
+
+**Impact:**
+- generateBlocks.ts reduced from 2,054 → ~1,850 lines (14% reduction)
+- All 888 existing tests passing + 193 new tests = 1,081 total tests
+- Zero behavioral changes (functionality preserved)
+- All modules ESLint compliant and Prettier formatted
+
+**Remaining Work:**
+- Phase 3: Extract imageProcessing.ts (~300 lines) and translationManager.ts (~100 lines)
+- Phase 4: Final cleanup of generateBlocks.ts
+- emojiProcessor.ts refactoring (separate effort)
+
+---
+
 ## Problem
 
 Two large files in the Notion fetch scripts have low test coverage due to their size and complexity:
 
-- **generateBlocks.ts**: 2,054 lines, 68.37% coverage
+- **generateBlocks.ts**: ~~2,054 lines~~ → 1,850 lines (Phase 1&2 ✅), 68.37% coverage → improving
 - **emojiProcessor.ts**: 1,060 lines, 1.05% coverage
 
 These files are difficult to test comprehensively because they contain multiple responsibilities mixed together.
@@ -26,101 +56,97 @@ These files are difficult to test comprehensively because they contain multiple 
 
 Break down the 2,054-line file into focused modules:
 
-#### 1. `imageCache.ts` (~150 lines)
+#### ✅ 1. `frontmatterBuilder.ts` (149 lines) - COMPLETED
 **Responsibilities:**
-- Image cache management (ImageCache class)
-- Cache validation and cleanup
-- Cache statistics
+- `buildFrontmatter()` - Complete Docusaurus frontmatter generation
+- `quoteYamlValue()` - YAML special character escaping
+- `getPublishedDate()` - Multi-level date fallback logic
 
-**Benefits:**
-- Easy to test cache hit/miss scenarios
-- Easy to test LRU eviction logic
-- Easy to test cleanup operations
+**Test Coverage:** 27 tests (1.81:1 ratio)
+- YAML escaping edge cases
+- Date parsing with fallbacks (Published date → last_edited_time → current date)
+- Special character handling
+- Custom props quoting
 
-#### 2. `imageProcessing.ts` (~300 lines)
+#### ✅ 2. `markdownTransform.ts` (272 lines) - COMPLETED
 **Responsibilities:**
-- `validateAndSanitizeImageUrl()`
-- `processImageWithFallbacks()`
-- `downloadAndProcessImageWithCache()`
-- `createFallbackImageMarkdown()`
+- `sanitizeMarkdownImages()` - ReDoS-protected image URL cleanup (2MB limit)
+- `ensureBlankLineAfterStandaloneBold()` - Preserve Notion formatting
+- `processCalloutsInMarkdown()` - Convert to Docusaurus admonitions
+- `normalizeForMatch()` - Unicode normalization
+- `findMatchingBlockquote()` - Blockquote matching
+- `extractTextFromCalloutBlock()` - Text extraction from callouts
+
+**Test Coverage:** 31 tests (1.14:1 ratio)
+- Image sanitization patterns (empty URLs, whitespace, invalid placeholders)
+- Callout conversion logic
+- Fence/admonition guard logic
+
+#### ✅ 3. `imageValidation.ts` (72 lines) - COMPLETED
+**Responsibilities:**
+- `validateAndSanitizeImageUrl()` - HTTPS-only validation
+- `createFallbackImageMarkdown()` - Fallback generation for failed downloads
+
+**Test Coverage:** 24 tests (3.33:1 ratio)
+- Protocol whitelist (http/https only)
+- Malformed URL handling
+- Type safety (non-string inputs)
+- Empty/null/undefined handling
+
+#### ✅ 4. `pageGrouping.ts` (167 lines) - COMPLETED
+**Responsibilities:**
+- `groupPagesByLang()` - Multi-language page organization
+- `createStandalonePageGroup()` - Single-language page handling
+- `resolvePageTitle()` - Property resolution with fallbacks
+- `resolvePageLocale()` - Locale mapping (Spanish/Portuguese/English)
+- `getElementTypeProperty()` - Element type extraction
+
+**Test Coverage:** 63 tests (3.77:1 ratio)
+- Title resolution fallback chain
+- Locale detection from properties
+- Sub-item relation grouping
+- Edge cases (missing properties, invalid data)
+
+#### ✅ 5. `cacheStrategies.ts` (101 lines) - COMPLETED
+**Responsibilities:**
+- `LRUCache<T>` class - Generic LRU cache with eviction
+- `validateCacheSize()` - Environment variable validation (min: 1, max: 10000)
+- `buildCacheKey()` - Cache key generation
+
+**Test Coverage:** 48 tests (4.75:1 ratio)
+- LRU eviction algorithm
+- Cache size boundaries
+- Environment variable parsing
+- Generic type support
+
+#### 6. `imageProcessing.ts` (~300 lines) - PHASE 3
+**Responsibilities:**
+- `processImageWithFallbacks()` - Download with retry logic
+- `downloadAndProcessImageWithCache()` - Cache integration
 - Image failure logging
 
-**Benefits:**
-- Isolated image URL validation testing
-- Controlled retry scenario testing
-- Fallback path testing
+**Status:** Still in generateBlocks.ts, extraction planned for Phase 3
 
-#### 3. `markdownTransform.ts` (~400 lines)
+#### 7. `translationManager.ts` (~100 lines) - PHASE 3
 **Responsibilities:**
-- `sanitizeMarkdownImages()`
-- `ensureBlankLineAfterStandaloneBold()`
-- `processCalloutsInMarkdown()`
-- `normalizeForMatch()`
-- `findMatchingBlockquote()`
-
-**Benefits:**
-- Pure function testing (input → output)
-- Easy regex pattern testing
-- Edge case handling
-
-#### 4. `pageGrouping.ts` (~200 lines)
-**Responsibilities:**
-- `groupPagesByLang()`
-- `createStandalonePageGroup()`
-- `resolvePageTitle()`
-- `resolvePageLocale()`
-- `getElementTypeProperty()`
-
-**Benefits:**
-- Straightforward page property resolution tests
-- Locale mapping tests
-- Grouping logic verification
-
-#### 5. `frontmatterBuilder.ts` (~150 lines)
-**Responsibilities:**
-- `buildFrontmatter()`
-- `quoteYamlValue()`
-- `getPublishedDate()`
-
-**Benefits:**
-- YAML escaping tests
-- Date parsing fallback tests
-- Frontmatter format validation
-
-#### 6. `translationManager.ts` (~100 lines)
-**Responsibilities:**
-- `setTranslationString()`
+- `setTranslationString()` - Translation file updates
 - Translation file I/O
 - i18n path management
 
-**Benefits:**
-- Translation file creation/update tests
-- Error recovery tests
-- Path resolution tests
+**Status:** Still in generateBlocks.ts, extraction planned for Phase 3
 
-#### 7. `cacheStrategies.ts` (~200 lines)
-**Responsibilities:**
-- `LRUCache` class
-- `validateCacheSize()`
-- `loadWithCache()` generic cache loader
-- Prefetch cache management
+#### 8. `generateBlocks.ts` (~1,850 lines → target ~500-600 lines)
+**Current Status:**
+- 14% size reduction from Phase 1&2
+- Imports 5 new modules
+- Main orchestration logic remains
+- Phase 3&4 will extract remaining logic
 
-**Benefits:**
-- LRU algorithm verification
-- Cache size validation tests
-- Generic cache loader tests
-
-#### 8. `generateBlocks.ts` (~500 lines remaining)
-**Responsibilities:**
+**Final Responsibilities (after Phase 4):**
 - Main orchestration logic
 - Section/toggle/page/heading handling
 - Progress tracking
 - Spinner management
-
-**Benefits:**
-- Focused on business logic
-- Dependencies injected/mockable
-- Much easier to comprehend and maintain
 
 ### emojiProcessor.ts → Smaller Modules
 
@@ -164,23 +190,30 @@ Break down the 1,060-line file:
 
 ## Implementation Strategy
 
-**Phase 1: Extract Pure Functions** (Low Risk)
-- Start with utility functions that have no side effects
-- Move to separate files with comprehensive tests
-- Examples: `quoteYamlValue`, `normalizeForMatch`, `ensureBlankLineAfterStandaloneBold`
+**✅ Phase 1: Extract Pure Functions** (Low Risk) - COMPLETED
+- ✅ Extracted utility functions with no side effects
+- ✅ Created comprehensive test suites
+- ✅ Modules: `frontmatterBuilder.ts`, `markdownTransform.ts`, `imageValidation.ts`, `pageGrouping.ts`
+- ✅ Examples: `quoteYamlValue`, `normalizeForMatch`, `ensureBlankLineAfterStandaloneBold`
+- **Result:** 4 modules, 660 lines of code, 145 tests
 
-**Phase 2: Extract Classes** (Medium Risk)
-- Move self-contained classes to their own modules
-- Examples: `LRUCache`, `ImageCache`
+**✅ Phase 2: Extract Classes** (Medium Risk) - COMPLETED
+- ✅ Moved self-contained classes to dedicated module
+- ✅ Created `cacheStrategies.ts` with `LRUCache<T>` class
+- ✅ Added environment validation: `validateCacheSize()`
+- **Result:** 1 module, 101 lines of code, 48 tests
 
-**Phase 3: Extract Complex Logic** (Higher Risk)
-- Break down image processing pipeline
-- Extract markdown transformation logic
+**Phase 3: Extract Complex Logic** (Higher Risk) - NEXT PR
+- Extract image processing pipeline → `imageProcessing.ts` (~300 lines)
+- Extract translation management → `translationManager.ts` (~100 lines)
 - Requires careful dependency injection
+- **Estimated:** 2 modules, ~400 lines to extract, ~80-100 new tests
 
-**Phase 4: Reduce Main File** (Final Step)
-- Main files become thin orchestration layers
-- All heavy lifting delegated to focused modules
+**Phase 4: Reduce Main File** (Final Step) - FUTURE PR
+- Remove extracted code from generateBlocks.ts
+- Clean up imports and dead code
+- Verify main file is now ~500-600 lines (70% reduction)
+- Main file becomes thin orchestration layer
 
 ## Testing Goals After Refactoring
 
@@ -191,20 +224,29 @@ Each extracted module should achieve:
 
 ## Estimated Effort
 
-- **Phase 1**: 2-3 hours (extract ~10 pure functions)
-- **Phase 2**: 3-4 hours (extract ~3 classes with tests)
-- **Phase 3**: 5-6 hours (extract complex processing logic)
-- **Phase 4**: 2-3 hours (refactor main orchestration)
+- **Phase 1**: ✅ 2-3 hours (extract ~10 pure functions) - COMPLETED
+- **Phase 2**: ✅ 3-4 hours (extract ~3 classes with tests) - COMPLETED
+- **Phase 3**: 5-6 hours (extract complex processing logic) - NEXT PR
+- **Phase 4**: 2-3 hours (refactor main orchestration) - FUTURE PR
 
-**Total**: ~12-16 hours of focused work
+**Total**: ~12-16 hours of focused work (5-7 hours completed in current PR)
 
 ## Success Criteria
 
+### Phase 1 & 2 (Current PR)
+- [x] All extracted modules under 400 lines (largest is 272 lines)
+- [x] Each module has comprehensive test coverage (193 tests total, 2.54:1 ratio)
+- [x] All existing tests still pass (888 tests + 193 new = 1,081 total)
+- [x] No behavioral changes (refactoring only, zero test failures)
+- [x] Code quality: ESLint compliant, Prettier formatted
+- [x] Type safety: All TypeScript errors resolved
+
+### Overall Project Goals (After Phase 4)
 - [ ] All modules under 400 lines
 - [ ] Each module has 85%+ coverage
-- [ ] All existing tests still pass
-- [ ] No behavioral changes (refactoring only)
+- [ ] generateBlocks.ts reduced to ~500-600 lines (70% reduction)
 - [ ] Overall project coverage improves by 10%+
+- [ ] emojiProcessor.ts refactored into smaller modules
 
 ## Related Work
 
@@ -215,8 +257,28 @@ This refactoring builds on recent test coverage improvements:
 
 ## References
 
-- Current test files: `scripts/notion-fetch/generateBlocks.test.ts`, `scripts/notion-fetch/emojiProcessor.test.ts`
-- Branch: `claude/analyze-notion-fetch-all-01RYyatE5KEXqzMczu11r4gS`
+### Phase 1 & 2 (Current PR)
+- **Branch**: `claude/refactor-issue-md-01JpWHDGU4qfX51sHWjMATCe`
+- **New Modules**:
+  - `scripts/notion-fetch/frontmatterBuilder.ts` + `.test.ts`
+  - `scripts/notion-fetch/markdownTransform.ts` + `.test.ts`
+  - `scripts/notion-fetch/imageValidation.ts` + `.test.ts`
+  - `scripts/notion-fetch/pageGrouping.ts` + `.test.ts`
+  - `scripts/notion-fetch/cacheStrategies.ts` + `.test.ts`
+- **Modified Files**:
+  - `scripts/notion-fetch/generateBlocks.ts` (imports from new modules)
+  - `scripts/notion-fetch/generateBlocks.test.ts` (updated import paths)
+  - `scripts/notion-fetch/__tests__/introductionMarkdown.test.ts` (updated import paths)
+
+### Commits
+1. `088d3b2` - refactor(notion-fetch): extract functions from generateBlocks.ts into testable modules
+2. `8a335ff` - chore: update bun.lock after dependency install
+3. `d004de6` - fix(tests): resolve test failures after refactoring
+4. `1694ecc` - fix(types): add missing beforeAll and afterAll imports to test files
+
+### Original Analysis
+- Previous branch: `claude/analyze-notion-fetch-all-01RYyatE5KEXqzMczu11r4gS`
+- Test files: `scripts/notion-fetch/generateBlocks.test.ts`, `scripts/notion-fetch/emojiProcessor.test.ts`
 
 ---
 

@@ -10,7 +10,7 @@ vi.mock("../../notionClient", () => ({
 let ensureBlankLineAfterStandaloneBold: (content: string) => string;
 
 beforeAll(async () => {
-  ({ ensureBlankLineAfterStandaloneBold } = await import("../generateBlocks"));
+  ({ ensureBlankLineAfterStandaloneBold } = await import("../markdownTransform"));
 });
 
 describe("ensureBlankLineAfterStandaloneBold", () => {

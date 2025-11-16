@@ -25,6 +25,28 @@ import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { EmojiProcessor } from "./emojiProcessor";
+import {
+  quoteYamlValue,
+  getPublishedDate,
+  buildFrontmatter,
+} from "./frontmatterBuilder";
+import {
+  sanitizeMarkdownImages,
+  ensureBlankLineAfterStandaloneBold,
+  processCalloutsInMarkdown,
+} from "./markdownTransform";
+import {
+  validateAndSanitizeImageUrl,
+  createFallbackImageMarkdown,
+} from "./imageValidation";
+import {
+  getElementTypeProperty,
+  resolvePageTitle,
+  resolvePageLocale,
+  groupPagesByLang,
+  createStandalonePageGroup,
+} from "./pageGrouping";
+import { LRUCache, validateCacheSize, buildCacheKey } from "./cacheStrategies";
 
 // Enhanced image handling utilities for robust processing
 interface ImageProcessingResult {
@@ -41,59 +63,9 @@ interface ImageUrlValidationResult {
   error?: string;
 }
 
-/**
- * Validates and sanitizes image URLs to prevent broken references
- */
-function validateAndSanitizeImageUrl(url: string): ImageUrlValidationResult {
-  if (!url || typeof url !== "string") {
-    return { isValid: false, error: "URL is empty or not a string" };
-  }
+// validateAndSanitizeImageUrl moved to imageValidation.ts
 
-  const trimmedUrl = url.trim();
-  if (trimmedUrl === "") {
-    return { isValid: false, error: "URL is empty after trimming" };
-  }
-
-  // Check for obvious invalid patterns
-  if (trimmedUrl === "undefined" || trimmedUrl === "null") {
-    return { isValid: false, error: "URL contains literal undefined/null" };
-  }
-
-  // Validate URL format
-  try {
-    const urlObj = new URL(trimmedUrl);
-    // Ensure it's a reasonable protocol
-    if (!["http:", "https:"].includes(urlObj.protocol)) {
-      return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
-    }
-    return { isValid: true, sanitizedUrl: trimmedUrl };
-  } catch (err: unknown) {
-    const message =
-      err && typeof err === "object" && "message" in err
-        ? String((err as any).message)
-        : "Unknown URL parse error";
-    return { isValid: false, error: `Invalid URL format: ${message}` };
-  }
-}
-
-/**
- * Creates a fallback image reference when download fails
- */
-function createFallbackImageMarkdown(
-  originalMarkdown: string,
-  imageUrl: string,
-  index: number
-): string {
-  // Extract alt text from original markdown
-  const altMatch = originalMarkdown.match(/!\[(.*?)\]/);
-  const altText = altMatch?.[1] || `Image ${index + 1}`;
-
-  // Create a placeholder that documents the original URL for recovery
-  const fallbackComment = `<!-- Failed to download image: ${imageUrl} -->`;
-  const placeholderText = `**[Image ${index + 1}: ${altText}]** *(Image failed to download)*`;
-
-  return `${fallbackComment}\n${placeholderText}`;
-}
+// createFallbackImageMarkdown moved to imageValidation.ts
 
 /**
  * Enhanced image processing with comprehensive fallback handling
@@ -250,69 +222,8 @@ function logImageFailure(logEntry: any): void {
   });
 }
 
-/**
- * Post-process markdown to ensure no broken image references remain
- */
-function sanitizeMarkdownImages(content: string): string {
-  if (!content || content.indexOf("![") === -1) return content;
-  // Cap processing size to avoid ReDoS on pathological inputs
-  const MAX_LEN = 2_000_000;
-  const text = content.length > MAX_LEN ? content.slice(0, MAX_LEN) : content;
-  let sanitized = text;
-
-  // Pattern 1: Completely empty URLs
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*\)/g,
-    "**[Image: $1]** *(Image URL was empty)*"
-  );
-
-  // Pattern 2: Invalid literal placeholders
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*(?:undefined|null)\s*\)/g,
-    "**[Image: $1]** *(Image URL was invalid)*"
-  );
-
-  // Pattern 3: Unencoded whitespace inside URL (safe regex without nested greedy scans)
-  // Matches any whitespace in the URL excluding escaped closing parens and %20
-  sanitized = sanitized.replace(
-    /!\[([^\]]*)\]\(\s*([^()\s][^()\r\n]*?(?:\s+)[^()\r\n]*?)\s*\)/g,
-    "**[Image: $1]** *(Image URL contained whitespace)*"
-  );
-
-  // If we truncated, append a notice to avoid corrupting content silently
-  if (text.length !== content.length) {
-    return sanitized + "\n\n<!-- Content truncated for sanitation safety -->";
-  }
-  return sanitized;
-}
-
-/**
- * Ensure standalone bold lines (`**Heading**`) are treated as their own paragraphs
- * by inserting a blank line when missing. This preserves Notion formatting where
- * bold text represents a section title followed by descriptive copy.
- */
-export function ensureBlankLineAfterStandaloneBold(content: string): string {
-  if (!content) return content;
-
-  const lines = content.split("\n");
-  const result: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    result.push(line);
-
-    const nextLine = lines[i + 1];
-    const isStandaloneBold = /^\s*\*\*[^*].*\*\*\s*$/.test(line.trim());
-    const nextLineHasContent =
-      nextLine !== undefined && nextLine.trim().length > 0;
-
-    if (isStandaloneBold && nextLineHasContent) {
-      result.push("");
-    }
-  }
-
-  return result.join("\n");
-}
+// sanitizeMarkdownImages moved to markdownTransform.ts
+// ensureBlankLineAfterStandaloneBold moved to markdownTransform.ts
 
 /**
  * Image cache system to prevent re-downloading and provide recovery options
@@ -458,67 +369,7 @@ async function downloadAndProcessImageWithCache(
   };
 }
 
-/**
- * Extracts published date from Notion page properties with enhanced error handling
- *
- * @param page - The Notion page object containing properties and metadata
- * @returns A formatted date string in en-US locale format (MM/DD/YYYY)
- *
- * Fallback strategy:
- * 1. Use Published date field if available and valid
- * 2. Fall back to last_edited_time if Published date is missing/invalid
- * 3. Final fallback to current date
- */
-export function getPublishedDate(page: any): string {
-  // Try to get the new Published date field
-  const publishedDateProp = page.properties?.[NOTION_PROPERTIES.PUBLISHED_DATE];
-
-  if (publishedDateProp?.date?.start) {
-    try {
-      // Parse the date string as a local date to avoid timezone issues
-      const dateString = publishedDateProp.date.start;
-      const [year, month, day] = dateString.split("-").map(Number);
-
-      // Create date in local timezone to avoid UTC conversion issues
-      const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
-
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US");
-      } else {
-        console.warn(
-          `Invalid published date format for page ${page.id}, falling back to last_edited_time`
-        );
-      }
-    } catch (error) {
-      console.warn(
-        `Error parsing published date for page ${page.id}:`,
-        error.message
-      );
-    }
-  }
-
-  // Fall back to last_edited_time if Published date is not available or invalid
-  if (page.last_edited_time) {
-    try {
-      const date = new Date(page.last_edited_time);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US");
-      } else {
-        console.warn(
-          `Invalid last_edited_time format for page ${page.id}, using current date`
-        );
-      }
-    } catch (error) {
-      console.warn(
-        `Error parsing last_edited_time for page ${page.id}:`,
-        error.message
-      );
-    }
-  }
-
-  // Final fallback to current date
-  return new Date().toLocaleDateString("en-US");
-}
+// getPublishedDate is now imported from frontmatterBuilder.ts
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -551,189 +402,8 @@ for (const locale of locales.filter((l) => l !== DEFAULT_LOCALE)) {
   fs.mkdirSync(getI18NPath(locale), { recursive: true });
 }
 
-// (moved to utils) Format detection helpers
-
-/**
- * Process callout blocks in the markdown string to convert them to Docusaurus admonitions
- */
-function processCalloutsInMarkdown(
-  markdownContent: string,
-  blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>
-): string {
-  if (!markdownContent || !blocks || blocks.length === 0) {
-    return markdownContent;
-  }
-
-  const lines = markdownContent.split("\n");
-  const calloutBlocks: CalloutBlockNode[] = [];
-
-  function collectCallouts(
-    blockList: Array<PartialBlockObjectResponse | BlockObjectResponse>
-  ) {
-    for (const block of blockList) {
-      if (isCalloutBlock(block)) {
-        calloutBlocks.push(block as CalloutBlockNode);
-      }
-
-      const potentialChildren = (
-        block as {
-          children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
-        }
-      ).children;
-
-      if (Array.isArray(potentialChildren)) {
-        collectCallouts(potentialChildren);
-      }
-    }
-  }
-
-  collectCallouts(blocks);
-
-  let searchIndex = 0;
-
-  for (const calloutBlock of calloutBlocks) {
-    const searchText = extractTextFromCalloutBlock(calloutBlock);
-    const match = findMatchingBlockquote(lines, searchText, searchIndex);
-
-    if (!match) {
-      continue;
-    }
-
-    const admonitionMarkdown = convertCalloutToAdmonition(
-      calloutBlock,
-      match.contentLines
-    );
-
-    if (!admonitionMarkdown) {
-      continue;
-    }
-
-    // Guard: avoid replacing inside code fences or existing admonitions
-    const isWithinFenceOrAdmonition = (() => {
-      let fenceDelim: string | null = null;
-      let inAdmonition = false;
-      for (let i = 0; i <= match.end; i++) {
-        const ln = lines[i].trim();
-        const fenceMatch = ln.match(/^(```+|~~~+)(.*)?$/);
-        if (fenceMatch) {
-          const delim = fenceMatch[1];
-          if (!fenceDelim) {
-            fenceDelim = delim;
-          } else if (fenceDelim === delim) {
-            fenceDelim = null;
-          }
-        }
-        if (/^:::[a-z]+/i.test(ln)) inAdmonition = true;
-        if (/^:::$/.test(ln)) inAdmonition = false;
-      }
-      // inside if fence is currently open or we're currently inside an admonition
-      return fenceDelim !== null || inAdmonition;
-    })();
-    if (isWithinFenceOrAdmonition) {
-      continue;
-    }
-
-    const leadingWhitespace = lines[match.start].match(/^\s*/)?.[0] ?? "";
-    const admonitionLinesRaw = admonitionMarkdown.trimEnd().split("\n");
-    const admonitionLines = admonitionLinesRaw.map((l) =>
-      l.length ? `${leadingWhitespace}${l}` : l
-    );
-    const replaceCount = match.end - match.start + 1;
-    lines.splice(match.start, replaceCount, ...admonitionLines);
-    searchIndex = match.start + admonitionLines.length;
-  }
-
-  return lines.join("\n");
-}
-
-/**
- * Extract text content from a callout block for matching
- */
-function extractTextFromCalloutBlock(block: any): string {
-  const rich = block?.callout?.rich_text;
-  if (!Array.isArray(rich)) return "";
-
-  const parts = rich.map((t: any) => {
-    if (typeof t?.plain_text === "string") return t.plain_text;
-    if (t?.type === "text" && t?.text?.content != null) return t.text.content;
-    return "";
-  });
-
-  const result: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const cur = parts[i];
-    if (!cur) continue;
-    if (
-      result.length > 0 &&
-      !/\s$/.test(result[result.length - 1]) &&
-      !/^\s/.test(cur)
-    ) {
-      result.push(" ");
-    }
-    result.push(cur);
-  }
-  return result.join("");
-}
-
-function normalizeForMatch(text: string): string {
-  // Normalize Unicode to reduce variant mismatches (e.g., emoji, punctuation)
-  const nfkc =
-    typeof text.normalize === "function" ? text.normalize("NFKC") : text;
-
-  let stripped = nfkc;
-  const graphemes = Array.from(stripped);
-  if (graphemes.length > 0 && /\p{Extended_Pictographic}/u.test(graphemes[0])) {
-    // Remove first grapheme safely
-    stripped = graphemes.slice(1).join("");
-    stripped = stripped.replace(/^[\s:;\-–—]+/u, "");
-  }
-
-  return stripped.replace(/\s+/g, " ").trim();
-}
-
-function findMatchingBlockquote(
-  lines: string[],
-  searchText: string,
-  fromIndex: number
-): { start: number; end: number; contentLines: string[] } | null {
-  const normalizedSearch = normalizeForMatch(searchText);
-  if (!normalizedSearch) return null;
-
-  const stripQuote = (line: string) => line.replace(/^\s*>+\s?/, "");
-
-  for (let i = fromIndex; i < lines.length; i++) {
-    if (!lines[i].trimStart().startsWith(">")) continue;
-
-    const blockLines: string[] = [];
-    let end = i;
-    while (end < lines.length) {
-      const l = lines[end];
-      if (l.trim() === "") {
-        // allow blank lines inside the blockquote region
-        blockLines.push(l);
-        end++;
-        continue;
-      }
-      if (!l.trimStart().startsWith(">")) break;
-      blockLines.push(l);
-      end++;
-    }
-    end -= 1;
-
-    const contentLines = blockLines.map((line) =>
-      line.trim() === "" ? "" : stripQuote(line)
-    );
-    const normalizedContent = normalizeForMatch(contentLines.join(" "));
-
-    if (normalizedContent.includes(normalizedSearch)) {
-      return { start: i, end, contentLines };
-    }
-
-    i = end;
-  }
-
-  return null;
-}
+// Markdown transform functions (processCalloutsInMarkdown, extractTextFromCalloutBlock,
+// normalizeForMatch, findMatchingBlockquote) are now imported from markdownTransform.ts
 
 async function downloadAndProcessImage(
   url: string,
@@ -872,296 +542,17 @@ async function downloadAndProcessImage(
     : new Error(String(lastError ?? "Unknown image processing error"));
 }
 
-const LEGACY_SECTION_PROPERTY = "Section";
+// Page grouping functions (getElementTypeProperty, resolvePageTitle, resolvePageLocale,
+// groupPagesByLang, createStandalonePageGroup) are now imported from pageGrouping.ts
 
-const getElementTypeProperty = (page: Record<string, any>) =>
-  page?.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
-  page?.properties?.[LEGACY_SECTION_PROPERTY];
+// Frontmatter functions (quoteYamlValue, buildFrontmatter) are now imported from frontmatterBuilder.ts
 
-const extractPlainText = (property: any) => {
-  if (!property) {
-    return undefined;
-  }
-
-  if (typeof property === "string") {
-    return property;
-  }
-
-  const candidates = Array.isArray(property.title)
-    ? property.title
-    : Array.isArray(property.rich_text)
-      ? property.rich_text
-      : [];
-
-  for (const item of candidates) {
-    if (item?.plain_text) {
-      return item.plain_text;
-    }
-    if (item?.text?.content) {
-      return item.text.content;
-    }
-  }
-
-  return undefined;
-};
-
-const resolvePageTitle = (page: Record<string, any>) => {
-  const properties = page?.properties ?? {};
-  const candidates = [
-    properties[NOTION_PROPERTIES.TITLE],
-    properties.Title,
-    properties.title,
-  ];
-
-  for (const candidate of candidates) {
-    const resolved = extractPlainText(candidate);
-    if (resolved) {
-      return resolved;
-    }
-  }
-
-  const fallbackId = (page?.id ?? "page").slice(0, 8);
-  return `${FALLBACK_TITLE_PREFIX}-${fallbackId}`;
-};
-
-const resolvePageLocale = (page: Record<string, any>) => {
-  const languageProperty =
-    page?.properties?.[NOTION_PROPERTIES.LANGUAGE] ??
-    page?.properties?.Language;
-
-  const languageName = languageProperty?.select?.name;
-  if (languageName && LANGUAGE_NAME_TO_LOCALE[languageName]) {
-    return LANGUAGE_NAME_TO_LOCALE[languageName];
-  }
-
-  return DEFAULT_LOCALE;
-};
-
-const groupPagesByLang = (pages: Array<Record<string, any>>, page) => {
-  const elementType = getElementTypeProperty(page);
-  const sectionName = (
-    elementType?.select?.name ??
-    elementType?.name ??
-    elementType ??
-    ""
-  )
-    .toString()
-    .trim();
-
-  const grouped = {
-    mainTitle: resolvePageTitle(page),
-    section: sectionName,
-    content: {} as Record<string, Record<string, any>>,
-  };
-
-  const subItemRelation = page?.properties?.["Sub-item"]?.relation ?? [];
-
-  for (const relation of subItemRelation) {
-    const subpage = pages.find((candidate) => candidate.id === relation?.id);
-    if (!subpage) {
-      continue;
-    }
-
-    const lang = resolvePageLocale(subpage);
-    grouped.content[lang] = subpage;
-  }
-
-  const parentLocale = resolvePageLocale(page);
-  if (!grouped.content[parentLocale]) {
-    grouped.content[parentLocale] = page;
-  }
-
-  return grouped;
-};
-
-const createStandalonePageGroup = (page: Record<string, any>) => {
-  const elementType = getElementTypeProperty(page);
-  const sectionName = (
-    elementType?.select?.name ??
-    elementType?.name ??
-    elementType ??
-    ""
-  )
-    .toString()
-    .trim();
-  const locale = resolvePageLocale(page);
-
-  return {
-    mainTitle: resolvePageTitle(page),
-    section: sectionName,
-    content: {
-      [locale]: page,
-    } as Record<string, Record<string, any>>,
-  };
-};
-
-/**
- * Helper function to safely quote YAML values that contain special characters
- * YAML special characters that need quoting: & : [ ] { } , | > * ! % @ ` # - and quotes
- */
-const quoteYamlValue = (value: string): string => {
-  if (!value || typeof value !== "string") {
-    return "";
-  }
-
-  // Check if the value contains any YAML special characters that require quoting
-  const needsQuoting = /[&:[\]{}|>*!%@`#-]|^\s|^['"]|['"]$/.test(value);
-
-  if (needsQuoting) {
-    // Use double quotes and escape any existing double quotes
-    return `"${value.replace(/"/g, '\\"')}"`;
-  }
-
-  return value;
-};
-
-const buildFrontmatter = (
-  pageTitle: string,
-  sidebarPosition: number,
-  tags: string[],
-  keywords: string[],
-  customProps: Record<string, unknown>,
-  relativePath: string,
-  safeSlug: string,
-  page: any
-) => {
-  // Quote the title to handle special characters like & : etc.
-  const quotedTitle = quoteYamlValue(pageTitle);
-
-  // Quote keywords and tags to prevent YAML parsing errors
-  const quotedKeywords = keywords.map((k) => quoteYamlValue(k));
-  const quotedTags = tags.map((t) => quoteYamlValue(t));
-
-  let frontmatter = `---
-id: doc-${safeSlug}
-title: ${quotedTitle}
-sidebar_label: ${quotedTitle}
-sidebar_position: ${sidebarPosition}
-pagination_label: ${quotedTitle}
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/${relativePath}
-keywords:
-${quotedKeywords.map((k) => `  - ${k}`).join("\n")}
-tags: [${quotedTags.join(", ")}]
-slug: /${safeSlug}
-last_update:
-  date: ${getPublishedDate(page)}
-  author: Awana Digital`;
-
-  if (Object.keys(customProps).length > 0) {
-    frontmatter += `\nsidebar_custom_props:`;
-    for (const [key, value] of Object.entries(customProps)) {
-      if (
-        typeof value === "string" &&
-        (value.includes('"') ||
-          value.includes("'") ||
-          /[^\x20-\x7E]/.test(value))
-      ) {
-        const quoteChar = value.includes('"') ? "'" : '"';
-        frontmatter += `\n  ${key}: ${quoteChar}${value}${quoteChar}`;
-      } else {
-        frontmatter += `\n  ${key}: ${value}`;
-      }
-    }
-  }
-
-  frontmatter += `\n---\n`;
-  return frontmatter;
-};
-
-/**
- * LRU Cache implementation with size limit
- */
-class LRUCache<T> {
-  private cache = new Map<string, T>();
-  private readonly maxSize: number;
-
-  constructor(maxSize: number = 1000) {
-    this.maxSize = Math.max(1, maxSize);
-  }
-
-  get(key: string): T | undefined {
-    const value = this.cache.get(key);
-    if (value !== undefined) {
-      // Move to end (most recently used)
-      this.cache.delete(key);
-      this.cache.set(key, value);
-    }
-    return value;
-  }
-
-  set(key: string, value: T): void {
-    // Remove if exists (will re-add at end)
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    }
-
-    // Evict oldest if at capacity
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.cache.delete(oldestKey);
-      }
-    }
-
-    this.cache.set(key, value);
-  }
-
-  has(key: string): boolean {
-    return this.cache.has(key);
-  }
-
-  delete(key: string): boolean {
-    return this.cache.delete(key);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  get size(): number {
-    return this.cache.size;
-  }
-}
-
-/**
- * Validate and parse cache size from environment
- */
-function validateCacheSize(): number {
-  const defaultSize = 1000;
-  const envValue = process.env.NOTION_CACHE_MAX_SIZE;
-
-  if (!envValue) return defaultSize;
-
-  const parsed = Number.parseInt(envValue, 10);
-
-  if (Number.isNaN(parsed) || parsed < 1) {
-    console.warn(
-      chalk.yellow(
-        `⚠️  Invalid NOTION_CACHE_MAX_SIZE: "${envValue}", using default: ${defaultSize}`
-      )
-    );
-    return defaultSize;
-  }
-
-  if (parsed > 10000) {
-    console.warn(
-      chalk.yellow(
-        `⚠️  NOTION_CACHE_MAX_SIZE: ${parsed} exceeds maximum 10000, using maximum`
-      )
-    );
-    return 10000;
-  }
-
-  return parsed;
-}
+// Cache strategies (LRUCache, validateCacheSize, buildCacheKey) are now imported from cacheStrategies.ts
 
 const CACHE_MAX_SIZE = validateCacheSize();
 
 const blockPrefetchCache = new LRUCache<any[]>(CACHE_MAX_SIZE);
 const markdownPrefetchCache = new LRUCache<any>(CACHE_MAX_SIZE);
-
-const buildCacheKey = (id: string, lastEdited?: string | null) =>
-  `${id}:${lastEdited ?? "unknown"}`;
 
 export function __resetPrefetchCaches(): void {
   blockPrefetchCache.clear();

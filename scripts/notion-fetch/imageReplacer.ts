@@ -19,6 +19,7 @@ import {
   logImageFailure,
   type ImageProcessingResult,
 } from "./imageProcessing";
+import { processBatch } from "./timeoutUtils";
 
 /**
  * Image match information extracted from markdown
@@ -61,6 +62,10 @@ export interface ImageReplacementResult {
 }
 
 const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
+
+// Maximum concurrent image downloads to prevent resource exhaustion
+// Matches emoji processing pattern for consistency
+const MAX_CONCURRENT_IMAGES = 5;
 
 /**
  * Extracts all image matches from markdown content
@@ -113,11 +118,16 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
  *
  * Workflow:
  * 1. Extract image matches with regex
- * 2. Validate and queue all images for processing
- * 3. Process valid images concurrently
+ * 2. Validate all images upfront
+ * 3. Process valid images in batches with concurrency control
  * 4. Apply replacements deterministically (end-to-start)
  * 5. Sanitize final markdown
  * 6. Report statistics
+ *
+ * IMPORTANT: Uses batch processing to prevent resource exhaustion.
+ * Processing all images concurrently (Promise.allSettled) can hang the script
+ * when pages have many images (10-15+). Batch size of 5 balances performance
+ * and stability.
  *
  * @param markdown - Source markdown content
  * @param safeFilename - Safe filename for logging/caching
@@ -142,17 +152,28 @@ export async function processAndReplaceImages(
     };
   }
 
-  // Phase 1: Validate and queue all images for processing
-  const imageProcessingTasks = imageMatches.map((match) => {
+  // Phase 1: Validate all images upfront and separate valid from invalid
+  interface ValidatedImage {
+    match: ImageMatch;
+    sanitizedUrl: string;
+  }
+
+  const validImages: ValidatedImage[] = [];
+  const invalidResults: Array<{
+    success: false;
+    originalMarkdown: string;
+    imageUrl: string;
+    index: number;
+    error: string;
+    fallbackUsed: true;
+  }> = [];
+
+  for (const match of imageMatches) {
     const urlValidation = validateAndSanitizeImageUrl(match.url);
+
     if (!urlValidation.isValid) {
       console.warn(
         chalk.yellow(`⚠️  Invalid image URL detected: ${urlValidation.error}`)
-      );
-      const fallbackMarkdown = createFallbackImageMarkdown(
-        match.full,
-        match.url,
-        match.idx
       );
 
       logImageFailure({
@@ -165,7 +186,7 @@ export async function processAndReplaceImages(
         validationFailed: true,
       });
 
-      return Promise.resolve({
+      invalidResults.push({
         success: false,
         originalMarkdown: match.full,
         imageUrl: match.url,
@@ -173,11 +194,12 @@ export async function processAndReplaceImages(
         error: urlValidation.error,
         fallbackUsed: true,
       });
+      continue;
     }
 
     if (!urlValidation.sanitizedUrl!.startsWith("http")) {
       console.info(chalk.blue(`ℹ️  Skipping local image: ${match.url}`));
-      return Promise.resolve({
+      invalidResults.push({
         success: false,
         originalMarkdown: match.full,
         imageUrl: match.url,
@@ -185,27 +207,49 @@ export async function processAndReplaceImages(
         error: "Local image skipped",
         fallbackUsed: true,
       });
+      continue;
     }
 
-    return processImageWithFallbacks(
-      urlValidation.sanitizedUrl!,
-      safeFilename,
-      match.idx,
-      match.full
-    ).then((result) => ({
-      ...result,
-      originalMarkdown: match.full,
-      imageUrl: urlValidation.sanitizedUrl!,
-      index: match.idx,
-    }));
-  });
+    validImages.push({
+      match,
+      sanitizedUrl: urlValidation.sanitizedUrl!,
+    });
+  }
 
-  // Phase 2: Process all valid images concurrently
+  // Phase 2: Process valid images in batches with concurrency control
+  // This prevents resource exhaustion when pages have many images
   let successfulImages = 0;
   let totalFailures = 0;
   let totalSaved = 0;
 
-  const imageResults = await Promise.allSettled(imageProcessingTasks);
+  const batchResults = await processBatch(
+    validImages,
+    async (validImage) => {
+      const result = await processImageWithFallbacks(
+        validImage.sanitizedUrl,
+        safeFilename,
+        validImage.match.idx,
+        validImage.match.full
+      );
+      return {
+        ...result,
+        originalMarkdown: validImage.match.full,
+        imageUrl: validImage.sanitizedUrl,
+        index: validImage.match.idx,
+      };
+    },
+    {
+      maxConcurrent: MAX_CONCURRENT_IMAGES,
+      // No timeout here - individual operations have their own timeouts
+      operation: "image processing",
+    }
+  );
+
+  // Combine invalid (pre-validated) results with batch processing results
+  const imageResults = [
+    ...invalidResults.map((r) => ({ status: "fulfilled" as const, value: r })),
+    ...batchResults,
+  ];
 
   // Build deterministic replacements using recorded match indices
   const indexedReplacements: Array<{

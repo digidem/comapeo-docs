@@ -24,6 +24,14 @@ export class TimeoutError extends Error {
 /**
  * Wraps a promise with a timeout that rejects if the operation takes too long
  *
+ * IMPORTANT: JavaScript doesn't support native promise cancellation. When a timeout
+ * occurs, the underlying operation continues running until completion. The timeout
+ * serves as a circuit breaker to unblock the script flow, but the operation itself
+ * cannot be forcibly cancelled.
+ *
+ * For operations that support AbortController (like fetch/axios), use the signal
+ * parameter to enable actual cancellation.
+ *
  * @param promise - The promise to wrap with a timeout
  * @param timeoutMs - Maximum time to wait in milliseconds
  * @param operation - Description of the operation for error messages
@@ -43,7 +51,7 @@ export async function withTimeout<T>(
   timeoutMs: number,
   operation: string
 ): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: NodeJS.Timeout | undefined;
 
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
@@ -58,11 +66,20 @@ export async function withTimeout<T>(
 
   try {
     const result = await Promise.race([promise, timeoutPromise]);
-    clearTimeout(timeoutId!);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
     return result;
   } catch (error) {
-    clearTimeout(timeoutId!);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
     throw error;
+  } finally {
+    // Extra safety: ensure timeout is always cleared
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -124,25 +141,47 @@ export interface BatchConfig {
  * Unlike Promise.all() or Promise.allSettled() which process everything concurrently,
  * this processes items in batches to prevent resource exhaustion.
  *
+ * Key benefits:
+ * - Prevents network saturation from too many concurrent requests
+ * - Avoids memory exhaustion from loading too many resources simultaneously
+ * - Enables graceful degradation - one failure doesn't block others
+ * - Better progress tracking with batch-level granularity
+ *
  * @param items - Array of items to process
- * @param processor - Async function to process each item
+ * @param processor - Async function to process each item (receives item and global index)
  * @param config - Batch processing configuration
- * @returns Array of settled results for each item
+ * @returns Array of settled results for each item (maintains original order)
  *
  * @example
  * ```ts
  * const results = await processBatch(
  *   imageUrls,
- *   (url) => downloadImage(url),
+ *   async (url, index) => {
+ *     console.log(`Processing ${index + 1}/${imageUrls.length}`);
+ *     return downloadImage(url);
+ *   },
  *   { maxConcurrent: 3, timeoutMs: 30000, operation: "image download" }
  * );
  * ```
  */
 export async function processBatch<T, R>(
-  items: T[],
+  items: readonly T[],
   processor: (item: T, index: number) => Promise<R>,
   config: BatchConfig
 ): Promise<PromiseSettledResult<R>[]> {
+  // Validate inputs
+  if (!Array.isArray(items)) {
+    throw new TypeError("items must be an array");
+  }
+
+  if (typeof processor !== "function") {
+    throw new TypeError("processor must be a function");
+  }
+
+  if (config.maxConcurrent < 1) {
+    throw new RangeError("maxConcurrent must be at least 1");
+  }
+
   const results: PromiseSettledResult<R>[] = [];
   const { maxConcurrent, timeoutMs, operation } = config;
 
@@ -150,18 +189,24 @@ export async function processBatch<T, R>(
     const batch = items.slice(i, i + maxConcurrent);
     const batchPromises = batch.map((item, batchIndex) => {
       const itemIndex = i + batchIndex;
-      const promise = processor(item, itemIndex);
 
-      // Apply timeout if configured
-      if (timeoutMs && operation) {
-        return withTimeout(
-          promise,
-          timeoutMs,
-          `${operation} (item ${itemIndex + 1}/${items.length})`
-        );
+      try {
+        const promise = processor(item, itemIndex);
+
+        // Apply timeout if configured
+        if (timeoutMs && operation) {
+          return withTimeout(
+            promise,
+            timeoutMs,
+            `${operation} (item ${itemIndex + 1}/${items.length})`
+          );
+        }
+
+        return promise;
+      } catch (error) {
+        // Handle synchronous errors from processor
+        return Promise.reject(error);
       }
-
-      return promise;
     });
 
     const batchResults = await Promise.allSettled(batchPromises);

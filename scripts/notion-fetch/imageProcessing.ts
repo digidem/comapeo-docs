@@ -373,12 +373,16 @@ export async function downloadAndProcessImage(
       60000
     );
 
+    // Create AbortController for actual request cancellation
+    const abortController = new AbortController();
+
     try {
       spinner.text = `Processing image ${index + 1}: Downloading`;
       const response = await axios.get(url, {
         responseType: "arraybuffer",
         timeout: 30000,
         maxRedirects: 5,
+        signal: abortController.signal,
         headers: {
           "User-Agent": "notion-fetch-script/1.0",
         },
@@ -463,6 +467,9 @@ export async function downloadAndProcessImage(
       spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
       console.error(chalk.red("Image processing error details:"), error);
 
+      // Abort the request if it's still in progress
+      abortController.abort();
+
       if (attemptNumber < 3) {
         // Test-environment-aware retry delays
         // Standardized test environment detection
@@ -485,6 +492,8 @@ export async function downloadAndProcessImage(
       }
     } finally {
       SpinnerManager.remove(spinner);
+      // Ensure abort controller is cleaned up
+      abortController.abort();
     }
 
     attempt++;

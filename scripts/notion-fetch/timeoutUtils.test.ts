@@ -40,6 +40,9 @@ describe("timeoutUtils", () => {
       await expect(resultPromise).rejects.toThrow(
         'Operation "slow operation" timed out after 1000ms'
       );
+
+      // Clean up the hanging promise
+      await vi.runAllTimersAsync();
     });
 
     it("should include operation name in TimeoutError", async () => {
@@ -54,6 +57,9 @@ describe("timeoutUtils", () => {
         name: "TimeoutError",
         operation: "critical task",
       });
+
+      // Clean up
+      await vi.runAllTimersAsync();
     });
 
     it("should clear timeout when promise resolves", async () => {
@@ -119,6 +125,9 @@ describe("timeoutUtils", () => {
       const result = await resultPromise;
 
       expect(result).toBe("fallback value");
+
+      // Clean up
+      await vi.runAllTimersAsync();
     });
 
     it("should log warning when timeout occurs", async () => {
@@ -140,6 +149,9 @@ describe("timeoutUtils", () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining("image processing timed out after 500ms")
       );
+
+      // Clean up
+      await vi.runAllTimersAsync();
     });
 
     it("should throw non-timeout errors", async () => {
@@ -175,10 +187,29 @@ describe("timeoutUtils", () => {
       const result = await resultPromise;
 
       expect(result).toEqual(fallbackObject);
+
+      // Clean up
+      await vi.runAllTimersAsync();
     });
   });
 
   describe("processBatch", () => {
+    it("should validate inputs", async () => {
+      // @ts-expect-error Testing invalid input
+      await expect(
+        processBatch(null, async () => {}, { maxConcurrent: 1 })
+      ).rejects.toThrow(TypeError);
+
+      // @ts-expect-error Testing invalid input
+      await expect(
+        processBatch([1, 2], "not a function", { maxConcurrent: 1 })
+      ).rejects.toThrow(TypeError);
+
+      await expect(
+        processBatch([1, 2], async () => {}, { maxConcurrent: 0 })
+      ).rejects.toThrow(RangeError);
+    });
+
     it("should process items in batches respecting maxConcurrent", async () => {
       const items = [1, 2, 3, 4, 5];
       const processingOrder: number[] = [];
@@ -205,6 +236,20 @@ describe("timeoutUtils", () => {
       expect(activeCount.max).toBeLessThanOrEqual(2);
       expect(results).toHaveLength(5);
       expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    });
+
+    it("should handle synchronous errors from processor", async () => {
+      const items = [1, 2, 3];
+      const processor = (_item: number) => {
+        throw new Error("Synchronous error");
+      };
+
+      const results = await processBatch(items, processor, {
+        maxConcurrent: 2,
+      });
+
+      expect(results).toHaveLength(3);
+      expect(results.every((r) => r.status === "rejected")).toBe(true);
     });
 
     it("should apply timeout to each item when configured", async () => {
@@ -362,6 +407,9 @@ describe("timeoutUtils", () => {
           expect(error.operation).toBe("test");
         }
       }
+
+      // Clean up
+      await vi.runAllTimersAsync();
     });
   });
 });

@@ -144,7 +144,9 @@ if (metadata.width <= maxWidth) {
 - [ ] **Benchmarking:** Measure wall-clock time for a 50-page sync before/after changes
   - **With live Notion access:** Run `bun run notion:fetch-all` and record total time
   - **Alternative (no Notion credentials):** Use content-branch snapshot or canned JSON fixtures
-    - Run `git checkout content && bun run notion:fetch -- --pages 50` against cached content
+    - Create disposable worktree: `git worktree add ../content-bench content`
+    - Run in worktree: `cd ../content-bench && bun i && bun run notion:fetch -- --pages 50`
+    - Cleanup when done: `cd .. && git worktree remove content-bench`
     - Or create test fixture with representative image distribution
   - Post-change: Re-run and verify 20-30% improvement on pages with small images
   - Document: Add results to PR (e.g., "50 pages: 15min → 11min (27% faster)")
@@ -250,6 +252,37 @@ db.exec("CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, ...)");
 **Recommendation:**
 Start with **Option 1** (per-entry files) for caches < 10,000 entries, then **Option 2** (SQLite) if cache grows larger.
 
+**Migration from Monolithic Cache:**
+
+The new per-entry format is incompatible with the existing `image-cache.json` monolithic file. Without migration, the old cache will be silently ignored and all images will be re-downloaded on first run.
+
+**Migration options:**
+
+1. **One-time migration script (recommended for production):**
+
+   ```typescript
+   // scripts/migrate-image-cache.ts
+   const oldCache = JSON.parse(fs.readFileSync("image-cache.json", "utf-8"));
+   const cacheDir = ".cache/images";
+   fs.mkdirSync(cacheDir, { recursive: true });
+
+   for (const [url, entry] of Object.entries(oldCache)) {
+     const hash = createHash("md5").update(url).digest("hex");
+     const cachePath = path.join(cacheDir, `${hash}.json`);
+     fs.writeFileSync(cachePath, JSON.stringify(entry));
+   }
+
+   console.log(`Migrated ${Object.keys(oldCache).length} cache entries`);
+   // Optionally: fs.unlinkSync('image-cache.json');  // Remove old cache
+   ```
+
+   Run via: `bun run scripts/migrate-image-cache.ts`
+
+2. **Gradual re-download (acceptable for development):**
+   - Delete `image-cache.json` to avoid confusion
+   - Accept that images will re-download on first fetch
+   - New cache format will populate naturally
+
 **Acceptance Criteria:**
 
 - [ ] Cache doesn't load all entries at startup
@@ -257,6 +290,15 @@ Start with **Option 1** (per-entry files) for caches < 10,000 entries, then **Op
 - [ ] Performance improves for large caches (measured)
 - [ ] Cache hits/misses still work correctly
 - [ ] Tests verify lazy loading behavior
+- [ ] **Migration:** One-time migration script provided (`bun run scripts/migrate-image-cache.ts`)
+  - Reads existing `image-cache.json` if present
+  - Converts each entry to per-entry file format (`.cache/images/[hash].json`)
+  - Logs migration progress and entry count
+  - Optionally removes old cache file after successful migration
+- [ ] **Documentation:** README or migration guide explains:
+  - Old cache format will be ignored after upgrade
+  - How to run migration script to preserve existing cache
+  - Alternative: delete old cache and accept re-download
 
 ---
 
@@ -437,8 +479,10 @@ const concurrency = detectOptimalConcurrency({
 - [ ] **Benchmarking:** Measure wall-clock time for multi-page sync before/after changes
   - **With live Notion access:** Run `bun run notion:fetch-all` (50+ pages) and record total time
   - **Alternative (no Notion credentials):** Use content-branch snapshot or create large test fixture
-    - Checkout content branch with 50+ cached pages
-    - Run against local cache to measure parallel processing overhead
+    - Create disposable worktree: `git worktree add ../content-bench content`
+    - Run in worktree: `cd ../content-bench && bun i && bun run notion:fetch -- --pages 50`
+    - Measure parallel processing overhead on local cache
+    - Cleanup when done: `cd .. && git worktree remove content-bench`
     - Or create mock Notion API responses with realistic delays
   - Post-change: Re-run and verify 50-70% improvement
   - Document: Add results to PR (e.g., "156 pages: 78min → 28min (64% faster)" or "50 cached pages: 10min → 3.5min (65% faster)")

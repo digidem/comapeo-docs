@@ -373,12 +373,13 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
-  // Track the previous attempt's promise to prevent race conditions.
+  // Track the previous attempt's promise and timeout status to prevent race conditions.
   // JavaScript promises are not cancellable - when withTimeout() rejects,
   // the underlying operation keeps running and can still write to disk.
   // We must wait for the timed-out promise to fully settle before starting
   // the next retry, otherwise a slow attempt can overwrite a successful retry.
   let previousAttempt: Promise<any> | null = null;
+  let previousTimedOut = false;
 
   // Overall timeout per attempt: 120 seconds
   // Must be LONGER than sum of individual timeouts to avoid false positives:
@@ -389,16 +390,37 @@ export async function downloadAndProcessImage(
   // - Overall timeout: 120s (safety buffer for legitimate slow images)
   const OVERALL_TIMEOUT_MS = 120000;
 
+  // Grace period for timed-out operations to finish disk writes
+  // If the operation is truly deadlocked, we give up after this period
+  const GRACE_PERIOD_MS = 30000;
+
   while (attempt < 3) {
     // Wait for the previous attempt to fully settle (including all disk I/O)
     // before starting a new one. This prevents timed-out attempts from
     // overwriting files written by successful retries.
+    //
+    // IMPORTANT: If the previous attempt timed out, it might be deadlocked.
+    // We give it a grace period to finish disk writes, but if it doesn't
+    // complete within that window, we proceed anyway to avoid indefinite blocking.
     if (previousAttempt) {
-      await previousAttempt.catch(() => {
-        // Ignore errors - we just need to wait for the promise to settle
-        // so all disk writes complete before the next attempt starts
-      });
+      if (previousTimedOut) {
+        // Previous attempt timed out - might be deadlocked
+        // Give it a grace period to finish, but don't wait forever
+        await Promise.race([
+          previousAttempt.catch(() => {
+            // Ignore errors - we just care about completion
+          }),
+          new Promise((resolve) => setTimeout(resolve, GRACE_PERIOD_MS)),
+        ]);
+      } else {
+        // Previous attempt completed normally (success or non-timeout error)
+        // It's already settled, so this returns immediately
+        await previousAttempt.catch(() => {
+          // Ignore errors - we just need to wait for the promise to settle
+        });
+      }
       previousAttempt = null;
+      previousTimedOut = false;
     }
 
     const attemptNumber = attempt + 1;
@@ -523,6 +545,8 @@ export async function downloadAndProcessImage(
 
       if (error instanceof TimeoutError) {
         errorMessage = `Overall timeout (${OVERALL_TIMEOUT_MS}ms) processing image ${index + 1} from ${url}`;
+        // Mark that this attempt timed out - the underlying promise might be deadlocked
+        previousTimedOut = true;
       } else if ((error as any)?.code === "ECONNABORTED") {
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
       } else if ((error as any)?.response) {

@@ -1,0 +1,292 @@
+/**
+ * Image replacement utilities for markdown content
+ *
+ * Handles comprehensive image processing:
+ * - Regex-based image detection with safety limits
+ * - URL validation and sanitization
+ * - Concurrent image downloading with fallbacks
+ * - Deterministic markdown replacement
+ */
+
+import chalk from "chalk";
+import {
+  validateAndSanitizeImageUrl,
+  createFallbackImageMarkdown,
+} from "./imageValidation";
+import { sanitizeMarkdownImages } from "./markdownTransform";
+import {
+  processImageWithFallbacks,
+  logImageFailure,
+  type ImageProcessingResult,
+} from "./imageProcessing";
+
+/**
+ * Image match information extracted from markdown
+ */
+export interface ImageMatch {
+  /** Full markdown image syntax */
+  full: string;
+  /** Image URL */
+  url: string;
+  /** Alt text */
+  alt: string;
+  /** Sequential index for tracking */
+  idx: number;
+  /** Start position in source markdown */
+  start: number;
+  /** End position in source markdown */
+  end: number;
+}
+
+/**
+ * Image processing statistics
+ */
+export interface ImageProcessingStats {
+  /** Number of images successfully downloaded */
+  successfulImages: number;
+  /** Number of images that failed with fallbacks */
+  totalFailures: number;
+  /** Total bytes saved from successful downloads */
+  totalSaved: number;
+}
+
+/**
+ * Result of image replacement operation
+ */
+export interface ImageReplacementResult {
+  /** Processed markdown with image URLs replaced */
+  markdown: string;
+  /** Processing statistics */
+  stats: ImageProcessingStats;
+}
+
+const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
+
+/**
+ * Extracts all image matches from markdown content
+ *
+ * Uses an improved regex pattern that:
+ * - Matches until ')' not preceded by '\'
+ * - Allows spaces (trimmed)
+ * - Handles escaped parentheses in URLs
+ *
+ * @param sourceMarkdown - Source markdown content
+ * @returns Array of image matches with position information
+ */
+export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
+  // Improved URL pattern: match until a ')' not preceded by '\', allow spaces trimmed
+  const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+  const imageMatches: ImageMatch[] = [];
+  let m: RegExpExecArray | null;
+  let tmpIndex = 0;
+  let safetyCounter = 0;
+
+  while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+    if (++safetyCounter > SAFETY_LIMIT) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
+        )
+      );
+      break;
+    }
+    const start = m.index;
+    const full = m[0];
+    const end = start + full.length;
+    const rawUrl = m[2];
+    const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
+    imageMatches.push({
+      full,
+      url: unescapedUrl,
+      alt: m[1],
+      idx: tmpIndex++,
+      start,
+      end,
+    });
+  }
+
+  return imageMatches;
+}
+
+/**
+ * Processes and replaces all images in markdown content
+ *
+ * Workflow:
+ * 1. Extract image matches with regex
+ * 2. Validate and queue all images for processing
+ * 3. Process valid images concurrently
+ * 4. Apply replacements deterministically (end-to-start)
+ * 5. Sanitize final markdown
+ * 6. Report statistics
+ *
+ * @param markdown - Source markdown content
+ * @param safeFilename - Safe filename for logging/caching
+ * @returns Processed markdown and statistics
+ */
+export async function processAndReplaceImages(
+  markdown: string,
+  safeFilename: string
+): Promise<ImageReplacementResult> {
+  const sourceMarkdown = markdown;
+  const imageMatches = extractImageMatches(sourceMarkdown);
+
+  if (imageMatches.length === 0) {
+    // No images found, just sanitize
+    return {
+      markdown: sanitizeMarkdownImages(markdown),
+      stats: {
+        successfulImages: 0,
+        totalFailures: 0,
+        totalSaved: 0,
+      },
+    };
+  }
+
+  // Phase 1: Validate and queue all images for processing
+  const imageProcessingTasks = imageMatches.map((match) => {
+    const urlValidation = validateAndSanitizeImageUrl(match.url);
+    if (!urlValidation.isValid) {
+      console.warn(
+        chalk.yellow(`⚠️  Invalid image URL detected: ${urlValidation.error}`)
+      );
+      const fallbackMarkdown = createFallbackImageMarkdown(
+        match.full,
+        match.url,
+        match.idx
+      );
+
+      logImageFailure({
+        timestamp: new Date().toISOString(),
+        pageBlock: safeFilename,
+        imageIndex: match.idx,
+        originalUrl: match.url,
+        error: urlValidation.error,
+        fallbackUsed: true,
+        validationFailed: true,
+      });
+
+      return Promise.resolve({
+        success: false,
+        originalMarkdown: match.full,
+        imageUrl: match.url,
+        index: match.idx,
+        error: urlValidation.error,
+        fallbackUsed: true,
+      });
+    }
+
+    if (!urlValidation.sanitizedUrl!.startsWith("http")) {
+      console.info(chalk.blue(`ℹ️  Skipping local image: ${match.url}`));
+      return Promise.resolve({
+        success: false,
+        originalMarkdown: match.full,
+        imageUrl: match.url,
+        index: match.idx,
+        error: "Local image skipped",
+        fallbackUsed: true,
+      });
+    }
+
+    return processImageWithFallbacks(
+      urlValidation.sanitizedUrl!,
+      safeFilename,
+      match.idx,
+      match.full
+    ).then((result) => ({
+      ...result,
+      originalMarkdown: match.full,
+      imageUrl: urlValidation.sanitizedUrl!,
+      index: match.idx,
+    }));
+  });
+
+  // Phase 2: Process all valid images concurrently
+  let successfulImages = 0;
+  let totalFailures = 0;
+  let totalSaved = 0;
+
+  const imageResults = await Promise.allSettled(imageProcessingTasks);
+
+  // Build deterministic replacements using recorded match indices
+  const indexedReplacements: Array<{
+    start: number;
+    end: number;
+    text: string;
+  }> = [];
+
+  for (const result of imageResults) {
+    if (result.status !== "fulfilled") {
+      // Promise rejection - should not happen with our error handling
+      console.error(
+        chalk.red(`Unexpected image processing failure: ${result.reason}`)
+      );
+      totalFailures++;
+      continue;
+    }
+    const processResult = result.value;
+    const match = imageMatches.find((im) => im.idx === processResult.index);
+    if (!match) continue;
+
+    let replacementText: string;
+    if (processResult.success && processResult.newPath) {
+      replacementText = match.full.replace(
+        processResult.imageUrl!,
+        processResult.newPath
+      );
+      totalSaved += processResult.savedBytes || 0;
+      successfulImages++;
+    } else {
+      replacementText = createFallbackImageMarkdown(
+        match.full,
+        match.url,
+        match.idx
+      );
+      totalFailures++;
+    }
+    indexedReplacements.push({
+      start: match.start,
+      end: match.end,
+      text: replacementText,
+    });
+  }
+
+  // Apply replacements from end to start to keep indices stable
+  indexedReplacements.sort((a, b) => b.start - a.start);
+  let processedMarkdown = markdown;
+  for (const rep of indexedReplacements) {
+    processedMarkdown =
+      processedMarkdown.slice(0, rep.start) +
+      rep.text +
+      processedMarkdown.slice(rep.end);
+  }
+
+  // Final sanitization
+  processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
+
+  // Phase 3: Report results
+  const totalImages = imageMatches.length;
+  console.info(
+    chalk.green(
+      `📸 Processed ${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`
+    )
+  );
+  if (totalFailures > 0) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  ${totalFailures} images failed but have been replaced with informative placeholders`
+      )
+    );
+    console.info(
+      chalk.blue(`💡 Check 'image-failures.json' for recovery information`)
+    );
+  }
+
+  return {
+    markdown: processedMarkdown,
+    stats: {
+      successfulImages,
+      totalFailures,
+      totalSaved,
+    },
+  };
+}

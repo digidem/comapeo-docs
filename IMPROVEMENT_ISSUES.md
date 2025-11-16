@@ -173,53 +173,82 @@ this.loadCache(); // Loads ALL entries immediately
 
 **Proposed Solution:**
 
-**Option 1: On-demand loading**
+**Option 1: Per-entry file cache (recommended for immediate wins)**
 
 ```typescript
+// Use one file per cache entry - true lazy loading
+// .cache/images/
+//   ├── abc123def456.json  (hash of URL 1)
+//   ├── 789ghi012jkl.json  (hash of URL 2)
+//   └── ...
+
 class ImageCache {
-  private loaded = false;
+  private cacheDir = path.join(process.cwd(), ".cache/images");
+
+  constructor() {
+    // No upfront loading - instant startup!
+    fs.mkdirSync(this.cacheDir, { recursive: true });
+  }
 
   has(url: string): boolean {
-    if (!this.loaded) this.loadCache();
-    // ... rest of logic
+    const hash = createHash("md5").update(url).digest("hex");
+    const cachePath = path.join(this.cacheDir, `${hash}.json`);
+
+    if (!fs.existsSync(cachePath)) return false;
+
+    // Verify file exists on disk
+    try {
+      const entry = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+      const fullPath = path.join(IMAGES_PATH, entry.localPath);
+      return fs.existsSync(fullPath);
+    } catch {
+      return false;
+    }
+  }
+
+  get(url: string): CacheEntry | undefined {
+    const hash = createHash("md5").update(url).digest("hex");
+    const cachePath = path.join(this.cacheDir, `${hash}.json`);
+
+    try {
+      return JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+    } catch {
+      return undefined;
+    }
+  }
+
+  set(url: string, entry: CacheEntry): void {
+    const hash = createHash("md5").update(url).digest("hex");
+    const cachePath = path.join(this.cacheDir, `${hash}.json`);
+    fs.writeFileSync(cachePath, JSON.stringify(entry));
   }
 }
 ```
 
-**Option 2: Streaming cache (better for large caches)**
+**Why this is better than "lazy load on first access":**
 
-```typescript
-// Use one file per cache entry
-// cache/
-//   ├── hash-of-url-1.json
-//   ├── hash-of-url-2.json
-//   └── ...
+- Option 1 (old): `has()` calls `loadCache()` which reads entire JSON → still 5-10s delay on first access
+- Option 1 (new): Per-entry files → instant startup, only reads requested URLs
+- True lazy loading with actual performance gains
 
-get(url: string): CacheEntry | undefined {
-  const hash = createHash('md5').update(url).digest('hex');
-  const cachePath = path.join(CACHE_DIR, `${hash}.json`);
-
-  if (!fs.existsSync(cachePath)) return undefined;
-  return JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-}
-```
-
-**Option 3: SQLite (best for very large caches)**
+**Option 2: SQLite (best for very large caches > 10,000 entries)**
 
 ```typescript
 // Use better-sqlite3 for instant lookups
-const db = new Database("image-cache.db");
+const db = new Database(".cache/images.db");
 db.exec("CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, ...)");
+
+// Instant startup, indexed lookups, handles millions of entries
 ```
 
 **Expected Impact:**
 
-- **Startup Time:** -5 to -10 seconds for large caches
-- **Memory:** Reduced memory footprint
+- **Startup Time:** -5 to -10 seconds for large caches (immediate, not deferred)
+- **Memory:** Reduced memory footprint (only load entries as needed)
 - **Complexity:** Medium (structural change)
 
 **Recommendation:**
-Start with **Option 1** (trivial), then **Option 2** if cache grows > 1000 entries.
+Start with **Option 1** (per-entry files) for caches < 10,000 entries, then **Option 2** (SQLite) if cache grows larger.
 
 **Acceptance Criteria:**
 
@@ -232,6 +261,79 @@ Start with **Option 1** (trivial), then **Option 2** if cache grows > 1000 entri
 ---
 
 ## ⚡ High-Impact Improvements (Medium Priority, Medium Complexity)
+
+### Shared Dependency: Rate Limit Manager
+
+**Note:** Issues #4 (Parallel Pages) and #6 (Adaptive Batch) both need rate limit handling. To avoid duplicating 429 detection/backoff logic, implement a shared `RateLimitManager` utility first or as part of the first issue.
+
+**Minimal implementation:**
+
+```typescript
+// scripts/notion-fetch/rateLimitManager.ts
+export class RateLimitManager {
+  private lastRateLimitTime: number = 0;
+  private currentBackoffMs: number = 0;
+
+  /**
+   * Check if we're currently in backoff period
+   */
+  isRateLimited(): boolean {
+    if (this.currentBackoffMs === 0) return false;
+    const elapsed = Date.now() - this.lastRateLimitTime;
+    return elapsed < this.currentBackoffMs;
+  }
+
+  /**
+   * Record a 429 response and calculate backoff
+   */
+  recordRateLimit(retryAfterHeader?: string): void {
+    this.lastRateLimitTime = Date.now();
+
+    // Use Retry-After header if provided (in seconds)
+    if (retryAfterHeader) {
+      const retryAfterSeconds = parseInt(retryAfterHeader, 10);
+      if (!isNaN(retryAfterSeconds)) {
+        this.currentBackoffMs = retryAfterSeconds * 1000;
+        return;
+      }
+    }
+
+    // Otherwise exponential backoff: 5s, 10s, 20s, 40s (max)
+    this.currentBackoffMs = Math.min(
+      40000,
+      (this.currentBackoffMs || 2500) * 2
+    );
+  }
+
+  /**
+   * Get suggested concurrency reduction (0.5 = reduce by half)
+   */
+  getConcurrencyMultiplier(): number {
+    if (!this.isRateLimited()) return 1.0;
+    return 0.5; // Reduce concurrency by half during backoff
+  }
+
+  /**
+   * Reset backoff when requests succeed
+   */
+  recordSuccess(): void {
+    if (this.isRateLimited()) return; // Still in backoff
+    this.currentBackoffMs = 0;
+  }
+}
+
+// Singleton for use across parallel operations
+export const rateLimitManager = new RateLimitManager();
+```
+
+**Usage in both Issue #4 and #6:**
+
+- Check `rateLimitManager.isRateLimited()` before starting new batches
+- Call `rateLimitManager.recordRateLimit(retryAfter)` when catching 429 errors
+- Use `rateLimitManager.getConcurrencyMultiplier()` to adjust batch sizes
+- Call `rateLimitManager.recordSuccess()` after successful requests
+
+---
 
 ### Issue 4: Add parallel page processing
 
@@ -313,9 +415,10 @@ const concurrency = detectOptimalConcurrency({
 3. **Memory usage:** 5 pages × 15 images = 75 concurrent image operations
    - Solution: Keep image batch size at 5, but process multiple pages
 4. **Notion API rate limits:** Parallel requests may trigger 429 (Too Many Requests)
-   - Solution: Add rate limit detection and automatic retry with backoff
-   - Track retry metrics (log rate limit hits and retry counts directly)
-   - **Note:** Can be enhanced later with centralized error manager (Issue #5), but not required for initial implementation
+   - Solution: Use shared `RateLimitManager` (see above) for detection and backoff
+   - Catch 429 errors and call `rateLimitManager.recordRateLimit(retryAfterHeader)`
+   - Check `rateLimitManager.isRateLimited()` before starting new batches
+   - **Shared with Issue #6** to avoid duplicating throttling logic
 
 **Acceptance Criteria:**
 
@@ -326,9 +429,11 @@ const concurrency = detectOptimalConcurrency({
 - [ ] Error in one page doesn't stop other pages
 - [ ] Failed pages reported clearly at end
 - [ ] Memory usage stays within reasonable bounds
-- [ ] **Rate limit handling:** Detect 429 responses and throttle/retry automatically
-  - Log rate limit hits and retry counts
-  - Gracefully back off when rate limited (exponential backoff)
+- [ ] **Rate limit handling:** Use shared `RateLimitManager` for 429 detection and backoff
+  - Integrate with `rateLimitManager.recordRateLimit()` on 429 errors
+  - Check `rateLimitManager.isRateLimited()` before processing new batches
+  - Log rate limit hits and backoff duration
+  - Shared implementation with Issue #6 (no duplication)
 - [ ] **Benchmarking:** Measure wall-clock time for multi-page sync before/after changes
   - **With live Notion access:** Run `bun run notion:fetch-all` (50+ pages) and record total time
   - **Alternative (no Notion credentials):** Use content-branch snapshot or create large test fixture
@@ -658,10 +763,11 @@ export function detectOptimalConcurrency(
   - Tests verify heuristic with known resource values (no flakiness)
 - [ ] Tests verify adaptive behavior across different resource profiles
 - [ ] Documentation explains resource requirements
-- [ ] **Rate limit awareness:** Reduce concurrency when 429 responses detected
-  - Track retry-after headers from Notion API
-  - Temporarily lower concurrency on rate limit hits
-  - Resume normal concurrency after backoff period
+- [ ] **Rate limit awareness:** Use shared `RateLimitManager` to adjust concurrency
+  - Multiply adaptive concurrency by `rateLimitManager.getConcurrencyMultiplier()`
+  - Reduces concurrency by 50% during rate limit backoff
+  - Automatically resumes normal concurrency after backoff period
+  - Shared implementation with Issue #4 (no duplication)
 
 ---
 

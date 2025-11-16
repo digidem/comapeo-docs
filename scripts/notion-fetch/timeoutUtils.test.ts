@@ -34,10 +34,14 @@ describe("timeoutUtils", () => {
 
       const resultPromise = withTimeout(promise, 1000, "slow operation");
 
+      // Catch the rejection immediately to prevent unhandled promise rejection
+      const rejectionPromise = resultPromise.catch((error) => error);
+
       await vi.advanceTimersByTimeAsync(1001);
 
-      await expect(resultPromise).rejects.toThrow(TimeoutError);
-      await expect(resultPromise).rejects.toThrow(
+      const error = await rejectionPromise;
+      expect(error).toBeInstanceOf(TimeoutError);
+      expect(error.message).toContain(
         'Operation "slow operation" timed out after 1000ms'
       );
 
@@ -51,9 +55,13 @@ describe("timeoutUtils", () => {
       });
       const resultPromise = withTimeout(promise, 500, "critical task");
 
+      // Catch the rejection immediately
+      const rejectionPromise = resultPromise.catch((error) => error);
+
       await vi.advanceTimersByTimeAsync(501);
 
-      await expect(resultPromise).rejects.toMatchObject({
+      const error = await rejectionPromise;
+      expect(error).toMatchObject({
         name: "TimeoutError",
         operation: "critical task",
       });
@@ -77,9 +85,13 @@ describe("timeoutUtils", () => {
       const promise = Promise.reject(new Error("failed"));
 
       const resultPromise = withTimeout(promise, 5000, "test");
+      // Catch immediately to prevent unhandled rejection
+      const rejectionPromise = resultPromise.catch((error) => error);
+
       await vi.runAllTimersAsync();
 
-      await expect(resultPromise).rejects.toThrow("failed");
+      const error = await rejectionPromise;
+      expect(error.message).toBe("failed");
       expect(clearTimeoutSpy).toHaveBeenCalled();
     });
 
@@ -88,9 +100,13 @@ describe("timeoutUtils", () => {
       const promise = Promise.reject(originalError);
 
       const resultPromise = withTimeout(promise, 5000, "test");
+      // Catch immediately to prevent unhandled rejection
+      const rejectionPromise = resultPromise.catch((error) => error);
+
       await vi.runAllTimersAsync();
 
-      await expect(resultPromise).rejects.toThrow(originalError);
+      const error = await rejectionPromise;
+      expect(error).toBe(originalError);
     });
   });
 
@@ -165,9 +181,13 @@ describe("timeoutUtils", () => {
         "test"
       );
 
+      // Catch immediately to prevent unhandled rejection
+      const rejectionPromise = resultPromise.catch((err) => err);
+
       await vi.runAllTimersAsync();
 
-      await expect(resultPromise).rejects.toThrow("network failure");
+      const caughtError = await rejectionPromise;
+      expect(caughtError.message).toBe("network failure");
     });
 
     it("should support complex fallback types", async () => {
@@ -396,16 +416,15 @@ describe("timeoutUtils", () => {
 
       const resultPromise = withTimeout(promise, 100, "test");
 
+      // Catch immediately to prevent unhandled rejection
+      const rejectionPromise = resultPromise.catch((error) => error);
+
       await vi.advanceTimersByTimeAsync(101);
 
-      try {
-        await resultPromise;
-        expect.fail("Should have thrown");
-      } catch (error) {
-        expect(error).toBeInstanceOf(TimeoutError);
-        if (error instanceof TimeoutError) {
-          expect(error.operation).toBe("test");
-        }
+      const error = await rejectionPromise;
+      expect(error).toBeInstanceOf(TimeoutError);
+      if (error instanceof TimeoutError) {
+        expect(error.operation).toBe("test");
       }
 
       // Clean up

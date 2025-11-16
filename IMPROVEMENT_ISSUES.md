@@ -18,11 +18,13 @@ This document contains detailed issue descriptions for improving the Notion fetc
 Spinners create noise in CI logs and don't provide value in non-interactive environments. They can also cause timing issues in GitHub Actions.
 
 **Current Behavior:**
+
 - Spinners run in both local and CI environments
 - CI logs show spinner control characters and timeout warnings
 - Test output includes unnecessary spinner noise
 
 **Proposed Solution:**
+
 ```typescript
 // scripts/notion-fetch/spinnerManager.ts
 static create(text: string, timeoutMs?: number) {
@@ -40,11 +42,13 @@ static create(text: string, timeoutMs?: number) {
 ```
 
 **Expected Impact:**
+
 - **Time:** No performance change
 - **Noise:** Eliminates spinner control characters in CI logs
 - **Complexity:** Trivial (~5 minutes)
 
 **Acceptance Criteria:**
+
 - [ ] Spinners disabled when `CI=true` or `GITHUB_ACTIONS=true`
 - [ ] Simple text output used instead (✓/✗ prefix)
 - [ ] Local development still shows spinners
@@ -63,6 +67,7 @@ static create(text: string, timeoutMs?: number) {
 
 **Problem:**
 All images go through full download → resize → compress pipeline, even when:
+
 - Image is already small (< 50KB)
 - Image is already optimized
 - Image dimensions are below maxWidth threshold
@@ -71,6 +76,7 @@ This wastes CPU and time on images that don't need processing.
 
 **Current Behavior:**
 Every image processed through:
+
 1. Download (30s max)
 2. Sharp resize (30s max)
 3. Compression (45s max)
@@ -80,6 +86,7 @@ Even a 20KB already-optimized PNG goes through all steps.
 **Proposed Solution:**
 
 **Phase 1: Skip small images (10 minutes)**
+
 ```typescript
 // scripts/notion-fetch/imageProcessing.ts
 const MIN_SIZE_FOR_PROCESSING = 50 * 1024; // 50KB
@@ -90,12 +97,13 @@ if (originalBuffer.length < MIN_SIZE_FOR_PROCESSING) {
   return {
     newPath: imagePath,
     savedBytes: 0,
-    skipped: 'small-size'
+    skipped: "small-size",
   };
 }
 ```
 
 **Phase 2: Skip already-optimized images (30 minutes)**
+
 ```typescript
 // Detect optimization markers
 const isAlreadyOptimized = await checkIfOptimized(originalBuffer, chosenFmt);
@@ -105,6 +113,7 @@ if (isAlreadyOptimized) {
 ```
 
 **Phase 3: Skip resize if dimensions OK (20 minutes)**
+
 ```typescript
 // Check actual dimensions before resizing
 const metadata = await sharp(originalBuffer).metadata();
@@ -114,21 +123,29 @@ if (metadata.width <= maxWidth) {
 ```
 
 **Expected Impact:**
+
 - **Time Saved:** 20-30% reduction on pages with many small images
 - **Complexity:** Low (incremental implementation)
 - **Risk:** Low (only skips unnecessary work)
 
 **Data Points:**
+
 - imageCompressor.ts already has partial skip logic (line 50-60)
 - Can extend existing patterns
 
 **Acceptance Criteria:**
+
 - [ ] Images < 50KB saved directly without processing
 - [ ] Dimensions checked before resize
 - [ ] Already-optimized images skip compression
 - [ ] Logs indicate when processing skipped and why
 - [ ] Tests verify skip logic works correctly
 - [ ] No regression in image quality
+- [ ] **Benchmarking:** Measure wall-clock time for a 50-page sync before/after changes
+  - Baseline: Run `bun run notion:fetch-all` and record total time
+  - Post-change: Re-run and verify 20-30% improvement on pages with small images
+  - Document: Add results to PR (e.g., "50 pages: 15min → 11min (27% faster)")
+- [ ] Performance metrics logged showing skip rate (e.g., "Skipped 45/120 images (37.5%)")
 
 ---
 
@@ -144,6 +161,7 @@ if (metadata.width <= maxWidth) {
 Image cache loads entire JSON file into memory at startup, even though most URLs won't be checked during a run.
 
 **Current Behavior:**
+
 ```typescript
 // ImageCache constructor
 this.loadCache(); // Loads ALL entries immediately
@@ -153,6 +171,7 @@ this.loadCache(); // Loads ALL entries immediately
 **Proposed Solution:**
 
 **Option 1: On-demand loading**
+
 ```typescript
 class ImageCache {
   private loaded = false;
@@ -165,6 +184,7 @@ class ImageCache {
 ```
 
 **Option 2: Streaming cache (better for large caches)**
+
 ```typescript
 // Use one file per cache entry
 // cache/
@@ -182,13 +202,15 @@ get(url: string): CacheEntry | undefined {
 ```
 
 **Option 3: SQLite (best for very large caches)**
+
 ```typescript
 // Use better-sqlite3 for instant lookups
-const db = new Database('image-cache.db');
-db.exec('CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, ...)');
+const db = new Database("image-cache.db");
+db.exec("CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, ...)");
 ```
 
 **Expected Impact:**
+
 - **Startup Time:** -5 to -10 seconds for large caches
 - **Memory:** Reduced memory footprint
 - **Complexity:** Medium (structural change)
@@ -197,6 +219,7 @@ db.exec('CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, ...)');
 Start with **Option 1** (trivial), then **Option 2** if cache grows > 1000 entries.
 
 **Acceptance Criteria:**
+
 - [ ] Cache doesn't load all entries at startup
 - [ ] First cache access loads data on-demand
 - [ ] Performance improves for large caches (measured)
@@ -219,6 +242,7 @@ Start with **Option 1** (trivial), then **Option 2** if cache grows > 1000 entri
 Pages are processed sequentially (1 → 2 → 3 → ... → 156), but they're independent and could be processed in parallel.
 
 **Current Behavior:**
+
 ```typescript
 for (const page of pages) {
   await processPage(page); // Waits for each page to complete
@@ -230,9 +254,10 @@ For 50+ page runs, this creates artificial sequencing bottleneck.
 **Proposed Solution:**
 
 **Phase 1: Simple parallel batching (1 hour)**
+
 ```typescript
 // scripts/notion-fetch/generateBlocks.ts
-import { processBatch } from './timeoutUtils';
+import { processBatch } from "./timeoutUtils";
 
 const pageResults = await processBatch(
   pages,
@@ -244,13 +269,14 @@ const pageResults = await processBatch(
   },
   {
     maxConcurrent: 5, // Process 5 pages at a time
-    operation: 'page processing',
+    operation: "page processing",
     timeoutMs: 180000, // 3 minutes per page
   }
 );
 ```
 
 **Phase 2: Adaptive concurrency (optional)**
+
 ```typescript
 // Adjust concurrency based on image load
 const concurrency = detectOptimalConcurrency({
@@ -261,33 +287,48 @@ const concurrency = detectOptimalConcurrency({
 ```
 
 **Expected Impact:**
+
 - **Time Saved:** 50-70% reduction for multi-page runs
   - Example: 50 pages @ 30s each = 25 minutes sequential → ~7-10 minutes parallel
 - **Complexity:** Medium
 - **Risk:** Medium (need to ensure file write safety)
 
 **Implementation Notes:**
+
 - ✅ `processBatch` utility already exists in timeoutUtils.ts
 - ✅ Image processing already uses batch processing (max 5 concurrent)
 - ⚠️ Need to ensure markdown file writes don't conflict
 - ⚠️ Need to track overall progress across parallel operations
 
 **Potential Issues:**
+
 1. **File write conflicts:** Multiple pages writing to same directory
    - Solution: Atomic writes already handled by `writeMarkdownFile`
 2. **Progress tracking:** Spinners overlap with parallel processing
    - Solution: Use aggregated progress (see Issue #9)
+   - **IMPORTANT:** Issue #9 should be implemented first or co-delivered to avoid UI regression
 3. **Memory usage:** 5 pages × 15 images = 75 concurrent image operations
    - Solution: Keep image batch size at 5, but process multiple pages
+4. **Notion API rate limits:** Parallel requests may trigger 429 (Too Many Requests)
+   - Solution: Add rate limit detection and automatic retry with backoff
+   - Track retry metrics in error manager (see Issue #5)
 
 **Acceptance Criteria:**
+
 - [ ] Pages processed in batches of 5 (configurable)
 - [ ] Overall processing time reduced by 50%+ for multi-page runs
 - [ ] No file write conflicts or corruption
-- [ ] Progress tracking shows aggregate progress
+- [ ] **Progress tracking shows aggregate progress** (requires Issue #9 first or co-delivered)
 - [ ] Error in one page doesn't stop other pages
 - [ ] Failed pages reported clearly at end
 - [ ] Memory usage stays within reasonable bounds
+- [ ] **Rate limit handling:** Detect 429 responses and throttle/retry automatically
+  - Log rate limit hits and retry counts
+  - Gracefully back off when rate limited (exponential backoff)
+- [ ] **Benchmarking:** Measure wall-clock time for multi-page sync before/after changes
+  - Baseline: Run `bun run notion:fetch-all` (50+ pages) and record total time
+  - Post-change: Re-run and verify 50-70% improvement
+  - Document: Add results to PR (e.g., "156 pages: 78min → 28min (64% faster)")
 
 ---
 
@@ -301,18 +342,21 @@ const concurrency = detectOptimalConcurrency({
 
 **Problem:**
 Error handling and retry logic is duplicated across multiple files:
+
 - `imageProcessing.ts`: Retry with exponential backoff
 - `imageReplacer.ts`: Error aggregation
 - `emojiCache.ts`: Error logging
 - `generateBlocks.ts`: Different retry pattern
 
 This creates:
+
 - Inconsistent error messages
 - Duplicate retry logic
 - Scattered error logs
 - Hard to track failure patterns
 
 **Current Issues:**
+
 1. **logImageFailure() uses sync I/O** - Blocks in CI (lines 129-210 in imageProcessing.ts)
 2. **No centralized error tracking** - Can't see failure patterns
 3. **Retry logic duplicated** - Exponential backoff copied 3+ times
@@ -321,6 +365,7 @@ This creates:
 **Proposed Solution:**
 
 **Create: `scripts/notion-fetch/errorManager.ts`**
+
 ```typescript
 export class ErrorManager {
   private errors: Map<string, ErrorEntry[]> = new Map();
@@ -379,7 +424,7 @@ export class ErrorManager {
   async flush(): Promise<void> {
     // Async, batched write
     const summary = this.generateSummary();
-    await fs.promises.writeFile('error-summary.json', JSON.stringify(summary));
+    await fs.promises.writeFile("error-summary.json", JSON.stringify(summary));
   }
 
   /**
@@ -399,10 +444,11 @@ export class ErrorManager {
 export const errorManager = new ErrorManager();
 
 // Auto-flush on exit
-process.on('beforeExit', () => errorManager.flush());
+process.on("beforeExit", () => errorManager.flush());
 ```
 
 **Usage Example:**
+
 ```typescript
 // Replace this:
 let attempt = 0;
@@ -416,23 +462,22 @@ while (attempt < 3) {
 }
 
 // With this:
-return await errorManager.withRetry(
-  () => someOperation(),
-  {
-    maxRetries: 3,
-    operation: 'image-download',
-    backoff: 'exponential',
-  }
-);
+return await errorManager.withRetry(() => someOperation(), {
+  maxRetries: 3,
+  operation: "image-download",
+  backoff: "exponential",
+});
 ```
 
 **Expected Impact:**
+
 - **Code Deduplication:** Remove ~100 lines of duplicate retry logic
 - **Better Debugging:** Centralized error tracking with patterns
 - **Less Noise:** Batched error logging, no sync I/O blocks
 - **Complexity:** High (touches many files)
 
 **Migration Path:**
+
 1. Create ErrorManager class
 2. Migrate imageProcessing.ts to use ErrorManager
 3. Migrate other files incrementally
@@ -440,6 +485,7 @@ return await errorManager.withRetry(
 5. Add error summary at end of runs
 
 **Acceptance Criteria:**
+
 - [ ] ErrorManager class created with retry logic
 - [ ] All retry logic uses ErrorManager.withRetry()
 - [ ] Error logging is async and batched
@@ -463,17 +509,20 @@ return await errorManager.withRetry(
 
 **Problem:**
 Batch sizes are hardcoded:
+
 - Images: 5 concurrent (MAX_CONCURRENT_IMAGES)
 - Pages: Sequential (1 at a time)
 - Blocks: Sequential
 
 This doesn't adapt to:
+
 - Available system memory
 - CPU core count
 - Network bandwidth
 - Image sizes (small vs large)
 
 **Current Behavior:**
+
 ```typescript
 const MAX_CONCURRENT_IMAGES = 5; // Always 5, regardless of system
 ```
@@ -484,14 +533,17 @@ On a 2-core machine with 4GB RAM, 5 might be too many.
 **Proposed Solution:**
 
 **Phase 1: System resource detection**
+
 ```typescript
 // scripts/notion-fetch/resourceManager.ts
-import os from 'node:os';
+import os from "node:os";
 
-export function detectOptimalConcurrency(type: 'images' | 'pages' | 'blocks'): number {
+export function detectOptimalConcurrency(
+  type: "images" | "pages" | "blocks"
+): number {
   const cpuCores = os.cpus().length;
-  const freeMemoryGB = os.freemem() / (1024 ** 3);
-  const totalMemoryGB = os.totalmem() / (1024 ** 3);
+  const freeMemoryGB = os.freemem() / 1024 ** 3;
+  const totalMemoryGB = os.totalmem() / 1024 ** 3;
 
   // Conservative defaults
   const config = {
@@ -525,27 +577,26 @@ export function detectOptimalConcurrency(type: 'images' | 'pages' | 'blocks'): n
   // Take the minimum of memory/CPU limits, clamped to min/max
   return Math.max(
     settings.minConcurrency,
-    Math.min(
-      settings.maxConcurrency,
-      memoryBasedLimit,
-      cpuBasedLimit
-    )
+    Math.min(settings.maxConcurrency, memoryBasedLimit, cpuBasedLimit)
   );
 }
 ```
 
 **Expected Impact:**
+
 - **Performance:** 20-40% improvement on well-resourced machines
 - **Stability:** Prevents OOM on low-memory systems
 - **Complexity:** High (requires testing on various systems)
 
 **Testing Strategy:**
+
 - Test on 2-core, 4GB RAM system (GitHub Actions)
 - Test on 8-core, 16GB RAM system (typical developer laptop)
 - Test on 32-core, 64GB RAM system (high-end workstation)
 - Verify memory usage stays within bounds
 
 **Acceptance Criteria:**
+
 - [ ] Batch size adapts to available CPU cores
 - [ ] Batch size adapts to available memory
 - [ ] Minimum/maximum limits enforced
@@ -554,6 +605,10 @@ export function detectOptimalConcurrency(type: 'images' | 'pages' | 'blocks'): n
 - [ ] Logs show concurrency adjustments
 - [ ] Tests verify adaptive behavior
 - [ ] Documentation explains resource requirements
+- [ ] **Rate limit awareness:** Reduce concurrency when 429 responses detected
+  - Track retry-after headers from Notion API
+  - Temporarily lower concurrency on rate limit hits
+  - Resume normal concurrency after backoff period
 
 ---
 
@@ -569,6 +624,7 @@ export function detectOptimalConcurrency(type: 'images' | 'pages' | 'blocks'): n
 Image and block caches never expire or invalidate. If a Notion page is updated with a new image, the cache continues serving the old image.
 
 **Current Behavior:**
+
 ```typescript
 // Cache entry has no freshness tracking
 interface ImageCacheEntry {
@@ -584,12 +640,13 @@ Cache never checks if Notion content has changed.
 **Proposed Solution:**
 
 **Phase 1: Track Notion's last_edited_time**
+
 ```typescript
 interface ImageCacheEntry {
   url: string;
   localPath: string;
-  timestamp: string;           // When we cached it
-  notionLastEdited?: string;   // Notion's last_edited_time
+  timestamp: string; // When we cached it
+  notionLastEdited?: string; // Notion's last_edited_time
   blockName: string;
 }
 
@@ -598,6 +655,7 @@ imageCache.set(url, localPath, blockName, notionPage.last_edited_time);
 ```
 
 **Phase 2: Invalidate stale entries**
+
 ```typescript
 has(url: string, notionLastEdited?: string): boolean {
   const entry = this.cache.get(url);
@@ -624,17 +682,44 @@ has(url: string, notionLastEdited?: string): boolean {
 ```
 
 **Expected Impact:**
+
 - **Correctness:** Cache stays in sync with Notion
 - **Performance:** Minimal impact (just timestamp comparison)
 - **User Experience:** Users always see latest content
 
+**Migration Strategy:**
+The `notionLastEdited` field is optional to maintain backwards compatibility with existing cache files. Three approaches for handling existing cache entries:
+
+1. **Lazy backfill (recommended):**
+   - Existing entries without `notionLastEdited` use TTL fallback (30-day expiration)
+   - New fetches populate `notionLastEdited` field
+   - Cache naturally migrates over time as content is refreshed
+   - No manual intervention required
+
+2. **One-time migration script:**
+   - Add `bun run cache:migrate` command
+   - Iterates through cache, fetches Notion timestamps, updates entries
+   - Useful for large caches that won't refresh naturally
+   - Optional, not required for deployment
+
+3. **Cache versioning:**
+   - Add `cacheVersion: 2` to schema
+   - On version mismatch, clear old cache and rebuild
+   - Cleanest approach but loses existing cache benefits
+   - Use only if breaking changes required
+
+**Recommended:** Use approach #1 (lazy backfill) for gradual migration without disruption.
+
 **Acceptance Criteria:**
-- [ ] Cache entries track Notion's last_edited_time
+
+- [ ] Cache entries track Notion's last_edited_time (optional field)
 - [ ] Stale entries invalidated when Notion content newer
-- [ ] TTL fallback for entries without Notion timestamp
-- [ ] Backwards compatible with existing cache files
-- [ ] Tests verify freshness checking
-- [ ] Documentation explains cache invalidation
+- [ ] TTL fallback for entries without Notion timestamp (30 days default)
+- [ ] Backwards compatible with existing cache files (no breaking changes)
+- [ ] Tests verify freshness checking with and without `notionLastEdited`
+- [ ] Documentation explains cache invalidation and migration approach
+- [ ] Old cache entries without `notionLastEdited` expire via TTL
+- [ ] No silent cache misses after rollout (TTL ensures gradual refresh)
 
 ---
 
@@ -648,12 +733,14 @@ has(url: string, notionLastEdited?: string): boolean {
 
 **Problem:**
 Timeout values are hardcoded guesses:
+
 - Download: 30s
 - Sharp: 30s
 - Compression: 45s
 - Overall: 90s
 
 We don't know:
+
 - How often timeouts actually occur
 - Which operations timeout most frequently
 - If timeout values are appropriate
@@ -662,6 +749,7 @@ We don't know:
 **Proposed Solution:**
 
 **Phase 1: Timeout instrumentation**
+
 ```typescript
 // scripts/notion-fetch/timeoutTelemetry.ts
 export class TimeoutTelemetry {
@@ -676,7 +764,10 @@ export class TimeoutTelemetry {
       total: measurements.length,
       timeouts: timeoutCount,
       timeoutRate: percentage,
-      p50, p95, p99, max,
+      p50,
+      p95,
+      p99,
+      max,
       recommendedTimeout: p99 * 1.2,
     };
   }
@@ -688,6 +779,7 @@ export class TimeoutTelemetry {
 ```
 
 **Example Output:**
+
 ```
 === Timeout Telemetry Report ===
 
@@ -703,17 +795,55 @@ image download:
 ```
 
 **Expected Impact:**
+
 - **Data-Driven:** Tune timeouts based on actual performance
 - **Visibility:** See which operations are slow
 - **Optimization:** Identify bottlenecks with hard data
 
+**Configuration & Storage Plan:**
+
+1. **Opt-in by default with easy disable:**
+
+   ```bash
+   # Enable telemetry (default: enabled)
+   NOTION_FETCH_TELEMETRY=true bun run notion:fetch-all
+
+   # Disable telemetry for clean output
+   NOTION_FETCH_TELEMETRY=false bun run notion:fetch-all
+   ```
+
+2. **Storage location:**
+   - **In-memory during run:** Measurements stored in memory, no I/O overhead
+   - **Report output:** `./telemetry-report.txt` (only written at end of run)
+   - **Historical data:** `./telemetry-history.json` (optional, for trend analysis)
+
+3. **Retention policy:**
+   - In-memory data: Cleared after each run (no persistence)
+   - Report files: Keep last 10 reports (auto-rotate)
+   - Historical JSON: Keep last 30 days of data (auto-prune on startup)
+   - Add `.telemetry-*` to `.gitignore`
+
+4. **Output modes:**
+   - `NOTION_FETCH_TELEMETRY=false` - No telemetry, no output
+   - `NOTION_FETCH_TELEMETRY=true` - Report written to file, summary to stdout
+   - `NOTION_FETCH_TELEMETRY=verbose` - Full report to stdout + file
+
 **Acceptance Criteria:**
+
 - [ ] Telemetry class tracks operation timings
 - [ ] withTimeout instrumented to record measurements
 - [ ] Report generated at end of run
 - [ ] Percentile calculations (p50, p95, p99)
 - [ ] Recommended timeout calculations
 - [ ] Tests verify telemetry accuracy
+- [ ] **Configuration:** `NOTION_FETCH_TELEMETRY` env var controls behavior
+  - `false` - Disabled (no collection, no output)
+  - `true` - Enabled (default, file + summary)
+  - `verbose` - Full output to stdout
+- [ ] **Storage:** Reports written to `./telemetry-report.txt`
+- [ ] **Retention:** Auto-rotate reports (keep last 10), prune history (30 days)
+- [ ] **Gitignore:** `.telemetry-*` files excluded from git
+- [ ] **Documentation:** Explains how to enable/disable and interpret reports
 
 ---
 
@@ -729,6 +859,7 @@ image download:
 When processing pages/images in parallel, individual spinners create noise and don't show overall progress clearly.
 
 **Current Behavior:**
+
 ```
 ⠋ Processing image 1 (attempt 1/3)
 ⠋ Processing image 2 (attempt 1/3)
@@ -741,11 +872,13 @@ Multiple spinners overlap and it's hard to see overall progress.
 **Proposed Solution:**
 
 Replace individual spinners with aggregate progress:
+
 ```typescript
 ⠋ Processing images: 5/15 complete (33%) | 2 in progress | ETA: 45s
 ```
 
 **Implementation:**
+
 ```typescript
 // scripts/notion-fetch/progressTracker.ts
 export class ProgressTracker {
@@ -780,7 +913,7 @@ export class ProgressTracker {
   }
 
   private calculateETA(): string {
-    if (this.completed === 0) return 'calculating...';
+    if (this.completed === 0) return "calculating...";
 
     const elapsed = Date.now() - this.startTime;
     const avgTimePerItem = elapsed / this.completed;
@@ -793,11 +926,13 @@ export class ProgressTracker {
 ```
 
 **Expected Impact:**
+
 - **UX:** Clearer progress visualization
 - **Debugging:** Easier to see where processing is stuck
 - **Performance:** See ETA for long-running operations
 
 **Acceptance Criteria:**
+
 - [ ] ProgressTracker class created
 - [ ] Shows aggregate progress (X/Y complete)
 - [ ] Shows percentage, in progress count, failed count
@@ -810,25 +945,28 @@ export class ProgressTracker {
 
 ## Summary Table
 
-| Issue | Priority | Complexity | Time Saved | Effort |
-|-------|----------|------------|------------|--------|
-| #1 CI Spinners | ⭐⭐⭐ | Trivial | 0% (noise) | 5min |
-| #2 Smart Skips | ⭐⭐⭐ | Low | 20-30% | 1hr |
-| #3 Lazy Cache | ⭐⭐ | Medium | 5-10s startup | 2hr |
-| #4 Parallel Pages | ⭐⭐⭐ | Medium | 50-70% | 2-3hr |
-| #5 Error Manager | ⭐⭐ | High | 0% (quality) | 4-6hr |
-| #6 Adaptive Batch | ⭐⭐ | High | 20-40% | 6-8hr |
-| #7 Cache Freshness | ⭐⭐ | Medium | 0% (correctness) | 3-4hr |
-| #8 Telemetry | ⭐ | Medium | 0% (insight) | 3-4hr |
-| #9 Progress Tracking | ⭐⭐ | Low | 0% (UX) | 2hr |
+| Issue                | Priority | Complexity | Time Saved       | Effort |
+| -------------------- | -------- | ---------- | ---------------- | ------ |
+| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   |
+| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    |
+| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    |
+| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  |
+| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  |
+| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  |
+| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  |
+| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    |
 
 **Recommended Order:**
-1. #1 CI Spinners (quick win)
-2. #2 Smart Skips (high impact, low effort)
-3. #4 Parallel Pages (massive performance boost)
-4. #3 Lazy Cache (good optimization)
-5. #9 Progress Tracking (pairs well with #4)
-6. #5 Error Manager (code quality)
-7. #7 Cache Freshness (correctness)
-8. #6 Adaptive Batch (advanced optimization)
-9. #8 Telemetry (nice to have)
+
+1. **#1 CI Spinners** (quick win, 5min)
+2. **#2 Smart Skips** (high impact, low effort, 1hr)
+3. **#9 Progress Tracking** (prerequisite for #4, prevents UI regression, 2hr)
+4. **#4 Parallel Pages** (massive performance boost, requires #9, 2-3hr)
+5. **#3 Lazy Cache** (good optimization, 2hr)
+6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)
+7. **#7 Cache Freshness** (correctness, 3-4hr)
+8. **#6 Adaptive Batch** (advanced optimization, 6-8hr)
+9. **#8 Telemetry** (nice to have, 3-4hr)
+
+**Critical Path Note:** Issue #9 (Progress Tracking) MUST be implemented before or co-delivered with Issue #4 (Parallel Pages) to avoid noisy spinner overlap and ensure clean UI during parallel operations. See Issue #4 acceptance criteria for details.

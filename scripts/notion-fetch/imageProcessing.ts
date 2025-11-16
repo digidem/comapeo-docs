@@ -373,6 +373,13 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
+  // Track the previous attempt's promise to prevent race conditions.
+  // JavaScript promises are not cancellable - when withTimeout() rejects,
+  // the underlying operation keeps running and can still write to disk.
+  // We must wait for the timed-out promise to fully settle before starting
+  // the next retry, otherwise a slow attempt can overwrite a successful retry.
+  let previousAttempt: Promise<any> | null = null;
+
   // Overall timeout per attempt: 120 seconds
   // Must be LONGER than sum of individual timeouts to avoid false positives:
   // - Download: 30s (axios timeout)
@@ -383,6 +390,17 @@ export async function downloadAndProcessImage(
   const OVERALL_TIMEOUT_MS = 120000;
 
   while (attempt < 3) {
+    // Wait for the previous attempt to fully settle (including all disk I/O)
+    // before starting a new one. This prevents timed-out attempts from
+    // overwriting files written by successful retries.
+    if (previousAttempt) {
+      await previousAttempt.catch(() => {
+        // Ignore errors - we just need to wait for the promise to settle
+        // so all disk writes complete before the next attempt starts
+      });
+      previousAttempt = null;
+    }
+
     const attemptNumber = attempt + 1;
 
     // Spinner timeout must be longer than operation timeout to avoid premature warnings
@@ -394,86 +412,91 @@ export async function downloadAndProcessImage(
     // Create AbortController for actual request cancellation
     const abortController = new AbortController();
 
+    // Capture the entire async operation so we can track when it fully settles
+    const currentAttempt = (async () => {
+      spinner.text = `Processing image ${index + 1}: Downloading`;
+      const response = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+        maxRedirects: 5,
+        signal: abortController.signal,
+        headers: {
+          "User-Agent": "notion-fetch-script/1.0",
+        },
+      });
+
+      const originalBuffer = Buffer.from(response.data, "binary");
+      const cleanUrl = url.split("?")[0];
+
+      const rawCT = (response.headers as Record<string, unknown>)[
+        "content-type"
+      ];
+      const normalizedCT =
+        typeof rawCT === "string"
+          ? rawCT
+          : Array.isArray(rawCT)
+            ? rawCT[0]
+            : undefined;
+      const headerFmt = formatFromContentType(normalizedCT);
+      const bufferFmt = detectFormatFromBuffer(originalBuffer);
+      const chosenFmt = chooseFormat(bufferFmt, headerFmt);
+
+      const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
+      let extension = extForFormat(chosenFmt);
+      if (!extension) {
+        extension = urlExt || ".jpg";
+      }
+
+      const sanitizedBlockName = blockName
+        .replace(/[^a-z0-9]/gi, "")
+        .toLowerCase()
+        .slice(0, 20);
+      const filename = `${sanitizedBlockName}_${index}${extension}`;
+      const filepath = path.join(IMAGES_PATH, filename);
+
+      let resizedBuffer = originalBuffer;
+      let originalSize = originalBuffer.length;
+
+      if (isResizableFormat(chosenFmt)) {
+        spinner.text = `Processing image ${index + 1}: Resizing`;
+        const processed = await processImage(originalBuffer, filepath);
+        resizedBuffer = processed.outputBuffer;
+        originalSize = processed.originalSize;
+      } else {
+        spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
+        resizedBuffer = originalBuffer;
+        originalSize = originalBuffer.length;
+      }
+
+      spinner.text = `Processing image ${index + 1}: Compressing`;
+      const { finalSize, usedFallback } = await compressImageToFileWithFallback(
+        originalBuffer,
+        resizedBuffer,
+        filepath,
+        url
+      );
+
+      const savedBytes = usedFallback
+        ? 0
+        : Math.max(0, originalSize - finalSize);
+      const imagePath = `/images/${filename}`;
+
+      return {
+        filepath,
+        imagePath,
+        savedBytes,
+        usedFallback,
+      };
+    })();
+
+    // Store reference to this attempt for race condition prevention
+    previousAttempt = currentAttempt;
+
     try {
       // Wrap the ENTIRE operation with timeout
       // This ensures we never hang indefinitely even if individual timeouts fail
       const result = await withTimeout(
-        (async () => {
-          spinner.text = `Processing image ${index + 1}: Downloading`;
-          const response = await axios.get(url, {
-            responseType: "arraybuffer",
-            timeout: 30000,
-            maxRedirects: 5,
-            signal: abortController.signal,
-            headers: {
-              "User-Agent": "notion-fetch-script/1.0",
-            },
-          });
-
-          const originalBuffer = Buffer.from(response.data, "binary");
-          const cleanUrl = url.split("?")[0];
-
-          const rawCT = (response.headers as Record<string, unknown>)[
-            "content-type"
-          ];
-          const normalizedCT =
-            typeof rawCT === "string"
-              ? rawCT
-              : Array.isArray(rawCT)
-                ? rawCT[0]
-                : undefined;
-          const headerFmt = formatFromContentType(normalizedCT);
-          const bufferFmt = detectFormatFromBuffer(originalBuffer);
-          const chosenFmt = chooseFormat(bufferFmt, headerFmt);
-
-          const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
-          let extension = extForFormat(chosenFmt);
-          if (!extension) {
-            extension = urlExt || ".jpg";
-          }
-
-          const sanitizedBlockName = blockName
-            .replace(/[^a-z0-9]/gi, "")
-            .toLowerCase()
-            .slice(0, 20);
-          const filename = `${sanitizedBlockName}_${index}${extension}`;
-          const filepath = path.join(IMAGES_PATH, filename);
-
-          let resizedBuffer = originalBuffer;
-          let originalSize = originalBuffer.length;
-
-          if (isResizableFormat(chosenFmt)) {
-            spinner.text = `Processing image ${index + 1}: Resizing`;
-            const processed = await processImage(originalBuffer, filepath);
-            resizedBuffer = processed.outputBuffer;
-            originalSize = processed.originalSize;
-          } else {
-            spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
-            resizedBuffer = originalBuffer;
-            originalSize = originalBuffer.length;
-          }
-
-          spinner.text = `Processing image ${index + 1}: Compressing`;
-          const { finalSize, usedFallback } =
-            await compressImageToFileWithFallback(
-              originalBuffer,
-              resizedBuffer,
-              filepath,
-              url
-            );
-
-          const savedBytes = usedFallback
-            ? 0
-            : Math.max(0, originalSize - finalSize);
-          const imagePath = `/images/${filename}`;
-
-          return {
-            filepath,
-            imagePath,
-            savedBytes,
-            usedFallback,
-          };
-        })(),
+        currentAttempt,
         OVERALL_TIMEOUT_MS,
         `image ${index + 1} processing`
       );

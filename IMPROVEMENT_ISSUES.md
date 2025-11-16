@@ -142,7 +142,10 @@ if (metadata.width <= maxWidth) {
 - [ ] Tests verify skip logic works correctly
 - [ ] No regression in image quality
 - [ ] **Benchmarking:** Measure wall-clock time for a 50-page sync before/after changes
-  - Baseline: Run `bun run notion:fetch-all` and record total time
+  - **With live Notion access:** Run `bun run notion:fetch-all` and record total time
+  - **Alternative (no Notion credentials):** Use content-branch snapshot or canned JSON fixtures
+    - Run `git checkout content && bun run notion:fetch -- --pages 50` against cached content
+    - Or create test fixture with representative image distribution
   - Post-change: Re-run and verify 20-30% improvement on pages with small images
   - Document: Add results to PR (e.g., "50 pages: 15min → 11min (27% faster)")
 - [ ] Performance metrics logged showing skip rate (e.g., "Skipped 45/120 images (37.5%)")
@@ -311,7 +314,8 @@ const concurrency = detectOptimalConcurrency({
    - Solution: Keep image batch size at 5, but process multiple pages
 4. **Notion API rate limits:** Parallel requests may trigger 429 (Too Many Requests)
    - Solution: Add rate limit detection and automatic retry with backoff
-   - Track retry metrics in error manager (see Issue #5)
+   - Track retry metrics (log rate limit hits and retry counts directly)
+   - **Note:** Can be enhanced later with centralized error manager (Issue #5), but not required for initial implementation
 
 **Acceptance Criteria:**
 
@@ -326,9 +330,13 @@ const concurrency = detectOptimalConcurrency({
   - Log rate limit hits and retry counts
   - Gracefully back off when rate limited (exponential backoff)
 - [ ] **Benchmarking:** Measure wall-clock time for multi-page sync before/after changes
-  - Baseline: Run `bun run notion:fetch-all` (50+ pages) and record total time
+  - **With live Notion access:** Run `bun run notion:fetch-all` (50+ pages) and record total time
+  - **Alternative (no Notion credentials):** Use content-branch snapshot or create large test fixture
+    - Checkout content branch with 50+ cached pages
+    - Run against local cache to measure parallel processing overhead
+    - Or create mock Notion API responses with realistic delays
   - Post-change: Re-run and verify 50-70% improvement
-  - Document: Add results to PR (e.g., "156 pages: 78min → 28min (64% faster)")
+  - Document: Add results to PR (e.g., "156 pages: 78min → 28min (64% faster)" or "50 cached pages: 10min → 3.5min (65% faster)")
 
 ---
 
@@ -532,18 +540,58 @@ On a 2-core machine with 4GB RAM, 5 might be too many.
 
 **Proposed Solution:**
 
-**Phase 1: System resource detection**
+**Phase 1: System resource detection with injectable providers**
 
 ```typescript
 // scripts/notion-fetch/resourceManager.ts
 import os from "node:os";
 
+/**
+ * Resource provider interface for dependency injection
+ * Allows tests to override system resource detection
+ */
+export interface ResourceProvider {
+  getCpuCores: () => number;
+  getFreeMemoryGB: () => number;
+  getTotalMemoryGB: () => number;
+}
+
+/**
+ * Default resource provider using real system values
+ */
+const defaultResourceProvider: ResourceProvider = {
+  getCpuCores: () => os.cpus().length,
+  getFreeMemoryGB: () => os.freemem() / 1024 ** 3,
+  getTotalMemoryGB: () => os.totalmem() / 1024 ** 3,
+};
+
+/**
+ * Environment variable overrides for CI/testing
+ * NOTION_FETCH_CONCURRENCY_OVERRIDE="images:5,pages:10,blocks:20"
+ */
+function getEnvOverride(type: string): number | undefined {
+  const override = process.env.NOTION_FETCH_CONCURRENCY_OVERRIDE;
+  if (!override) return undefined;
+
+  const pairs = override.split(",");
+  for (const pair of pairs) {
+    const [key, value] = pair.split(":");
+    if (key === type) return parseInt(value, 10);
+  }
+  return undefined;
+}
+
 export function detectOptimalConcurrency(
-  type: "images" | "pages" | "blocks"
+  type: "images" | "pages" | "blocks",
+  provider: ResourceProvider = defaultResourceProvider
 ): number {
-  const cpuCores = os.cpus().length;
-  const freeMemoryGB = os.freemem() / 1024 ** 3;
-  const totalMemoryGB = os.totalmem() / 1024 ** 3;
+  // Check for environment override first (for CI/testing)
+  const envOverride = getEnvOverride(type);
+  if (envOverride !== undefined) return envOverride;
+
+  const cpuCores = provider.getCpuCores();
+  const freeMemoryGB = provider.getFreeMemoryGB();
+  const totalMemoryGB = provider.getTotalMemoryGB();
 
   // Conservative defaults
   const config = {
@@ -603,7 +651,12 @@ export function detectOptimalConcurrency(
 - [ ] Performance improves on high-resource systems
 - [ ] No OOM errors on low-resource systems
 - [ ] Logs show concurrency adjustments
-- [ ] Tests verify adaptive behavior
+- [ ] **Testability:** Injectable ResourceProvider interface for deterministic tests
+  - Tests can inject mock resource values (e.g., "2 cores, 4GB RAM")
+  - Environment variable override: `NOTION_FETCH_CONCURRENCY_OVERRIDE="images:5,pages:10"`
+  - CI can simulate different hardware profiles without depending on host
+  - Tests verify heuristic with known resource values (no flakiness)
+- [ ] Tests verify adaptive behavior across different resource profiles
 - [ ] Documentation explains resource requirements
 - [ ] **Rate limit awareness:** Reduce concurrency when 429 responses detected
   - Track retry-after headers from Notion API
@@ -814,14 +867,14 @@ image download:
 
 2. **Storage location:**
    - **In-memory during run:** Measurements stored in memory, no I/O overhead
-   - **Report output:** `./telemetry-report.txt` (only written at end of run)
-   - **Historical data:** `./telemetry-history.json` (optional, for trend analysis)
+   - **Report output:** `.telemetry-report.txt` (only written at end of run, hidden file)
+   - **Historical data:** `.telemetry-history.json` (optional, for trend analysis)
 
 3. **Retention policy:**
    - In-memory data: Cleared after each run (no persistence)
-   - Report files: Keep last 10 reports (auto-rotate)
+   - Report files: Keep last 10 reports (auto-rotate `.telemetry-report-*.txt`)
    - Historical JSON: Keep last 30 days of data (auto-prune on startup)
-   - Add `.telemetry-*` to `.gitignore`
+   - Add `.telemetry*` to `.gitignore` (matches all telemetry files)
 
 4. **Output modes:**
    - `NOTION_FETCH_TELEMETRY=false` - No telemetry, no output
@@ -840,9 +893,9 @@ image download:
   - `false` - Disabled (no collection, no output)
   - `true` - Enabled (default, file + summary)
   - `verbose` - Full output to stdout
-- [ ] **Storage:** Reports written to `./telemetry-report.txt`
+- [ ] **Storage:** Reports written to `.telemetry-report.txt` (hidden file)
 - [ ] **Retention:** Auto-rotate reports (keep last 10), prune history (30 days)
-- [ ] **Gitignore:** `.telemetry-*` files excluded from git
+- [ ] **Gitignore:** `.telemetry*` pattern excludes all telemetry files from git
 - [ ] **Documentation:** Explains how to enable/disable and interpret reports
 
 ---

@@ -13,41 +13,31 @@ import { sanitizeMarkdownContent } from "./utils";
 import config from "../../docusaurus.config";
 import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
-import { fetchNotionBlocks } from "../fetchNotionData";
 import { EmojiProcessor } from "./emojiProcessor";
+import { buildFrontmatter } from "./frontmatterBuilder";
 import {
-  quoteYamlValue,
-  getPublishedDate,
-  buildFrontmatter,
-} from "./frontmatterBuilder";
-import {
-  sanitizeMarkdownImages,
   ensureBlankLineAfterStandaloneBold,
   processCalloutsInMarkdown,
 } from "./markdownTransform";
 import {
-  validateAndSanitizeImageUrl,
-  createFallbackImageMarkdown,
-} from "./imageValidation";
-import {
-  getElementTypeProperty,
   resolvePageTitle,
-  resolvePageLocale,
   groupPagesByLang,
   createStandalonePageGroup,
 } from "./pageGrouping";
-import { LRUCache, validateCacheSize, buildCacheKey } from "./cacheStrategies";
-import {
-  processImageWithFallbacks,
-  downloadAndProcessImageWithCache,
-  getImageCache,
-  logImageFailure,
-  type ImageProcessingResult,
-} from "./imageProcessing";
+import { LRUCache, validateCacheSize } from "./cacheStrategies";
+import { getImageCache, logImageFailure } from "./imageProcessing";
 import { setTranslationString, getI18NPath } from "./translationManager";
-
-// Image processing functions moved to imageProcessing.ts
-// Translation functions moved to translationManager.ts
+import { loadBlocksForPage, loadMarkdownForPage } from "./cacheLoaders";
+import { processAndReplaceImages } from "./imageReplacer";
+import {
+  processToggleSection,
+  processHeadingSection,
+} from "./sectionProcessors";
+import {
+  removeDuplicateTitle,
+  writeMarkdownFile,
+  writePlaceholderFile,
+} from "./contentWriter";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,134 +149,6 @@ export async function generateBlocks(pages, progressCallback) {
     const markdownFetchCount = { value: 0 };
     const markdownCacheHits = { value: 0 };
 
-    const logProgress = (
-      index: number,
-      total: number,
-      prefix: string,
-      title: string
-    ) => {
-      if (
-        total > 0 &&
-        (index === 0 ||
-          index === total - 1 ||
-          ((index + 1) % 10 === 0 && index + 1 < total))
-      ) {
-        console.log(
-          chalk.gray(`    ${prefix} ${index + 1}/${total} for "${title}"`)
-        );
-      }
-    };
-
-    /**
-     * Generic cache loader that handles:
-     * 1. Main map cache lookup
-     * 2. Prefetch cache lookup
-     * 3. In-flight request deduplication
-     * 4. Cache hit/miss tracking
-     */
-    const loadWithCache = async <T>(
-      pageRecord: Record<string, any>,
-      pageIndex: number,
-      totalCount: number,
-      title: string,
-      config: {
-        mainMap: Map<string, { key: string; data: T }>;
-        prefetchCache: LRUCache<T>;
-        inFlightMap: Map<string, Promise<T>>;
-        cacheHits: { value: number };
-        fetchCount: { value: number };
-        fetchFn: (pageId: string) => Promise<T>;
-        normalizeResult: (result: any) => T;
-        logPrefix: string;
-      }
-    ): Promise<{ data: T; source: "cache" | "fetched" }> => {
-      const pageId = pageRecord?.id;
-      if (!pageId) {
-        return { data: config.normalizeResult([]), source: "cache" };
-      }
-
-      const cacheKey = buildCacheKey(pageId, pageRecord?.last_edited_time);
-
-      // Check main map cache
-      const existing = config.mainMap.get(pageId);
-      if (existing && existing.key === cacheKey) {
-        config.cacheHits.value += 1;
-        return { data: existing.data, source: "cache" };
-      }
-
-      // Check prefetch cache
-      if (config.prefetchCache.has(cacheKey)) {
-        config.cacheHits.value += 1;
-        const cached = config.prefetchCache.get(cacheKey);
-        const normalized = config.normalizeResult(cached);
-        config.mainMap.set(pageId, { key: cacheKey, data: normalized });
-        return { data: normalized, source: "cache" };
-      }
-
-      // Check in-flight requests or start new fetch
-      let inFlight = config.inFlightMap.get(cacheKey);
-      if (!inFlight) {
-        config.fetchCount.value += 1;
-        logProgress(pageIndex, totalCount, config.logPrefix, title);
-        inFlight = (async () => {
-          const result = await config.fetchFn(pageId);
-          const normalized = config.normalizeResult(result);
-          config.prefetchCache.set(cacheKey, normalized);
-          return normalized;
-        })()
-          .catch((error) => {
-            config.prefetchCache.delete(cacheKey);
-            throw error;
-          })
-          .finally(() => {
-            config.inFlightMap.delete(cacheKey);
-          });
-        config.inFlightMap.set(cacheKey, inFlight);
-      }
-
-      const result = await inFlight;
-      const normalized = config.normalizeResult(result);
-      config.mainMap.set(pageId, { key: cacheKey, data: normalized });
-      return { data: normalized, source: "fetched" };
-    };
-
-    const loadBlocksForPage = async (
-      pageRecord: Record<string, any>,
-      pageIndex: number,
-      totalCount: number,
-      title: string
-    ): Promise<{ data: any[]; source: "cache" | "fetched" }> => {
-      return loadWithCache<any[]>(pageRecord, pageIndex, totalCount, title, {
-        mainMap: blocksMap,
-        prefetchCache: blockPrefetchCache,
-        inFlightMap: inFlightBlockFetches,
-        cacheHits: blockCacheHits,
-        fetchCount: blockFetchCount,
-        fetchFn: fetchNotionBlocks,
-        normalizeResult: (result) => (Array.isArray(result) ? result : []),
-        logPrefix: "Fetching blocks",
-      });
-    };
-
-    const loadMarkdownForPage = async (
-      pageRecord: Record<string, any>,
-      pageIndex: number,
-      totalCount: number,
-      title: string
-    ): Promise<{ data: any; source: "cache" | "fetched" }> => {
-      return loadWithCache<any>(pageRecord, pageIndex, totalCount, title, {
-        mainMap: markdownMap,
-        prefetchCache: markdownPrefetchCache,
-        inFlightMap: inFlightMarkdownFetches,
-        cacheHits: markdownCacheHits,
-        fetchCount: markdownFetchCount,
-        fetchFn: (pageId) => n2m.pageToMarkdown(pageId),
-        normalizeResult: (result) =>
-          Array.isArray(result) ? result : (result ?? []),
-        logPrefix: "Converting markdown",
-      });
-    };
-
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
@@ -379,64 +241,27 @@ export async function generateBlocks(pages, progressCallback) {
 
           // TOGGLE
           if (normalizedSectionType === "toggle") {
-            const sectionName =
-              page.properties?.["Title"]?.title?.[0]?.plain_text ?? pageTitle;
-            if (!page.properties?.["Title"]?.title?.[0]?.plain_text) {
-              console.warn(
-                chalk.yellow(
-                  `Missing 'Title' property for toggle page ${page.id}; falling back to page title.`
-                )
-              );
-            }
-            const sectionFolder = filename || safeFilename;
-            const sectionFolderPath = path.join(PATH, sectionFolder);
-            fs.mkdirSync(sectionFolderPath, { recursive: true });
-            currentSectionFolder[lang] = sectionFolder;
-            pageSpinner.succeed(
-              chalk.green(`Section folder created: ${sectionFolder}`)
+            const sectionFolder = processToggleSection(
+              page,
+              filename,
+              safeFilename,
+              pageTitle,
+              lang,
+              i,
+              PATH,
+              currentHeading,
+              pageSpinner
             );
+            currentSectionFolder[lang] = sectionFolder;
             sectionCount++;
-            if (lang === "en") {
-              const categoryContent = {
-                label: sectionName,
-                position: i + 1,
-                collapsible: true,
-                collapsed: true,
-                link: {
-                  type: "generated-index",
-                },
-                customProps: { title: null },
-              };
-              if (currentHeading.get(lang)) {
-                categoryContent.customProps.title = currentHeading.get(lang);
-                currentHeading.set(lang, null);
-              }
-              const categoryFilePath = path.join(
-                sectionFolderPath,
-                "_category_.json"
-              );
-              fs.writeFileSync(
-                categoryFilePath,
-                JSON.stringify(categoryContent, null, 2),
-                "utf8"
-              );
-              pageSpinner.succeed(
-                chalk.green(`added _category_.json to ${sectionFolder}`)
-              );
-            }
             // HEADING (Title)
           } else if (
             normalizedSectionType === "title" ||
             normalizedSectionType === "heading"
           ) {
-            currentHeading.set(lang, pageTitle);
+            processHeadingSection(pageTitle, lang, currentHeading, pageSpinner);
             titleSectionCount++; // Increment title section counter
             currentSectionFolder = {};
-            pageSpinner.succeed(
-              chalk.green(
-                `Title section detected: ${currentHeading.get(lang)}, will be applied to next item`
-              )
-            );
 
             // PAGE
           } else if (normalizedSectionType === "page") {
@@ -451,7 +276,12 @@ export async function generateBlocks(pages, progressCallback) {
                   page,
                   pageProcessingIndex - 1,
                   totalPages,
-                  pageTitle
+                  pageTitle,
+                  blocksMap,
+                  blockPrefetchCache,
+                  inFlightBlockFetches,
+                  blockCacheHits,
+                  blockFetchCount
                 );
               rawBlocks = blockData;
               console.log(
@@ -488,7 +318,12 @@ export async function generateBlocks(pages, progressCallback) {
                 page,
                 pageProcessingIndex - 1,
                 totalPages,
-                pageTitle
+                pageTitle,
+                markdownMap,
+                markdownPrefetchCache,
+                inFlightMarkdownFetches,
+                markdownCacheHits,
+                markdownFetchCount
               );
             const markdown = markdownData;
             if (markdownSource === "fetched") {
@@ -539,211 +374,12 @@ export async function generateBlocks(pages, progressCallback) {
               }
 
               // Enhanced image processing with comprehensive fallback handling
-              // Collect matches first without mutating the source
-              const sourceMarkdown = markdownString.parent;
-              // Improved URL pattern: match until a ')' not preceded by '\', allow spaces trimmed
-              const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
-              const imageMatches: Array<{
-                full: string;
-                url: string;
-                alt: string;
-                idx: number;
-                start: number;
-                end: number;
-              }> = [];
-              let m: RegExpExecArray | null;
-              let tmpIndex = 0;
-              let safetyCounter = 0;
-              const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
-
-              while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
-                if (++safetyCounter > SAFETY_LIMIT) {
-                  console.warn(
-                    chalk.yellow(
-                      `⚠️  Image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
-                    )
-                  );
-                  break;
-                }
-                const start = m.index;
-                const full = m[0];
-                const end = start + full.length;
-                const rawUrl = m[2];
-                const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
-                imageMatches.push({
-                  full,
-                  url: unescapedUrl,
-                  alt: m[1],
-                  idx: tmpIndex++,
-                  start,
-                  end,
-                });
-              }
-
-              const imageReplacements: Array<{
-                original: string;
-                replacement: string;
-              }> = [];
-
-              // Phase 1: Validate and queue all images for processing
-              const imageProcessingTasks = imageMatches.map((match) => {
-                const urlValidation = validateAndSanitizeImageUrl(match.url);
-                if (!urlValidation.isValid) {
-                  console.warn(
-                    chalk.yellow(
-                      `⚠️  Invalid image URL detected: ${urlValidation.error}`
-                    )
-                  );
-                  const fallbackMarkdown = createFallbackImageMarkdown(
-                    match.full,
-                    match.url,
-                    match.idx
-                  );
-                  imageReplacements.push({
-                    original: match.full,
-                    replacement: fallbackMarkdown,
-                  });
-
-                  logImageFailure({
-                    timestamp: new Date().toISOString(),
-                    pageBlock: safeFilename,
-                    imageIndex: match.idx,
-                    originalUrl: match.url,
-                    error: urlValidation.error,
-                    fallbackUsed: true,
-                    validationFailed: true,
-                  });
-
-                  return Promise.resolve({
-                    success: false,
-                    originalMarkdown: match.full,
-                    imageUrl: match.url,
-                    index: match.idx,
-                    error: urlValidation.error,
-                    fallbackUsed: true,
-                  });
-                }
-
-                if (!urlValidation.sanitizedUrl!.startsWith("http")) {
-                  console.info(
-                    chalk.blue(`ℹ️  Skipping local image: ${match.url}`)
-                  );
-                  return Promise.resolve({
-                    success: false,
-                    originalMarkdown: match.full,
-                    imageUrl: match.url,
-                    index: match.idx,
-                    error: "Local image skipped",
-                    fallbackUsed: true,
-                  });
-                }
-
-                return processImageWithFallbacks(
-                  urlValidation.sanitizedUrl!,
-                  safeFilename,
-                  match.idx,
-                  match.full
-                ).then((result) => ({
-                  ...result,
-                  originalMarkdown: match.full,
-                  imageUrl: urlValidation.sanitizedUrl!,
-                  index: match.idx,
-                }));
-              });
-
-              // Phase 2: Process all valid images concurrently
-              let successfulImages = 0;
-              let totalFailures = 0;
-
-              if (imageProcessingTasks.length > 0) {
-                const imageResults =
-                  await Promise.allSettled(imageProcessingTasks);
-
-                // Build deterministic replacements using recorded match indices
-                const indexedReplacements: Array<{
-                  start: number;
-                  end: number;
-                  text: string;
-                }> = [];
-                for (const result of imageResults) {
-                  if (result.status !== "fulfilled") {
-                    // Promise rejection - should not happen with our error handling
-                    console.error(
-                      chalk.red(
-                        `Unexpected image processing failure: ${result.reason}`
-                      )
-                    );
-                    totalFailures++;
-                    continue;
-                  }
-                  const processResult = result.value;
-                  const match = imageMatches.find(
-                    (im) => im.idx === processResult.index
-                  );
-                  if (!match) continue;
-                  let replacementText: string;
-                  if (processResult.success && processResult.newPath) {
-                    replacementText = match.full.replace(
-                      processResult.imageUrl!,
-                      processResult.newPath
-                    );
-                    totalSaved += processResult.savedBytes || 0;
-                    successfulImages++;
-                  } else {
-                    replacementText = createFallbackImageMarkdown(
-                      match.full,
-                      match.url,
-                      match.idx
-                    );
-                    totalFailures++;
-                  }
-                  indexedReplacements.push({
-                    start: match.start,
-                    end: match.end,
-                    text: replacementText,
-                  });
-                }
-                // Apply from end to start to keep indices stable
-                indexedReplacements.sort((a, b) => b.start - a.start);
-                let processedMarkdown = markdownString.parent;
-                for (const rep of indexedReplacements) {
-                  processedMarkdown =
-                    processedMarkdown.slice(0, rep.start) +
-                    rep.text +
-                    processedMarkdown.slice(rep.end);
-                }
-                // Continue with final sanitation
-                processedMarkdown = sanitizeMarkdownImages(processedMarkdown);
-                markdownString.parent = processedMarkdown;
-              } else {
-                // Phase 3: No image replacements needed, just sanitize
-                let processedMarkdown = sanitizeMarkdownImages(
-                  markdownString.parent
-                );
-                markdownString.parent = processedMarkdown;
-              }
-
-              // Phase 5: Report results
-              const totalImages = imageMatches.length;
-              if (totalImages > 0) {
-                console.info(
-                  chalk.green(
-                    `📸 Processed ${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`
-                  )
-                );
-                if (totalFailures > 0) {
-                  console.warn(
-                    chalk.yellow(
-                      `⚠️  ${totalFailures} images failed but have been replaced with informative placeholders`
-                    )
-                  );
-                  console.info(
-                    chalk.blue(
-                      `💡 Check 'image-failures.json' for recovery information`
-                    )
-                  );
-                }
-              }
+              const imageResult = await processAndReplaceImages(
+                markdownString.parent,
+                safeFilename
+              );
+              markdownString.parent = imageResult.markdown;
+              totalSaved += imageResult.stats.totalSaved;
 
               // Sanitize content to fix malformed HTML/JSX tags
               markdownString.parent = sanitizeMarkdownContent(
@@ -753,75 +389,36 @@ export async function generateBlocks(pages, progressCallback) {
               markdownString.parent = ensureBlankLineAfterStandaloneBold(
                 markdownString.parent
               );
+
               // Remove duplicate title heading if it exists
-              // The first H1 heading often duplicates the title in Notion exports
-              let contentBody = markdownString.parent;
-
-              // Find the first H1 heading pattern at the beginning of the content
-              const firstH1Regex = /^\s*# (.+?)(?:\n|$)/;
-              const firstH1Match = contentBody.match(firstH1Regex);
-
-              if (firstH1Match) {
-                const firstH1Text = firstH1Match[1].trim();
-                // Check if this heading is similar to the page title (exact match or contains)
-                if (
-                  firstH1Text === pageTitle ||
-                  pageTitle.includes(firstH1Text) ||
-                  firstH1Text.includes(pageTitle)
-                ) {
-                  // Remove the duplicate heading
-                  contentBody = contentBody.replace(firstH1Match[0], "");
-
-                  // Also remove any empty lines at the beginning
-                  contentBody = contentBody.replace(/^\s+/, "");
-                }
-              }
-
-              // Add frontmatter to markdown content
-              const contentWithFrontmatter = frontmatter + contentBody;
-              fs.writeFileSync(filePath, contentWithFrontmatter, "utf8");
-
-              pageSpinner.succeed(
-                chalk.green(
-                  `Page ${processedPages + 1}/${totalPages} processed: ${filePath}`
-                )
-              );
-              console.log(
-                chalk.blue(
-                  `  ↳ Added frontmatter with id: doc-${safeFilename}, title: ${pageTitle}`
-                )
+              const contentBody = removeDuplicateTitle(
+                markdownString.parent,
+                pageTitle
               );
 
-              // Log information about custom properties
-              if (Object.keys(customProps).length > 0) {
-                console.log(
-                  chalk.yellow(
-                    `  ↳ Added custom properties: ${JSON.stringify(customProps)}`
-                  )
-                );
-              }
-
-              // Log information about section folder placement
-              if (currentSectionFolder[lang]) {
-                console.log(
-                  chalk.cyan(
-                    `  ↳ Placed in section folder: ${currentSectionFolder[lang]}`
-                  )
-                );
-              }
-            } else {
-              const placeholderBody = `\n<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->\n\n:::note\nContent placeholder – add blocks in Notion to replace this file.\n:::\n`;
-
-              fs.writeFileSync(
+              // Write markdown file with frontmatter
+              writeMarkdownFile(
                 filePath,
-                `${frontmatter}${placeholderBody}`,
-                "utf8"
+                frontmatter,
+                contentBody,
+                pageTitle,
+                processedPages,
+                totalPages,
+                pageSpinner,
+                safeFilename,
+                customProps,
+                currentSectionFolder,
+                lang
               );
-
-              pageSpinner.warn(
-                chalk.yellow(
-                  `No 'Website Block' property found for page ${processedPages + 1}/${totalPages}: ${page.id}. Placeholder content generated.`
-                )
+            } else {
+              // Write placeholder file when no content exists
+              writePlaceholderFile(
+                filePath,
+                frontmatter,
+                page.id,
+                processedPages,
+                totalPages,
+                pageSpinner
               );
             }
             if (pendingHeading) {

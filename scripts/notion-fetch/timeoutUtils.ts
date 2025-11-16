@@ -194,12 +194,13 @@ export async function processBatch<T, R>(
         const promise = processor(item, itemIndex);
 
         // Apply timeout if configured
-        if (timeoutMs && operation) {
-          return withTimeout(
-            promise,
-            timeoutMs,
-            `${operation} (item ${itemIndex + 1}/${items.length})`
-          );
+        if (timeoutMs) {
+          // Use provided operation name or default to "batch operation"
+          const operationDescription = operation
+            ? `${operation} (item ${itemIndex + 1}/${items.length})`
+            : `batch operation (item ${itemIndex + 1}/${items.length})`;
+
+          return withTimeout(promise, timeoutMs, operationDescription);
         }
 
         return promise;

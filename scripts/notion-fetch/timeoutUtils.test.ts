@@ -397,6 +397,36 @@ describe("timeoutUtils", () => {
       expect(results).toHaveLength(3);
       expect(results.every((r) => r.status === "fulfilled")).toBe(true);
     });
+
+    it("should apply timeout even when operation is not provided", async () => {
+      const items = [1, 2, 3];
+      const processor = async (item: number) => {
+        if (item === 2) {
+          // Item 2 takes too long
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        return item;
+      };
+
+      const resultPromise = processBatch(items, processor, {
+        maxConcurrent: 3,
+        timeoutMs: 1000,
+        // No operation name provided - should still apply timeout with default description
+      });
+
+      await vi.advanceTimersByTimeAsync(1001);
+      const results = await resultPromise;
+
+      expect(results).toHaveLength(3);
+      expect(results[0].status).toBe("fulfilled");
+      expect(results[1].status).toBe("rejected");
+      expect(results[2].status).toBe("fulfilled");
+
+      if (results[1].status === "rejected") {
+        expect(results[1].reason).toBeInstanceOf(TimeoutError);
+        expect(results[1].reason.message).toContain("batch operation");
+      }
+    });
   });
 
   describe("TimeoutError", () => {

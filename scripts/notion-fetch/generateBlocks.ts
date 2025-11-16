@@ -8,18 +8,8 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { n2m } from "../notionClient";
 import { NOTION_PROPERTIES } from "../constants";
-import axios from "axios";
 import chalk from "chalk";
-import { processImage } from "./imageProcessor";
-import {
-  sanitizeMarkdownContent,
-  compressImageToFileWithFallback,
-  detectFormatFromBuffer,
-  formatFromContentType,
-  chooseFormat,
-  extForFormat,
-  isResizableFormat,
-} from "./utils";
+import { sanitizeMarkdownContent } from "./utils";
 import config from "../../docusaurus.config";
 import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
@@ -47,329 +37,17 @@ import {
   createStandalonePageGroup,
 } from "./pageGrouping";
 import { LRUCache, validateCacheSize, buildCacheKey } from "./cacheStrategies";
+import {
+  processImageWithFallbacks,
+  downloadAndProcessImageWithCache,
+  getImageCache,
+  logImageFailure,
+  type ImageProcessingResult,
+} from "./imageProcessing";
+import { setTranslationString, getI18NPath } from "./translationManager";
 
-// Enhanced image handling utilities for robust processing
-interface ImageProcessingResult {
-  success: boolean;
-  newPath?: string;
-  savedBytes?: number;
-  error?: string;
-  fallbackUsed?: boolean;
-}
-
-interface ImageUrlValidationResult {
-  isValid: boolean;
-  sanitizedUrl?: string;
-  error?: string;
-}
-
-// validateAndSanitizeImageUrl moved to imageValidation.ts
-
-// createFallbackImageMarkdown moved to imageValidation.ts
-
-/**
- * Enhanced image processing with comprehensive fallback handling
- */
-async function processImageWithFallbacks(
-  imageUrl: string,
-  blockName: string,
-  index: number,
-  originalMarkdown: string
-): Promise<ImageProcessingResult> {
-  // Step 1: Validate URL
-  const validation = validateAndSanitizeImageUrl(imageUrl);
-  if (!validation.isValid) {
-    console.warn(
-      chalk.yellow(
-        `⚠️  Invalid image URL for image ${index + 1}: ${validation.error}`
-      )
-    );
-    return {
-      success: false,
-      error: validation.error,
-      fallbackUsed: true,
-    };
-  }
-
-  // Step 2: Attempt download with caching and retries
-  try {
-    const result = await downloadAndProcessImageWithCache(
-      validation.sanitizedUrl!,
-      blockName,
-      index
-    );
-    return {
-      success: true,
-      newPath: result.newPath,
-      savedBytes: result.savedBytes,
-      fallbackUsed: false,
-    };
-  } catch (err: unknown) {
-    const message =
-      err && typeof err === "object" && "message" in err
-        ? String((err as any).message)
-        : String(err ?? "Unknown error");
-    console.warn(
-      chalk.yellow(`⚠️  Image download failed for ${imageUrl}: ${message}`)
-    );
-
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      pageBlock: blockName,
-      imageIndex: index,
-      originalUrl: imageUrl,
-      error: message,
-      fallbackUsed: true,
-    };
-
-    logImageFailure(logEntry);
-
-    return {
-      success: false,
-      error: message,
-      fallbackUsed: true,
-    };
-  }
-}
-
-/**
- * Logs image failures for manual recovery
- * Note: Fire-and-forget async to avoid blocking image processing
- * IMPORTANT: Disabled in CI environments to prevent script hanging due to
- * synchronous file I/O blocking in GitHub Actions. Console logs provide
- * sufficient debugging information for CI runs.
- */
-function logImageFailure(logEntry: any): void {
-  // Skip logging in CI to prevent hanging due to sync I/O blocking
-  // CI environments like GitHub Actions have I/O limitations that cause
-  // synchronous file operations to block the event loop indefinitely
-  if (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true") {
-    // Console output is still available in CI logs
-    return;
-  }
-
-  const logPath = path.join(process.cwd(), "image-failures.json");
-  const logDir = path.dirname(logPath);
-  const tmpPath = `${logPath}.tmp`;
-  const MAX_ENTRIES = 5000;
-  const MAX_FIELD_LEN = 2000;
-
-  // Run async but don't wait for completion
-  (async () => {
-    const safeEntry = (() => {
-      try {
-        const clone: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(logEntry ?? {})) {
-          let val = v;
-          if (typeof val === "string") val = val.slice(0, MAX_FIELD_LEN);
-          else if (typeof val === "object")
-            val = JSON.parse(JSON.stringify(val));
-          clone[k] = val;
-        }
-        return clone;
-      } catch {
-        return { message: "non-serializable log entry" };
-      }
-    })();
-
-    try {
-      try {
-        fs.mkdirSync(logDir, { recursive: true });
-      } catch {
-        // ignore
-      }
-
-      let existingLogs: any[] = [];
-      try {
-        if (fs.existsSync(logPath)) {
-          const content = fs.readFileSync(logPath, "utf-8");
-          const parsed = JSON.parse(content);
-          existingLogs = Array.isArray(parsed) ? parsed : [];
-        }
-      } catch {
-        existingLogs = [];
-      }
-      existingLogs.push(safeEntry);
-      if (existingLogs.length > MAX_ENTRIES) {
-        existingLogs = existingLogs.slice(-MAX_ENTRIES);
-      }
-
-      const payload = JSON.stringify(existingLogs, null, 2);
-      try {
-        fs.writeFileSync(tmpPath, payload);
-        fs.renameSync(tmpPath, logPath);
-      } catch {
-        console.warn(
-          chalk.yellow("Failed to write image failure log atomically")
-        );
-        try {
-          fs.writeFileSync(logPath, payload);
-        } catch {
-          console.warn(chalk.yellow("Failed to write image failure log"));
-        }
-      } finally {
-        try {
-          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-        } catch {
-          // best-effort cleanup
-        }
-      }
-    } catch (e) {
-      console.warn(chalk.yellow("Image failure log write error"), e);
-    }
-  })().catch(() => {
-    // Silently ignore errors to prevent unhandled promise rejections
-  });
-}
-
-// sanitizeMarkdownImages moved to markdownTransform.ts
-// ensureBlankLineAfterStandaloneBold moved to markdownTransform.ts
-
-/**
- * Image cache system to prevent re-downloading and provide recovery options
- */
-interface ImageCacheEntry {
-  url: string;
-  localPath: string;
-  timestamp: string;
-  blockName: string;
-  checksum?: string;
-}
-
-class ImageCache {
-  private cacheFile: string;
-  private cache: Map<string, ImageCacheEntry>;
-
-  constructor() {
-    this.cacheFile = path.join(process.cwd(), "image-cache.json");
-    this.cache = new Map();
-    this.loadCache();
-  }
-
-  private loadCache(): void {
-    try {
-      if (fs.existsSync(this.cacheFile)) {
-        const content = fs.readFileSync(this.cacheFile, "utf-8");
-        const cacheData = JSON.parse(content);
-        Object.entries(cacheData).forEach(([url, entry]) => {
-          this.cache.set(url, entry as ImageCacheEntry);
-        });
-        console.info(
-          chalk.blue(`📦 Loaded image cache with ${this.cache.size} entries`)
-        );
-      }
-    } catch (error) {
-      console.warn(
-        chalk.yellow("⚠️  Failed to load image cache, starting fresh")
-      );
-    }
-  }
-
-  private saveCache(): void {
-    try {
-      const cacheData = Object.fromEntries(this.cache);
-      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
-    } catch (error) {
-      console.warn(chalk.yellow("⚠️  Failed to save image cache"));
-    }
-  }
-
-  private getAbsoluteImagePath(fileNameOrWebPath: string): string {
-    const baseName = path.basename(fileNameOrWebPath || "");
-    // reject suspicious names
-    if (!baseName || baseName.includes("..") || baseName.includes(path.sep)) {
-      return path.join(IMAGES_PATH, "_invalid-image-name_");
-    }
-    return path.join(IMAGES_PATH, baseName);
-  }
-
-  has(url: string): boolean {
-    const entry = this.cache.get(url);
-    if (!entry) return false;
-    const fullPath = this.getAbsoluteImagePath(entry.localPath);
-    return fs.existsSync(fullPath);
-  }
-
-  get(url: string): ImageCacheEntry | undefined {
-    if (this.has(url)) {
-      return this.cache.get(url);
-    }
-    this.cache.delete(url);
-    return undefined;
-  }
-
-  set(url: string, localPath: string, blockName: string): void {
-    const safeBase = path.basename(localPath || "");
-    const entry: ImageCacheEntry = {
-      url,
-      localPath: safeBase,
-      timestamp: new Date().toISOString(),
-      blockName,
-    };
-    this.cache.set(url, entry);
-    this.saveCache();
-  }
-
-  getStats(): { totalEntries: number; validEntries: number } {
-    let validEntries = 0;
-    for (const [url] of this.cache) {
-      if (this.has(url)) validEntries++;
-    }
-    return { totalEntries: this.cache.size, validEntries };
-  }
-
-  cleanup(): void {
-    // Remove stale entries where local files no longer exist
-    const staleUrls = [];
-    for (const [url] of this.cache) {
-      if (!this.has(url)) {
-        staleUrls.push(url);
-      }
-    }
-    staleUrls.forEach((url) => this.cache.delete(url));
-    if (staleUrls.length > 0) {
-      this.saveCache();
-      console.info(
-        chalk.blue(`🧹 Cleaned up ${staleUrls.length} stale cache entries`)
-      );
-    }
-  }
-}
-
-// Global image cache instance
-const imageCache = new ImageCache();
-
-/**
- * Enhanced download function with caching
- */
-async function downloadAndProcessImageWithCache(
-  url: string,
-  blockName: string,
-  index: number
-): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
-  const cachedEntry = imageCache.get(url);
-  if (cachedEntry) {
-    const fileName = path.basename(cachedEntry.localPath);
-    const webPath = `/images/${fileName}`;
-    console.info(chalk.green(`💾 Using cached image: ${webPath}`));
-    return {
-      newPath: webPath,
-      savedBytes: 0,
-      fromCache: true,
-    };
-  }
-
-  const result = await downloadAndProcessImage(url, blockName, index);
-  imageCache.set(url, result.newPath, blockName);
-
-  return {
-    newPath: result.newPath,
-    savedBytes: result.savedBytes,
-    fromCache: false,
-  };
-}
-
-// getPublishedDate is now imported from frontmatterBuilder.ts
+// Image processing functions moved to imageProcessing.ts
+// Translation functions moved to translationManager.ts
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -380,11 +58,10 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
 
 const CONTENT_PATH = path.join(__dirname, "../../docs");
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
-const I18N_PATH = path.join(__dirname, "../../i18n/");
-const getI18NPath = (locale: string) =>
-  path.join(I18N_PATH, locale, "docusaurus-plugin-content-docs", "current");
 const locales = config.i18n.locales;
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
+
+// I18N_PATH and getI18NPath moved to translationManager.ts
 
 const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
   English: "en",
@@ -402,152 +79,10 @@ for (const locale of locales.filter((l) => l !== DEFAULT_LOCALE)) {
   fs.mkdirSync(getI18NPath(locale), { recursive: true });
 }
 
-// Markdown transform functions (processCalloutsInMarkdown, extractTextFromCalloutBlock,
-// normalizeForMatch, findMatchingBlockquote) are now imported from markdownTransform.ts
-
-async function downloadAndProcessImage(
-  url: string,
-  blockName: string,
-  index: number
-) {
-  let attempt = 0;
-  let lastError: unknown;
-
-  while (attempt < 3) {
-    const attemptNumber = attempt + 1;
-    const spinner = SpinnerManager.create(
-      `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
-      60000
-    );
-
-    try {
-      spinner.text = `Processing image ${index + 1}: Downloading`;
-      const response = await axios.get(url, {
-        responseType: "arraybuffer",
-        timeout: 30000,
-        maxRedirects: 5,
-        headers: {
-          "User-Agent": "notion-fetch-script/1.0",
-        },
-      });
-
-      const originalBuffer = Buffer.from(response.data, "binary");
-      const cleanUrl = url.split("?")[0];
-
-      const rawCT = (response.headers as Record<string, unknown>)[
-        "content-type"
-      ];
-      const normalizedCT =
-        typeof rawCT === "string"
-          ? rawCT
-          : Array.isArray(rawCT)
-            ? rawCT[0]
-            : undefined;
-      const headerFmt = formatFromContentType(normalizedCT);
-      const bufferFmt = detectFormatFromBuffer(originalBuffer);
-      const chosenFmt = chooseFormat(bufferFmt, headerFmt);
-
-      const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
-      let extension = extForFormat(chosenFmt);
-      if (!extension) {
-        extension = urlExt || ".jpg";
-      }
-
-      const sanitizedBlockName = blockName
-        .replace(/[^a-z0-9]/gi, "")
-        .toLowerCase()
-        .slice(0, 20);
-      const filename = `${sanitizedBlockName}_${index}${extension}`;
-      const filepath = path.join(IMAGES_PATH, filename);
-
-      let resizedBuffer = originalBuffer;
-      let originalSize = originalBuffer.length;
-
-      if (isResizableFormat(chosenFmt)) {
-        spinner.text = `Processing image ${index + 1}: Resizing`;
-        const processed = await processImage(originalBuffer, filepath);
-        resizedBuffer = processed.outputBuffer;
-        originalSize = processed.originalSize;
-      } else {
-        spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
-        resizedBuffer = originalBuffer;
-        originalSize = originalBuffer.length;
-      }
-
-      spinner.text = `Processing image ${index + 1}: Compressing`;
-      const { finalSize, usedFallback } = await compressImageToFileWithFallback(
-        originalBuffer,
-        resizedBuffer,
-        filepath,
-        url
-      );
-
-      spinner.succeed(
-        usedFallback
-          ? chalk.green(
-              `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
-            )
-          : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
-      );
-
-      const savedBytes = usedFallback
-        ? 0
-        : Math.max(0, originalSize - finalSize);
-      const imagePath = `/images/${filename}`;
-      return { newPath: imagePath, savedBytes };
-    } catch (error) {
-      lastError = error;
-      let errorMessage = `Error processing image ${index + 1} from ${url}`;
-
-      if ((error as any)?.code === "ECONNABORTED") {
-        errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
-      } else if ((error as any)?.response) {
-        errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
-      } else if ((error as any)?.code === "ENOTFOUND") {
-        errorMessage = `DNS resolution failed for image ${index + 1}: ${url}`;
-      }
-
-      spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
-      console.error(chalk.red("Image processing error details:"), error);
-
-      if (attemptNumber < 3) {
-        // Test-environment-aware retry delays
-        // Standardized test environment detection
-        const isTestEnv =
-          process.env.NODE_ENV === "test" || process.env.VITEST === "true";
-        const baseDelayMs = isTestEnv ? 10 : 1000;
-        const jitter = Math.floor(Math.random() * (isTestEnv ? 5 : 250));
-        const delayMs =
-          Math.min(
-            isTestEnv ? 50 : 4000,
-            baseDelayMs * 2 ** (attemptNumber - 1)
-          ) + jitter;
-
-        console.warn(
-          chalk.yellow(
-            `Retrying image ${index + 1} in ${delayMs}ms (attempt ${attemptNumber + 1}/3)`
-          )
-        );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    } finally {
-      SpinnerManager.remove(spinner);
-    }
-
-    attempt++;
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(String(lastError ?? "Unknown image processing error"));
-}
-
-// Page grouping functions (getElementTypeProperty, resolvePageTitle, resolvePageLocale,
-// groupPagesByLang, createStandalonePageGroup) are now imported from pageGrouping.ts
-
-// Frontmatter functions (quoteYamlValue, buildFrontmatter) are now imported from frontmatterBuilder.ts
-
-// Cache strategies (LRUCache, validateCacheSize, buildCacheKey) are now imported from cacheStrategies.ts
+// Markdown transform functions moved to markdownTransform.ts
+// Page grouping functions moved to pageGrouping.ts
+// Frontmatter functions moved to frontmatterBuilder.ts
+// Cache strategies moved to cacheStrategies.ts
 
 const CACHE_MAX_SIZE = validateCacheSize();
 
@@ -559,54 +94,7 @@ export function __resetPrefetchCaches(): void {
   markdownPrefetchCache.clear();
 }
 
-function setTranslationString(
-  lang: string,
-  original: string,
-  translated: string
-) {
-  const lPath = path.join(I18N_PATH, lang, "code.json");
-  const dir = path.dirname(lPath);
-  fs.mkdirSync(dir, { recursive: true });
-
-  let fileContents = "{}";
-  try {
-    const existing = fs.readFileSync(lPath, "utf8");
-    if (typeof existing === "string" && existing.trim().length > 0) {
-      fileContents = existing;
-    }
-  } catch {
-    console.warn(
-      chalk.yellow(
-        `Translation file missing for ${lang}, creating a new one at ${lPath}`
-      )
-    );
-  }
-
-  let file: Record<string, any>;
-  try {
-    file = JSON.parse(fileContents);
-  } catch (parseError) {
-    console.warn(
-      chalk.yellow(
-        `Failed to parse translation file for ${lang}, resetting content`
-      ),
-      parseError
-    );
-    file = {};
-  }
-
-  const safeKey =
-    typeof original === "string"
-      ? original.slice(0, 2000)
-      : String(original).slice(0, 2000);
-  const safeMessage =
-    typeof translated === "string"
-      ? translated.slice(0, 5000)
-      : String(translated).slice(0, 5000);
-
-  file[safeKey] = { message: safeMessage };
-  fs.writeFileSync(lPath, JSON.stringify(file, null, 4));
-}
+// setTranslationString moved to translationManager.ts
 
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
@@ -1389,6 +877,7 @@ export async function generateBlocks(pages, progressCallback) {
     }
 
     // Final cache cleanup and statistics
+    const imageCache = getImageCache();
     imageCache.cleanup();
     const cacheStats = imageCache.getStats();
 
@@ -1437,7 +926,7 @@ export async function generateBlocks(pages, progressCallback) {
 
     // Final cache save
     try {
-      imageCache.cleanup();
+      getImageCache().cleanup();
     } catch (cacheError) {
       console.warn(chalk.yellow("Warning: Failed to cleanup image cache"));
     }

@@ -505,16 +505,23 @@ export async function downloadAndProcessImage(
       }
 
       spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
-      console.error(chalk.red("Image processing error details:"), error);
+
+      // Only log full error details in verbose mode or non-test environments
+      // This reduces noise in test output while preserving debugging capability
+      const isTestEnv =
+        process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+      const isVerbose =
+        process.env.VERBOSE === "true" || process.env.DEBUG === "true";
+
+      if (!isTestEnv || isVerbose) {
+        console.error(chalk.red("Image processing error details:"), error);
+      }
 
       // Abort the request if it's still in progress
       abortController.abort();
 
       if (attemptNumber < 3) {
         // Test-environment-aware retry delays
-        // Standardized test environment detection
-        const isTestEnv =
-          process.env.NODE_ENV === "test" || process.env.VITEST === "true";
         const baseDelayMs = isTestEnv ? 10 : 1000;
         const jitter = Math.floor(Math.random() * (isTestEnv ? 5 : 250));
         const delayMs =

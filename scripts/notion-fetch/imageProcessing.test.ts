@@ -520,23 +520,36 @@ describe("imageProcessing", () => {
     });
 
     it("should handle timeout errors", async () => {
-      const mockAxios = vi.mocked(axios);
-      const error: any = new Error("Timeout");
-      error.code = "ECONNABORTED";
-      mockAxios.get.mockRejectedValue(error);
+      // Enable verbose mode to test error logging (suppressed by default in tests)
+      const originalVerbose = process.env.VERBOSE;
+      process.env.VERBOSE = "true";
 
-      await expect(
-        downloadAndProcessImage(
-          "https://example.com/image.jpg",
-          "test-block",
-          0
-        )
-      ).rejects.toThrow();
+      try {
+        const mockAxios = vi.mocked(axios);
+        const error: any = new Error("Timeout");
+        error.code = "ECONNABORTED";
+        mockAxios.get.mockRejectedValue(error);
 
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining("Image processing error details"),
-        expect.any(Error)
-      );
+        await expect(
+          downloadAndProcessImage(
+            "https://example.com/image.jpg",
+            "test-block",
+            0
+          )
+        ).rejects.toThrow();
+
+        expect(console.error).toHaveBeenCalledWith(
+          expect.stringContaining("Image processing error details"),
+          expect.any(Error)
+        );
+      } finally {
+        // Restore original VERBOSE setting
+        if (originalVerbose !== undefined) {
+          process.env.VERBOSE = originalVerbose;
+        } else {
+          delete process.env.VERBOSE;
+        }
+      }
     });
 
     it("should handle HTTP errors", async () => {

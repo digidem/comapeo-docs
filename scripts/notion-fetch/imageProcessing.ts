@@ -17,6 +17,7 @@ import {
   validateAndSanitizeImageUrl,
   createFallbackImageMarkdown,
 } from "./imageValidation";
+import { withTimeout, TimeoutError } from "./timeoutUtils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -352,6 +353,12 @@ export async function downloadAndProcessImageWithCache(
 /**
  * Downloads and processes an image with retry logic
  *
+ * IMPORTANT: Each attempt has an overall timeout to prevent indefinite hangs.
+ * - Download: 30s (axios timeout)
+ * - Sharp processing: 30s (withTimeout)
+ * - Compression: 45s (withTimeout)
+ * - Overall per-attempt limit: 90s (catches any combination of delays)
+ *
  * @param url - URL of the image to download
  * @param blockName - Name of the block containing the image
  * @param index - Index of the image in the block
@@ -366,97 +373,130 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
+  // Overall timeout per attempt: 90 seconds
+  // This is the safety net that prevents total hangs
+  // (download 30s + sharp 30s + compression 45s = worst case 105s, but most finish much faster)
+  const OVERALL_TIMEOUT_MS = 90000;
+
   while (attempt < 3) {
     const attemptNumber = attempt + 1;
+
+    // Spinner timeout must be longer than operation timeout to avoid premature warnings
     const spinner = SpinnerManager.create(
       `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
-      60000
+      120000 // 2 minutes (longer than 90s operation timeout)
     );
 
     // Create AbortController for actual request cancellation
     const abortController = new AbortController();
 
     try {
-      spinner.text = `Processing image ${index + 1}: Downloading`;
-      const response = await axios.get(url, {
-        responseType: "arraybuffer",
-        timeout: 30000,
-        maxRedirects: 5,
-        signal: abortController.signal,
-        headers: {
-          "User-Agent": "notion-fetch-script/1.0",
-        },
-      });
+      // Wrap the ENTIRE operation with timeout
+      // This ensures we never hang indefinitely even if individual timeouts fail
+      const result = await withTimeout(
+        (async () => {
+          spinner.text = `Processing image ${index + 1}: Downloading`;
+          const response = await axios.get(url, {
+            responseType: "arraybuffer",
+            timeout: 30000,
+            maxRedirects: 5,
+            signal: abortController.signal,
+            headers: {
+              "User-Agent": "notion-fetch-script/1.0",
+            },
+          });
 
-      const originalBuffer = Buffer.from(response.data, "binary");
-      const cleanUrl = url.split("?")[0];
+          const originalBuffer = Buffer.from(response.data, "binary");
+          const cleanUrl = url.split("?")[0];
 
-      const rawCT = (response.headers as Record<string, unknown>)[
-        "content-type"
-      ];
-      const normalizedCT =
-        typeof rawCT === "string"
-          ? rawCT
-          : Array.isArray(rawCT)
-            ? rawCT[0]
-            : undefined;
-      const headerFmt = formatFromContentType(normalizedCT);
-      const bufferFmt = detectFormatFromBuffer(originalBuffer);
-      const chosenFmt = chooseFormat(bufferFmt, headerFmt);
+          const rawCT = (response.headers as Record<string, unknown>)[
+            "content-type"
+          ];
+          const normalizedCT =
+            typeof rawCT === "string"
+              ? rawCT
+              : Array.isArray(rawCT)
+                ? rawCT[0]
+                : undefined;
+          const headerFmt = formatFromContentType(normalizedCT);
+          const bufferFmt = detectFormatFromBuffer(originalBuffer);
+          const chosenFmt = chooseFormat(bufferFmt, headerFmt);
 
-      const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
-      let extension = extForFormat(chosenFmt);
-      if (!extension) {
-        extension = urlExt || ".jpg";
-      }
+          const urlExt = (path.extname(cleanUrl) || "").toLowerCase();
+          let extension = extForFormat(chosenFmt);
+          if (!extension) {
+            extension = urlExt || ".jpg";
+          }
 
-      const sanitizedBlockName = blockName
-        .replace(/[^a-z0-9]/gi, "")
-        .toLowerCase()
-        .slice(0, 20);
-      const filename = `${sanitizedBlockName}_${index}${extension}`;
-      const filepath = path.join(IMAGES_PATH, filename);
+          const sanitizedBlockName = blockName
+            .replace(/[^a-z0-9]/gi, "")
+            .toLowerCase()
+            .slice(0, 20);
+          const filename = `${sanitizedBlockName}_${index}${extension}`;
+          const filepath = path.join(IMAGES_PATH, filename);
 
-      let resizedBuffer = originalBuffer;
-      let originalSize = originalBuffer.length;
+          let resizedBuffer = originalBuffer;
+          let originalSize = originalBuffer.length;
 
-      if (isResizableFormat(chosenFmt)) {
-        spinner.text = `Processing image ${index + 1}: Resizing`;
-        const processed = await processImage(originalBuffer, filepath);
-        resizedBuffer = processed.outputBuffer;
-        originalSize = processed.originalSize;
-      } else {
-        spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
-        resizedBuffer = originalBuffer;
-        originalSize = originalBuffer.length;
-      }
+          if (isResizableFormat(chosenFmt)) {
+            spinner.text = `Processing image ${index + 1}: Resizing`;
+            const processed = await processImage(originalBuffer, filepath);
+            resizedBuffer = processed.outputBuffer;
+            originalSize = processed.originalSize;
+          } else {
+            spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
+            resizedBuffer = originalBuffer;
+            originalSize = originalBuffer.length;
+          }
 
-      spinner.text = `Processing image ${index + 1}: Compressing`;
-      const { finalSize, usedFallback } = await compressImageToFileWithFallback(
-        originalBuffer,
-        resizedBuffer,
-        filepath,
-        url
+          spinner.text = `Processing image ${index + 1}: Compressing`;
+          const { finalSize, usedFallback } =
+            await compressImageToFileWithFallback(
+              originalBuffer,
+              resizedBuffer,
+              filepath,
+              url
+            );
+
+          const savedBytes = usedFallback
+            ? 0
+            : Math.max(0, originalSize - finalSize);
+          const imagePath = `/images/${filename}`;
+
+          return {
+            filepath,
+            imagePath,
+            savedBytes,
+            usedFallback,
+          };
+        })(),
+        OVERALL_TIMEOUT_MS,
+        `image ${index + 1} processing`
       );
 
       spinner.succeed(
-        usedFallback
+        result.usedFallback
           ? chalk.green(
-              `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
+              `Image ${index + 1} saved with fallback (original, unmodified): ${result.filepath}`
             )
-          : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
+          : chalk.green(
+              `Image ${index + 1} processed and saved: ${result.filepath}`
+            )
       );
 
-      const savedBytes = usedFallback
-        ? 0
-        : Math.max(0, originalSize - finalSize);
-      const imagePath = `/images/${filename}`;
-      return { newPath: imagePath, savedBytes };
+      SpinnerManager.remove(spinner);
+      abortController.abort(); // Clean up
+      return {
+        newPath: result.imagePath,
+        savedBytes: result.savedBytes,
+      };
     } catch (error) {
       lastError = error;
       let errorMessage = `Error processing image ${index + 1} from ${url}`;
 
-      if ((error as any)?.code === "ECONNABORTED") {
+      if (error instanceof TimeoutError) {
+        errorMessage = `Overall timeout (${OVERALL_TIMEOUT_MS}ms) processing image ${index + 1} from ${url}`;
+      } else if ((error as any)?.code === "ECONNABORTED") {
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
       } else if ((error as any)?.response) {
         errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;

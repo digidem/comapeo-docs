@@ -373,10 +373,14 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
-  // Overall timeout per attempt: 90 seconds
-  // This is the safety net that prevents total hangs
-  // (download 30s + sharp 30s + compression 45s = worst case 105s, but most finish much faster)
-  const OVERALL_TIMEOUT_MS = 90000;
+  // Overall timeout per attempt: 120 seconds
+  // Must be LONGER than sum of individual timeouts to avoid false positives:
+  // - Download: 30s (axios timeout)
+  // - Sharp resize: 30s (withTimeout in imageProcessor.ts)
+  // - Compression: 45s (withTimeout in utils.ts)
+  // - Worst case total: 105s
+  // - Overall timeout: 120s (safety buffer for legitimate slow images)
+  const OVERALL_TIMEOUT_MS = 120000;
 
   while (attempt < 3) {
     const attemptNumber = attempt + 1;
@@ -384,7 +388,7 @@ export async function downloadAndProcessImage(
     // Spinner timeout must be longer than operation timeout to avoid premature warnings
     const spinner = SpinnerManager.create(
       `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
-      120000 // 2 minutes (longer than 90s operation timeout)
+      150000 // 2.5 minutes (longer than 120s operation timeout)
     );
 
     // Create AbortController for actual request cancellation

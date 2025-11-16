@@ -300,12 +300,13 @@ This refactoring builds on recent test coverage improvements:
 3. `d004de6` - fix(tests): resolve test failures after refactoring
 4. `1694ecc` - fix(types): add missing beforeAll and afterAll imports to test files
 
-### Phase 3 Progress (To be committed)
-- Extracted imageProcessing.ts with comprehensive image handling (download, cache, retry)
-- Extracted translationManager.ts with i18n file management
-- Updated generateBlocks.ts to use new modules (55% total reduction)
-- All 539 tests passing + 67 new tests = 606 module tests total
-- Zero behavioral changes (refactoring only)
+### Phase 3 Commit
+5. `9836206` - refactor(notion-fetch): extract imageProcessing and translationManager modules (Phase 3)
+   - Extracted imageProcessing.ts with comprehensive image handling (download, cache, retry)
+   - Extracted translationManager.ts with i18n file management
+   - Updated generateBlocks.ts to use new modules (55% total reduction)
+   - All 539 tests passing + 67 new tests = 606 module tests total
+   - Zero behavioral changes (refactoring only)
 
 ### Original Analysis
 - Previous branch: `claude/analyze-notion-fetch-all-01RYyatE5KEXqzMczu11r4gS`

@@ -119,9 +119,9 @@ export async function loadWithCache<T>(
   }
 
   const result = await inFlight;
-  const normalized = config.normalizeResult(result);
-  config.mainMap.set(pageId, { key: cacheKey, data: normalized });
-  return { data: normalized, source: "fetched" };
+  // Result is already normalized by the inFlight promise
+  config.mainMap.set(pageId, { key: cacheKey, data: result });
+  return { data: result, source: "fetched" };
 }
 
 /**

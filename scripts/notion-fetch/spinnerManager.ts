@@ -11,8 +11,14 @@ class SpinnerManager {
 
   /**
    * Create a new spinner and track it
+   * In CI environments, returns a no-op spinner with simple text output
    */
   static create(text: string, timeoutMs: number = 30000): Ora {
+    // Disable spinners in CI environments to reduce noise
+    if (this.isCIEnvironment()) {
+      return this.createNoOpSpinner(text);
+    }
+
     const spinner = ora(text).start();
     this.spinners.add(spinner);
 
@@ -28,6 +34,56 @@ class SpinnerManager {
 
     this.timeouts.set(spinner, timeout);
     return spinner;
+  }
+
+  /**
+   * Check if running in CI environment
+   */
+  private static isCIEnvironment(): boolean {
+    return process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+  }
+
+  /**
+   * Create a no-op spinner for CI environments
+   * Provides simple text output instead of spinner animations
+   */
+  private static createNoOpSpinner(text: string): Ora {
+    return {
+      text,
+      succeed: (message?: string) => {
+        console.log(`✓ ${message || text}`);
+        return this.createNoOpSpinner(text) as Ora;
+      },
+      fail: (message?: string) => {
+        console.error(`✗ ${message || text}`);
+        return this.createNoOpSpinner(text) as Ora;
+      },
+      warn: (message?: string) => {
+        console.warn(`⚠ ${message || text}`);
+        return this.createNoOpSpinner(text) as Ora;
+      },
+      info: (message?: string) => {
+        console.info(`ℹ ${message || text}`);
+        return this.createNoOpSpinner(text) as Ora;
+      },
+      start: () => this.createNoOpSpinner(text) as Ora,
+      stop: () => this.createNoOpSpinner(text) as Ora,
+      clear: () => this.createNoOpSpinner(text) as Ora,
+      render: () => this.createNoOpSpinner(text) as Ora,
+      frame: () => "",
+      isSpinning: false,
+      indent: 0,
+      spinner: "dots" as const,
+      color: "cyan" as const,
+      hideCursor: true,
+      interval: 0,
+      stream: process.stdout,
+      id: undefined,
+      isEnabled: false,
+      prefixText: "",
+      suffixText: "",
+      stopAndPersist: () => this.createNoOpSpinner(text) as Ora,
+    } as Ora;
   }
 
   /**

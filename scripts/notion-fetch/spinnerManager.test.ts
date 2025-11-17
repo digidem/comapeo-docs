@@ -117,4 +117,137 @@ describe("spinnerManager", () => {
       expect(SpinnerManager.hasActiveSpinners()).toBe(false);
     });
   });
+
+  describe("CI environment detection", () => {
+    const originalCI = process.env.CI;
+    const originalGitHubActions = process.env.GITHUB_ACTIONS;
+
+    afterEach(() => {
+      // Restore original environment variables
+      if (originalCI === undefined) {
+        delete process.env.CI;
+      } else {
+        process.env.CI = originalCI;
+      }
+      if (originalGitHubActions === undefined) {
+        delete process.env.GITHUB_ACTIONS;
+      } else {
+        process.env.GITHUB_ACTIONS = originalGitHubActions;
+      }
+    });
+
+    it("should create no-op spinner when CI=true", () => {
+      process.env.CI = "true";
+
+      const spinner = SpinnerManager.create("Test spinner");
+
+      expect(spinner).toBeDefined();
+      expect(spinner.isSpinning).toBe(false);
+      expect(spinner.isEnabled).toBe(false);
+      // No-op spinners are not tracked in the active spinners set
+      expect(SpinnerManager.getActiveCount()).toBe(0);
+    });
+
+    it("should create no-op spinner when GITHUB_ACTIONS=true", () => {
+      process.env.GITHUB_ACTIONS = "true";
+
+      const spinner = SpinnerManager.create("Test spinner");
+
+      expect(spinner).toBeDefined();
+      expect(spinner.isSpinning).toBe(false);
+      expect(spinner.isEnabled).toBe(false);
+      expect(SpinnerManager.getActiveCount()).toBe(0);
+    });
+
+    it("should create normal spinner in non-CI environment", () => {
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+
+      const spinner = SpinnerManager.create("Test spinner", 1000);
+
+      expect(spinner).toBeDefined();
+      // Normal spinners are tracked
+      expect(SpinnerManager.getActiveCount()).toBe(1);
+
+      SpinnerManager.remove(spinner);
+    });
+
+    it("should handle no-op spinner methods without errors in CI", () => {
+      process.env.CI = "true";
+
+      // Mock console methods to verify they're called
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+      const consoleInfoSpy = vi
+        .spyOn(console, "info")
+        .mockImplementation(() => {});
+
+      const spinner = SpinnerManager.create("Test operation");
+
+      // Test succeed method
+      spinner.succeed("Success message");
+      expect(consoleLogSpy).toHaveBeenCalledWith("✓ Success message");
+
+      // Test fail method
+      spinner.fail("Error message");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("✗ Error message");
+
+      // Test warn method
+      spinner.warn("Warning message");
+      expect(consoleWarnSpy).toHaveBeenCalledWith("⚠ Warning message");
+
+      // Test info method
+      spinner.info("Info message");
+      expect(consoleInfoSpy).toHaveBeenCalledWith("ℹ Info message");
+
+      // Test methods that should be no-ops
+      expect(() => spinner.start()).not.toThrow();
+      expect(() => spinner.stop()).not.toThrow();
+      expect(() => spinner.clear()).not.toThrow();
+      expect(() => spinner.render()).not.toThrow();
+
+      consoleLogSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+      consoleInfoSpy.mockRestore();
+    });
+
+    it("should use default text when no message provided in CI", () => {
+      process.env.CI = "true";
+
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      const spinner = SpinnerManager.create("Default text");
+      spinner.succeed();
+
+      expect(consoleLogSpy).toHaveBeenCalledWith("✓ Default text");
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should not create timeout for no-op spinners in CI", () => {
+      process.env.CI = "true";
+
+      // Create a spinner with very short timeout
+      const spinner = SpinnerManager.create("Test spinner", 1);
+
+      // Wait longer than timeout
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // No timeout warning should occur for no-op spinners
+          expect(spinner.isSpinning).toBe(false);
+          resolve(undefined);
+        }, 10);
+      });
+    });
+  });
 });

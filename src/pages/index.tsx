@@ -3,7 +3,7 @@ import clsx from "clsx";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
-// import HomepageFeatures from "@site/src/components/HomepageFeatures"; // Not available
+import HomepageFeatures from "../components/HomepageFeatures";
 import Heading from "@theme/Heading";
 import { translate } from "@docusaurus/Translate";
 import styles from "./index.module.css";
@@ -76,7 +76,9 @@ export default function Home(): ReactNode {
       description="Description will go into a meta tag in <head />"
     >
       <HomepageHeader />
-      <main>{/* <HomepageFeatures /> */}</main>
+      <main>
+        <HomepageFeatures />
+      </main>
     </Layout>
   );
 }

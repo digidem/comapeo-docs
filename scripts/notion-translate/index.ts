@@ -26,6 +26,13 @@ import {
 
 const LEGACY_SECTION_PROPERTY = "Section";
 
+// Type helpers for Notion properties
+type NotionTitleProperty = { title: Array<{ plain_text: string }> };
+type NotionSelectProperty = { select: { name: string } | null };
+type NotionNumberProperty = { number: number };
+type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
+type NotionRelationProperty = { relation: Array<{ id: string }> };
+
 const getElementTypeProperty = (page: NotionPage) =>
   page.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
   (page.properties as Record<string, any>)?.[LEGACY_SECTION_PROPERTY];
@@ -84,8 +91,9 @@ export async function findTranslationPage(
   targetLanguage: string
 ): Promise<NotionPage | null> {
   try {
-    const title =
-      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const title = (
+      englishPage.properties[NOTION_PROPERTIES.TITLE] as NotionTitleProperty
+    ).title[0].plain_text;
 
     const filter = {
       and: [
@@ -167,8 +175,9 @@ export async function saveTranslatedContentToDisk(
 ): Promise<string> {
   try {
     // Create a sanitized filename from the title
-    const title =
-      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const title = (
+      englishPage.properties[NOTION_PROPERTIES.TITLE] as NotionTitleProperty
+    ).title[0].plain_text;
 
     // Create collision-safe filename
     const baseSlug = title
@@ -208,7 +217,11 @@ export async function saveTranslatedContentToDisk(
         const categoryContent = {
           label: title,
           position:
-            englishPage.properties[NOTION_PROPERTIES.ORDER]?.number || 1,
+            (
+              englishPage.properties[NOTION_PROPERTIES.ORDER] as
+                | NotionNumberProperty
+                | undefined
+            )?.number || 1,
           collapsible: true,
           collapsed: true,
           link: {
@@ -378,8 +391,9 @@ async function processLanguageTranslations(
   let skippedTranslations = 0;
 
   for (const englishPage of englishPages) {
-    const originalTitle =
-      englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+    const originalTitle = (
+      englishPage.properties[NOTION_PROPERTIES.TITLE] as NotionTitleProperty
+    ).title[0].plain_text;
     console.log(chalk.blue(`Processing: ${originalTitle}`));
 
     // Find existing translation
@@ -435,8 +449,9 @@ async function processSinglePageTranslation({
   onNew: () => void;
   onUpdate: () => void;
 }) {
-  const originalTitle =
-    englishPage.properties[NOTION_PROPERTIES.TITLE].title[0].plain_text;
+  const originalTitle = (
+    englishPage.properties[NOTION_PROPERTIES.TITLE] as NotionTitleProperty
+  ).title[0].plain_text;
 
   // Check if this is a title page
   const elementType = getElementTypeProperty(englishPage);
@@ -474,22 +489,22 @@ async function processSinglePageTranslation({
   };
 
   // Copy other properties from the English page
-  if (
-    englishPage.properties[NOTION_PROPERTIES.ORDER] &&
-    englishPage.properties[NOTION_PROPERTIES.ORDER].number
-  ) {
+  const orderProp = englishPage.properties[NOTION_PROPERTIES.ORDER] as
+    | NotionNumberProperty
+    | undefined;
+  if (orderProp && orderProp.number) {
     properties[NOTION_PROPERTIES.ORDER] = {
-      number: englishPage.properties[NOTION_PROPERTIES.ORDER].number,
+      number: orderProp.number,
     };
   }
-  if (
-    englishPage.properties[NOTION_PROPERTIES.TAGS] &&
-    englishPage.properties[NOTION_PROPERTIES.TAGS].multi_select
-  ) {
+  const tagsProp = englishPage.properties[NOTION_PROPERTIES.TAGS] as
+    | NotionMultiSelectProperty
+    | undefined;
+  if (tagsProp && tagsProp.multi_select) {
     properties[NOTION_PROPERTIES.TAGS] = {
-      multi_select: englishPage.properties[
-        NOTION_PROPERTIES.TAGS
-      ].multi_select.map((tag: { name: string }) => ({ name: tag.name })),
+      multi_select: tagsProp.multi_select.map((tag: { name: string }) => ({
+        name: tag.name,
+      })),
     };
   }
   const englishElementType = getElementTypeProperty(englishPage);
@@ -500,7 +515,9 @@ async function processSinglePageTranslation({
   }
 
   // Find the parent of the English page to nest the translation as a sibling
-  const parentInfo = englishPage.properties["Parent item"].relation[0].id;
+  const parentInfo = (
+    englishPage.properties["Parent item"] as NotionRelationProperty
+  ).relation[0].id;
   // Create or update translation page in Notion as a sibling (child of the same parent)
   await createNotionPageFromMarkdown(
     notion,

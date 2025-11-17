@@ -18,7 +18,7 @@ export default function DocSidebarItemWrapper(props: Props): ReactNode {
             opacity: 0.8,
           }}
         >
-          {props.item.customProps.title}
+          {(props.item.customProps as any).title}
         </div>
       )}
       <DocSidebarItem {...props} />

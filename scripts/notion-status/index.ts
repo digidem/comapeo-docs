@@ -74,7 +74,7 @@ export async function updateNotionPageStatus(
 
         await notion.pages.update({
           page_id: page.id,
-          properties,
+          properties: properties as any,
         });
         successCount++;
       } catch (error) {

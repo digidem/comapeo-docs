@@ -267,7 +267,7 @@ export function calloutToAdmonition(
 export function isCalloutBlock(
   block: PartialBlockObjectResponse | BlockObjectResponse
 ): block is CalloutBlockObjectResponse {
-  return block.type === "callout";
+  return (block as any).type === "callout";
 }
 
 /**
@@ -283,7 +283,7 @@ export function convertCalloutToAdmonition(
 
   // Type assertion since we've confirmed this is a callout block
   const calloutBlock = block as CalloutBlockObjectResponse;
-  const calloutProperties: CalloutBlockProperties = calloutBlock.callout;
+  const calloutProperties: CalloutBlockProperties = calloutBlock.callout as any;
 
   if (!calloutProperties) {
     return null;

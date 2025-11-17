@@ -310,7 +310,8 @@ export function createMockAxios() {
   const mockGet = vi.fn();
   const urlMocks = new Map<
     string,
-    { type: "success"; data: Buffer; contentType?: string } | { type: "error"; error: Error }
+    | { type: "success"; data: Buffer; contentType?: string }
+    | { type: "error"; error: Error }
   >();
 
   const axios = {
@@ -471,6 +472,13 @@ export function mockProcessedImageResult(
     format,
     buffer: Buffer.from("mock-compressed-image"),
   };
+}
+
+/**
+ * Simple delay function for testing
+ */
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

@@ -1,3 +1,4 @@
+// @ts-nocheck - Bun types not fully compatible
 import { test } from "bun:test";
 
 const COMMAND = ["bunx", "vitest", "run", "--pool=threads"] as const;

@@ -7,12 +7,12 @@ type ParseResult = {
   };
 };
 
-export const mockOpenAIParse = vi.fn().mockResolvedValue<ParseResult>({
+export const mockOpenAIParse = vi.fn().mockResolvedValue({
   output_parsed: {
     markdown: "# translated\n\nMock content",
     title: "Mock Title",
   },
-});
+} as ParseResult);
 
 class MockOpenAI {
   responses = {

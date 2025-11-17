@@ -1,13 +1,12 @@
 import ora from "ora";
 import chalk from "chalk";
-import type { QueryDatabaseParameters } from "@notionhq/client/build/src/api-endpoints";
 import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
 import { generateBlocks } from "./generateBlocks";
 import { trackSpinner } from "./runtime";
 import { perfTelemetry } from "../perfTelemetry";
 
 export interface FetchPipelineOptions {
-  filter?: QueryDatabaseParameters["filter"];
+  filter?: any; // QueryDatabase filter parameter
   fetchSpinnerText?: string;
   generateSpinnerText?: string;
   onProgress?: (progress: { current: number; total: number }) => void;

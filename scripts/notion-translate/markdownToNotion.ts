@@ -88,7 +88,7 @@ export async function markdownToNotionBlocks(
   // Process the markdown AST
   visit(ast, (node) => {
     // Cast node to our custom type
-    const typedNode = node as MarkdownNode;
+    const typedNode = node as unknown as MarkdownNode;
     switch (typedNode.type) {
       case "heading": {
         const headingNode = typedNode as HeadingNode;
@@ -140,7 +140,7 @@ export async function markdownToNotionBlocks(
                 },
               ],
             },
-          } as BlockObjectRequest);
+          } as unknown as BlockObjectRequest);
         }
         break;
       }
@@ -377,7 +377,7 @@ function createHeadingBlock(
         },
       ],
     },
-  } as BlockObjectRequest;
+  } as unknown as BlockObjectRequest;
 }
 
 /**
@@ -582,9 +582,8 @@ export async function createNotionPageFromMarkdown(
       const nonEnglishResults = language
         ? response.results
         : response.results.filter((page) => {
-            // @ts-expect-error - We know the page has properties
             const pageLanguage =
-              page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
+              (page as any).properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
             return pageLanguage !== MAIN_LANGUAGE;
           });
 

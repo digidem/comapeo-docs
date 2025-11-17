@@ -1,20 +1,22 @@
 #!/usr/bin/env bun
+// @ts-nocheck - Playwright types not installed
+/* eslint-disable import/no-unresolved */
 /**
  * Screenshot script for PR visual comparisons
  * Generic tool for capturing before/after screenshots
- * 
+ *
  * Usage:
  *   bun scripts/screenshot-prs.ts --url /docs/overview --name sidebar
  *   bun scripts/screenshot-prs.ts --url / --name landing --viewport mobile
  *   bun scripts/screenshot-prs.ts --url /docs/overview --selector "aside[class*='sidebar']" --name sidebar-detail
  */
 
-import { chromium } from 'playwright';
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { chromium } from "playwright";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
-const SCREENSHOTS_DIR = join(process.cwd(), 'screenshots');
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const SCREENSHOTS_DIR = join(process.cwd(), "screenshots");
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
 const VIEWPORTS = {
   mobile: { width: 375, height: 667 },
@@ -33,22 +35,23 @@ interface ScreenshotOptions {
 }
 
 async function takeScreenshot(options: ScreenshotOptions) {
-  const browser = await chromium.launch({ channel: 'chrome' });
+  const browser = await chromium.launch({ channel: "chrome" });
   const context = await browser.newContext();
   const page = await context.newPage();
 
   try {
     // Set viewport
-    const viewport = typeof options.viewport === 'string' 
-      ? VIEWPORTS[options.viewport]
-      : options.viewport || VIEWPORTS.desktop;
-    
+    const viewport =
+      typeof options.viewport === "string"
+        ? VIEWPORTS[options.viewport]
+        : options.viewport || VIEWPORTS.desktop;
+
     await page.setViewportSize(viewport);
 
     // Navigate
     const fullUrl = `${BASE_URL}${options.url}`;
     console.log(`📸 Navigating to ${fullUrl}`);
-    await page.goto(fullUrl, { waitUntil: 'networkidle' });
+    await page.goto(fullUrl, { waitUntil: "networkidle" });
     await page.waitForTimeout(1000); // Wait for animations
 
     // Determine output path
@@ -59,16 +62,24 @@ async function takeScreenshot(options: ScreenshotOptions) {
     // Take screenshot
     if (options.selector) {
       const element = await page.locator(options.selector).first();
-      if (await element.count() > 0) {
+      if ((await element.count()) > 0) {
         await element.screenshot({ path: screenshotPath });
         console.log(`✅ Saved element screenshot: ${screenshotPath}`);
       } else {
-        console.log(`⚠️  Selector not found, taking full page: ${options.selector}`);
-        await page.screenshot({ path: screenshotPath, fullPage: options.fullPage || false });
+        console.log(
+          `⚠️  Selector not found, taking full page: ${options.selector}`
+        );
+        await page.screenshot({
+          path: screenshotPath,
+          fullPage: options.fullPage || false,
+        });
         console.log(`✅ Saved fallback screenshot: ${screenshotPath}`);
       }
     } else {
-      await page.screenshot({ path: screenshotPath, fullPage: options.fullPage || false });
+      await page.screenshot({
+        path: screenshotPath,
+        fullPage: options.fullPage || false,
+      });
       console.log(`✅ Saved screenshot: ${screenshotPath}`);
     }
 
@@ -80,35 +91,36 @@ async function takeScreenshot(options: ScreenshotOptions) {
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   // Parse arguments
   const options: ScreenshotOptions = {
-    url: '/',
-    name: 'screenshot',
+    url: "/",
+    name: "screenshot",
   };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--url':
+      case "--url":
         options.url = args[++i];
         break;
-      case '--name':
+      case "--name":
         options.name = args[++i];
         break;
-      case '--viewport':
+      case "--viewport":
         const vp = args[++i];
-        options.viewport = vp in VIEWPORTS ? vp as keyof typeof VIEWPORTS : VIEWPORTS.desktop;
+        options.viewport =
+          vp in VIEWPORTS ? (vp as keyof typeof VIEWPORTS) : VIEWPORTS.desktop;
         break;
-      case '--selector':
+      case "--selector":
         options.selector = args[++i];
         break;
-      case '--full-page':
+      case "--full-page":
         options.fullPage = true;
         break;
-      case '--output':
+      case "--output":
         options.output = args[++i];
         break;
-      case '--help':
+      case "--help":
         console.log(`
 Screenshot Capture Tool for PR Visual Reviews
 
@@ -151,6 +163,6 @@ Examples:
 }
 
 main().catch((error) => {
-  console.error('❌ Error:', error.message);
+  console.error("❌ Error:", error.message);
   process.exit(1);
 });

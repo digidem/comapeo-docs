@@ -88,15 +88,16 @@ export async function translateMarkdownFile(
   try {
     // Read the markdown file
     const content = await fs.readFile(filePath, "utf8");
+    const fileName = path.basename(filePath, path.extname(filePath));
 
     // Translate the content
-    const translatedContent = await translateText(content, targetLanguage);
+    const translated = await translateText(content, fileName, targetLanguage);
 
     // Ensure the output directory exists
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
     // Write the translated content to the output file
-    await fs.writeFile(outputPath, translatedContent, "utf8");
+    await fs.writeFile(outputPath, translated.markdown, "utf8");
 
     spinner.succeed(
       chalk.green(`Translated ${path.basename(filePath)} to ${targetLanguage}`)
@@ -123,7 +124,7 @@ export async function translateText(
   text: string,
   title: string,
   targetLanguage: string
-): Promise<string> {
+): Promise<{ markdown: string; title: string }> {
   // Add "title: {title}" to the first line of the text
   const textWithTitle = `title: ${title}\n\n markdown: ${text}`;
   try {
@@ -170,7 +171,10 @@ export async function translateText(
   } catch (error) {
     console.error("Error translating text:", error);
     // Return a fallback translation message instead of throwing
-    return `# Translation Error\n\nUnable to translate content to ${targetLanguage}. Please try again later.\n\nOriginal content:\n\n${text}`;
+    return {
+      markdown: `# Translation Error\n\nUnable to translate content to ${targetLanguage}. Please try again later.\n\nOriginal content:\n\n${text}`,
+      title: title
+    };
   }
 }
 
@@ -189,7 +193,7 @@ export async function translateString(
   try {
     const translatedText = await translateText(text, "", targetLanguage);
     spinner.succeed(chalk.green(`Text translated to ${targetLanguage}`));
-    return translatedText;
+    return translatedText.markdown;
   } catch (error) {
     spinner.fail(chalk.red(`Failed to translate text: ${error.message}`));
     throw error;

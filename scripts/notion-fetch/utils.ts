@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import chalk from "chalk";
 import { compressImage } from "./imageCompressor";
+import { withTimeoutFallback } from "./timeoutUtils";
 
 // Re-export sanitize so callers have a single utils entrypoint
 export { sanitizeMarkdownContent } from "./contentSanitizer";
@@ -144,6 +145,11 @@ export function isResizableFormat(fmt: ImgFormat): boolean {
   return fmt === "jpeg" || fmt === "png" || fmt === "webp";
 }
 
+// Timeout for overall compression operation (imagemin + all plugins)
+// Individual plugins like pngquant have their own timeouts, but this ensures
+// the entire compression doesn't hang indefinitely
+const COMPRESS_TIMEOUT_MS = 45000; // 45 seconds (longer than pngquant's 30s timeout)
+
 // Helper A: wrap in-memory optimization with fail-open semantics.
 // Returns {buffer: Buffer to write, compressedSize: number, usedFallback: boolean}
 export async function compressImageWithFallback(
@@ -152,8 +158,18 @@ export async function compressImageWithFallback(
   sourceUrl: string
 ): Promise<{ buffer: Buffer; compressedSize: number; usedFallback: boolean }> {
   try {
-    const { compressedBuffer, compressedSize } =
-      await compressImage(inputBuffer);
+    // Wrap compression with timeout to prevent indefinite hangs
+    // Falls back to original buffer on timeout
+    const { compressedBuffer, compressedSize } = await withTimeoutFallback(
+      compressImage(inputBuffer),
+      COMPRESS_TIMEOUT_MS,
+      {
+        compressedBuffer: inputBuffer,
+        originalSize: inputBuffer.length,
+        compressedSize: inputBuffer.length,
+      },
+      `image compression (${filepath})`
+    );
     // If optimizer returns larger or equal size, keep original to avoid regressions.
     if (!compressedBuffer || compressedBuffer.length >= inputBuffer.length) {
       return {

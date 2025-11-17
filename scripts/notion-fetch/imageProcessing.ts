@@ -17,6 +17,7 @@ import {
   validateAndSanitizeImageUrl,
   createFallbackImageMarkdown,
 } from "./imageValidation";
+import { withTimeout, TimeoutError } from "./timeoutUtils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -352,6 +353,12 @@ export async function downloadAndProcessImageWithCache(
 /**
  * Downloads and processes an image with retry logic
  *
+ * IMPORTANT: Each attempt has an overall timeout to prevent indefinite hangs.
+ * - Download: 30s (axios timeout)
+ * - Sharp processing: 30s (withTimeout)
+ * - Compression: 45s (withTimeout)
+ * - Overall per-attempt limit: 90s (catches any combination of delays)
+ *
  * @param url - URL of the image to download
  * @param blockName - Name of the block containing the image
  * @param index - Index of the image in the block
@@ -366,19 +373,75 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
+  // Track the previous attempt's promise and timeout status to prevent race conditions.
+  // JavaScript promises are not cancellable - when withTimeout() rejects,
+  // the underlying operation keeps running and can still write to disk.
+  // We must wait for the timed-out promise to fully settle before starting
+  // the next retry, otherwise a slow attempt can overwrite a successful retry.
+  let previousAttempt: Promise<any> | null = null;
+  let previousTimedOut = false;
+
+  // Overall timeout per attempt: 120 seconds
+  // Must be LONGER than sum of individual timeouts to avoid false positives:
+  // - Download: 30s (axios timeout)
+  // - Sharp resize: 30s (withTimeout in imageProcessor.ts)
+  // - Compression: 45s (withTimeout in utils.ts)
+  // - Worst case total: 105s
+  // - Overall timeout: 120s (safety buffer for legitimate slow images)
+  const OVERALL_TIMEOUT_MS = 120000;
+
+  // Grace period for timed-out operations to finish disk writes
+  // If the operation is truly deadlocked, we give up after this period
+  const GRACE_PERIOD_MS = 30000;
+
   while (attempt < 3) {
+    // Wait for the previous attempt to fully settle (including all disk I/O)
+    // before starting a new one. This prevents timed-out attempts from
+    // overwriting files written by successful retries.
+    //
+    // IMPORTANT: If the previous attempt timed out, it might be deadlocked.
+    // We give it a grace period to finish disk writes, but if it doesn't
+    // complete within that window, we proceed anyway to avoid indefinite blocking.
+    if (previousAttempt) {
+      if (previousTimedOut) {
+        // Previous attempt timed out - might be deadlocked
+        // Give it a grace period to finish, but don't wait forever
+        await Promise.race([
+          previousAttempt.catch(() => {
+            // Ignore errors - we just care about completion
+          }),
+          new Promise((resolve) => setTimeout(resolve, GRACE_PERIOD_MS)),
+        ]);
+      } else {
+        // Previous attempt completed normally (success or non-timeout error)
+        // It's already settled, so this returns immediately
+        await previousAttempt.catch(() => {
+          // Ignore errors - we just need to wait for the promise to settle
+        });
+      }
+      previousAttempt = null;
+      previousTimedOut = false;
+    }
+
     const attemptNumber = attempt + 1;
+
+    // Spinner timeout must be longer than operation timeout to avoid premature warnings
     const spinner = SpinnerManager.create(
       `Processing image ${index + 1} (attempt ${attemptNumber}/3)`,
-      60000
+      150000 // 2.5 minutes (longer than 120s operation timeout)
     );
 
-    try {
+    // Create AbortController for actual request cancellation
+    const abortController = new AbortController();
+
+    // Capture the entire async operation so we can track when it fully settles
+    const currentAttempt = (async () => {
       spinner.text = `Processing image ${index + 1}: Downloading`;
       const response = await axios.get(url, {
         responseType: "arraybuffer",
         timeout: 30000,
         maxRedirects: 5,
+        signal: abortController.signal,
         headers: {
           "User-Agent": "notion-fetch-script/1.0",
         },
@@ -435,24 +498,56 @@ export async function downloadAndProcessImage(
         url
       );
 
-      spinner.succeed(
-        usedFallback
-          ? chalk.green(
-              `Image ${index + 1} saved with fallback (original, unmodified): ${filepath}`
-            )
-          : chalk.green(`Image ${index + 1} processed and saved: ${filepath}`)
-      );
-
       const savedBytes = usedFallback
         ? 0
         : Math.max(0, originalSize - finalSize);
       const imagePath = `/images/${filename}`;
-      return { newPath: imagePath, savedBytes };
+
+      return {
+        filepath,
+        imagePath,
+        savedBytes,
+        usedFallback,
+      };
+    })();
+
+    // Store reference to this attempt for race condition prevention
+    previousAttempt = currentAttempt;
+
+    try {
+      // Wrap the ENTIRE operation with timeout
+      // This ensures we never hang indefinitely even if individual timeouts fail
+      const result = await withTimeout(
+        currentAttempt,
+        OVERALL_TIMEOUT_MS,
+        `image ${index + 1} processing`
+      );
+
+      spinner.succeed(
+        result.usedFallback
+          ? chalk.green(
+              `Image ${index + 1} saved with fallback (original, unmodified): ${result.filepath}`
+            )
+          : chalk.green(
+              `Image ${index + 1} processed and saved: ${result.filepath}`
+            )
+      );
+
+      SpinnerManager.remove(spinner);
+      abortController.abort(); // Clean up
+      return {
+        newPath: result.imagePath,
+        savedBytes: result.savedBytes,
+      };
     } catch (error) {
       lastError = error;
       let errorMessage = `Error processing image ${index + 1} from ${url}`;
 
-      if ((error as any)?.code === "ECONNABORTED") {
+      if (error instanceof TimeoutError) {
+        errorMessage = `Overall timeout (${OVERALL_TIMEOUT_MS}ms) processing image ${index + 1} from ${url}`;
+        // Mark that this attempt timed out - the underlying promise might be deadlocked
+        previousTimedOut = true;
+      } else if ((error as any)?.code === "ECONNABORTED") {
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
       } else if ((error as any)?.response) {
         errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
@@ -461,13 +556,23 @@ export async function downloadAndProcessImage(
       }
 
       spinner.fail(chalk.red(`${errorMessage} (attempt ${attemptNumber}/3)`));
-      console.error(chalk.red("Image processing error details:"), error);
+
+      // Only log full error details in verbose mode or non-test environments
+      // This reduces noise in test output while preserving debugging capability
+      const isTestEnv =
+        process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+      const isVerbose =
+        process.env.VERBOSE === "true" || process.env.DEBUG === "true";
+
+      if (!isTestEnv || isVerbose) {
+        console.error(chalk.red("Image processing error details:"), error);
+      }
+
+      // Abort the request if it's still in progress
+      abortController.abort();
 
       if (attemptNumber < 3) {
         // Test-environment-aware retry delays
-        // Standardized test environment detection
-        const isTestEnv =
-          process.env.NODE_ENV === "test" || process.env.VITEST === "true";
         const baseDelayMs = isTestEnv ? 10 : 1000;
         const jitter = Math.floor(Math.random() * (isTestEnv ? 5 : 250));
         const delayMs =
@@ -485,6 +590,8 @@ export async function downloadAndProcessImage(
       }
     } finally {
       SpinnerManager.remove(spinner);
+      // Ensure abort controller is cleaned up
+      abortController.abort();
     }
 
     attempt++;

@@ -120,14 +120,18 @@ export async function runFetchPipeline(
       perfTelemetry.flush();
       return { data, metrics };
     } catch (error) {
-      generateSpinner.fail(chalk.red("Failed to generate blocks"));
+      if (generateSpinner.isSpinning) {
+        generateSpinner.fail(chalk.red("Failed to generate blocks"));
+      }
       throw error;
     } finally {
       unregisterGenerateSpinner?.();
       SpinnerManager.remove(generateSpinner);
     }
   } catch (error) {
-    fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
+    if (fetchSpinner.isSpinning) {
+      fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
+    }
     perfTelemetry.flush();
     throw error;
   } finally {

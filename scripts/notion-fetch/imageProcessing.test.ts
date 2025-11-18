@@ -18,6 +18,9 @@ import {
   downloadAndProcessImageWithCache,
   downloadAndProcessImage,
   getImageCache,
+  getProcessingMetrics,
+  resetProcessingMetrics,
+  logProcessingMetrics,
   type ImageProcessingResult,
   type ImageCacheEntry,
 } from "./imageProcessing";
@@ -672,6 +675,143 @@ describe("imageProcessing", () => {
       const cache1 = getImageCache();
       const cache2 = getImageCache();
       expect(cache1).toBe(cache2);
+    });
+  });
+
+  describe("Skip optimization logic", () => {
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      const { resetProcessingMetrics } = await import("./imageProcessing");
+      resetProcessingMetrics();
+    });
+
+    it("should skip processing for small images (< 50KB)", async () => {
+      const mockAxios = vi.mocked(axios);
+      const smallImageBuffer = Buffer.alloc(30 * 1024); // 30KB
+      mockAxios.get.mockResolvedValueOnce({
+        data: smallImageBuffer,
+        headers: { "content-type": "image/jpeg" },
+      });
+
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+
+      const result = await downloadAndProcessImage(
+        "https://example.com/image.jpg",
+        "test-block",
+        0
+      );
+
+      expect(result.newPath).toBeDefined();
+      expect(result.savedBytes).toBe(0);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining("testblock_0.jpg"),
+        smallImageBuffer
+      );
+
+      const { getProcessingMetrics } = await import("./imageProcessing");
+      const metrics = getProcessingMetrics();
+      expect(metrics.skippedSmallSize).toBe(1);
+    });
+
+    it("should process images larger than 50KB threshold", async () => {
+      const mockAxios = vi.mocked(axios);
+      const largeImageBuffer = Buffer.alloc(100 * 1024); // 100KB
+      mockAxios.get.mockResolvedValueOnce({
+        data: largeImageBuffer,
+        headers: { "content-type": "image/jpeg" },
+      });
+
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const result = await downloadAndProcessImage(
+        "https://example.com/image.jpg",
+        "test-block",
+        0
+      );
+
+      expect(result.newPath).toBeDefined();
+
+      const { getProcessingMetrics } = await import("./imageProcessing");
+      const metrics = getProcessingMetrics();
+      expect(metrics.skippedSmallSize).toBe(0);
+      expect(metrics.fullyProcessed).toBe(1);
+    });
+
+    it("should skip processing for already-optimized PNG images", async () => {
+      const mockAxios = vi.mocked(axios);
+      // Create a PNG buffer with optimization markers in the first 4KB (where hasOptimizationMarkers checks)
+      const pngSignature = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
+      const optimizationMarker = Buffer.from("pngquant optimized image");
+      const paddingSize = 100 * 1024 - 8 - optimizationMarker.length;
+      // Place marker within first 4KB so it's detected
+      const imageBuffer = Buffer.concat([
+        pngSignature,
+        optimizationMarker,
+        Buffer.alloc(paddingSize),
+      ]);
+
+      mockAxios.get.mockResolvedValueOnce({
+        data: imageBuffer,
+        headers: { "content-type": "image/png" },
+      });
+
+      const { detectFormatFromBuffer, isResizableFormat } = await import(
+        "./utils"
+      );
+      vi.mocked(detectFormatFromBuffer).mockReturnValue("png");
+      vi.mocked(isResizableFormat).mockReturnValue(true);
+
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+
+      const result = await downloadAndProcessImage(
+        "https://example.com/image.png",
+        "test-block",
+        0
+      );
+
+      expect(result.newPath).toBeDefined();
+
+      const { getProcessingMetrics } = await import("./imageProcessing");
+      const metrics = getProcessingMetrics();
+      expect(metrics.skippedAlreadyOptimized).toBe(1);
+    });
+
+    it("should track processing metrics correctly", async () => {
+      const { getProcessingMetrics, resetProcessingMetrics } = await import(
+        "./imageProcessing"
+      );
+      resetProcessingMetrics();
+
+      const mockAxios = vi.mocked(axios);
+
+      // Small image (skip)
+      const smallBuffer = Buffer.alloc(30 * 1024);
+      mockAxios.get.mockResolvedValueOnce({
+        data: smallBuffer,
+        headers: { "content-type": "image/jpeg" },
+      });
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+
+      await downloadAndProcessImage("https://example.com/small.jpg", "test", 0);
+
+      // Large image (process)
+      const largeBuffer = Buffer.alloc(100 * 1024);
+      mockAxios.get.mockResolvedValueOnce({
+        data: largeBuffer,
+        headers: { "content-type": "image/jpeg" },
+      });
+
+      await downloadAndProcessImage("https://example.com/large.jpg", "test", 1);
+
+      const metrics = getProcessingMetrics();
+      expect(metrics.totalProcessed).toBe(2);
+      expect(metrics.skippedSmallSize).toBe(1);
+      expect(metrics.fullyProcessed).toBe(1);
     });
   });
 });

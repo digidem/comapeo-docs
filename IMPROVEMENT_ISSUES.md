@@ -6,9 +6,9 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 1/9 issues completed (11% complete)
+**Current Status:** 2/9 issues completed (22% complete)
 
-**Next Recommended Task:** Issue #2 - Skip processing for small/optimized images (Est: 1hr, High Impact)
+**Next Recommended Task:** Issue #9 - Add aggregated progress tracking for parallel operations (Est: 2hr, Medium Priority) - **Required before Issue #4**
 
 **Quick Links:**
 
@@ -206,6 +206,95 @@ This ensures:
 
 ---
 
+### Issue 2: Skip processing for small/optimized images ✅
+
+**Status:** ✅ COMPLETED
+
+**Implementation Date:** 2025-01-18
+
+**Files Modified:**
+
+- `scripts/notion-fetch/imageProcessing.ts` - Added skip logic for small images (<50KB), already-optimized detection, and dimension checks; added performance metrics tracking
+- `scripts/notion-fetch/imageProcessing.test.ts` - Added 4 new tests for skip logic and metrics tracking
+- `scripts/notion-fetch/imageReplacer.ts` - Integrated performance metrics logging
+
+**Summary:**
+
+Successfully implemented comprehensive skip logic for image processing to avoid unnecessary work on images that don't need optimization. Images are now evaluated through three phases of checks before processing, with detailed metrics tracking showing skip rates and performance improvements.
+
+**Key Changes:**
+
+1. **Phase 1: Skip small images** (< 50KB threshold)
+   - Images under 50KB saved directly without processing
+   - Saves both resize and compression operations
+   - Assumes small images are already optimized
+
+2. **Phase 2: Skip already-optimized images**
+   - Detects optimization markers from popular tools (pngquant, OptiPNG, mozjpeg, etc.)
+   - Checks PNG bit depth (≤4-bit images skipped)
+   - Works across different image formats (PNG, JPEG, WebP)
+   - Optimization markers checked in first 4KB for performance
+
+3. **Phase 3: Skip resize if dimensions acceptable**
+   - Uses Sharp to check image dimensions before resize
+   - Skips resize if width ≤ 1280px (maxWidth threshold)
+   - Still applies compression if beneficial
+   - Gracefully falls back to resize if metadata check fails
+
+4. **Performance metrics tracking**
+   - Counts total images processed
+   - Tracks skip reasons (small size, already optimized, resize skipped)
+   - Tracks fully processed images
+   - Logs detailed summary with percentages
+   - Provides `getProcessingMetrics()`, `resetProcessingMetrics()`, `logProcessingMetrics()` functions
+
+**Test Results:**
+
+- All 37 tests passing (33 existing + 4 new skip logic tests)
+- Tests verify all three skip phases
+- Tests verify metrics tracking accuracy
+- Tests verify small image handling
+- Tests verify optimization marker detection
+
+**Acceptance Criteria Met:**
+
+- ✅ Images < 50KB saved directly without processing
+- ✅ Dimensions checked before resize
+- ✅ Already-optimized images skip compression
+- ✅ Logs indicate when processing skipped and why
+- ✅ Tests verify skip logic works correctly
+- ✅ No regression in image quality
+- ✅ Performance metrics logged showing skip rate
+
+**Expected Performance Impact:**
+
+- **Time Saved:** 20-30% reduction on pages with many small or already-optimized images
+- **CPU Savings:** Eliminates unnecessary resize/compress operations
+- **Network Savings:** None (still downloads to check size/optimization)
+- **Quality:** No regression (skips only when safe)
+
+**Example Metrics Output:**
+
+```
+📊 Image Processing Performance Metrics:
+   Total images: 120
+   Skipped (small size): 45 (37.5%)
+   Skipped (already optimized): 12 (10.0%)
+   Resize skipped: 28 (23.3%)
+   Fully processed: 63 (52.5%)
+   Overall skip rate: 47.5%
+```
+
+**Next Developer Notes:**
+
+- Implementation is production-ready
+- Metrics will help identify optimization opportunities in real-world usage
+- Consider adjusting MIN_SIZE_FOR_PROCESSING threshold based on actual metrics
+- Phase 3 (resize skip) provides additional optimization without sacrificing quality
+- All skip logic is conservative (processes when in doubt)
+
+---
+
 ## 🚀 Quick Wins (High Priority, Low Complexity)
 
 ### Issue 1: Disable spinners in CI environments ✅ COMPLETED
@@ -261,7 +350,9 @@ static create(text: string, timeoutMs?: number) {
 
 ---
 
-### Issue 2: Skip processing for small/optimized images
+### Issue 2: Skip processing for small/optimized images ✅ COMPLETED
+
+> **Status:** ✅ COMPLETED - See "Completed Issues" section above for implementation details
 
 **Title:** `perf(notion-fetch): skip processing for small/optimized images`
 
@@ -1355,20 +1446,20 @@ export class ProgressTracker {
 | Issue                | Priority | Complexity | Time Saved       | Effort | Status  |
 | -------------------- | -------- | ---------- | ---------------- | ------ | ------- |
 | #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE |
-| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | 🔜 Next |
+| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE |
 | #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO |
 | #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  | ⏳ TODO |
 | #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO |
 | #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO |
 | #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO |
 | #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO |
-| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ⏳ TODO |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | 🔜 Next |
 
 **Recommended Order:**
 
 1. ~~**#1 CI Spinners**~~ ✅ COMPLETED (quick win, 5min)
-2. **#2 Smart Skips** 🔜 NEXT (high impact, low effort, 1hr)
-3. **#9 Progress Tracking** (prerequisite for #4, prevents UI regression, 2hr)
+2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr)
+3. **#9 Progress Tracking** 🔜 NEXT (prerequisite for #4, prevents UI regression, 2hr)
 4. **#4 Parallel Pages** (massive performance boost, requires #9, 2-3hr)
 5. **#3 Lazy Cache** (good optimization, 2hr)
 6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)

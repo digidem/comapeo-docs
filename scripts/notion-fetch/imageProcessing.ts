@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import axios from "axios";
 import chalk from "chalk";
+import sharp from "sharp";
 import { processImage } from "./imageProcessor";
 import {
   compressImageToFileWithFallback,
@@ -11,6 +12,7 @@ import {
   chooseFormat,
   extForFormat,
   isResizableFormat,
+  type ImgFormat,
 } from "./utils";
 import SpinnerManager from "./spinnerManager";
 import {
@@ -19,10 +21,152 @@ import {
 } from "./imageValidation";
 import { withTimeout, TimeoutError } from "./timeoutUtils";
 
+/**
+ * Check if image buffer contains optimization markers indicating it's already optimized
+ * Works across different image formats (PNG, JPEG, WebP, etc.)
+ */
+function hasOptimizationMarkers(buffer: Buffer, format: ImgFormat): boolean {
+  const markers = [
+    "pngquant", // pngquant optimizer
+    "OptiPNG", // OptiPNG optimizer
+    "ImageOptim", // ImageOptim
+    "TinyPNG", // TinyPNG service
+    "pngcrush", // pngcrush optimizer
+    "mozjpeg", // MozJPEG optimizer
+    "jpegoptim", // jpegoptim
+    "libjpeg-turbo", // libjpeg-turbo
+  ];
+
+  // Convert buffer to string for searching (check first 4KB for performance)
+  const header = buffer.toString("latin1", 0, Math.min(buffer.length, 4096));
+
+  return markers.some((marker) => header.includes(marker));
+}
+
+/**
+ * Detect PNG bit depth from IHDR chunk
+ * Returns bit depth (1, 2, 4, 8, 16) or null if not found
+ */
+function detectPngBitDepth(buffer: Buffer): number | null {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer.length < 30) return null;
+  if (
+    buffer[0] !== 0x89 ||
+    buffer[1] !== 0x50 ||
+    buffer[2] !== 0x4e ||
+    buffer[3] !== 0x47
+  ) {
+    return null;
+  }
+
+  // IHDR chunk starts at byte 8
+  // Chunk structure: 4 bytes length, 4 bytes type, N bytes data, 4 bytes CRC
+  // IHDR type: 49 48 44 52 ("IHDR")
+  if (
+    buffer[12] === 0x49 &&
+    buffer[13] === 0x48 &&
+    buffer[14] === 0x44 &&
+    buffer[15] === 0x52
+  ) {
+    // Bit depth is at offset 24 (8 + 4 + 4 + 4 + 4)
+    // Width (4 bytes) + Height (4 bytes) + Bit depth (1 byte)
+    return buffer[24];
+  }
+
+  return null;
+}
+
+/**
+ * Determine if image should skip compression based on heuristics
+ * Returns reason string if should skip, null if should attempt compression
+ */
+function shouldSkipOptimization(
+  buffer: Buffer,
+  format: ImgFormat
+): string | null {
+  // Check for optimization markers
+  if (hasOptimizationMarkers(buffer, format)) {
+    return "already optimized (contains optimizer markers)";
+  }
+
+  // PNG-specific checks
+  if (format === "png") {
+    // Check bit depth - low bit depth images are typically already optimized
+    const bitDepth = detectPngBitDepth(buffer);
+    if (bitDepth !== null && bitDepth <= 4) {
+      return `already optimized (low bit depth: ${bitDepth}-bit)`;
+    }
+  }
+
+  return null; // Should attempt compression
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
+
+/**
+ * Performance metrics for image processing skip optimizations
+ */
+interface ImageProcessingMetrics {
+  totalProcessed: number;
+  skippedSmallSize: number;
+  skippedAlreadyOptimized: number;
+  skippedResize: number;
+  fullyProcessed: number;
+}
+
+const processingMetrics: ImageProcessingMetrics = {
+  totalProcessed: 0,
+  skippedSmallSize: 0,
+  skippedAlreadyOptimized: 0,
+  skippedResize: 0,
+  fullyProcessed: 0,
+};
+
+/**
+ * Get current processing metrics
+ */
+export function getProcessingMetrics(): ImageProcessingMetrics {
+  return { ...processingMetrics };
+}
+
+/**
+ * Reset processing metrics (useful for testing)
+ */
+export function resetProcessingMetrics(): void {
+  processingMetrics.totalProcessed = 0;
+  processingMetrics.skippedSmallSize = 0;
+  processingMetrics.skippedAlreadyOptimized = 0;
+  processingMetrics.skippedResize = 0;
+  processingMetrics.fullyProcessed = 0;
+}
+
+/**
+ * Log processing metrics summary
+ */
+export function logProcessingMetrics(): void {
+  const total = processingMetrics.totalProcessed;
+  if (total === 0) return;
+
+  const skippedTotal =
+    processingMetrics.skippedSmallSize +
+    processingMetrics.skippedAlreadyOptimized;
+  const skipRate = ((skippedTotal / total) * 100).toFixed(1);
+
+  console.info(
+    chalk.blue(
+      `\n📊 Image Processing Performance Metrics:\n` +
+        `   Total images: ${total}\n` +
+        `   Skipped (small size): ${processingMetrics.skippedSmallSize} (${((processingMetrics.skippedSmallSize / total) * 100).toFixed(1)}%)\n` +
+        `   Skipped (already optimized): ${processingMetrics.skippedAlreadyOptimized} (${((processingMetrics.skippedAlreadyOptimized / total) * 100).toFixed(1)}%)\n` +
+        `   Resize skipped: ${processingMetrics.skippedResize} (${((processingMetrics.skippedResize / total) * 100).toFixed(1)}%)\n` +
+        `   Fully processed: ${processingMetrics.fullyProcessed} (${((processingMetrics.fullyProcessed / total) * 100).toFixed(1)}%)\n` +
+        `   Overall skip rate: ${skipRate}%`
+    )
+  );
+}
 
 /**
  * Result of image processing operation
@@ -476,19 +620,75 @@ export async function downloadAndProcessImage(
       const filename = `${sanitizedBlockName}_${index}${extension}`;
       const filepath = path.join(IMAGES_PATH, filename);
 
+      // Track metrics
+      processingMetrics.totalProcessed++;
+
+      // Phase 1: Skip processing for small images (< 50KB)
+      const MIN_SIZE_FOR_PROCESSING = 50 * 1024; // 50KB
+      if (originalBuffer.length < MIN_SIZE_FOR_PROCESSING) {
+        processingMetrics.skippedSmallSize++;
+        spinner.text = `Processing image ${index + 1}: Skipping (already small: ${Math.round(originalBuffer.length / 1024)}KB)`;
+        fs.writeFileSync(filepath, originalBuffer);
+        const imagePath = `/images/${filename}`;
+
+        return {
+          filepath,
+          imagePath,
+          savedBytes: 0,
+          usedFallback: false,
+        };
+      }
+
+      // Phase 2: Skip processing for already-optimized images
+      const skipReason = shouldSkipOptimization(originalBuffer, chosenFmt);
+      if (skipReason) {
+        processingMetrics.skippedAlreadyOptimized++;
+        spinner.text = `Processing image ${index + 1}: Skipping (${skipReason})`;
+        fs.writeFileSync(filepath, originalBuffer);
+        const imagePath = `/images/${filename}`;
+
+        return {
+          filepath,
+          imagePath,
+          savedBytes: 0,
+          usedFallback: false,
+        };
+      }
+
       let resizedBuffer = originalBuffer;
       let originalSize = originalBuffer.length;
 
       if (isResizableFormat(chosenFmt)) {
-        spinner.text = `Processing image ${index + 1}: Resizing`;
-        const processed = await processImage(originalBuffer, filepath);
-        resizedBuffer = processed.outputBuffer;
-        originalSize = processed.originalSize;
+        // Phase 3: Check dimensions before resize - skip if already acceptable
+        const maxWidth = 1280;
+        try {
+          const metadata = await sharp(originalBuffer).metadata();
+          if (metadata.width && metadata.width <= maxWidth) {
+            processingMetrics.skippedResize++;
+            spinner.text = `Processing image ${index + 1}: Skipping resize (dimensions OK: ${metadata.width}x${metadata.height})`;
+            resizedBuffer = originalBuffer;
+            originalSize = originalBuffer.length;
+          } else {
+            spinner.text = `Processing image ${index + 1}: Resizing (${metadata.width}x${metadata.height} -> max ${maxWidth}px)`;
+            const processed = await processImage(originalBuffer, filepath);
+            resizedBuffer = processed.outputBuffer;
+            originalSize = processed.originalSize;
+          }
+        } catch (error) {
+          // If metadata reading fails, proceed with resize as fallback
+          spinner.text = `Processing image ${index + 1}: Resizing (metadata check failed, proceeding)`;
+          const processed = await processImage(originalBuffer, filepath);
+          resizedBuffer = processed.outputBuffer;
+          originalSize = processed.originalSize;
+        }
       } else {
         spinner.text = `Processing image ${index + 1}: Skipping resize for ${chosenFmt || "unknown"} format`;
         resizedBuffer = originalBuffer;
         originalSize = originalBuffer.length;
       }
+
+      // Track that this image went through full processing pipeline
+      processingMetrics.fullyProcessed++;
 
       spinner.text = `Processing image ${index + 1}: Compressing`;
       const { finalSize, usedFallback } = await compressImageToFileWithFallback(

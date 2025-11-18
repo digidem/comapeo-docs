@@ -17,6 +17,7 @@ import { sanitizeMarkdownImages } from "./markdownTransform";
 import {
   processImageWithFallbacks,
   logImageFailure,
+  logProcessingMetrics,
   type ImageProcessingResult,
 } from "./imageProcessing";
 import { processBatch } from "./timeoutUtils";
@@ -324,6 +325,9 @@ export async function processAndReplaceImages(
       chalk.blue(`💡 Check 'image-failures.json' for recovery information`)
     );
   }
+
+  // Log performance metrics for skip optimizations
+  logProcessingMetrics();
 
   return {
     markdown: processedMarkdown,

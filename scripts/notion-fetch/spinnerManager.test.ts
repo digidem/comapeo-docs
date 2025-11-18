@@ -22,6 +22,13 @@ describe("spinnerManager", () => {
   });
 
   describe("SpinnerManager class methods", () => {
+    beforeEach(() => {
+      // Force non-CI environment for baseline tests
+      // These tests verify normal spinner behavior regardless of host environment
+      delete process.env.CI;
+      delete process.env.GITHUB_ACTIONS;
+    });
+
     it("should have static methods defined", () => {
       expect(typeof SpinnerManager.create).toBe("function");
       expect(typeof SpinnerManager.remove).toBe("function");

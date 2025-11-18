@@ -637,6 +637,7 @@ export async function exportNotionDatabase(
     spinner.succeed(
       chalk.green(`✅ Fetched ${allPages.length} pages from Notion`)
     );
+    SpinnerManager.remove(spinner);
 
     // Step 2: Fetch blocks for all pages with progress tracking
     spinner = SpinnerManager.create(
@@ -686,6 +687,7 @@ export async function exportNotionDatabase(
     spinner.succeed(
       chalk.green(`✅ Fetched blocks for ${allPages.length} pages`)
     );
+    SpinnerManager.remove(spinner);
 
     // Step 3: Perform comprehensive analysis
     const analysisMessage = options.quick
@@ -746,6 +748,7 @@ export async function exportNotionDatabase(
       pageAnalyses.length > 0 ? totalTextLength / pageAnalyses.length : 0;
 
     spinner.succeed(chalk.green("✅ Content analysis complete"));
+    SpinnerManager.remove(spinner);
 
     // Step 4: Generate comprehensive export result
     spinner = SpinnerManager.create(
@@ -864,6 +867,7 @@ export async function exportNotionDatabase(
     );
 
     spinner.succeed(chalk.green("✅ Export files generated"));
+    SpinnerManager.remove(spinner);
 
     // Step 5: Display comprehensive summary
     const executionTime = Math.round((Date.now() - startTime) / 1000);
@@ -936,6 +940,7 @@ export async function exportNotionDatabase(
     console.log("  • Translation planning and progress tracking");
   } catch (error) {
     spinner.fail(chalk.red("❌ Export failed"));
+    SpinnerManager.remove(spinner);
     console.error(chalk.red("Error:"), error);
 
     if (error instanceof Error) {

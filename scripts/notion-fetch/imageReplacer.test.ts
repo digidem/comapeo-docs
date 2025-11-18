@@ -45,6 +45,15 @@ vi.mock("./imageProcessing", () => ({
   logProcessingMetrics: vi.fn(),
 }));
 
+vi.mock("./progressTracker", () => {
+  const ProgressTrackerMock = vi.fn(function (this: any) {
+    this.startItem = vi.fn();
+    this.completeItem = vi.fn();
+    this.finish = vi.fn();
+  });
+  return { ProgressTracker: ProgressTrackerMock };
+});
+
 describe("imageReplacer", () => {
   describe("extractImageMatches", () => {
     it("should extract simple image markdown", () => {
@@ -315,6 +324,30 @@ Some text after
 
       // All three images should be processed
       expect(result.stats.successfulImages).toBe(3);
+    });
+
+    it("should not create ProgressTracker when there are no valid images", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      vi.clearAllMocks();
+
+      // Markdown with no images at all
+      const markdown = "Just plain text with no images";
+      await processAndReplaceImages(markdown, "test-file");
+
+      // ProgressTracker should not be created when validImages.length is 0
+      expect(ProgressTracker).not.toHaveBeenCalled();
+    });
+
+    it("should not create ProgressTracker when all images are invalid", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      vi.clearAllMocks();
+
+      // Markdown with only invalid images (will be filtered out)
+      const markdown = "![alt](invalid-url-1) ![alt2](invalid-url-2)";
+      await processAndReplaceImages(markdown, "test-file");
+
+      // ProgressTracker should not be created when all images fail validation
+      expect(ProgressTracker).not.toHaveBeenCalled();
     });
   });
 });

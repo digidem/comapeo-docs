@@ -224,12 +224,16 @@ export async function processAndReplaceImages(
   let totalFailures = 0;
   let totalSaved = 0;
 
-  // Create progress tracker for aggregate progress display
-  const progressTracker = new ProgressTracker({
-    total: validImages.length,
-    operation: "images",
-    spinnerTimeoutMs: 150000, // 2.5 minutes
-  });
+  // Create progress tracker only when there are images to process
+  // to avoid leaking a spinner when validImages.length is 0
+  const progressTracker =
+    validImages.length > 0
+      ? new ProgressTracker({
+          total: validImages.length,
+          operation: "images",
+          spinnerTimeoutMs: 150000, // 2.5 minutes
+        })
+      : undefined;
 
   const batchResults = await processBatch(
     validImages,

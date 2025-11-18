@@ -117,6 +117,33 @@ This ensures:
 - Acceptance criteria truly met: "Spinners disabled when CI=true"
 - Future spinners will automatically use CI detection if created through SpinnerManager
 
+**Lesson 3: Don't gate new behavior behind old state checks**
+
+After routing all spinners through SpinnerManager, the `succeed()` and `fail()` methods were never called in CI because of `if (spinner.isSpinning)` guards. No-op spinners have `isSpinning = false`, so the condition was always false, preventing any logging output in CI.
+
+**Fix Applied:**
+
+Removed `isSpinning` guards around `succeed()` and `fail()` calls:
+
+```typescript
+// Before (broken in CI):
+if (fetchSpinner.isSpinning) {
+  fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+}
+
+// After (works in both CI and non-CI):
+fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+```
+
+This ensures:
+
+- No-op spinner's `succeed()`/`fail()` methods are called in CI
+- ✓/✗ messages actually get logged in CI environments
+- Real spinners work normally in non-CI (succeed/fail stop the animation)
+- Acceptance criteria truly works: "Simple text output used instead (✓/✗ prefix)"
+
+**Pattern:** When adding conditional behavior, avoid gating the new behavior behind checks of the old state. Let the new implementation handle both cases internally.
+
 ---
 
 ## 🚀 Quick Wins (High Priority, Low Complexity)

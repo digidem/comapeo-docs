@@ -51,6 +51,7 @@ export async function runFetchPipeline(
 
   const fetchSpinner = SpinnerManager.create(fetchSpinnerText, FETCH_TIMEOUT);
   let unregisterFetchSpinner: (() => void) | undefined;
+  let fetchSucceeded = false;
   try {
     perfTelemetry.phaseStart("fetch");
     unregisterFetchSpinner = trackSpinner(fetchSpinner);
@@ -91,6 +92,7 @@ export async function runFetchPipeline(
     perfTelemetry.phaseEnd("transform");
 
     fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+    fetchSucceeded = true;
 
     if (!shouldGenerate) {
       perfTelemetry.flush();
@@ -102,6 +104,7 @@ export async function runFetchPipeline(
       FETCH_TIMEOUT
     );
     let unregisterGenerateSpinner: (() => void) | undefined;
+    let generateSucceeded = false;
     try {
       perfTelemetry.phaseStart("generate");
       unregisterGenerateSpinner = trackSpinner(generateSpinner);
@@ -116,11 +119,12 @@ export async function runFetchPipeline(
       perfTelemetry.phaseEnd("generate");
 
       generateSpinner.succeed(chalk.green("Blocks generated successfully"));
+      generateSucceeded = true;
 
       perfTelemetry.flush();
       return { data, metrics };
     } catch (error) {
-      if (generateSpinner.isSpinning) {
+      if (!generateSucceeded) {
         generateSpinner.fail(chalk.red("Failed to generate blocks"));
       }
       throw error;
@@ -129,7 +133,7 @@ export async function runFetchPipeline(
       SpinnerManager.remove(generateSpinner);
     }
   } catch (error) {
-    if (fetchSpinner.isSpinning) {
+    if (!fetchSucceeded) {
       fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
     }
     perfTelemetry.flush();

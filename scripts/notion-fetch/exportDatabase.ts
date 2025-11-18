@@ -3,11 +3,11 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import ora from "ora";
 
 import { enhancedNotion, DATABASE_ID, DATA_SOURCE_ID } from "../notionClient";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { NOTION_PROPERTIES } from "../constants";
+import SpinnerManager from "./spinnerManager";
 
 dotenv.config();
 
@@ -598,7 +598,9 @@ export async function exportNotionDatabase(
   }
 
   const startTime = Date.now();
-  let spinner = ora("Fetching all pages from Notion database...").start();
+  let spinner = SpinnerManager.create(
+    "Fetching all pages from Notion database..."
+  );
 
   try {
     // Step 1: Fetch all pages
@@ -634,7 +636,7 @@ export async function exportNotionDatabase(
     );
 
     // Step 2: Fetch blocks for all pages with progress tracking
-    spinner = ora("Fetching blocks and analyzing content...").start();
+    spinner = SpinnerManager.create("Fetching blocks and analyzing content...");
 
     const pagesWithBlocks: Array<{
       page: Record<string, unknown>;
@@ -683,7 +685,7 @@ export async function exportNotionDatabase(
     const analysisMessage = options.quick
       ? "Performing basic content analysis..."
       : "Performing comprehensive content analysis...";
-    spinner = ora(analysisMessage).start();
+    spinner = SpinnerManager.create(analysisMessage);
 
     const pageAnalyses: PageAnalysis[] = [];
     const statusBreakdown = new Map<string, number>();
@@ -740,7 +742,7 @@ export async function exportNotionDatabase(
     spinner.succeed(chalk.green("✅ Content analysis complete"));
 
     // Step 4: Generate comprehensive export result
-    spinner = ora("Generating export files...").start();
+    spinner = SpinnerManager.create("Generating export files...");
 
     const exportResult: ExportResult = {
       metadata: {

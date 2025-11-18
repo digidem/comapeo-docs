@@ -48,28 +48,29 @@ class SpinnerManager {
    * Provides simple text output instead of spinner animations
    */
   private static createNoOpSpinner(text: string): Ora {
-    return {
+    // Create a self-referential no-op spinner that can be chained
+    const noOpSpinner: Partial<Ora> = {
       text,
       succeed: (message?: string) => {
         console.log(`✓ ${message || text}`);
-        return this.createNoOpSpinner(text) as Ora;
+        return noOpSpinner as Ora;
       },
       fail: (message?: string) => {
         console.error(`✗ ${message || text}`);
-        return this.createNoOpSpinner(text) as Ora;
+        return noOpSpinner as Ora;
       },
       warn: (message?: string) => {
         console.warn(`⚠ ${message || text}`);
-        return this.createNoOpSpinner(text) as Ora;
+        return noOpSpinner as Ora;
       },
       info: (message?: string) => {
         console.info(`ℹ ${message || text}`);
-        return this.createNoOpSpinner(text) as Ora;
+        return noOpSpinner as Ora;
       },
-      start: () => this.createNoOpSpinner(text) as Ora,
-      stop: () => this.createNoOpSpinner(text) as Ora,
-      clear: () => this.createNoOpSpinner(text) as Ora,
-      render: () => this.createNoOpSpinner(text) as Ora,
+      start: () => noOpSpinner as Ora,
+      stop: () => noOpSpinner as Ora,
+      clear: () => noOpSpinner as Ora,
+      render: () => noOpSpinner as Ora,
       frame: () => "",
       isSpinning: false,
       indent: 0,
@@ -82,8 +83,10 @@ class SpinnerManager {
       isEnabled: false,
       prefixText: "",
       suffixText: "",
-      stopAndPersist: () => this.createNoOpSpinner(text) as Ora,
-    } as Ora;
+      stopAndPersist: () => noOpSpinner as Ora,
+    };
+
+    return noOpSpinner as Ora;
   }
 
   /**

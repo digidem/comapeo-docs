@@ -1,9 +1,9 @@
-import ora from "ora";
 import chalk from "chalk";
 import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
 import { generateBlocks } from "./generateBlocks";
 import { trackSpinner } from "./runtime";
 import { perfTelemetry } from "../perfTelemetry";
+import SpinnerManager from "./spinnerManager";
 
 export interface FetchPipelineOptions {
   filter?: any; // QueryDatabase filter parameter
@@ -45,11 +45,10 @@ export async function runFetchPipeline(
 
   console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
 
-  const fetchSpinner = ora(fetchSpinnerText);
+  const fetchSpinner = SpinnerManager.create(fetchSpinnerText);
   let unregisterFetchSpinner: (() => void) | undefined;
   try {
     perfTelemetry.phaseStart("fetch");
-    fetchSpinner.start();
     unregisterFetchSpinner = trackSpinner(fetchSpinner);
     let data = await fetchNotionData(filter);
     perfTelemetry.recordDataset({
@@ -96,11 +95,10 @@ export async function runFetchPipeline(
       return { data };
     }
 
-    const generateSpinner = ora(generateSpinnerText);
+    const generateSpinner = SpinnerManager.create(generateSpinnerText);
     let unregisterGenerateSpinner: (() => void) | undefined;
     try {
       perfTelemetry.phaseStart("generate");
-      generateSpinner.start();
       unregisterGenerateSpinner = trackSpinner(generateSpinner);
       const metrics = await generateBlocks(data, (progress) => {
         if (generateSpinner.isSpinning) {

@@ -32,9 +32,12 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 - `scripts/notion-fetch/spinnerManager.ts` - Added CI detection and no-op spinner
 - `scripts/notion-fetch/spinnerManager.test.ts` - Added 6 new tests for CI behavior
+- `scripts/notion-fetch/runFetch.ts` - Replaced 2 direct ora() calls with SpinnerManager.create()
+- `scripts/notion-fetch/exportDatabase.ts` - Replaced 4 direct ora() calls with SpinnerManager.create()
 
 **Summary:**
-Successfully implemented CI environment detection to disable spinner animations in CI/GitHub Actions environments. Spinners now output simple text with ✓/✗/⚠/ℹ prefixes instead of animated spinners.
+
+Successfully implemented CI environment detection to disable spinner animations in CI/GitHub Actions environments. Spinners now output simple text with ✓/✗/⚠/ℹ prefixes instead of animated spinners. **Critical fix applied:** All direct `ora()` calls routed through SpinnerManager to ensure ALL spinners respect CI detection.
 
 **Key Changes:**
 
@@ -43,6 +46,11 @@ Successfully implemented CI environment detection to disable spinner animations 
 3. No-op spinners use simple text output: `✓` for success, `✗` for failure, `⚠` for warnings, `ℹ` for info
 4. Local development unchanged - still uses animated spinners
 5. No timeouts created for no-op spinners (prevents unnecessary event loop activity)
+6. **Critical routing fix:** Replaced all direct `ora()` calls with `SpinnerManager.create()` in:
+   - runFetch.ts: fetchSpinner and generateSpinner (longest-running spinners)
+   - exportDatabase.ts: 4 progress spinners
+7. Made no-op spinner self-referential for proper method chaining
+8. Removed redundant `.start()` calls (SpinnerManager.create() already starts spinners)
 
 **Test Results:**
 
@@ -66,7 +74,9 @@ Successfully implemented CI environment detection to disable spinner animations 
 - CI logs will now be cleaner without spinner control characters
 - Consider testing in actual CI environment to verify output clarity
 
-**Important Lesson Learned:**
+**Important Lessons Learned:**
+
+**Lesson 1: Environment-dependent test isolation**
 
 When adding environment-dependent behavior (like CI detection), baseline tests must explicitly reset environment variables to ensure consistent behavior across all environments. Without this, tests pass locally but fail in CI.
 
@@ -87,6 +97,25 @@ This ensures:
 - Baseline tests always verify normal spinner behavior
 - Tests pass in local, CI=true, and GITHUB_ACTIONS=true environments
 - No false negatives in GitHub Actions pipeline
+
+**Lesson 2: Verify all code paths respect new behavior**
+
+The initial implementation only added CI detection to `SpinnerManager.create()`, but direct `ora()` calls in other files bypassed this logic entirely. This meant the longest-running spinners (fetch, generate) still created noise in CI logs.
+
+**Fix Applied:**
+
+Systematically replaced all direct `ora()` calls with `SpinnerManager.create()`:
+
+- Used `grep` to find all `ora()` calls in the codebase
+- Replaced each direct call with `SpinnerManager.create()`
+- Verified no direct `ora()` calls remain (except inside SpinnerManager itself)
+
+This ensures:
+
+- **All spinners** respect CI detection, not just some
+- Longest-running spinners now output clean text in CI
+- Acceptance criteria truly met: "Spinners disabled when CI=true"
+- Future spinners will automatically use CI detection if created through SpinnerManager
 
 ---
 

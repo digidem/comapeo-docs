@@ -429,6 +429,139 @@ describe("timeoutUtils", () => {
     });
   });
 
+  describe("processBatch with progressTracker", () => {
+    it("should call completeItem(true) for successful results", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      const processor = async (item: number) => ({
+        success: true,
+        value: item,
+      });
+
+      await processBatch(items, processor, {
+        maxConcurrent: 2,
+        progressTracker: mockTracker,
+      });
+
+      // Should start 3 items
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+      // Should complete all 3 as successful
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(true);
+    });
+
+    it("should call completeItem(false) for results with success: false", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      const processor = async (item: number) => {
+        // Item 2 fails
+        if (item === 2) {
+          return { success: false, error: "Failed" };
+        }
+        return { success: true, value: item };
+      };
+
+      await processBatch(items, processor, {
+        maxConcurrent: 2,
+        progressTracker: mockTracker,
+      });
+
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+      // Check that we got both true and false calls
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(true);
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(false);
+      // Should have 2 successes and 1 failure
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === true)
+      ).toHaveLength(2);
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === false)
+      ).toHaveLength(1);
+    });
+
+    it("should call completeItem(false) when promise rejects", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      const processor = async (item: number) => {
+        if (item === 2) {
+          throw new Error("Rejected");
+        }
+        return { success: true, value: item };
+      };
+
+      await processBatch(items, processor, {
+        maxConcurrent: 2,
+        progressTracker: mockTracker,
+      });
+
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+      // Should have 2 successes and 1 failure (from rejection)
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === true)
+      ).toHaveLength(2);
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === false)
+      ).toHaveLength(1);
+    });
+
+    it("should treat results without success property as successful", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      // Processor returns results without 'success' property
+      const processor = async (item: number) => ({ value: item });
+
+      await processBatch(items, processor, {
+        maxConcurrent: 2,
+        progressTracker: mockTracker,
+      });
+
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+      // All should be marked as successful (backward compatible)
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(true);
+      expect(mockTracker.completeItem).not.toHaveBeenCalledWith(false);
+    });
+
+    it("should handle all items failing with success: false", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      const processor = async () => ({ success: false, error: "All fail" });
+
+      await processBatch(items, processor, {
+        maxConcurrent: 2,
+        progressTracker: mockTracker,
+      });
+
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+      // All should be failures
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(false);
+      expect(mockTracker.completeItem).not.toHaveBeenCalledWith(true);
+    });
+  });
+
   describe("TimeoutError", () => {
     it("should create error with correct properties", () => {
       const error = new TimeoutError("Test timeout", "test-op");

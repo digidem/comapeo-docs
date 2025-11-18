@@ -204,9 +204,17 @@ export async function processBatch<T, R>(
         // Wrap promise to track completion
         const trackedPromise = promise
           .then((result) => {
-            // Notify progress tracker of success
+            // Notify progress tracker - check result.success if available
             if (progressTracker) {
-              progressTracker.completeItem(true);
+              // If result has a 'success' property, use it to determine status
+              // Otherwise, treat promise fulfillment as success (backward compatible)
+              const isSuccess =
+                typeof result === "object" &&
+                result !== null &&
+                "success" in result
+                  ? result.success === true
+                  : true;
+              progressTracker.completeItem(isSuccess);
             }
             return result;
           })

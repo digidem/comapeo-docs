@@ -233,7 +233,19 @@ export async function processBatch<T, R>(
             ? `${operation} (item ${itemIndex + 1}/${items.length})`
             : `batch operation (item ${itemIndex + 1}/${items.length})`;
 
-          return withTimeout(trackedPromise, timeoutMs, operationDescription);
+          return withTimeout(
+            trackedPromise,
+            timeoutMs,
+            operationDescription
+          ).catch((error) => {
+            // CRITICAL: If timeout fires before trackedPromise settles,
+            // the .then/.catch handlers above won't run yet.
+            // We must notify progress tracker here to prevent hanging.
+            if (error instanceof TimeoutError && progressTracker) {
+              progressTracker.completeItem(false);
+            }
+            throw error;
+          });
         }
 
         return trackedPromise;

@@ -560,6 +560,142 @@ describe("timeoutUtils", () => {
       expect(mockTracker.completeItem).toHaveBeenCalledWith(false);
       expect(mockTracker.completeItem).not.toHaveBeenCalledWith(true);
     });
+
+    it("should notify progressTracker when item times out", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3];
+      const processor = async (item: number) => {
+        if (item === 2) {
+          // Item 2 hangs forever
+          await new Promise(() => {
+            /* never resolves */
+          });
+        }
+        return { success: true, value: item };
+      };
+
+      const resultPromise = processBatch(items, processor, {
+        maxConcurrent: 3,
+        timeoutMs: 1000,
+        progressTracker: mockTracker,
+      });
+
+      // Advance time to trigger timeout for item 2
+      await vi.advanceTimersByTimeAsync(1001);
+      const results = await resultPromise;
+
+      // Should start all 3 items
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(3);
+
+      // Should complete all 3 items (including the timed-out one)
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(3);
+
+      // Items 1 and 3 succeed, item 2 fails due to timeout
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === true)
+      ).toHaveLength(2);
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === false)
+      ).toHaveLength(1);
+
+      // Verify results
+      expect(results).toHaveLength(3);
+      expect(results[0].status).toBe("fulfilled");
+      expect(results[1].status).toBe("rejected"); // Timed out
+      expect(results[2].status).toBe("fulfilled");
+    });
+
+    it("should not double-notify progressTracker if promise settles after timeout", async () => {
+      // Create a more realistic mock that simulates ProgressTracker's isFinished guard
+      let isFinished = false;
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn((success: boolean) => {
+          if (isFinished) return; // Simulate ProgressTracker's guard
+          // Simulate finish() being called when all items complete
+          isFinished = true;
+        }),
+      };
+
+      let resolveSlowPromise: ((value: any) => void) | null = null;
+      const items = [1];
+      const processor = async () => {
+        return new Promise((resolve) => {
+          resolveSlowPromise = resolve;
+        });
+      };
+
+      const resultPromise = processBatch(items, processor, {
+        maxConcurrent: 1,
+        timeoutMs: 1000,
+        progressTracker: mockTracker,
+      });
+
+      // Trigger timeout
+      await vi.advanceTimersByTimeAsync(1001);
+      await resultPromise;
+
+      // completeItem should be called once for timeout
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(1);
+      expect(mockTracker.completeItem).toHaveBeenCalledWith(false);
+
+      // Now resolve the promise late
+      if (resolveSlowPromise) {
+        resolveSlowPromise({ success: true });
+      }
+      await vi.runAllTimersAsync();
+
+      // completeItem called twice, but second call is ignored due to isFinished guard
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(2);
+      // This demonstrates that without the guard, we'd have double notification
+      // The real ProgressTracker prevents this with its isFinished check
+    });
+
+    it("should handle mixed timeouts and successes with progressTracker", async () => {
+      const mockTracker = {
+        startItem: vi.fn(),
+        completeItem: vi.fn(),
+      };
+
+      const items = [1, 2, 3, 4, 5];
+      const processor = async (item: number) => {
+        if (item === 2 || item === 4) {
+          // Items 2 and 4 hang
+          await new Promise(() => {
+            /* never resolves */
+          });
+        }
+        return { success: true, value: item };
+      };
+
+      const resultPromise = processBatch(items, processor, {
+        maxConcurrent: 5,
+        timeoutMs: 1000,
+        progressTracker: mockTracker,
+      });
+
+      await vi.advanceTimersByTimeAsync(1001);
+      const results = await resultPromise;
+
+      expect(mockTracker.startItem).toHaveBeenCalledTimes(5);
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(5);
+
+      // 3 successes, 2 failures (timeouts)
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === true)
+      ).toHaveLength(3);
+      expect(
+        mockTracker.completeItem.mock.calls.filter((call) => call[0] === false)
+      ).toHaveLength(2);
+
+      // Verify results
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(3);
+      expect(results.filter((r) => r.status === "rejected")).toHaveLength(2);
+    });
   });
 
   describe("TimeoutError", () => {

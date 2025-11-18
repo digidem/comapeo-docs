@@ -117,32 +117,38 @@ This ensures:
 - Acceptance criteria truly met: "Spinners disabled when CI=true"
 - Future spinners will automatically use CI detection if created through SpinnerManager
 
-**Lesson 3: Don't gate new behavior behind old state checks**
+**Lesson 3: Distinguish between guards for logging vs guards for error reporting**
 
-After routing all spinners through SpinnerManager, the `succeed()` and `fail()` methods were never called in CI because of `if (spinner.isSpinning)` guards. No-op spinners have `isSpinning = false`, so the condition was always false, preventing any logging output in CI.
+After routing all spinners through SpinnerManager, the `succeed()` methods were never called in CI because of `if (spinner.isSpinning)` guards. No-op spinners have `isSpinning = false`, so the condition was always false, preventing any logging output in CI.
 
 **Fix Applied:**
 
-Removed `isSpinning` guards around `succeed()` and `fail()` calls:
+Removed `isSpinning` guards around `succeed()` calls only, but kept guards around `fail()` calls:
 
 ```typescript
+// succeed() - Remove guard (enable CI logging):
 // Before (broken in CI):
 if (fetchSpinner.isSpinning) {
   fetchSpinner.succeed(chalk.green("Data fetched successfully"));
 }
-
 // After (works in both CI and non-CI):
 fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+
+// fail() - Keep guard (accurate error reporting):
+// Correct:
+if (fetchSpinner.isSpinning) {
+  fetchSpinner.fail(chalk.red("Failed to fetch data"));
+}
 ```
 
 This ensures:
 
-- No-op spinner's `succeed()`/`fail()` methods are called in CI
-- ✓/✗ messages actually get logged in CI environments
-- Real spinners work normally in non-CI (succeed/fail stop the animation)
-- Acceptance criteria truly works: "Simple text output used instead (✓/✗ prefix)"
+- **`succeed()` calls are unconditional**: No-op spinner's succeed() methods log ✓ in CI
+- **`fail()` calls are guarded**: Only the operation that actually failed reports an error
+- Prevents confusing errors like "Failed to fetch" when fetch succeeded but a later operation failed
+- Acceptance criteria works: "Simple text output used instead (✓/✗ prefix)"
 
-**Pattern:** When adding conditional behavior, avoid gating the new behavior behind checks of the old state. Let the new implementation handle both cases internally.
+**Pattern:** Guards serve different purposes. Remove guards that prevent new behavior (CI logging), but keep guards that ensure correctness (accurate error attribution). The `isSpinning` check on `fail()` ensures we only report failures for operations that haven't already succeeded.
 
 **Lesson 4: Always clean up managed resources before reassignment**
 

@@ -598,8 +598,11 @@ export async function exportNotionDatabase(
   }
 
   const startTime = Date.now();
+  // Use 10-minute timeout for long-running database operations
+  const LONG_OPERATION_TIMEOUT = 600000; // 10 minutes
   let spinner = SpinnerManager.create(
-    "Fetching all pages from Notion database..."
+    "Fetching all pages from Notion database...",
+    LONG_OPERATION_TIMEOUT
   );
 
   try {
@@ -636,7 +639,10 @@ export async function exportNotionDatabase(
     );
 
     // Step 2: Fetch blocks for all pages with progress tracking
-    spinner = SpinnerManager.create("Fetching blocks and analyzing content...");
+    spinner = SpinnerManager.create(
+      "Fetching blocks and analyzing content...",
+      LONG_OPERATION_TIMEOUT
+    );
 
     const pagesWithBlocks: Array<{
       page: Record<string, unknown>;
@@ -685,7 +691,7 @@ export async function exportNotionDatabase(
     const analysisMessage = options.quick
       ? "Performing basic content analysis..."
       : "Performing comprehensive content analysis...";
-    spinner = SpinnerManager.create(analysisMessage);
+    spinner = SpinnerManager.create(analysisMessage, LONG_OPERATION_TIMEOUT);
 
     const pageAnalyses: PageAnalysis[] = [];
     const statusBreakdown = new Map<string, number>();
@@ -742,7 +748,10 @@ export async function exportNotionDatabase(
     spinner.succeed(chalk.green("✅ Content analysis complete"));
 
     // Step 4: Generate comprehensive export result
-    spinner = SpinnerManager.create("Generating export files...");
+    spinner = SpinnerManager.create(
+      "Generating export files...",
+      LONG_OPERATION_TIMEOUT
+    );
 
     const exportResult: ExportResult = {
       metadata: {

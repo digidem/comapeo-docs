@@ -86,9 +86,7 @@ export async function runFetchPipeline(
     console.log(`  - data length after transform: ${data.length}`);
     perfTelemetry.phaseEnd("transform");
 
-    if (fetchSpinner.isSpinning) {
-      fetchSpinner.succeed(chalk.green("Data fetched successfully"));
-    }
+    fetchSpinner.succeed(chalk.green("Data fetched successfully"));
 
     if (!shouldGenerate) {
       perfTelemetry.flush();
@@ -110,24 +108,18 @@ export async function runFetchPipeline(
       });
       perfTelemetry.phaseEnd("generate");
 
-      if (generateSpinner.isSpinning) {
-        generateSpinner.succeed(chalk.green("Blocks generated successfully"));
-      }
+      generateSpinner.succeed(chalk.green("Blocks generated successfully"));
 
       perfTelemetry.flush();
       return { data, metrics };
     } catch (error) {
-      if (generateSpinner.isSpinning) {
-        generateSpinner.fail(chalk.red("Failed to generate blocks"));
-      }
+      generateSpinner.fail(chalk.red("Failed to generate blocks"));
       throw error;
     } finally {
       unregisterGenerateSpinner?.();
     }
   } catch (error) {
-    if (fetchSpinner.isSpinning) {
-      fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
-    }
+    fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
     perfTelemetry.flush();
     throw error;
   } finally {

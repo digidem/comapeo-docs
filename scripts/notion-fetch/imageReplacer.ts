@@ -21,6 +21,7 @@ import {
   type ImageProcessingResult,
 } from "./imageProcessing";
 import { processBatch } from "./timeoutUtils";
+import { ProgressTracker } from "./progressTracker";
 
 /**
  * Image match information extracted from markdown
@@ -223,6 +224,13 @@ export async function processAndReplaceImages(
   let totalFailures = 0;
   let totalSaved = 0;
 
+  // Create progress tracker for aggregate progress display
+  const progressTracker = new ProgressTracker({
+    total: validImages.length,
+    operation: "images",
+    spinnerTimeoutMs: 150000, // 2.5 minutes
+  });
+
   const batchResults = await processBatch(
     validImages,
     async (validImage) => {
@@ -243,6 +251,7 @@ export async function processAndReplaceImages(
       maxConcurrent: MAX_CONCURRENT_IMAGES,
       // No timeout here - individual operations have their own timeouts
       operation: "image processing",
+      progressTracker: progressTracker,
     }
   );
 

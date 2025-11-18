@@ -42,6 +42,7 @@ vi.mock("./imageProcessing", () => ({
     });
   }),
   logImageFailure: vi.fn(),
+  logProcessingMetrics: vi.fn(),
 }));
 
 describe("imageReplacer", () => {

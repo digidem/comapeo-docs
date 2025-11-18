@@ -6,9 +6,9 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 2/9 issues completed (22% complete)
+**Current Status:** 3/9 issues completed (33% complete)
 
-**Next Recommended Task:** Issue #9 - Add aggregated progress tracking for parallel operations (Est: 2hr, Medium Priority) - **Required before Issue #4**
+**Next Recommended Task:** Issue #4 - Implement parallel page fetching (Est: 2-3hr, High Priority, High Impact)
 
 **Quick Links:**
 
@@ -292,6 +292,102 @@ Successfully implemented comprehensive skip logic for image processing to avoid 
 - Consider adjusting MIN_SIZE_FOR_PROCESSING threshold based on actual metrics
 - Phase 3 (resize skip) provides additional optimization without sacrificing quality
 - All skip logic is conservative (processes when in doubt)
+
+---
+
+### Issue 9: Add aggregated progress tracking for parallel operations ✅
+
+**Status:** ✅ COMPLETED
+
+**Implementation Date:** 2025-01-18
+
+**Files Modified:**
+
+- `scripts/notion-fetch/progressTracker.ts` - New ProgressTracker class with aggregate progress display
+- `scripts/notion-fetch/progressTracker.test.ts` - Comprehensive tests (24 tests)
+- `scripts/notion-fetch/timeoutUtils.ts` - Added `progressTracker` option to BatchConfig; integrated tracking into processBatch
+- `scripts/notion-fetch/imageReplacer.ts` - Integrated ProgressTracker with image batch processing
+
+**Summary:**
+
+Successfully implemented aggregated progress tracking for parallel operations, replacing individual spinners with a single aggregate progress indicator that shows overall completion, ETA, and status counts.
+
+**Key Changes:**
+
+1. **ProgressTracker Class**
+   - Tracks total, completed, in-progress, and failed counts
+   - Calculates real-time percentage and ETA
+   - Integrates with SpinnerManager for clean UI
+   - Auto-finishes when all items complete
+   - Supports manual finish() and fail() for error handling
+
+2. **Progress Display Format**
+   ```
+   ⠋ Processing images: 5/15 complete (33%) | 2 in progress | 1 failed | ETA: 45s
+   ```
+   - Clear aggregate metrics instead of overlapping spinners
+   - Real-time ETA based on average time per item
+   - Shows in-progress and failed counts
+   - Human-readable duration formatting (ms, s, m, m s)
+
+3. **BatchConfig Integration**
+   - Added optional `progressTracker` parameter to BatchConfig
+   - processBatch automatically calls startItem() and completeItem()
+   - Tracks success/failure for each item
+   - Works seamlessly with existing timeout logic
+
+4. **Image Processing Integration**
+   - ProgressTracker created in processAndReplaceImages
+   - Passed to processBatch for automatic tracking
+   - Replaces individual per-image spinners
+   - Cleaner output for parallel image processing
+
+**Test Results:**
+
+- All 24 ProgressTracker tests passing
+- All 25 imageReplacer tests passing
+- All 24 timeoutUtils tests passing
+- Tests verify progress calculations, ETA, percentage, duration formatting, and parallel operations
+
+**Acceptance Criteria Met:**
+
+- ✅ ProgressTracker class created
+- ✅ Shows aggregate progress (X/Y complete)
+- ✅ Shows percentage, in progress count, failed count
+- ✅ Calculates and displays ETA
+- ✅ Integrates with SpinnerManager
+- ✅ Works with parallel batch processing
+- ✅ Tests verify progress calculations
+
+**Expected UX Impact:**
+
+- **Cleaner Output:** Single progress line instead of overlapping spinners
+- **Better Visibility:** Clear percentage and ETA for long operations
+- **Debugging:** Easy to see how many items are in progress vs failed
+- **Professional:** Aggregate progress feels more polished
+
+**Example Output:**
+
+Before (noisy overlapping spinners):
+```
+⠋ Processing image 1 (attempt 1/3)
+⠋ Processing image 2 (attempt 1/3)
+⠋ Processing image 3 (attempt 1/3)
+...
+```
+
+After (clean aggregate progress):
+```
+⠋ Processing images: 12/25 complete (48%) | 3 in progress | 1 failed | ETA: 32s
+```
+
+**Next Developer Notes:**
+
+- ProgressTracker is now ready for use with parallel page fetching (Issue #4)
+- Can be reused for any batch operation (emojis, blocks, etc.)
+- ETA calculation assumes relatively consistent item processing times
+- Automatically handles zero-item edge cases
+- Thread-safe for concurrent operations
 
 ---
 
@@ -1345,7 +1441,9 @@ image download:
 
 ---
 
-### Issue 9: Add aggregated progress tracking for parallel operations
+### Issue 9: Add aggregated progress tracking for parallel operations ✅ COMPLETED
+
+> **Status:** ✅ COMPLETED - See "Completed Issues" section above for implementation details
 
 **Title:** `feat(notion-fetch): add aggregated progress tracking for parallel operations`
 
@@ -1431,13 +1529,13 @@ export class ProgressTracker {
 
 **Acceptance Criteria:**
 
-- [ ] ProgressTracker class created
-- [ ] Shows aggregate progress (X/Y complete)
-- [ ] Shows percentage, in progress count, failed count
-- [ ] Calculates and displays ETA
-- [ ] Integrates with SpinnerManager
-- [ ] Works with parallel batch processing
-- [ ] Tests verify progress calculations
+- [x] ProgressTracker class created
+- [x] Shows aggregate progress (X/Y complete)
+- [x] Shows percentage, in progress count, failed count
+- [x] Calculates and displays ETA
+- [x] Integrates with SpinnerManager
+- [x] Works with parallel batch processing
+- [x] Tests verify progress calculations
 
 ---
 
@@ -1447,24 +1545,22 @@ export class ProgressTracker {
 | -------------------- | -------- | ---------- | ---------------- | ------ | ------- |
 | #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE |
 | #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ✅ DONE |
 | #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO |
-| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  | ⏳ TODO |
+| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  | 🔜 Next |
 | #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO |
 | #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO |
 | #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO |
 | #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO |
-| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | 🔜 Next |
 
 **Recommended Order:**
 
 1. ~~**#1 CI Spinners**~~ ✅ COMPLETED (quick win, 5min)
 2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr)
-3. **#9 Progress Tracking** 🔜 NEXT (prerequisite for #4, prevents UI regression, 2hr)
-4. **#4 Parallel Pages** (massive performance boost, requires #9, 2-3hr)
+3. ~~**#9 Progress Tracking**~~ ✅ COMPLETED (prerequisite for #4, prevents UI regression, 2hr)
+4. **#4 Parallel Pages** 🔜 NEXT (massive performance boost, 50-70% time savings, 2-3hr)
 5. **#3 Lazy Cache** (good optimization, 2hr)
 6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)
 7. **#7 Cache Freshness** (correctness, 3-4hr)
 8. **#6 Adaptive Batch** (advanced optimization, 6-8hr)
 9. **#8 Telemetry** (nice to have, 3-4hr)
-
-**Critical Path Note:** Issue #9 (Progress Tracking) MUST be implemented before or co-delivered with Issue #4 (Parallel Pages) to avoid noisy spinner overlap and ensure clean UI during parallel operations. See Issue #4 acceptance criteria for details.

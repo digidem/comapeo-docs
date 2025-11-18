@@ -117,38 +117,55 @@ This ensures:
 - Acceptance criteria truly met: "Spinners disabled when CI=true"
 - Future spinners will automatically use CI detection if created through SpinnerManager
 
-**Lesson 3: Distinguish between guards for logging vs guards for error reporting**
+**Lesson 3: Use explicit success flags instead of spinner state for error attribution**
 
-After routing all spinners through SpinnerManager, the `succeed()` methods were never called in CI because of `if (spinner.isSpinning)` guards. No-op spinners have `isSpinning = false`, so the condition was always false, preventing any logging output in CI.
+After routing all spinners through SpinnerManager, the `succeed()` and `fail()` methods were never called in CI because of `if (spinner.isSpinning)` guards. No-op spinners have `isSpinning = false` by design, so the condition was always false, preventing any logging output in CI.
 
-**Fix Applied:**
+**Initial Fix (broken):**
 
-Removed `isSpinning` guards around `succeed()` calls only, but kept guards around `fail()` calls:
+Removed guards around `succeed()` calls (correct), but kept guards around `fail()` calls using `isSpinning`:
 
 ```typescript
-// succeed() - Remove guard (enable CI logging):
-// Before (broken in CI):
-if (fetchSpinner.isSpinning) {
-  fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+// This worked for non-CI but broke CI error logging:
+catch (error) {
+  if (fetchSpinner.isSpinning) {  // Always false in CI!
+    fetchSpinner.fail(chalk.red("Failed to fetch data"));
+  }
+  throw error;
 }
-// After (works in both CI and non-CI):
-fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+```
 
-// fail() - Keep guard (accurate error reporting):
-// Correct:
-if (fetchSpinner.isSpinning) {
-  fetchSpinner.fail(chalk.red("Failed to fetch data"));
+Problem: `isSpinning` can't distinguish "already succeeded" from "is a no-op spinner". In CI, `isSpinning` is always false, so errors became silent.
+
+**Correct Fix:**
+
+Track success state explicitly with boolean flags instead of relying on spinner state:
+
+```typescript
+let fetchSucceeded = false;
+try {
+  // ... fetch operations ...
+  fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+  fetchSucceeded = true;  // Mark as succeeded
+
+  // ... later operations ...
+} catch (error) {
+  if (!fetchSucceeded) {  // Works in CI and non-CI!
+    fetchSpinner.fail(chalk.red("Failed to fetch data"));
+  }
+  throw error;
 }
 ```
 
 This ensures:
 
-- **`succeed()` calls are unconditional**: No-op spinner's succeed() methods log ✓ in CI
-- **`fail()` calls are guarded**: Only the operation that actually failed reports an error
-- Prevents confusing errors like "Failed to fetch" when fetch succeeded but a later operation failed
-- Acceptance criteria works: "Simple text output used instead (✓/✗ prefix)"
+- **`succeed()` calls are unconditional**: Logs ✓ in both CI and non-CI
+- **`fail()` calls check success flags**: Only logs ✗ for operations that didn't succeed
+- Works identically in CI and non-CI environments
+- Prevents confusing errors when fetch succeeds but later operations fail
+- Enables proper error logging in CI (errors aren't silent)
 
-**Pattern:** Guards serve different purposes. Remove guards that prevent new behavior (CI logging), but keep guards that ensure correctness (accurate error attribution). The `isSpinning` check on `fail()` ensures we only report failures for operations that haven't already succeeded.
+**Pattern:** Don't rely on mutable object state (`isSpinning`) to determine control flow when that state has different meanings in different contexts. Use explicit boolean flags that directly represent the success/failure state you care about.
 
 **Lesson 4: Always clean up managed resources before reassignment**
 

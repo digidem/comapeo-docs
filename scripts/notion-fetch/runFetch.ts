@@ -45,7 +45,11 @@ export async function runFetchPipeline(
 
   console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
 
-  const fetchSpinner = SpinnerManager.create(fetchSpinnerText);
+  // Use 5-minute timeout for fetch/generate operations
+  // (can take longer with large databases or many images)
+  const FETCH_TIMEOUT = 300000; // 5 minutes
+
+  const fetchSpinner = SpinnerManager.create(fetchSpinnerText, FETCH_TIMEOUT);
   let unregisterFetchSpinner: (() => void) | undefined;
   try {
     perfTelemetry.phaseStart("fetch");
@@ -93,7 +97,10 @@ export async function runFetchPipeline(
       return { data };
     }
 
-    const generateSpinner = SpinnerManager.create(generateSpinnerText);
+    const generateSpinner = SpinnerManager.create(
+      generateSpinnerText,
+      FETCH_TIMEOUT
+    );
     let unregisterGenerateSpinner: (() => void) | undefined;
     try {
       perfTelemetry.phaseStart("generate");

@@ -1,9 +1,9 @@
-import ora from "ora";
 import chalk from "chalk";
 import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
 import { generateBlocks } from "./generateBlocks";
 import { trackSpinner } from "./runtime";
 import { perfTelemetry } from "../perfTelemetry";
+import SpinnerManager from "./spinnerManager";
 
 export interface FetchPipelineOptions {
   filter?: any; // QueryDatabase filter parameter
@@ -45,11 +45,15 @@ export async function runFetchPipeline(
 
   console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
 
-  const fetchSpinner = ora(fetchSpinnerText);
+  // Use 5-minute timeout for fetch/generate operations
+  // (can take longer with large databases or many images)
+  const FETCH_TIMEOUT = 300000; // 5 minutes
+
+  const fetchSpinner = SpinnerManager.create(fetchSpinnerText, FETCH_TIMEOUT);
   let unregisterFetchSpinner: (() => void) | undefined;
+  let fetchSucceeded = false;
   try {
     perfTelemetry.phaseStart("fetch");
-    fetchSpinner.start();
     unregisterFetchSpinner = trackSpinner(fetchSpinner);
     let data = await fetchNotionData(filter);
     perfTelemetry.recordDataset({
@@ -87,20 +91,22 @@ export async function runFetchPipeline(
     console.log(`  - data length after transform: ${data.length}`);
     perfTelemetry.phaseEnd("transform");
 
-    if (fetchSpinner.isSpinning) {
-      fetchSpinner.succeed(chalk.green("Data fetched successfully"));
-    }
+    fetchSpinner.succeed(chalk.green("Data fetched successfully"));
+    fetchSucceeded = true;
 
     if (!shouldGenerate) {
       perfTelemetry.flush();
       return { data };
     }
 
-    const generateSpinner = ora(generateSpinnerText);
+    const generateSpinner = SpinnerManager.create(
+      generateSpinnerText,
+      FETCH_TIMEOUT
+    );
     let unregisterGenerateSpinner: (() => void) | undefined;
+    let generateSucceeded = false;
     try {
       perfTelemetry.phaseStart("generate");
-      generateSpinner.start();
       unregisterGenerateSpinner = trackSpinner(generateSpinner);
       const metrics = await generateBlocks(data, (progress) => {
         if (generateSpinner.isSpinning) {
@@ -112,27 +118,28 @@ export async function runFetchPipeline(
       });
       perfTelemetry.phaseEnd("generate");
 
-      if (generateSpinner.isSpinning) {
-        generateSpinner.succeed(chalk.green("Blocks generated successfully"));
-      }
+      generateSpinner.succeed(chalk.green("Blocks generated successfully"));
+      generateSucceeded = true;
 
       perfTelemetry.flush();
       return { data, metrics };
     } catch (error) {
-      if (generateSpinner.isSpinning) {
+      if (!generateSucceeded) {
         generateSpinner.fail(chalk.red("Failed to generate blocks"));
       }
       throw error;
     } finally {
       unregisterGenerateSpinner?.();
+      SpinnerManager.remove(generateSpinner);
     }
   } catch (error) {
-    if (fetchSpinner.isSpinning) {
+    if (!fetchSucceeded) {
       fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
     }
     perfTelemetry.flush();
     throw error;
   } finally {
     unregisterFetchSpinner?.();
+    SpinnerManager.remove(fetchSpinner);
   }
 }

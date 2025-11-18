@@ -3,11 +3,11 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import ora from "ora";
 
 import { enhancedNotion, DATABASE_ID, DATA_SOURCE_ID } from "../notionClient";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { NOTION_PROPERTIES } from "../constants";
+import SpinnerManager from "./spinnerManager";
 
 dotenv.config();
 
@@ -598,7 +598,12 @@ export async function exportNotionDatabase(
   }
 
   const startTime = Date.now();
-  let spinner = ora("Fetching all pages from Notion database...").start();
+  // Use 10-minute timeout for long-running database operations
+  const LONG_OPERATION_TIMEOUT = 600000; // 10 minutes
+  let spinner = SpinnerManager.create(
+    "Fetching all pages from Notion database...",
+    LONG_OPERATION_TIMEOUT
+  );
 
   try {
     // Step 1: Fetch all pages
@@ -632,9 +637,13 @@ export async function exportNotionDatabase(
     spinner.succeed(
       chalk.green(`✅ Fetched ${allPages.length} pages from Notion`)
     );
+    SpinnerManager.remove(spinner);
 
     // Step 2: Fetch blocks for all pages with progress tracking
-    spinner = ora("Fetching blocks and analyzing content...").start();
+    spinner = SpinnerManager.create(
+      "Fetching blocks and analyzing content...",
+      LONG_OPERATION_TIMEOUT
+    );
 
     const pagesWithBlocks: Array<{
       page: Record<string, unknown>;
@@ -678,12 +687,13 @@ export async function exportNotionDatabase(
     spinner.succeed(
       chalk.green(`✅ Fetched blocks for ${allPages.length} pages`)
     );
+    SpinnerManager.remove(spinner);
 
     // Step 3: Perform comprehensive analysis
     const analysisMessage = options.quick
       ? "Performing basic content analysis..."
       : "Performing comprehensive content analysis...";
-    spinner = ora(analysisMessage).start();
+    spinner = SpinnerManager.create(analysisMessage, LONG_OPERATION_TIMEOUT);
 
     const pageAnalyses: PageAnalysis[] = [];
     const statusBreakdown = new Map<string, number>();
@@ -738,9 +748,13 @@ export async function exportNotionDatabase(
       pageAnalyses.length > 0 ? totalTextLength / pageAnalyses.length : 0;
 
     spinner.succeed(chalk.green("✅ Content analysis complete"));
+    SpinnerManager.remove(spinner);
 
     // Step 4: Generate comprehensive export result
-    spinner = ora("Generating export files...").start();
+    spinner = SpinnerManager.create(
+      "Generating export files...",
+      LONG_OPERATION_TIMEOUT
+    );
 
     const exportResult: ExportResult = {
       metadata: {
@@ -853,6 +867,7 @@ export async function exportNotionDatabase(
     );
 
     spinner.succeed(chalk.green("✅ Export files generated"));
+    SpinnerManager.remove(spinner);
 
     // Step 5: Display comprehensive summary
     const executionTime = Math.round((Date.now() - startTime) / 1000);
@@ -925,6 +940,7 @@ export async function exportNotionDatabase(
     console.log("  • Translation planning and progress tracking");
   } catch (error) {
     spinner.fail(chalk.red("❌ Export failed"));
+    SpinnerManager.remove(spinner);
     console.error(chalk.red("Error:"), error);
 
     if (error instanceof Error) {

@@ -11,8 +11,14 @@ class SpinnerManager {
 
   /**
    * Create a new spinner and track it
+   * In CI environments, returns a no-op spinner with simple text output
    */
   static create(text: string, timeoutMs: number = 30000): Ora {
+    // Disable spinners in CI environments to reduce noise
+    if (this.isCIEnvironment()) {
+      return this.createNoOpSpinner(text);
+    }
+
     const spinner = ora(text).start();
     this.spinners.add(spinner);
 
@@ -28,6 +34,59 @@ class SpinnerManager {
 
     this.timeouts.set(spinner, timeout);
     return spinner;
+  }
+
+  /**
+   * Check if running in CI environment
+   */
+  private static isCIEnvironment(): boolean {
+    return process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+  }
+
+  /**
+   * Create a no-op spinner for CI environments
+   * Provides simple text output instead of spinner animations
+   */
+  private static createNoOpSpinner(text: string): Ora {
+    // Create a self-referential no-op spinner that can be chained
+    const noOpSpinner: Partial<Ora> = {
+      text,
+      succeed: (message?: string) => {
+        console.log(`✓ ${message || text}`);
+        return noOpSpinner as Ora;
+      },
+      fail: (message?: string) => {
+        console.error(`✗ ${message || text}`);
+        return noOpSpinner as Ora;
+      },
+      warn: (message?: string) => {
+        console.warn(`⚠ ${message || text}`);
+        return noOpSpinner as Ora;
+      },
+      info: (message?: string) => {
+        console.info(`ℹ ${message || text}`);
+        return noOpSpinner as Ora;
+      },
+      start: () => noOpSpinner as Ora,
+      stop: () => noOpSpinner as Ora,
+      clear: () => noOpSpinner as Ora,
+      render: () => noOpSpinner as Ora,
+      frame: () => "",
+      isSpinning: false,
+      indent: 0,
+      spinner: "dots" as const,
+      color: "cyan" as const,
+      hideCursor: true,
+      interval: 0,
+      stream: process.stdout,
+      id: undefined,
+      isEnabled: false,
+      prefixText: "",
+      suffixText: "",
+      stopAndPersist: () => noOpSpinner as Ora,
+    };
+
+    return noOpSpinner as Ora;
   }
 
   /**

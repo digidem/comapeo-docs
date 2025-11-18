@@ -144,6 +144,43 @@ This ensures:
 
 **Pattern:** When adding conditional behavior, avoid gating the new behavior behind checks of the old state. Let the new implementation handle both cases internally.
 
+**Lesson 4: Always clean up managed resources before reassignment**
+
+After fixing memory leaks in runFetch.ts with finally blocks, the same pattern was found in exportDatabase.ts where the `spinner` variable was reassigned 4 times without removing the previous spinner from SpinnerManager. Each SpinnerManager.create() call registers the spinner in an internal Set and timeout Map, but reassignment loses the reference without cleanup.
+
+**Fix Applied:**
+
+Added `SpinnerManager.remove(spinner)` calls immediately after each spinner completes:
+
+```typescript
+// Before reassigning spinner variable:
+spinner.succeed(chalk.green("✅ Stage complete"));
+SpinnerManager.remove(spinner);  // Clean up before reassignment
+
+// Now safe to create next spinner:
+spinner = SpinnerManager.create("Next stage...", TIMEOUT);
+```
+
+Also added cleanup in error paths:
+
+```typescript
+catch (error) {
+  spinner.fail(chalk.red("❌ Export failed"));
+  SpinnerManager.remove(spinner);  // Clean up even on failure
+  throw error;
+}
+```
+
+This ensures:
+
+- Every spinner created is eventually removed from the manager
+- Memory doesn't leak when running exports repeatedly
+- Timeout callbacks are properly cleared
+- SpinnerManager.getActiveCount() accurately reflects active spinners
+- No phantom spinners accumulate in long-lived processes or test suites
+
+**Pattern:** When using a manager class that tracks resource lifecycle (SpinnerManager, ConnectionPool, etc.), ensure cleanup happens before variable reassignment or in finally blocks. Variable reassignment doesn't automatically clean up the old resource—you must explicitly call the cleanup method.
+
 ---
 
 ## 🚀 Quick Wins (High Priority, Low Complexity)

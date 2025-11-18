@@ -66,6 +66,28 @@ Successfully implemented CI environment detection to disable spinner animations 
 - CI logs will now be cleaner without spinner control characters
 - Consider testing in actual CI environment to verify output clarity
 
+**Important Lesson Learned:**
+
+When adding environment-dependent behavior (like CI detection), baseline tests must explicitly reset environment variables to ensure consistent behavior across all environments. Without this, tests pass locally but fail in CI.
+
+**Fix Applied:**
+
+Added `beforeEach` to baseline test suite to force non-CI environment:
+
+```typescript
+beforeEach(() => {
+  // Force non-CI environment for baseline tests
+  delete process.env.CI;
+  delete process.env.GITHUB_ACTIONS;
+});
+```
+
+This ensures:
+
+- Baseline tests always verify normal spinner behavior
+- Tests pass in local, CI=true, and GITHUB_ACTIONS=true environments
+- No false negatives in GitHub Actions pipeline
+
 ---
 
 ## 🚀 Quick Wins (High Priority, Low Complexity)

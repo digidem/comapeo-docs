@@ -43,6 +43,7 @@ vi.mock("./imageProcessing", () => ({
   }),
   logImageFailure: vi.fn(),
   logProcessingMetrics: vi.fn(),
+  resetProcessingMetrics: vi.fn(),
 }));
 
 vi.mock("./progressTracker", () => {
@@ -348,6 +349,23 @@ Some text after
 
       // ProgressTracker should not be created when all images fail validation
       expect(ProgressTracker).not.toHaveBeenCalled();
+    });
+
+    it("should reset processing metrics at the start of each call", async () => {
+      const { resetProcessingMetrics } = await import("./imageProcessing");
+      vi.clearAllMocks();
+
+      // First call
+      const markdown1 = "![img](https://example.com/1.png)";
+      await processAndReplaceImages(markdown1, "page-1");
+
+      expect(resetProcessingMetrics).toHaveBeenCalledTimes(1);
+
+      // Second call should reset metrics again
+      const markdown2 = "![img](https://example.com/2.png)";
+      await processAndReplaceImages(markdown2, "page-2");
+
+      expect(resetProcessingMetrics).toHaveBeenCalledTimes(2);
     });
   });
 });

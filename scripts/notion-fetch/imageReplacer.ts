@@ -18,6 +18,7 @@ import {
   processImageWithFallbacks,
   logImageFailure,
   logProcessingMetrics,
+  resetProcessingMetrics,
   type ImageProcessingResult,
 } from "./imageProcessing";
 import { processBatch } from "./timeoutUtils";
@@ -139,6 +140,9 @@ export async function processAndReplaceImages(
   markdown: string,
   safeFilename: string
 ): Promise<ImageReplacementResult> {
+  // Reset metrics at start of each page to ensure accurate per-page telemetry
+  resetProcessingMetrics();
+
   const sourceMarkdown = markdown;
   const imageMatches = extractImageMatches(sourceMarkdown);
 

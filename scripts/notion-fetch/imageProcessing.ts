@@ -517,6 +517,10 @@ export async function downloadAndProcessImage(
   let attempt = 0;
   let lastError: unknown;
 
+  // Track metrics once per URL before retries
+  // Increment total here so each URL is only counted once, regardless of retries
+  processingMetrics.totalProcessed++;
+
   // Track the previous attempt's promise and timeout status to prevent race conditions.
   // JavaScript promises are not cancellable - when withTimeout() rejects,
   // the underlying operation keeps running and can still write to disk.
@@ -620,13 +624,9 @@ export async function downloadAndProcessImage(
       const filename = `${sanitizedBlockName}_${index}${extension}`;
       const filepath = path.join(IMAGES_PATH, filename);
 
-      // Track metrics
-      processingMetrics.totalProcessed++;
-
       // Phase 1: Skip processing for small images (< 50KB)
       const MIN_SIZE_FOR_PROCESSING = 50 * 1024; // 50KB
       if (originalBuffer.length < MIN_SIZE_FOR_PROCESSING) {
-        processingMetrics.skippedSmallSize++;
         spinner.text = `Processing image ${index + 1}: Skipping (already small: ${Math.round(originalBuffer.length / 1024)}KB)`;
         fs.writeFileSync(filepath, originalBuffer);
         const imagePath = `/images/${filename}`;
@@ -636,13 +636,13 @@ export async function downloadAndProcessImage(
           imagePath,
           savedBytes: 0,
           usedFallback: false,
+          skippedSmallSize: true,
         };
       }
 
       // Phase 2: Skip processing for already-optimized images
       const skipReason = shouldSkipOptimization(originalBuffer, chosenFmt);
       if (skipReason) {
-        processingMetrics.skippedAlreadyOptimized++;
         spinner.text = `Processing image ${index + 1}: Skipping (${skipReason})`;
         fs.writeFileSync(filepath, originalBuffer);
         const imagePath = `/images/${filename}`;
@@ -652,11 +652,13 @@ export async function downloadAndProcessImage(
           imagePath,
           savedBytes: 0,
           usedFallback: false,
+          skippedAlreadyOptimized: true,
         };
       }
 
       let resizedBuffer = originalBuffer;
       let originalSize = originalBuffer.length;
+      let skippedResize = false;
 
       if (isResizableFormat(chosenFmt)) {
         // Phase 3: Check dimensions before resize - skip if already acceptable
@@ -664,7 +666,7 @@ export async function downloadAndProcessImage(
         try {
           const metadata = await sharp(originalBuffer).metadata();
           if (metadata.width && metadata.width <= maxWidth) {
-            processingMetrics.skippedResize++;
+            skippedResize = true;
             spinner.text = `Processing image ${index + 1}: Skipping resize (dimensions OK: ${metadata.width}x${metadata.height})`;
             resizedBuffer = originalBuffer;
             originalSize = originalBuffer.length;
@@ -687,9 +689,6 @@ export async function downloadAndProcessImage(
         originalSize = originalBuffer.length;
       }
 
-      // Track that this image went through full processing pipeline
-      processingMetrics.fullyProcessed++;
-
       spinner.text = `Processing image ${index + 1}: Compressing`;
       const { finalSize, usedFallback } = await compressImageToFileWithFallback(
         originalBuffer,
@@ -708,6 +707,8 @@ export async function downloadAndProcessImage(
         imagePath,
         savedBytes,
         usedFallback,
+        skippedResize,
+        fullyProcessed: true,
       };
     })();
 
@@ -735,6 +736,19 @@ export async function downloadAndProcessImage(
 
       SpinnerManager.remove(spinner);
       abortController.abort(); // Clean up
+
+      // Increment metrics only on successful completion (outside retry loop)
+      if (result.skippedSmallSize) {
+        processingMetrics.skippedSmallSize++;
+      } else if (result.skippedAlreadyOptimized) {
+        processingMetrics.skippedAlreadyOptimized++;
+      } else if (result.fullyProcessed) {
+        processingMetrics.fullyProcessed++;
+        if (result.skippedResize) {
+          processingMetrics.skippedResize++;
+        }
+      }
+
       return {
         newPath: result.imagePath,
         savedBytes: result.savedBytes,

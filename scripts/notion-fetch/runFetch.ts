@@ -124,6 +124,7 @@ export async function runFetchPipeline(
       throw error;
     } finally {
       unregisterGenerateSpinner?.();
+      SpinnerManager.remove(generateSpinner);
     }
   } catch (error) {
     fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));
@@ -131,5 +132,6 @@ export async function runFetchPipeline(
     throw error;
   } finally {
     unregisterFetchSpinner?.();
+    SpinnerManager.remove(fetchSpinner);
   }
 }

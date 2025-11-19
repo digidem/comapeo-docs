@@ -526,33 +526,35 @@ export async function generateBlocks(pages, progressCallback) {
         } else if (normalizedSectionType === "page") {
           pageProcessingIndex += 1;
 
+          // Guard against malformed pages with null/undefined properties
+          const props = page.properties;
+
           let tags = ["comapeo"];
-          if (page.properties["Tags"] && page.properties["Tags"].multi_select) {
-            tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
+          if (props?.["Tags"]?.multi_select) {
+            tags = props["Tags"].multi_select.map((tag) => tag.name);
           }
 
           let keywords = ["docs", "comapeo"];
           if (
-            page.properties.Keywords?.multi_select &&
-            page.properties.Keywords.multi_select.length > 0
+            props?.Keywords?.multi_select &&
+            props.Keywords.multi_select.length > 0
           ) {
-            keywords = page.properties.Keywords.multi_select.map(
+            keywords = props.Keywords.multi_select.map(
               (keyword) => keyword.name
             );
           }
 
           let sidebarPosition = i + 1;
-          if (page.properties["Order"] && page.properties["Order"].number) {
-            sidebarPosition = page.properties["Order"].number;
+          if (props?.["Order"]?.number) {
+            sidebarPosition = props["Order"].number;
           }
 
           const customProps: Record<string, unknown> = {};
           if (
-            page.properties["Icon"] &&
-            page.properties["Icon"].rich_text &&
-            page.properties["Icon"].rich_text.length > 0
+            props?.["Icon"]?.rich_text &&
+            props["Icon"].rich_text.length > 0
           ) {
-            customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
+            customProps.icon = props["Icon"].rich_text[0].plain_text;
           }
 
           const pendingHeading = currentHeading.get(lang);

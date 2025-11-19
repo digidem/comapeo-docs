@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import axios from "axios";
 import chalk from "chalk";
 import sharp from "sharp";
@@ -356,42 +357,39 @@ export function logImageFailure(logEntry: any): void {
 /**
  * Image cache system to prevent re-downloading and provide recovery options
  */
+/**
+ * Lazy-loading image cache using per-entry files.
+ *
+ * Instead of loading the entire cache at startup, each entry is stored
+ * as a separate JSON file in `.cache/images/[md5hash].json`.
+ *
+ * Benefits:
+ * - Instant startup (no bulk loading)
+ * - Lower memory footprint (only load entries as needed)
+ * - Atomic operations (file-per-entry is naturally safe for concurrency)
+ */
 export class ImageCache {
-  private cacheFile: string;
-  private cache: Map<string, ImageCacheEntry>;
+  private cacheDir: string;
 
   constructor() {
-    this.cacheFile = path.join(process.cwd(), "image-cache.json");
-    this.cache = new Map();
-    this.loadCache();
+    this.cacheDir = path.join(process.cwd(), ".cache", "images");
+    // Ensure cache directory exists - instant startup, no loading
+    fs.mkdirSync(this.cacheDir, { recursive: true });
   }
 
-  private loadCache(): void {
-    try {
-      if (fs.existsSync(this.cacheFile)) {
-        const content = fs.readFileSync(this.cacheFile, "utf-8");
-        const cacheData = JSON.parse(content);
-        Object.entries(cacheData).forEach(([url, entry]) => {
-          this.cache.set(url, entry as ImageCacheEntry);
-        });
-        console.info(
-          chalk.blue(`📦 Loaded image cache with ${this.cache.size} entries`)
-        );
-      }
-    } catch (error) {
-      console.warn(
-        chalk.yellow("⚠️  Failed to load image cache, starting fresh")
-      );
-    }
+  /**
+   * Hash URL to create a cache filename
+   */
+  private hashUrl(url: string): string {
+    return createHash("md5").update(url).digest("hex");
   }
 
-  private saveCache(): void {
-    try {
-      const cacheData = Object.fromEntries(this.cache);
-      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
-    } catch (error) {
-      console.warn(chalk.yellow("⚠️  Failed to save image cache"));
-    }
+  /**
+   * Get the cache file path for a URL
+   */
+  private getCachePath(url: string): string {
+    const hash = this.hashUrl(url);
+    return path.join(this.cacheDir, `${hash}.json`);
   }
 
   private getAbsoluteImagePath(fileNameOrWebPath: string): string {
@@ -404,18 +402,41 @@ export class ImageCache {
   }
 
   has(url: string): boolean {
-    const entry = this.cache.get(url);
-    if (!entry) return false;
-    const fullPath = this.getAbsoluteImagePath(entry.localPath);
-    return fs.existsSync(fullPath);
+    const cachePath = this.getCachePath(url);
+
+    if (!fs.existsSync(cachePath)) return false;
+
+    try {
+      const content = fs.readFileSync(cachePath, "utf-8");
+      const entry = JSON.parse(content) as ImageCacheEntry;
+      const fullPath = this.getAbsoluteImagePath(entry.localPath);
+      return fs.existsSync(fullPath);
+    } catch {
+      return false;
+    }
   }
 
   get(url: string): ImageCacheEntry | undefined {
-    if (this.has(url)) {
-      return this.cache.get(url);
+    const cachePath = this.getCachePath(url);
+
+    if (!fs.existsSync(cachePath)) return undefined;
+
+    try {
+      const content = fs.readFileSync(cachePath, "utf-8");
+      const entry = JSON.parse(content) as ImageCacheEntry;
+
+      // Verify the actual image file exists
+      const fullPath = this.getAbsoluteImagePath(entry.localPath);
+      if (!fs.existsSync(fullPath)) {
+        // Clean up orphaned cache entry
+        fs.unlinkSync(cachePath);
+        return undefined;
+      }
+
+      return entry;
+    } catch {
+      return undefined;
     }
-    this.cache.delete(url);
-    return undefined;
   }
 
   set(url: string, localPath: string, blockName: string): void {
@@ -426,32 +447,78 @@ export class ImageCache {
       timestamp: new Date().toISOString(),
       blockName,
     };
-    this.cache.set(url, entry);
-    this.saveCache();
+
+    const cachePath = this.getCachePath(url);
+    try {
+      fs.writeFileSync(cachePath, JSON.stringify(entry, null, 2));
+    } catch (error) {
+      console.warn(chalk.yellow(`⚠️  Failed to save cache entry for ${url}`));
+    }
   }
 
   getStats(): { totalEntries: number; validEntries: number } {
-    let validEntries = 0;
-    for (const [url] of this.cache) {
-      if (this.has(url)) validEntries++;
+    try {
+      const files = fs
+        .readdirSync(this.cacheDir)
+        .filter((f) => f.endsWith(".json"));
+      let validEntries = 0;
+
+      for (const file of files) {
+        try {
+          const filePath = path.join(this.cacheDir, file);
+          const content = fs.readFileSync(filePath, "utf-8");
+          const entry = JSON.parse(content) as ImageCacheEntry;
+          const fullPath = this.getAbsoluteImagePath(entry.localPath);
+          if (fs.existsSync(fullPath)) {
+            validEntries++;
+          }
+        } catch {
+          // Skip invalid entries
+        }
+      }
+
+      return { totalEntries: files.length, validEntries };
+    } catch {
+      return { totalEntries: 0, validEntries: 0 };
     }
-    return { totalEntries: this.cache.size, validEntries };
   }
 
   cleanup(): void {
-    // Remove stale entries where local files no longer exist
-    const staleUrls = [];
-    for (const [url] of this.cache) {
-      if (!this.has(url)) {
-        staleUrls.push(url);
+    try {
+      const files = fs
+        .readdirSync(this.cacheDir)
+        .filter((f) => f.endsWith(".json"));
+      let cleanedCount = 0;
+
+      for (const file of files) {
+        const filePath = path.join(this.cacheDir, file);
+        try {
+          const content = fs.readFileSync(filePath, "utf-8");
+          const entry = JSON.parse(content) as ImageCacheEntry;
+          const fullPath = this.getAbsoluteImagePath(entry.localPath);
+
+          if (!fs.existsSync(fullPath)) {
+            fs.unlinkSync(filePath);
+            cleanedCount++;
+          }
+        } catch {
+          // Remove invalid cache files
+          try {
+            fs.unlinkSync(filePath);
+            cleanedCount++;
+          } catch {
+            // Ignore deletion errors
+          }
+        }
       }
-    }
-    staleUrls.forEach((url) => this.cache.delete(url));
-    if (staleUrls.length > 0) {
-      this.saveCache();
-      console.info(
-        chalk.blue(`🧹 Cleaned up ${staleUrls.length} stale cache entries`)
-      );
+
+      if (cleanedCount > 0) {
+        console.info(
+          chalk.blue(`🧹 Cleaned up ${cleanedCount} stale cache entries`)
+        );
+      }
+    } catch (error) {
+      console.warn(chalk.yellow("⚠️  Failed to cleanup image cache"));
     }
   }
 }

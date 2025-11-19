@@ -299,7 +299,7 @@ describe("imageProcessing", () => {
       const cacheEntry = {
         url: "https://example.com/image.jpg",
         localPath: "test_0.jpg",
-        timestamp: "2024-01-01T00:00:00Z",
+        timestamp: new Date().toISOString(), // Recent timestamp to pass TTL check
         blockName: "test-block",
       };
 

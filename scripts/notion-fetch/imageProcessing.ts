@@ -189,7 +189,12 @@ export interface ImageCacheEntry {
   timestamp: string;
   blockName: string;
   checksum?: string;
+  /** Notion's last_edited_time for freshness checking */
+  notionLastEdited?: string;
 }
+
+/** Default TTL for cache entries without notionLastEdited (30 days in ms) */
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Enhanced image processing with comprehensive fallback handling
@@ -401,7 +406,12 @@ export class ImageCache {
     return path.join(IMAGES_PATH, baseName);
   }
 
-  has(url: string): boolean {
+  /**
+   * Check if a valid cache entry exists for the URL
+   * @param url - The image URL
+   * @param notionLastEdited - Optional Notion last_edited_time for freshness check
+   */
+  has(url: string, notionLastEdited?: string): boolean {
     const cachePath = this.getCachePath(url);
 
     if (!fs.existsSync(cachePath)) return false;
@@ -410,7 +420,40 @@ export class ImageCache {
       const content = fs.readFileSync(cachePath, "utf-8");
       const entry = JSON.parse(content) as ImageCacheEntry;
       const fullPath = this.getAbsoluteImagePath(entry.localPath);
-      return fs.existsSync(fullPath);
+
+      // Check if image file exists
+      if (!fs.existsSync(fullPath)) return false;
+
+      // Check freshness if notionLastEdited is provided
+      if (notionLastEdited && entry.notionLastEdited) {
+        const cacheTime = new Date(entry.notionLastEdited).getTime();
+        const notionTime = new Date(notionLastEdited).getTime();
+
+        // Content is stale if Notion was edited after cache was created
+        if (notionTime > cacheTime) {
+          // Delete stale cache entry
+          try {
+            fs.unlinkSync(cachePath);
+          } catch {
+            // Ignore deletion errors
+          }
+          return false;
+        }
+      } else if (!entry.notionLastEdited) {
+        // No notionLastEdited - use TTL fallback
+        const cacheAge = Date.now() - new Date(entry.timestamp).getTime();
+        if (cacheAge > CACHE_TTL_MS) {
+          // Cache entry is too old
+          try {
+            fs.unlinkSync(cachePath);
+          } catch {
+            // Ignore deletion errors
+          }
+          return false;
+        }
+      }
+
+      return true;
     } catch {
       return false;
     }
@@ -439,13 +482,19 @@ export class ImageCache {
     }
   }
 
-  set(url: string, localPath: string, blockName: string): void {
+  set(
+    url: string,
+    localPath: string,
+    blockName: string,
+    notionLastEdited?: string
+  ): void {
     const safeBase = path.basename(localPath || "");
     const entry: ImageCacheEntry = {
       url,
       localPath: safeBase,
       timestamp: new Date().toISOString(),
       blockName,
+      notionLastEdited,
     };
 
     const cachePath = this.getCachePath(url);

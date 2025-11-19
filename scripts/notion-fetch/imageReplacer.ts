@@ -17,9 +17,12 @@ import { sanitizeMarkdownImages } from "./markdownTransform";
 import {
   processImageWithFallbacks,
   logImageFailure,
+  logProcessingMetrics,
+  resetProcessingMetrics,
   type ImageProcessingResult,
 } from "./imageProcessing";
 import { processBatch } from "./timeoutUtils";
+import { ProgressTracker } from "./progressTracker";
 
 /**
  * Image match information extracted from markdown
@@ -137,6 +140,9 @@ export async function processAndReplaceImages(
   markdown: string,
   safeFilename: string
 ): Promise<ImageReplacementResult> {
+  // Reset metrics at start of each page to ensure accurate per-page telemetry
+  resetProcessingMetrics();
+
   const sourceMarkdown = markdown;
   const imageMatches = extractImageMatches(sourceMarkdown);
 
@@ -222,6 +228,17 @@ export async function processAndReplaceImages(
   let totalFailures = 0;
   let totalSaved = 0;
 
+  // Create progress tracker only when there are images to process
+  // to avoid leaking a spinner when validImages.length is 0
+  const progressTracker =
+    validImages.length > 0
+      ? new ProgressTracker({
+          total: validImages.length,
+          operation: "images",
+          spinnerTimeoutMs: 150000, // 2.5 minutes
+        })
+      : undefined;
+
   const batchResults = await processBatch(
     validImages,
     async (validImage) => {
@@ -242,6 +259,7 @@ export async function processAndReplaceImages(
       maxConcurrent: MAX_CONCURRENT_IMAGES,
       // No timeout here - individual operations have their own timeouts
       operation: "image processing",
+      progressTracker: progressTracker,
     }
   );
 
@@ -324,6 +342,9 @@ export async function processAndReplaceImages(
       chalk.blue(`💡 Check 'image-failures.json' for recovery information`)
     );
   }
+
+  // Log performance metrics for skip optimizations
+  logProcessingMetrics();
 
   return {
     markdown: processedMarkdown,

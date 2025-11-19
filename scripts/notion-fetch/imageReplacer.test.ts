@@ -42,7 +42,18 @@ vi.mock("./imageProcessing", () => ({
     });
   }),
   logImageFailure: vi.fn(),
+  logProcessingMetrics: vi.fn(),
+  resetProcessingMetrics: vi.fn(),
 }));
+
+vi.mock("./progressTracker", () => {
+  const ProgressTrackerMock = vi.fn(function (this: any) {
+    this.startItem = vi.fn();
+    this.completeItem = vi.fn();
+    this.finish = vi.fn();
+  });
+  return { ProgressTracker: ProgressTrackerMock };
+});
 
 describe("imageReplacer", () => {
   describe("extractImageMatches", () => {
@@ -314,6 +325,47 @@ Some text after
 
       // All three images should be processed
       expect(result.stats.successfulImages).toBe(3);
+    });
+
+    it("should not create ProgressTracker when there are no valid images", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      vi.clearAllMocks();
+
+      // Markdown with no images at all
+      const markdown = "Just plain text with no images";
+      await processAndReplaceImages(markdown, "test-file");
+
+      // ProgressTracker should not be created when validImages.length is 0
+      expect(ProgressTracker).not.toHaveBeenCalled();
+    });
+
+    it("should not create ProgressTracker when all images are invalid", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      vi.clearAllMocks();
+
+      // Markdown with only invalid images (will be filtered out)
+      const markdown = "![alt](invalid-url-1) ![alt2](invalid-url-2)";
+      await processAndReplaceImages(markdown, "test-file");
+
+      // ProgressTracker should not be created when all images fail validation
+      expect(ProgressTracker).not.toHaveBeenCalled();
+    });
+
+    it("should reset processing metrics at the start of each call", async () => {
+      const { resetProcessingMetrics } = await import("./imageProcessing");
+      vi.clearAllMocks();
+
+      // First call
+      const markdown1 = "![img](https://example.com/1.png)";
+      await processAndReplaceImages(markdown1, "page-1");
+
+      expect(resetProcessingMetrics).toHaveBeenCalledTimes(1);
+
+      // Second call should reset metrics again
+      const markdown2 = "![img](https://example.com/2.png)";
+      await processAndReplaceImages(markdown2, "page-2");
+
+      expect(resetProcessingMetrics).toHaveBeenCalledTimes(2);
     });
   });
 });

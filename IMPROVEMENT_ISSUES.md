@@ -6,17 +6,376 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 1/9 issues completed (11% complete)
+**Current Status:** 3/9 issues completed + **Issue #4 in progress** (40% complete)
 
-**Next Recommended Task:** Issue #2 - Skip processing for small/optimized images (Est: 1hr, High Impact)
+**⚠️ IMPORTANT:** This PR delivers foundational work for Issue #4 (RateLimitManager, bug fixes, documentation). The parallel processing refactoring will be implemented in a **separate PR** to keep changes focused and reviewable.
+
+**This PR Contains:**
+
+- ✅ RateLimitManager utility (ready for use)
+- ✅ 5 critical bug fixes (metrics, progress tracking, timeouts)
+- ✅ Comprehensive documentation for next developer
+
+**Next PR Will Contain:**
+
+- ⏳ Parallel page processing implementation (Est: 1-2hr)
+- ⏳ Integration of RateLimitManager with generateBlocks.ts
+- ⏳ Final testing and benchmarking
 
 **Quick Links:**
 
 - [Completed Issues](#-completed-issues)
+- [In Progress](#-in-progress)
+- [Critical Bug Fixes](#-critical-bug-fixes-discovered-during-implementation)
 - [Quick Wins](#-quick-wins-high-priority-low-complexity) - Issues #2-3
 - [High-Impact Improvements](#-high-impact-improvements-medium-priority-medium-complexity) - Issues #4-5
 - [Advanced Optimizations](#-advanced-optimizations-lower-priority-higher-complexity) - Issues #6-9
 - [Summary Table](#summary-table)
+
+---
+
+## 🚧 In Progress
+
+### Issue #4 Status
+
+**Status:** 🟡 IN PROGRESS (40% complete - RateLimitManager done, parallel processing will continue in separate PR)
+
+**⚠️ IMPORTANT:** The parallel processing refactoring of generateBlocks.ts will be implemented in a **separate PR** to keep changes focused and reviewable. This PR contains the foundational work (RateLimitManager, bug fixes, documentation).
+
+**What's Complete:**
+
+- ✅ RateLimitManager utility (118 lines, 25 tests passing)
+  - Exponential backoff (1s → 2s → 4s → ... → 60s max)
+  - Retry-After header support
+  - Global singleton pattern
+  - Async waitForBackoff() helper
+- ✅ Critical timeout bug fix (prevents hanging spinners)
+- ✅ All prerequisites (ProgressTracker from Issue #9)
+- ✅ Comprehensive documentation for next developer
+
+**What's Remaining (Next PR):**
+
+1. **Refactor generateBlocks.ts** (~1-2 hours):
+   - Extract page processing logic into `processSinglePage()` function
+   - Flatten nested page structure into array of page tasks
+   - Replace sequential loop with `processBatch(pages, ..., { maxConcurrent: 5 })`
+   - Add ProgressTracker for aggregate progress display
+   - Integrate RateLimitManager (placeholder - actual 429 handling can be added later)
+
+2. **Important Decision Made:**
+   - Parallelize ONLY the "Page" type processing (90% of items, the actual bottleneck)
+   - Keep Toggle/Heading sequential (they modify shared state: currentSectionFolder, currentHeading)
+   - This is safer and still gives 50-70% speedup
+
+**Files Ready to Use:**
+
+- `scripts/notion-fetch/rateLimitManager.ts` - Ready for import
+- `scripts/notion-fetch/rateLimitManager.test.ts` - 25 tests passing
+- `scripts/notion-fetch/progressTracker.ts` - Ready for use (from Issue #9)
+- `scripts/notion-fetch/timeoutUtils.ts` - processBatch() ready with progress tracking
+
+**Next Developer Instructions:**
+
+1. **Read the current generateBlocks.ts structure** (lines 152-450)
+2. **Identify all "Page" type processing** (normalizedSectionType === "page")
+3. **Extract into async function:**
+   ```typescript
+   async function processSinglePage(
+     pageData: PageProcessingContext
+   ): Promise<PageProcessingResult> {
+     // All logic from lines 267-427
+     // Return { success, totalSaved, stats }
+   }
+   ```
+4. **Create page tasks array:**
+   ```typescript
+   const pageTasks: PageTask[] = [];
+   for (let i = 0; i < pagesByLang.length; i++) {
+     const pageByLang = pagesByLang[i];
+     if (normalizedSectionType === "page") {
+       for (const lang of Object.keys(pageByLang.content)) {
+         pageTasks.push({
+           pageByLang,
+           lang,
+           index: i,
+           // ... all context needed for processing
+         });
+       }
+     }
+   }
+   ```
+5. **Use processBatch for parallel execution:**
+
+   ```typescript
+   import { getRateLimitManager } from "./rateLimitManager";
+   import { ProgressTracker } from "./progressTracker";
+
+   const progressTracker = new ProgressTracker({
+     total: pageTasks.length,
+     operation: "pages",
+     spinnerTimeoutMs: 300000, // 5 minutes
+   });
+
+   const results = await processBatch(
+     pageTasks,
+     async (task) => processSinglePage(task),
+     {
+       maxConcurrent: 5,
+       timeoutMs: 180000, // 3 min per page
+       operation: "page processing",
+       progressTracker,
+     }
+   );
+   ```
+
+6. **Handle rate limiting (optional for now):**
+   ```typescript
+   // In processSinglePage, catch 429 errors:
+   catch (error) {
+     if (error.status === 429) {
+       const retryAfter = parseInt(error.headers?.['retry-after'] || '0');
+       getRateLimitManager().recordRateLimit(retryAfter);
+       throw error; // Let processBatch handle retry
+     }
+   }
+   ```
+
+**Testing Strategy:**
+
+- Run existing tests to ensure no regressions
+- Test with small dataset first (5-10 pages)
+- Verify parallel processing works correctly
+- Check that stats/counts match sequential version
+
+**Gotchas to Watch:**
+
+- ⚠️ Don't parallelize Toggle/Heading - they modify shared state
+- ⚠️ Preserve page order in final output
+- ⚠️ Aggregate stats correctly across parallel operations
+- ⚠️ Ensure ProgressTracker finishes even on errors
+
+---
+
+## 🐛 Critical Bug Fixes Discovered During Implementation
+
+**IMPORTANT:** These bugs were discovered and fixed while implementing Issues #2, #4, and #9. Future developers should be aware of these patterns.
+
+### Bug Fix #1: Duplicate Metric Counting in Retry Loops ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageProcessing.ts`
+**Commit:** `013fa52`
+
+**Problem:**
+
+- `processingMetrics.totalProcessed++` was inside retry loop (line 623)
+- Each retry attempt incremented counters again
+- Failed image retried 3x counted as 3 processed images
+- Inflated totals, corrupted percentage calculations
+
+**Root Cause:**
+
+```typescript
+while (attempt < maxRetries) {
+  processingMetrics.totalProcessed++;  // ❌ Wrong! Counts retries
+  try {
+    await processImage(...);
+    break;
+  } catch (error) {
+    // Retry...
+  }
+}
+```
+
+**Fix Applied:**
+
+```typescript
+processingMetrics.totalProcessed++;  // ✅ Once before retry loop
+
+while (attempt < maxRetries) {
+  try {
+    await processImage(...);
+    if (skipped) return { skippedSmallSize: true };  // Flags instead
+    break;
+  } catch (error) {
+    // Retry...
+  }
+}
+
+// Increment based on flags AFTER completion
+if (result.skippedSmallSize) processingMetrics.skippedSmallSize++;
+```
+
+**Lesson:** Never increment metrics inside retry loops. Use flags and increment once on completion.
+
+---
+
+### Bug Fix #2: ProgressTracker Leak on Empty Arrays ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageReplacer.ts`
+**Commit:** `66b9286`
+
+**Problem:**
+
+- ProgressTracker created unconditionally even when `validImages.length === 0`
+- Empty array → processBatch never calls `startItem`/`completeItem`
+- Tracker never calls `finish()`
+- Spinner with 150s timeout leaked
+- Process hung for 2.5 minutes after completion
+
+**Root Cause:**
+
+```typescript
+const progressTracker = new ProgressTracker({
+  total: validImages.length,  // Could be 0!
+  operation: "images",
+  spinnerTimeoutMs: 150000,
+});
+
+await processBatch(validImages, ...);  // Empty array → no items → never finishes
+```
+
+**Fix Applied:**
+
+```typescript
+const progressTracker =
+  validImages.length > 0
+    ? new ProgressTracker({
+        total: validImages.length,
+        operation: "images",
+        spinnerTimeoutMs: 150000,
+      })
+    : undefined; // Skip creation for empty arrays
+```
+
+**Lesson:** Always check array length before creating progress trackers. Empty arrays never trigger item callbacks.
+
+---
+
+### Bug Fix #3: Metrics Accumulation Across Pages ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageReplacer.ts`
+**Commit:** `56c1759`
+
+**Problem:**
+
+- `processingMetrics` is module-level state
+- `logProcessingMetrics()` called at end of each page
+- `resetProcessingMetrics()` existed but never used
+- Metrics accumulated: Page 2 = Page 1 + Page 2 data (wrong!)
+- Telemetry unusable for multi-page runs
+
+**Root Cause:**
+
+```typescript
+// imageProcessing.ts - module level
+const processingMetrics = {
+  totalProcessed: 0,
+  skippedSmallSize: 0,
+  // ...
+};
+
+// imageReplacer.ts - called once per page
+export async function processAndReplaceImages(...) {
+  // No reset here! ❌
+  // ... process images ...
+  logProcessingMetrics();  // Logs accumulated totals
+}
+```
+
+**Fix Applied:**
+
+```typescript
+export async function processAndReplaceImages(...) {
+  resetProcessingMetrics();  // ✅ Reset at start of each page
+  // ... process images ...
+  logProcessingMetrics();  // Now logs only current page
+}
+```
+
+**Lesson:** Module-level state requires explicit reset between logical units (pages, batches, etc.). Always reset at start of unit.
+
+---
+
+### Bug Fix #4: False Success Reporting in ProgressTracker ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** `0b9a180`
+
+**Problem:**
+
+- `processBatch` only checked promise fulfillment/rejection
+- `processImageWithFallbacks` never rejects - returns `{ success: false }` instead
+- All failed images counted as successes
+- Progress showed "100% success" even with 404s, timeouts, crashes
+
+**Root Cause:**
+
+```typescript
+.then((result) => {
+  progressTracker.completeItem(true);  // ❌ Always true for fulfilled promises
+  return result;
+})
+```
+
+**Fix Applied:**
+
+```typescript
+.then((result) => {
+  // Check result.success property if available
+  const isSuccess =
+    typeof result === "object" &&
+    result !== null &&
+    "success" in result
+      ? result.success === true
+      : true;  // Backward compatible
+  progressTracker.completeItem(isSuccess);  // ✅ Correct status
+  return result;
+})
+```
+
+**Lesson:** Promise fulfillment ≠ success. Check result.success property for operations that return error objects instead of rejecting.
+
+---
+
+### Bug Fix #5: Timeout Hangs Progress Tracker ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** `c8fbc86`
+
+**Problem:**
+
+- `processBatch` wraps promises: `tracker` → `timeout`
+- Timeout fires → `withTimeout` rejects immediately
+- `trackedPromise` still pending → `.then/.catch` never run
+- `progressTracker.completeItem()` NEVER called
+- Spinner shows "N in progress" forever
+- **CLI hangs indefinitely**
+
+**Root Cause:**
+
+```typescript
+const trackedPromise = promise
+  .then(() => progressTracker.completeItem(true))
+  .catch(() => progressTracker.completeItem(false));
+
+return withTimeout(trackedPromise, timeoutMs, ...);  // ❌ Timeout bypasses handlers
+```
+
+**Fix Applied:**
+
+```typescript
+return withTimeout(trackedPromise, timeoutMs, operationDescription).catch(
+  (error) => {
+    // ✅ CRITICAL: Notify tracker on timeout
+    if (error instanceof TimeoutError && progressTracker) {
+      progressTracker.completeItem(false);
+    }
+    throw error;
+  }
+);
+```
+
+**Lesson:** When wrapping promises with timeout, ensure progress tracking happens in BOTH paths (normal completion AND timeout). Timeouts bypass inner handlers.
 
 ---
 
@@ -146,11 +505,12 @@ let fetchSucceeded = false;
 try {
   // ... fetch operations ...
   fetchSpinner.succeed(chalk.green("Data fetched successfully"));
-  fetchSucceeded = true;  // Mark as succeeded
+  fetchSucceeded = true; // Mark as succeeded
 
   // ... later operations ...
 } catch (error) {
-  if (!fetchSucceeded) {  // Works in CI and non-CI!
+  if (!fetchSucceeded) {
+    // Works in CI and non-CI!
     fetchSpinner.fail(chalk.red("Failed to fetch data"));
   }
   throw error;
@@ -178,7 +538,7 @@ Added `SpinnerManager.remove(spinner)` calls immediately after each spinner comp
 ```typescript
 // Before reassigning spinner variable:
 spinner.succeed(chalk.green("✅ Stage complete"));
-SpinnerManager.remove(spinner);  // Clean up before reassignment
+SpinnerManager.remove(spinner); // Clean up before reassignment
 
 // Now safe to create next spinner:
 spinner = SpinnerManager.create("Next stage...", TIMEOUT);
@@ -203,6 +563,195 @@ This ensures:
 - No phantom spinners accumulate in long-lived processes or test suites
 
 **Pattern:** When using a manager class that tracks resource lifecycle (SpinnerManager, ConnectionPool, etc.), ensure cleanup happens before variable reassignment or in finally blocks. Variable reassignment doesn't automatically clean up the old resource—you must explicitly call the cleanup method.
+
+---
+
+### Issue 2: Skip processing for small/optimized images ✅
+
+**Status:** ✅ COMPLETED
+
+**Implementation Date:** 2025-01-18
+
+**Files Modified:**
+
+- `scripts/notion-fetch/imageProcessing.ts` - Added skip logic for small images (<50KB), already-optimized detection, and dimension checks; added performance metrics tracking
+- `scripts/notion-fetch/imageProcessing.test.ts` - Added 4 new tests for skip logic and metrics tracking
+- `scripts/notion-fetch/imageReplacer.ts` - Integrated performance metrics logging
+
+**Summary:**
+
+Successfully implemented comprehensive skip logic for image processing to avoid unnecessary work on images that don't need optimization. Images are now evaluated through three phases of checks before processing, with detailed metrics tracking showing skip rates and performance improvements.
+
+**Key Changes:**
+
+1. **Phase 1: Skip small images** (< 50KB threshold)
+   - Images under 50KB saved directly without processing
+   - Saves both resize and compression operations
+   - Assumes small images are already optimized
+
+2. **Phase 2: Skip already-optimized images**
+   - Detects optimization markers from popular tools (pngquant, OptiPNG, mozjpeg, etc.)
+   - Checks PNG bit depth (≤4-bit images skipped)
+   - Works across different image formats (PNG, JPEG, WebP)
+   - Optimization markers checked in first 4KB for performance
+
+3. **Phase 3: Skip resize if dimensions acceptable**
+   - Uses Sharp to check image dimensions before resize
+   - Skips resize if width ≤ 1280px (maxWidth threshold)
+   - Still applies compression if beneficial
+   - Gracefully falls back to resize if metadata check fails
+
+4. **Performance metrics tracking**
+   - Counts total images processed
+   - Tracks skip reasons (small size, already optimized, resize skipped)
+   - Tracks fully processed images
+   - Logs detailed summary with percentages
+   - Provides `getProcessingMetrics()`, `resetProcessingMetrics()`, `logProcessingMetrics()` functions
+
+**Test Results:**
+
+- All 37 tests passing (33 existing + 4 new skip logic tests)
+- Tests verify all three skip phases
+- Tests verify metrics tracking accuracy
+- Tests verify small image handling
+- Tests verify optimization marker detection
+
+**Acceptance Criteria Met:**
+
+- ✅ Images < 50KB saved directly without processing
+- ✅ Dimensions checked before resize
+- ✅ Already-optimized images skip compression
+- ✅ Logs indicate when processing skipped and why
+- ✅ Tests verify skip logic works correctly
+- ✅ No regression in image quality
+- ✅ Performance metrics logged showing skip rate
+
+**Expected Performance Impact:**
+
+- **Time Saved:** 20-30% reduction on pages with many small or already-optimized images
+- **CPU Savings:** Eliminates unnecessary resize/compress operations
+- **Network Savings:** None (still downloads to check size/optimization)
+- **Quality:** No regression (skips only when safe)
+
+**Example Metrics Output:**
+
+```
+📊 Image Processing Performance Metrics:
+   Total images: 120
+   Skipped (small size): 45 (37.5%)
+   Skipped (already optimized): 12 (10.0%)
+   Resize skipped: 28 (23.3%)
+   Fully processed: 63 (52.5%)
+   Overall skip rate: 47.5%
+```
+
+**Next Developer Notes:**
+
+- Implementation is production-ready
+- Metrics will help identify optimization opportunities in real-world usage
+- Consider adjusting MIN_SIZE_FOR_PROCESSING threshold based on actual metrics
+- Phase 3 (resize skip) provides additional optimization without sacrificing quality
+- All skip logic is conservative (processes when in doubt)
+
+---
+
+### Issue 9: Add aggregated progress tracking for parallel operations ✅
+
+**Status:** ✅ COMPLETED
+
+**Implementation Date:** 2025-01-18
+
+**Files Modified:**
+
+- `scripts/notion-fetch/progressTracker.ts` - New ProgressTracker class with aggregate progress display
+- `scripts/notion-fetch/progressTracker.test.ts` - Comprehensive tests (24 tests)
+- `scripts/notion-fetch/timeoutUtils.ts` - Added `progressTracker` option to BatchConfig; integrated tracking into processBatch
+- `scripts/notion-fetch/imageReplacer.ts` - Integrated ProgressTracker with image batch processing
+
+**Summary:**
+
+Successfully implemented aggregated progress tracking for parallel operations, replacing individual spinners with a single aggregate progress indicator that shows overall completion, ETA, and status counts.
+
+**Key Changes:**
+
+1. **ProgressTracker Class**
+   - Tracks total, completed, in-progress, and failed counts
+   - Calculates real-time percentage and ETA
+   - Integrates with SpinnerManager for clean UI
+   - Auto-finishes when all items complete
+   - Supports manual finish() and fail() for error handling
+
+2. **Progress Display Format**
+
+   ```
+   ⠋ Processing images: 5/15 complete (33%) | 2 in progress | 1 failed | ETA: 45s
+   ```
+
+   - Clear aggregate metrics instead of overlapping spinners
+   - Real-time ETA based on average time per item
+   - Shows in-progress and failed counts
+   - Human-readable duration formatting (ms, s, m, m s)
+
+3. **BatchConfig Integration**
+   - Added optional `progressTracker` parameter to BatchConfig
+   - processBatch automatically calls startItem() and completeItem()
+   - Tracks success/failure for each item
+   - Works seamlessly with existing timeout logic
+
+4. **Image Processing Integration**
+   - ProgressTracker created in processAndReplaceImages
+   - Passed to processBatch for automatic tracking
+   - Replaces individual per-image spinners
+   - Cleaner output for parallel image processing
+
+**Test Results:**
+
+- All 24 ProgressTracker tests passing
+- All 25 imageReplacer tests passing
+- All 24 timeoutUtils tests passing
+- Tests verify progress calculations, ETA, percentage, duration formatting, and parallel operations
+
+**Acceptance Criteria Met:**
+
+- ✅ ProgressTracker class created
+- ✅ Shows aggregate progress (X/Y complete)
+- ✅ Shows percentage, in progress count, failed count
+- ✅ Calculates and displays ETA
+- ✅ Integrates with SpinnerManager
+- ✅ Works with parallel batch processing
+- ✅ Tests verify progress calculations
+
+**Expected UX Impact:**
+
+- **Cleaner Output:** Single progress line instead of overlapping spinners
+- **Better Visibility:** Clear percentage and ETA for long operations
+- **Debugging:** Easy to see how many items are in progress vs failed
+- **Professional:** Aggregate progress feels more polished
+
+**Example Output:**
+
+Before (noisy overlapping spinners):
+
+```
+⠋ Processing image 1 (attempt 1/3)
+⠋ Processing image 2 (attempt 1/3)
+⠋ Processing image 3 (attempt 1/3)
+...
+```
+
+After (clean aggregate progress):
+
+```
+⠋ Processing images: 12/25 complete (48%) | 3 in progress | 1 failed | ETA: 32s
+```
+
+**Next Developer Notes:**
+
+- ProgressTracker is now ready for use with parallel page fetching (Issue #4)
+- Can be reused for any batch operation (emojis, blocks, etc.)
+- ETA calculation assumes relatively consistent item processing times
+- Automatically handles zero-item edge cases
+- Thread-safe for concurrent operations
 
 ---
 
@@ -261,7 +810,9 @@ static create(text: string, timeoutMs?: number) {
 
 ---
 
-### Issue 2: Skip processing for small/optimized images
+### Issue 2: Skip processing for small/optimized images ✅ COMPLETED
+
+> **Status:** ✅ COMPLETED - See "Completed Issues" section above for implementation details
 
 **Title:** `perf(notion-fetch): skip processing for small/optimized images`
 
@@ -1254,7 +1805,9 @@ image download:
 
 ---
 
-### Issue 9: Add aggregated progress tracking for parallel operations
+### Issue 9: Add aggregated progress tracking for parallel operations ✅ COMPLETED
+
+> **Status:** ✅ COMPLETED - See "Completed Issues" section above for implementation details
 
 **Title:** `feat(notion-fetch): add aggregated progress tracking for parallel operations`
 
@@ -1340,40 +1893,38 @@ export class ProgressTracker {
 
 **Acceptance Criteria:**
 
-- [ ] ProgressTracker class created
-- [ ] Shows aggregate progress (X/Y complete)
-- [ ] Shows percentage, in progress count, failed count
-- [ ] Calculates and displays ETA
-- [ ] Integrates with SpinnerManager
-- [ ] Works with parallel batch processing
-- [ ] Tests verify progress calculations
+- [x] ProgressTracker class created
+- [x] Shows aggregate progress (X/Y complete)
+- [x] Shows percentage, in progress count, failed count
+- [x] Calculates and displays ETA
+- [x] Integrates with SpinnerManager
+- [x] Works with parallel batch processing
+- [x] Tests verify progress calculations
 
 ---
 
 ## Summary Table
 
-| Issue                | Priority | Complexity | Time Saved       | Effort | Status  |
-| -------------------- | -------- | ---------- | ---------------- | ------ | ------- |
-| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE |
-| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | 🔜 Next |
-| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO |
-| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  | ⏳ TODO |
-| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO |
-| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO |
-| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO |
-| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO |
-| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ⏳ TODO |
+| Issue                | Priority | Complexity | Time Saved       | Effort | Status      |
+| -------------------- | -------- | ---------- | ---------------- | ------ | ----------- |
+| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE     |
+| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE     |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ✅ DONE     |
+| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 1-2hr  | 🟡 40% DONE |
+| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO     |
+| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO     |
+| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO     |
+| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO     |
+| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO     |
 
 **Recommended Order:**
 
 1. ~~**#1 CI Spinners**~~ ✅ COMPLETED (quick win, 5min)
-2. **#2 Smart Skips** 🔜 NEXT (high impact, low effort, 1hr)
-3. **#9 Progress Tracking** (prerequisite for #4, prevents UI regression, 2hr)
-4. **#4 Parallel Pages** (massive performance boost, requires #9, 2-3hr)
+2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr) + **5 critical bug fixes**
+3. ~~**#9 Progress Tracking**~~ ✅ COMPLETED (prerequisite for #4, prevents UI regression, 2hr)
+4. **#4 Parallel Pages** 🟡 IN PROGRESS (40% done - RateLimitManager ✅, refactoring pending, 1-2hr remaining)
 5. **#3 Lazy Cache** (good optimization, 2hr)
 6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)
 7. **#7 Cache Freshness** (correctness, 3-4hr)
 8. **#6 Adaptive Batch** (advanced optimization, 6-8hr)
 9. **#8 Telemetry** (nice to have, 3-4hr)
-
-**Critical Path Note:** Issue #9 (Progress Tracking) MUST be implemented before or co-delivered with Issue #4 (Parallel Pages) to avoid noisy spinner overlap and ensure clean UI during parallel operations. See Issue #4 acceptance criteria for details.

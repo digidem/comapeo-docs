@@ -7,6 +7,7 @@
  */
 
 import chalk from "chalk";
+import type { ProgressTracker } from "./progressTracker";
 
 /**
  * Error thrown when an operation times out
@@ -133,6 +134,8 @@ export interface BatchConfig {
   timeoutMs?: number;
   /** Optional operation name for logging */
   operation?: string;
+  /** Optional progress tracker for aggregate progress display */
+  progressTracker?: ProgressTracker;
 }
 
 /**
@@ -183,15 +186,45 @@ export async function processBatch<T, R>(
   }
 
   const results: PromiseSettledResult<R>[] = [];
-  const { maxConcurrent, timeoutMs, operation } = config;
+  const { maxConcurrent, timeoutMs, operation, progressTracker } = config;
 
   for (let i = 0; i < items.length; i += maxConcurrent) {
     const batch = items.slice(i, i + maxConcurrent);
     const batchPromises = batch.map((item, batchIndex) => {
       const itemIndex = i + batchIndex;
 
+      // Notify progress tracker that item is starting
+      if (progressTracker) {
+        progressTracker.startItem();
+      }
+
       try {
         const promise = processor(item, itemIndex);
+
+        // Wrap promise to track completion
+        const trackedPromise = promise
+          .then((result) => {
+            // Notify progress tracker - check result.success if available
+            if (progressTracker) {
+              // If result has a 'success' property, use it to determine status
+              // Otherwise, treat promise fulfillment as success (backward compatible)
+              const isSuccess =
+                typeof result === "object" &&
+                result !== null &&
+                "success" in result
+                  ? result.success === true
+                  : true;
+              progressTracker.completeItem(isSuccess);
+            }
+            return result;
+          })
+          .catch((error) => {
+            // Notify progress tracker of failure
+            if (progressTracker) {
+              progressTracker.completeItem(false);
+            }
+            throw error;
+          });
 
         // Apply timeout if configured
         if (timeoutMs) {
@@ -200,12 +233,28 @@ export async function processBatch<T, R>(
             ? `${operation} (item ${itemIndex + 1}/${items.length})`
             : `batch operation (item ${itemIndex + 1}/${items.length})`;
 
-          return withTimeout(promise, timeoutMs, operationDescription);
+          return withTimeout(
+            trackedPromise,
+            timeoutMs,
+            operationDescription
+          ).catch((error) => {
+            // CRITICAL: If timeout fires before trackedPromise settles,
+            // the .then/.catch handlers above won't run yet.
+            // We must notify progress tracker here to prevent hanging.
+            if (error instanceof TimeoutError && progressTracker) {
+              progressTracker.completeItem(false);
+            }
+            throw error;
+          });
         }
 
-        return promise;
+        return trackedPromise;
       } catch (error) {
         // Handle synchronous errors from processor
+        // Notify progress tracker of failure
+        if (progressTracker) {
+          progressTracker.completeItem(false);
+        }
         return Promise.reject(error);
       }
     });

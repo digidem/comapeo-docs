@@ -38,6 +38,45 @@ import {
   writeMarkdownFile,
   writePlaceholderFile,
 } from "./contentWriter";
+import { processBatch } from "./timeoutUtils";
+import { ProgressTracker } from "./progressTracker";
+
+/**
+ * Context captured for each page task during sequential pre-processing.
+ * Contains all data needed to process a page independently.
+ */
+interface PageTask {
+  pageByLang: any;
+  lang: string;
+  page: any;
+  pageTitle: string;
+  filename: string;
+  safeFilename: string;
+  filePath: string;
+  relativePath: string;
+  frontmatter: string;
+  customProps: Record<string, unknown>;
+  pendingHeading: string | undefined;
+  pageGroupIndex: number;
+  pageProcessingIndex: number;
+  totalPages: number;
+  PATH: string;
+  // Shared caches and counters (passed by reference)
+  blocksMap: Map<string, { key: string; data: any[] }>;
+  markdownMap: Map<string, { key: string; data: any }>;
+  blockPrefetchCache: any;
+  markdownPrefetchCache: any;
+  inFlightBlockFetches: Map<string, Promise<any[]>>;
+  inFlightMarkdownFetches: Map<string, Promise<any>>;
+  blockFetchCount: { value: number };
+  blockCacheHits: { value: number };
+  markdownFetchCount: { value: number };
+  markdownCacheHits: { value: number };
+  // Current section folder for this page (captured at task creation time)
+  currentSectionFolderForLang: string | undefined;
+  // Callback for progress
+  progressCallback: (progress: { current: number; total: number }) => void;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,6 +124,219 @@ export function __resetPrefetchCaches(): void {
 }
 
 // setTranslationString moved to translationManager.ts
+
+/**
+ * Process a single page task. This function is designed to be called in parallel.
+ * All dependencies are passed in via the task object to avoid shared state issues.
+ */
+async function processSinglePage(
+  task: PageTask
+): Promise<{ success: boolean; totalSaved: number; emojiCount: number }> {
+  const {
+    lang,
+    page,
+    pageTitle,
+    safeFilename,
+    filePath,
+    frontmatter,
+    customProps,
+    pendingHeading,
+    pageProcessingIndex,
+    totalPages,
+    blocksMap,
+    markdownMap,
+    inFlightBlockFetches,
+    inFlightMarkdownFetches,
+    blockFetchCount,
+    blockCacheHits,
+    markdownFetchCount,
+    markdownCacheHits,
+    currentSectionFolderForLang,
+  } = task;
+
+  let totalSaved = 0;
+  let emojiCount = 0;
+
+  console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
+  const pageSpinner = SpinnerManager.create(
+    `Processing page ${pageProcessingIndex}/${totalPages}`,
+    120000
+  ); // 2 minute timeout per page
+
+  try {
+    // Fetch raw block data first for emoji and callout processing
+    let rawBlocks: any[] = [];
+    let emojiMap = new Map<string, string>();
+    try {
+      const { data: blockData, source: blockSource } = await loadBlocksForPage(
+        page,
+        pageProcessingIndex - 1,
+        totalPages,
+        pageTitle,
+        blocksMap,
+        blockPrefetchCache,
+        inFlightBlockFetches,
+        blockCacheHits,
+        blockFetchCount
+      );
+      rawBlocks = blockData;
+      console.log(
+        chalk.blue(
+          `  ↳ Loaded ${rawBlocks.length} raw blocks for processing (${blockSource})`
+        )
+      );
+
+      // Process custom emojis from raw blocks before markdown conversion
+      const blockEmojiResult = await EmojiProcessor.processBlockEmojis(
+        page.id,
+        rawBlocks
+      );
+      if (blockEmojiResult?.emojiMap instanceof Map) {
+        emojiMap = blockEmojiResult.emojiMap;
+        totalSaved += blockEmojiResult.totalSaved ?? 0;
+        emojiCount += blockEmojiResult.emojiMap.size;
+      }
+    } catch (error) {
+      const msg =
+        error && typeof error === "object" && "message" in error
+          ? (error as any).message
+          : String(error);
+      console.warn(
+        chalk.yellow(`  ⚠️  Failed to fetch raw blocks for processing: ${msg}`)
+      );
+    }
+
+    // Load markdown lazily using the same caching mechanism
+    const { data: markdownData, source: markdownSource } =
+      await loadMarkdownForPage(
+        page,
+        pageProcessingIndex - 1,
+        totalPages,
+        pageTitle,
+        markdownMap,
+        markdownPrefetchCache,
+        inFlightMarkdownFetches,
+        markdownCacheHits,
+        markdownFetchCount
+      );
+    const markdown = markdownData;
+    if (markdownSource === "fetched") {
+      console.log(chalk.blue(`  ↳ Markdown generated for page`));
+    } else if (markdownSource === "cache") {
+      console.log(chalk.blue(`  ↳ Markdown reused from cache`));
+    }
+    const markdownString = n2m.toMarkdownString(markdown);
+
+    if (markdownString?.parent) {
+      // Apply custom emoji mappings to the markdown content
+      if (emojiMap.size > 0) {
+        markdownString.parent = EmojiProcessor.applyEmojiMappings(
+          markdownString.parent,
+          emojiMap
+        );
+        console.log(
+          chalk.green(
+            `  ↳ Applied ${emojiMap.size} custom emoji mappings to markdown`
+          )
+        );
+      }
+
+      // Process any remaining emoji URLs in the markdown (fallback)
+      // Only run fallback if no emoji mappings were applied to avoid overwriting processed content
+      if (emojiMap.size === 0) {
+        const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(
+          page.id,
+          markdownString.parent
+        );
+        if (fallbackEmojiResult) {
+          markdownString.parent = fallbackEmojiResult.content;
+          totalSaved += fallbackEmojiResult.totalSaved ?? 0;
+          emojiCount += fallbackEmojiResult.processedCount ?? 0;
+        }
+      }
+
+      // Process callouts in the markdown to convert them to Docusaurus admonitions
+      if (rawBlocks && rawBlocks.length > 0) {
+        markdownString.parent = processCalloutsInMarkdown(
+          markdownString.parent,
+          rawBlocks
+        );
+        console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
+      }
+
+      // Enhanced image processing with comprehensive fallback handling
+      const imageResult = await processAndReplaceImages(
+        markdownString.parent,
+        safeFilename
+      );
+      markdownString.parent = imageResult.markdown;
+      totalSaved += imageResult.stats.totalSaved;
+
+      // Sanitize content to fix malformed HTML/JSX tags
+      markdownString.parent = sanitizeMarkdownContent(markdownString.parent);
+
+      markdownString.parent = ensureBlankLineAfterStandaloneBold(
+        markdownString.parent
+      );
+
+      // Remove duplicate title heading if it exists
+      const contentBody = removeDuplicateTitle(
+        markdownString.parent,
+        pageTitle
+      );
+
+      // Create a mock currentSectionFolder for writeMarkdownFile
+      const sectionFolderForWrite: Record<string, string | undefined> = {};
+      sectionFolderForWrite[lang] = currentSectionFolderForLang;
+
+      // Write markdown file with frontmatter
+      writeMarkdownFile(
+        filePath,
+        frontmatter,
+        contentBody,
+        pageTitle,
+        pageProcessingIndex - 1, // processedPages
+        totalPages,
+        pageSpinner,
+        safeFilename,
+        customProps,
+        sectionFolderForWrite,
+        lang
+      );
+    } else {
+      // Write placeholder file when no content exists
+      writePlaceholderFile(
+        filePath,
+        frontmatter,
+        page.id,
+        pageProcessingIndex - 1, // processedPages
+        totalPages,
+        pageSpinner
+      );
+    }
+
+    pageSpinner.succeed(
+      chalk.green(
+        `Processed page ${pageProcessingIndex}/${totalPages}: ${pageTitle}`
+      )
+    );
+
+    return { success: true, totalSaved, emojiCount };
+  } catch (pageError) {
+    console.error(
+      chalk.red(`Failed to process page ${pageProcessingIndex}: ${page.id}`),
+      pageError
+    );
+    pageSpinner.fail(
+      chalk.red(
+        `Failed to process page ${pageProcessingIndex}/${totalPages}: ${page.id}`
+      )
+    );
+    return { success: false, totalSaved, emojiCount };
+  } finally {
+    SpinnerManager.remove(pageSpinner);
+  }
+}
 
 export async function generateBlocks(pages, progressCallback) {
   // pages are already sorted by Order property in fetchNotion.ts
@@ -149,6 +401,11 @@ export async function generateBlocks(pages, progressCallback) {
     const markdownFetchCount = { value: 0 };
     const markdownCacheHits = { value: 0 };
 
+    // Collect page tasks for parallel processing
+    const pageTasks: PageTask[] = [];
+
+    // Phase 1: Process Toggle/Heading sequentially (they modify shared state)
+    // and collect Page tasks with their captured context
     for (let i = 0; i < pagesByLang.length; i++) {
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
@@ -158,7 +415,6 @@ export async function generateBlocks(pages, progressCallback) {
         typeof sectionTypeRaw === "string"
           ? sectionTypeRaw.trim()
           : String(sectionTypeRaw ?? "").trim();
-      const sectionType = sectionTypeString;
       const normalizedSectionType = sectionTypeString.toLowerCase();
       const filename = title
         .toLowerCase()
@@ -181,66 +437,18 @@ export async function generateBlocks(pages, progressCallback) {
           ? `${currentSectionFolder[lang]}/${fileName}`
           : fileName;
 
-        let tags = ["comapeo"];
-        if (page.properties["Tags"] && page.properties["Tags"].multi_select) {
-          tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
+        // Set translation string for non-English pages
+        if (lang !== "en") {
+          setTranslationString(lang, pageByLang.mainTitle, pageTitle);
         }
 
-        let keywords = ["docs", "comapeo"];
-        if (
-          page.properties.Keywords?.multi_select &&
-          page.properties.Keywords.multi_select.length > 0
-        ) {
-          keywords = page.properties.Keywords.multi_select.map(
-            (keyword) => keyword.name
+        // TOGGLE - process sequentially (modifies currentSectionFolder)
+        if (normalizedSectionType === "toggle") {
+          const pageSpinner = SpinnerManager.create(
+            `Processing toggle section: ${pageTitle}`,
+            30000
           );
-        }
-
-        let sidebarPosition = i + 1;
-        if (page.properties["Order"] && page.properties["Order"].number) {
-          sidebarPosition = page.properties["Order"].number;
-        }
-
-        const customProps: Record<string, unknown> = {};
-        if (
-          page.properties["Icon"] &&
-          page.properties["Icon"].rich_text &&
-          page.properties["Icon"].rich_text.length > 0
-        ) {
-          customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
-        }
-
-        let pendingHeading: string | undefined;
-        if (normalizedSectionType === "page") {
-          pendingHeading = currentHeading.get(lang);
-          if (pendingHeading) {
-            customProps.title = pendingHeading;
-          }
-        }
-
-        const frontmatter = buildFrontmatter(
-          pageTitle,
-          sidebarPosition,
-          tags,
-          keywords,
-          customProps,
-          relativePath,
-          safeFilename,
-          page
-        );
-
-        console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
-        const pageSpinner = SpinnerManager.create(
-          `Processing page ${processedPages + 1}/${totalPages}`,
-          120000
-        ); // 2 minute timeout per page
-
-        try {
-          if (lang !== "en")
-            setTranslationString(lang, pageByLang.mainTitle, pageTitle);
-
-          // TOGGLE
-          if (normalizedSectionType === "toggle") {
+          try {
             const sectionFolder = processToggleSection(
               page,
               filename,
@@ -254,198 +462,172 @@ export async function generateBlocks(pages, progressCallback) {
             );
             currentSectionFolder[lang] = sectionFolder;
             sectionCount++;
-            // HEADING (Title)
-          } else if (
-            normalizedSectionType === "title" ||
-            normalizedSectionType === "heading"
-          ) {
+            processedPages++;
+            progressCallback({ current: processedPages, total: totalPages });
+          } finally {
+            SpinnerManager.remove(pageSpinner);
+          }
+          // HEADING (Title) - process sequentially (modifies currentHeading)
+        } else if (
+          normalizedSectionType === "title" ||
+          normalizedSectionType === "heading"
+        ) {
+          const pageSpinner = SpinnerManager.create(
+            `Processing heading: ${pageTitle}`,
+            30000
+          );
+          try {
             processHeadingSection(pageTitle, lang, currentHeading, pageSpinner);
-            titleSectionCount++; // Increment title section counter
+            titleSectionCount++;
             currentSectionFolder = {};
+            processedPages++;
+            progressCallback({ current: processedPages, total: totalPages });
+          } finally {
+            SpinnerManager.remove(pageSpinner);
+          }
+          // PAGE - collect task for parallel processing
+        } else if (normalizedSectionType === "page") {
+          pageProcessingIndex += 1;
 
-            // PAGE
-          } else if (normalizedSectionType === "page") {
-            pageProcessingIndex += 1;
-
-            // Fetch raw block data first for emoji and callout processing
-            let rawBlocks: any[] = [];
-            let emojiMap = new Map<string, string>();
-            try {
-              const { data: blockData, source: blockSource } =
-                await loadBlocksForPage(
-                  page,
-                  pageProcessingIndex - 1,
-                  totalPages,
-                  pageTitle,
-                  blocksMap,
-                  blockPrefetchCache,
-                  inFlightBlockFetches,
-                  blockCacheHits,
-                  blockFetchCount
-                );
-              rawBlocks = blockData;
-              console.log(
-                chalk.blue(
-                  `  ↳ Loaded ${rawBlocks.length} raw blocks for processing (${blockSource})`
-                )
-              );
-
-              // Process custom emojis from raw blocks before markdown conversion
-              const blockEmojiResult = await EmojiProcessor.processBlockEmojis(
-                page.id,
-                rawBlocks
-              );
-              if (blockEmojiResult?.emojiMap instanceof Map) {
-                emojiMap = blockEmojiResult.emojiMap;
-                totalSaved += blockEmojiResult.totalSaved ?? 0;
-                emojiCount += blockEmojiResult.emojiMap.size;
-              }
-            } catch (error) {
-              const msg =
-                error && typeof error === "object" && "message" in error
-                  ? (error as any).message
-                  : String(error);
-              console.warn(
-                chalk.yellow(
-                  `  ⚠️  Failed to fetch raw blocks for processing: ${msg}`
-                )
-              );
-            }
-
-            // Load markdown lazily using the same caching mechanism
-            const { data: markdownData, source: markdownSource } =
-              await loadMarkdownForPage(
-                page,
-                pageProcessingIndex - 1,
-                totalPages,
-                pageTitle,
-                markdownMap,
-                markdownPrefetchCache,
-                inFlightMarkdownFetches,
-                markdownCacheHits,
-                markdownFetchCount
-              );
-            const markdown = markdownData;
-            if (markdownSource === "fetched") {
-              console.log(chalk.blue(`  ↳ Markdown generated for page`));
-            } else if (markdownSource === "cache") {
-              console.log(chalk.blue(`  ↳ Markdown reused from cache`));
-            }
-            const markdownString = n2m.toMarkdownString(markdown);
-
-            if (markdownString?.parent) {
-              // Apply custom emoji mappings to the markdown content
-              if (emojiMap.size > 0) {
-                markdownString.parent = EmojiProcessor.applyEmojiMappings(
-                  markdownString.parent,
-                  emojiMap
-                );
-                console.log(
-                  chalk.green(
-                    `  ↳ Applied ${emojiMap.size} custom emoji mappings to markdown`
-                  )
-                );
-              }
-
-              // Process any remaining emoji URLs in the markdown (fallback)
-              // Only run fallback if no emoji mappings were applied to avoid overwriting processed content
-              if (emojiMap.size === 0) {
-                const fallbackEmojiResult =
-                  await EmojiProcessor.processPageEmojis(
-                    page.id,
-                    markdownString.parent
-                  );
-                if (fallbackEmojiResult) {
-                  markdownString.parent = fallbackEmojiResult.content;
-                  totalSaved += fallbackEmojiResult.totalSaved ?? 0;
-                  emojiCount += fallbackEmojiResult.processedCount ?? 0;
-                }
-              }
-
-              // Process callouts in the markdown to convert them to Docusaurus admonitions
-              if (rawBlocks && rawBlocks.length > 0) {
-                markdownString.parent = processCalloutsInMarkdown(
-                  markdownString.parent,
-                  rawBlocks
-                );
-                console.log(
-                  chalk.blue(`  ↳ Processed callouts in markdown content`)
-                );
-              }
-
-              // Enhanced image processing with comprehensive fallback handling
-              const imageResult = await processAndReplaceImages(
-                markdownString.parent,
-                safeFilename
-              );
-              markdownString.parent = imageResult.markdown;
-              totalSaved += imageResult.stats.totalSaved;
-
-              // Sanitize content to fix malformed HTML/JSX tags
-              markdownString.parent = sanitizeMarkdownContent(
-                markdownString.parent
-              );
-
-              markdownString.parent = ensureBlankLineAfterStandaloneBold(
-                markdownString.parent
-              );
-
-              // Remove duplicate title heading if it exists
-              const contentBody = removeDuplicateTitle(
-                markdownString.parent,
-                pageTitle
-              );
-
-              // Write markdown file with frontmatter
-              writeMarkdownFile(
-                filePath,
-                frontmatter,
-                contentBody,
-                pageTitle,
-                processedPages,
-                totalPages,
-                pageSpinner,
-                safeFilename,
-                customProps,
-                currentSectionFolder,
-                lang
-              );
-            } else {
-              // Write placeholder file when no content exists
-              writePlaceholderFile(
-                filePath,
-                frontmatter,
-                page.id,
-                processedPages,
-                totalPages,
-                pageSpinner
-              );
-            }
-            if (pendingHeading) {
-              currentHeading.set(lang, null);
-            }
+          let tags = ["comapeo"];
+          if (page.properties["Tags"] && page.properties["Tags"].multi_select) {
+            tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
           }
 
-          processedPages++;
-          progressCallback({ current: processedPages, total: totalPages });
-        } catch (pageError) {
-          console.error(
-            chalk.red(
-              `Failed to process page ${processedPages + 1}: ${page.id}`
-            ),
-            pageError
+          let keywords = ["docs", "comapeo"];
+          if (
+            page.properties.Keywords?.multi_select &&
+            page.properties.Keywords.multi_select.length > 0
+          ) {
+            keywords = page.properties.Keywords.multi_select.map(
+              (keyword) => keyword.name
+            );
+          }
+
+          let sidebarPosition = i + 1;
+          if (page.properties["Order"] && page.properties["Order"].number) {
+            sidebarPosition = page.properties["Order"].number;
+          }
+
+          const customProps: Record<string, unknown> = {};
+          if (
+            page.properties["Icon"] &&
+            page.properties["Icon"].rich_text &&
+            page.properties["Icon"].rich_text.length > 0
+          ) {
+            customProps.icon = page.properties["Icon"].rich_text[0].plain_text;
+          }
+
+          const pendingHeading = currentHeading.get(lang);
+          if (pendingHeading) {
+            customProps.title = pendingHeading;
+          }
+
+          const frontmatter = buildFrontmatter(
+            pageTitle,
+            sidebarPosition,
+            tags,
+            keywords,
+            customProps,
+            relativePath,
+            safeFilename,
+            page
           );
-          pageSpinner.fail(
-            chalk.red(
-              `Failed to process page ${processedPages + 1}/${totalPages}: ${page.id}`
-            )
-          );
-          processedPages++; // Still increment to maintain progress tracking
-          progressCallback({ current: processedPages, total: totalPages });
-          // Continue with next page instead of failing completely
-        } finally {
-          SpinnerManager.remove(pageSpinner);
+
+          // Capture current context for this page task
+          pageTasks.push({
+            pageByLang,
+            lang,
+            page,
+            pageTitle,
+            filename,
+            safeFilename,
+            filePath,
+            relativePath,
+            frontmatter,
+            customProps,
+            pendingHeading,
+            pageGroupIndex: i,
+            pageProcessingIndex,
+            totalPages,
+            PATH,
+            blocksMap,
+            markdownMap,
+            blockPrefetchCache,
+            markdownPrefetchCache,
+            inFlightBlockFetches,
+            inFlightMarkdownFetches,
+            blockFetchCount,
+            blockCacheHits,
+            markdownFetchCount,
+            markdownCacheHits,
+            currentSectionFolderForLang: currentSectionFolder[lang],
+            progressCallback,
+          });
+
+          // Clear pending heading after capturing it
+          if (pendingHeading) {
+            currentHeading.set(lang, null);
+          }
         }
+      }
+    }
+
+    // Phase 2: Process all Page tasks in parallel
+    if (pageTasks.length > 0) {
+      console.log(
+        chalk.blue(
+          `\n🚀 Processing ${pageTasks.length} pages in parallel (max 5 concurrent)...`
+        )
+      );
+
+      // Create progress tracker for parallel page processing
+      const progressTracker = new ProgressTracker({
+        total: pageTasks.length,
+        operation: "pages",
+        spinnerTimeoutMs: 300000, // 5 minutes for all pages
+      });
+
+      const pageResults = await processBatch(
+        pageTasks,
+        async (task) => processSinglePage(task),
+        {
+          maxConcurrent: 5,
+          timeoutMs: 180000, // 3 minutes per page
+          operation: "page processing",
+          progressTracker,
+        }
+      );
+
+      // Aggregate results from parallel processing
+      let failedCount = 0;
+      for (const result of pageResults) {
+        if (result.status === "fulfilled") {
+          totalSaved += result.value.totalSaved;
+          emojiCount += result.value.emojiCount;
+          if (!result.value.success) {
+            failedCount++;
+          }
+        } else {
+          failedCount++;
+          console.error(chalk.red(`Page processing failed: ${result.reason}`));
+        }
+        processedPages++;
+        progressCallback({ current: processedPages, total: totalPages });
+      }
+
+      if (failedCount > 0) {
+        console.warn(
+          chalk.yellow(
+            `\n⚠️  ${failedCount}/${pageTasks.length} pages failed to process`
+          )
+        );
+      } else {
+        console.log(
+          chalk.green(
+            `\n✅ All ${pageTasks.length} pages processed successfully`
+          )
+        );
       }
     }
 

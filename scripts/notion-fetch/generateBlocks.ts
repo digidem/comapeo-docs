@@ -322,8 +322,15 @@ async function processSinglePage(
         sectionFolderForWrite,
         lang
       );
+
+      pageSpinner.succeed(
+        chalk.green(
+          `Processed page ${pageProcessingIndex}/${totalPages}: ${pageTitle}`
+        )
+      );
     } else {
       // Write placeholder file when no content exists
+      // Note: writePlaceholderFile sets spinner to warn state, don't overwrite it
       writePlaceholderFile(
         filePath,
         frontmatter,
@@ -333,12 +340,6 @@ async function processSinglePage(
         pageSpinner
       );
     }
-
-    pageSpinner.succeed(
-      chalk.green(
-        `Processed page ${pageProcessingIndex}/${totalPages}: ${pageTitle}`
-      )
-    );
 
     return {
       success: true,

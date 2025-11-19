@@ -69,8 +69,6 @@ interface PageTask {
   inFlightMarkdownFetches: Map<string, Promise<any>>;
   // Current section folder for this page (captured at task creation time)
   currentSectionFolderForLang: string | undefined;
-  // Callback for progress
-  progressCallback: (progress: { current: number; total: number }) => void;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -596,7 +594,6 @@ export async function generateBlocks(pages, progressCallback) {
             inFlightBlockFetches,
             inFlightMarkdownFetches,
             currentSectionFolderForLang: currentSectionFolder[lang],
-            progressCallback,
           });
 
           // Clear pending heading after capturing it

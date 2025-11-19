@@ -610,15 +610,11 @@ describe("timeoutUtils", () => {
     });
 
     it("should not double-notify progressTracker if promise settles after timeout", async () => {
-      // Create a more realistic mock that simulates ProgressTracker's isFinished guard
-      let isFinished = false;
+      // processBatch now has a per-item guard (hasNotifiedTracker) that prevents
+      // double-counting when a timeout fires but the underlying promise settles later
       const mockTracker = {
         startItem: vi.fn(),
-        completeItem: vi.fn((success: boolean) => {
-          if (isFinished) return; // Simulate ProgressTracker's guard
-          // Simulate finish() being called when all items complete
-          isFinished = true;
-        }),
+        completeItem: vi.fn(),
       };
 
       let resolveSlowPromise: ((value: any) => void) | null = null;
@@ -643,16 +639,17 @@ describe("timeoutUtils", () => {
       expect(mockTracker.completeItem).toHaveBeenCalledTimes(1);
       expect(mockTracker.completeItem).toHaveBeenCalledWith(false);
 
-      // Now resolve the promise late
+      // Now resolve the promise late (simulates slow task completing after timeout)
       if (resolveSlowPromise) {
         resolveSlowPromise({ success: true });
       }
       await vi.runAllTimersAsync();
 
-      // completeItem called twice, but second call is ignored due to isFinished guard
-      expect(mockTracker.completeItem).toHaveBeenCalledTimes(2);
-      // This demonstrates that without the guard, we'd have double notification
-      // The real ProgressTracker prevents this with its isFinished check
+      // With the per-item hasNotifiedTracker guard, completeItem is only called once
+      // The second call is prevented because hasNotifiedTracker is already true
+      expect(mockTracker.completeItem).toHaveBeenCalledTimes(1);
+      // This ensures accurate failed counts and prevents the aggregate spinner
+      // from declaring completion too early
     });
 
     it("should handle mixed timeouts and successes with progressTracker", async () => {

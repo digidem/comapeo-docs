@@ -193,6 +193,10 @@ export async function processBatch<T, R>(
     const batchPromises = batch.map((item, batchIndex) => {
       const itemIndex = i + batchIndex;
 
+      // Per-item guard to prevent double-counting when timeout fires
+      // but underlying promise eventually settles
+      let hasNotifiedTracker = false;
+
       // Notify progress tracker that item is starting
       if (progressTracker) {
         progressTracker.startItem();
@@ -205,7 +209,9 @@ export async function processBatch<T, R>(
         const trackedPromise = promise
           .then((result) => {
             // Notify progress tracker - check result.success if available
-            if (progressTracker) {
+            // Skip if already notified (e.g., by timeout handler)
+            if (progressTracker && !hasNotifiedTracker) {
+              hasNotifiedTracker = true;
               // If result has a 'success' property, use it to determine status
               // Otherwise, treat promise fulfillment as success (backward compatible)
               const isSuccess =
@@ -220,7 +226,9 @@ export async function processBatch<T, R>(
           })
           .catch((error) => {
             // Notify progress tracker of failure
-            if (progressTracker) {
+            // Skip if already notified (e.g., by timeout handler)
+            if (progressTracker && !hasNotifiedTracker) {
+              hasNotifiedTracker = true;
               progressTracker.completeItem(false);
             }
             throw error;
@@ -241,7 +249,14 @@ export async function processBatch<T, R>(
             // CRITICAL: If timeout fires before trackedPromise settles,
             // the .then/.catch handlers above won't run yet.
             // We must notify progress tracker here to prevent hanging.
-            if (error instanceof TimeoutError && progressTracker) {
+            // The per-item guard ensures we only count once even if
+            // the underlying promise settles later.
+            if (
+              error instanceof TimeoutError &&
+              progressTracker &&
+              !hasNotifiedTracker
+            ) {
+              hasNotifiedTracker = true;
               progressTracker.completeItem(false);
             }
             throw error;
@@ -252,7 +267,9 @@ export async function processBatch<T, R>(
       } catch (error) {
         // Handle synchronous errors from processor
         // Notify progress tracker of failure
-        if (progressTracker) {
+        // Skip if already notified
+        if (progressTracker && !hasNotifiedTracker) {
+          hasNotifiedTracker = true;
           progressTracker.completeItem(false);
         }
         return Promise.reject(error);

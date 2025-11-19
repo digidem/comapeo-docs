@@ -13,7 +13,7 @@ This document contains detailed issue descriptions for improving the Notion fetc
 **This PR Contains:**
 
 - ✅ RateLimitManager utility (ready for use)
-- ✅ 5 critical bug fixes (metrics, progress tracking, timeouts)
+- ✅ 6 critical bug fixes (metrics, progress tracking, timeouts, double-counting)
 - ✅ Comprehensive documentation for next developer
 
 **Next PR Will Contain:**
@@ -376,6 +376,70 @@ return withTimeout(trackedPromise, timeoutMs, operationDescription).catch(
 ```
 
 **Lesson:** When wrapping promises with timeout, ensure progress tracking happens in BOTH paths (normal completion AND timeout). Timeouts bypass inner handlers.
+
+---
+
+### Bug Fix #6: Double-Counting Timed-Out Tasks in ProgressTracker ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** (pending)
+
+**Problem:**
+
+- When a task times out, `completeItem(false)` is called immediately in the timeout handler
+- The underlying promise continues running and eventually settles
+- When it settles, `.then/.catch` handlers call `completeItem()` again
+- **Double-counted:** Single timed-out task counted as 2 failures
+- Aggregate spinner declares completion while other items still processing
+- Failed counts are overstated
+
+**Root Cause:**
+
+```typescript
+const trackedPromise = promise
+  .then(() => progressTracker.completeItem(true))   // Called when promise settles
+  .catch(() => progressTracker.completeItem(false)); // Called when promise settles
+
+return withTimeout(trackedPromise, timeoutMs, ...).catch((error) => {
+  if (error instanceof TimeoutError) {
+    progressTracker.completeItem(false);  // ❌ Also called on timeout!
+  }
+  // Both paths can fire for the same item
+});
+```
+
+**Fix Applied:**
+
+```typescript
+// Per-item guard to prevent double-counting
+let hasNotifiedTracker = false;
+
+const trackedPromise = promise
+  .then((result) => {
+    if (progressTracker && !hasNotifiedTracker) {
+      hasNotifiedTracker = true;  // ✅ Guard prevents second call
+      progressTracker.completeItem(isSuccess);
+    }
+    return result;
+  })
+  .catch((error) => {
+    if (progressTracker && !hasNotifiedTracker) {
+      hasNotifiedTracker = true;  // ✅ Guard prevents second call
+      progressTracker.completeItem(false);
+    }
+    throw error;
+  });
+
+return withTimeout(trackedPromise, timeoutMs, ...).catch((error) => {
+  if (error instanceof TimeoutError && progressTracker && !hasNotifiedTracker) {
+    hasNotifiedTracker = true;  // ✅ Guard prevents double-counting
+    progressTracker.completeItem(false);
+  }
+  throw error;
+});
+```
+
+**Lesson:** When multiple code paths can notify a tracker for the same item (timeout + promise settlement), use a per-item guard to ensure exactly one notification. This is especially important for promises that continue running after timeout since JavaScript doesn't support native promise cancellation.
 
 ---
 

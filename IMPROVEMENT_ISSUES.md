@@ -8,9 +8,19 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 **Current Status:** 3/9 issues completed + **Issue #4 in progress** (40% complete)
 
-**⚠️ IMPORTANT:** Issue #4 (Parallel Pages) has RateLimitManager complete but page processing refactoring pending. See [Issue #4 Status](#issue-4-status) below for details.
+**⚠️ IMPORTANT:** This PR delivers foundational work for Issue #4 (RateLimitManager, bug fixes, documentation). The parallel processing refactoring will be implemented in a **separate PR** to keep changes focused and reviewable.
 
-**Next Recommended Task:** Complete Issue #4 - Parallel page processing implementation (Est: 1-2hr remaining)
+**This PR Contains:**
+
+- ✅ RateLimitManager utility (ready for use)
+- ✅ 5 critical bug fixes (metrics, progress tracking, timeouts)
+- ✅ Comprehensive documentation for next developer
+
+**Next PR Will Contain:**
+
+- ⏳ Parallel page processing implementation (Est: 1-2hr)
+- ⏳ Integration of RateLimitManager with generateBlocks.ts
+- ⏳ Final testing and benchmarking
 
 **Quick Links:**
 
@@ -28,9 +38,12 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ### Issue #4 Status
 
-**Status:** 🟡 IN PROGRESS (40% complete - RateLimitManager done, parallel processing pending)
+**Status:** 🟡 IN PROGRESS (40% complete - RateLimitManager done, parallel processing will continue in separate PR)
+
+**⚠️ IMPORTANT:** The parallel processing refactoring of generateBlocks.ts will be implemented in a **separate PR** to keep changes focused and reviewable. This PR contains the foundational work (RateLimitManager, bug fixes, documentation).
 
 **What's Complete:**
+
 - ✅ RateLimitManager utility (118 lines, 25 tests passing)
   - Exponential backoff (1s → 2s → 4s → ... → 60s max)
   - Retry-After header support
@@ -38,8 +51,10 @@ This document contains detailed issue descriptions for improving the Notion fetc
   - Async waitForBackoff() helper
 - ✅ Critical timeout bug fix (prevents hanging spinners)
 - ✅ All prerequisites (ProgressTracker from Issue #9)
+- ✅ Comprehensive documentation for next developer
 
-**What's Remaining:**
+**What's Remaining (Next PR):**
+
 1. **Refactor generateBlocks.ts** (~1-2 hours):
    - Extract page processing logic into `processSinglePage()` function
    - Flatten nested page structure into array of page tasks
@@ -53,6 +68,7 @@ This document contains detailed issue descriptions for improving the Notion fetc
    - This is safer and still gives 50-70% speedup
 
 **Files Ready to Use:**
+
 - `scripts/notion-fetch/rateLimitManager.ts` - Ready for import
 - `scripts/notion-fetch/rateLimitManager.test.ts` - 25 tests passing
 - `scripts/notion-fetch/progressTracker.ts` - Ready for use (from Issue #9)
@@ -89,6 +105,7 @@ This document contains detailed issue descriptions for improving the Notion fetc
    }
    ```
 5. **Use processBatch for parallel execution:**
+
    ```typescript
    import { getRateLimitManager } from "./rateLimitManager";
    import { ProgressTracker } from "./progressTracker";
@@ -110,6 +127,7 @@ This document contains detailed issue descriptions for improving the Notion fetc
      }
    );
    ```
+
 6. **Handle rate limiting (optional for now):**
    ```typescript
    // In processSinglePage, catch 429 errors:
@@ -123,12 +141,14 @@ This document contains detailed issue descriptions for improving the Notion fetc
    ```
 
 **Testing Strategy:**
+
 - Run existing tests to ensure no regressions
 - Test with small dataset first (5-10 pages)
 - Verify parallel processing works correctly
 - Check that stats/counts match sequential version
 
 **Gotchas to Watch:**
+
 - ⚠️ Don't parallelize Toggle/Heading - they modify shared state
 - ⚠️ Preserve page order in final output
 - ⚠️ Aggregate stats correctly across parallel operations
@@ -146,12 +166,14 @@ This document contains detailed issue descriptions for improving the Notion fetc
 **Commit:** `013fa52`
 
 **Problem:**
+
 - `processingMetrics.totalProcessed++` was inside retry loop (line 623)
 - Each retry attempt incremented counters again
 - Failed image retried 3x counted as 3 processed images
 - Inflated totals, corrupted percentage calculations
 
 **Root Cause:**
+
 ```typescript
 while (attempt < maxRetries) {
   processingMetrics.totalProcessed++;  // ❌ Wrong! Counts retries
@@ -165,6 +187,7 @@ while (attempt < maxRetries) {
 ```
 
 **Fix Applied:**
+
 ```typescript
 processingMetrics.totalProcessed++;  // ✅ Once before retry loop
 
@@ -192,6 +215,7 @@ if (result.skippedSmallSize) processingMetrics.skippedSmallSize++;
 **Commit:** `66b9286`
 
 **Problem:**
+
 - ProgressTracker created unconditionally even when `validImages.length === 0`
 - Empty array → processBatch never calls `startItem`/`completeItem`
 - Tracker never calls `finish()`
@@ -199,6 +223,7 @@ if (result.skippedSmallSize) processingMetrics.skippedSmallSize++;
 - Process hung for 2.5 minutes after completion
 
 **Root Cause:**
+
 ```typescript
 const progressTracker = new ProgressTracker({
   total: validImages.length,  // Could be 0!
@@ -210,14 +235,16 @@ await processBatch(validImages, ...);  // Empty array → no items → never fin
 ```
 
 **Fix Applied:**
+
 ```typescript
-const progressTracker = validImages.length > 0
-  ? new ProgressTracker({
-      total: validImages.length,
-      operation: "images",
-      spinnerTimeoutMs: 150000,
-    })
-  : undefined;  // Skip creation for empty arrays
+const progressTracker =
+  validImages.length > 0
+    ? new ProgressTracker({
+        total: validImages.length,
+        operation: "images",
+        spinnerTimeoutMs: 150000,
+      })
+    : undefined; // Skip creation for empty arrays
 ```
 
 **Lesson:** Always check array length before creating progress trackers. Empty arrays never trigger item callbacks.
@@ -230,6 +257,7 @@ const progressTracker = validImages.length > 0
 **Commit:** `56c1759`
 
 **Problem:**
+
 - `processingMetrics` is module-level state
 - `logProcessingMetrics()` called at end of each page
 - `resetProcessingMetrics()` existed but never used
@@ -237,6 +265,7 @@ const progressTracker = validImages.length > 0
 - Telemetry unusable for multi-page runs
 
 **Root Cause:**
+
 ```typescript
 // imageProcessing.ts - module level
 const processingMetrics = {
@@ -254,6 +283,7 @@ export async function processAndReplaceImages(...) {
 ```
 
 **Fix Applied:**
+
 ```typescript
 export async function processAndReplaceImages(...) {
   resetProcessingMetrics();  // ✅ Reset at start of each page
@@ -272,12 +302,14 @@ export async function processAndReplaceImages(...) {
 **Commit:** `0b9a180`
 
 **Problem:**
+
 - `processBatch` only checked promise fulfillment/rejection
 - `processImageWithFallbacks` never rejects - returns `{ success: false }` instead
 - All failed images counted as successes
 - Progress showed "100% success" even with 404s, timeouts, crashes
 
 **Root Cause:**
+
 ```typescript
 .then((result) => {
   progressTracker.completeItem(true);  // ❌ Always true for fulfilled promises
@@ -286,6 +318,7 @@ export async function processAndReplaceImages(...) {
 ```
 
 **Fix Applied:**
+
 ```typescript
 .then((result) => {
   // Check result.success property if available
@@ -310,6 +343,7 @@ export async function processAndReplaceImages(...) {
 **Commit:** `c8fbc86`
 
 **Problem:**
+
 - `processBatch` wraps promises: `tracker` → `timeout`
 - Timeout fires → `withTimeout` rejects immediately
 - `trackedPromise` still pending → `.then/.catch` never run
@@ -318,6 +352,7 @@ export async function processAndReplaceImages(...) {
 - **CLI hangs indefinitely**
 
 **Root Cause:**
+
 ```typescript
 const trackedPromise = promise
   .then(() => progressTracker.completeItem(true))
@@ -327,15 +362,17 @@ return withTimeout(trackedPromise, timeoutMs, ...);  // ❌ Timeout bypasses han
 ```
 
 **Fix Applied:**
+
 ```typescript
-return withTimeout(trackedPromise, timeoutMs, operationDescription)
-  .catch((error) => {
+return withTimeout(trackedPromise, timeoutMs, operationDescription).catch(
+  (error) => {
     // ✅ CRITICAL: Notify tracker on timeout
     if (error instanceof TimeoutError && progressTracker) {
       progressTracker.completeItem(false);
     }
     throw error;
-  });
+  }
+);
 ```
 
 **Lesson:** When wrapping promises with timeout, ensure progress tracking happens in BOTH paths (normal completion AND timeout). Timeouts bypass inner handlers.
@@ -468,11 +505,12 @@ let fetchSucceeded = false;
 try {
   // ... fetch operations ...
   fetchSpinner.succeed(chalk.green("Data fetched successfully"));
-  fetchSucceeded = true;  // Mark as succeeded
+  fetchSucceeded = true; // Mark as succeeded
 
   // ... later operations ...
 } catch (error) {
-  if (!fetchSucceeded) {  // Works in CI and non-CI!
+  if (!fetchSucceeded) {
+    // Works in CI and non-CI!
     fetchSpinner.fail(chalk.red("Failed to fetch data"));
   }
   throw error;
@@ -500,7 +538,7 @@ Added `SpinnerManager.remove(spinner)` calls immediately after each spinner comp
 ```typescript
 // Before reassigning spinner variable:
 spinner.succeed(chalk.green("✅ Stage complete"));
-SpinnerManager.remove(spinner);  // Clean up before reassignment
+SpinnerManager.remove(spinner); // Clean up before reassignment
 
 // Now safe to create next spinner:
 spinner = SpinnerManager.create("Next stage...", TIMEOUT);
@@ -644,9 +682,11 @@ Successfully implemented aggregated progress tracking for parallel operations, r
    - Supports manual finish() and fail() for error handling
 
 2. **Progress Display Format**
+
    ```
    ⠋ Processing images: 5/15 complete (33%) | 2 in progress | 1 failed | ETA: 45s
    ```
+
    - Clear aggregate metrics instead of overlapping spinners
    - Real-time ETA based on average time per item
    - Shows in-progress and failed counts
@@ -691,6 +731,7 @@ Successfully implemented aggregated progress tracking for parallel operations, r
 **Example Output:**
 
 Before (noisy overlapping spinners):
+
 ```
 ⠋ Processing image 1 (attempt 1/3)
 ⠋ Processing image 2 (attempt 1/3)
@@ -699,6 +740,7 @@ Before (noisy overlapping spinners):
 ```
 
 After (clean aggregate progress):
+
 ```
 ⠋ Processing images: 12/25 complete (48%) | 3 in progress | 1 failed | ETA: 32s
 ```
@@ -1863,17 +1905,17 @@ export class ProgressTracker {
 
 ## Summary Table
 
-| Issue                | Priority | Complexity | Time Saved       | Effort  | Status       |
-| -------------------- | -------- | ---------- | ---------------- | ------- | ------------ |
-| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min    | ✅ DONE      |
-| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr     | ✅ DONE      |
-| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr     | ✅ DONE      |
-| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 1-2hr   | 🟡 40% DONE  |
-| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr     | ⏳ TODO      |
-| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr   | ⏳ TODO      |
-| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr   | ⏳ TODO      |
-| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr   | ⏳ TODO      |
-| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr   | ⏳ TODO      |
+| Issue                | Priority | Complexity | Time Saved       | Effort | Status      |
+| -------------------- | -------- | ---------- | ---------------- | ------ | ----------- |
+| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE     |
+| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE     |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ✅ DONE     |
+| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 1-2hr  | 🟡 40% DONE |
+| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO     |
+| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO     |
+| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO     |
+| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO     |
+| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO     |
 
 **Recommended Order:**
 

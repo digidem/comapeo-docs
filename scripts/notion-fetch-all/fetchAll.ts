@@ -1,5 +1,6 @@
 import { NOTION_PROPERTIES } from "../constants";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
+import { GenerateBlocksOptions } from "../notion-fetch/generateBlocks";
 import {
   getStatusFromRawPage,
   selectPagesWithPriority,
@@ -32,6 +33,8 @@ export interface FetchAllOptions {
   fetchSpinnerText?: string;
   generateSpinnerText?: string;
   progressLogger?: (progress: { current: number; total: number }) => void;
+  /** Options for incremental sync */
+  generateOptions?: GenerateBlocksOptions;
 }
 
 export interface FetchAllResult {
@@ -62,6 +65,7 @@ export async function fetchAllNotionData(
     fetchSpinnerText,
     generateSpinnerText,
     progressLogger,
+    generateOptions = {},
   } = options;
 
   const filter = buildStatusFilter(includeRemoved);
@@ -97,6 +101,7 @@ export async function fetchAllNotionData(
     },
     onProgress: progressLogger,
     shouldGenerate: exportFiles,
+    generateOptions,
   });
 
   // Apply defensive filters for both removal and explicit status

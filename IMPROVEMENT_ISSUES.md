@@ -6,13 +6,18 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 4/9 issues completed
+**Current Status:** 9/9 issues completed ✅
 
 **This PR Contains:**
 
 - ✅ RateLimitManager utility (ready for use)
 - ✅ 6 critical bug fixes (metrics, progress tracking, timeouts, double-counting)
 - ✅ **Issue #4: Parallel page processing** (complete)
+- ✅ **Issue #3: Lazy cache loading** (complete)
+- ✅ **Issue #5: Error manager** (complete)
+- ✅ **Issue #6: Adaptive batch sizing** (complete)
+- ✅ **Issue #7: Cache freshness tracking** (complete)
+- ✅ **Issue #8: Timeout telemetry** (complete)
 - ✅ Comprehensive documentation for next developer
 
 **Issue #4 Implementation Summary:**
@@ -1984,11 +1989,11 @@ export class ProgressTracker {
 | #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE     |
 | #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ✅ DONE     |
 | #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 1-2hr  | ✅ DONE     |
-| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO     |
-| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO     |
-| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO     |
-| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO     |
-| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO     |
+| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ✅ DONE     |
+| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ✅ DONE     |
+| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ✅ DONE     |
+| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ✅ DONE     |
+| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ✅ DONE     |
 
 **Recommended Order:**
 
@@ -1996,8 +2001,8 @@ export class ProgressTracker {
 2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr) + **6 critical bug fixes**
 3. ~~**#9 Progress Tracking**~~ ✅ COMPLETED (prerequisite for #4, prevents UI regression, 2hr)
 4. ~~**#4 Parallel Pages**~~ ✅ COMPLETED (50-70% speedup, parallel processing with processBatch)
-5. **#3 Lazy Cache** (good optimization, 2hr)
-6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)
-7. **#7 Cache Freshness** (correctness, 3-4hr)
-8. **#6 Adaptive Batch** (advanced optimization, 6-8hr)
-9. **#8 Telemetry** (nice to have, 3-4hr)
+5. ~~**#3 Lazy Cache**~~ ✅ COMPLETED (per-entry file cache, instant startup)
+6. ~~**#5 Error Manager**~~ ✅ COMPLETED (centralized error handling with retry logic)
+7. ~~**#7 Cache Freshness**~~ ✅ COMPLETED (notionLastEdited tracking with TTL fallback)
+8. ~~**#6 Adaptive Batch**~~ ✅ COMPLETED (resource-based concurrency with injectable providers)
+9. ~~**#8 Telemetry**~~ ✅ COMPLETED (opt-in telemetry with percentile calculations)

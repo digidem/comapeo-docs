@@ -110,7 +110,7 @@ const IMAGES_PATH = path.join(__dirname, "../../static/images/");
 /**
  * Performance metrics for image processing skip optimizations
  */
-interface ImageProcessingMetrics {
+export interface ImageProcessingMetrics {
   totalProcessed: number;
   skippedSmallSize: number;
   skippedAlreadyOptimized: number;
@@ -118,16 +118,26 @@ interface ImageProcessingMetrics {
   fullyProcessed: number;
 }
 
-const processingMetrics: ImageProcessingMetrics = {
-  totalProcessed: 0,
-  skippedSmallSize: 0,
-  skippedAlreadyOptimized: 0,
-  skippedResize: 0,
-  fullyProcessed: 0,
-};
+/**
+ * Create a new metrics object for per-call tracking
+ * Use this to avoid race conditions in parallel processing
+ */
+export function createProcessingMetrics(): ImageProcessingMetrics {
+  return {
+    totalProcessed: 0,
+    skippedSmallSize: 0,
+    skippedAlreadyOptimized: 0,
+    skippedResize: 0,
+    fullyProcessed: 0,
+  };
+}
+
+// Legacy shared metrics for backward compatibility
+const processingMetrics: ImageProcessingMetrics = createProcessingMetrics();
 
 /**
  * Get current processing metrics
+ * @deprecated Use createProcessingMetrics() for per-call metrics instead
  */
 export function getProcessingMetrics(): ImageProcessingMetrics {
   return { ...processingMetrics };
@@ -135,6 +145,7 @@ export function getProcessingMetrics(): ImageProcessingMetrics {
 
 /**
  * Reset processing metrics (useful for testing)
+ * @deprecated Use createProcessingMetrics() for per-call metrics instead
  */
 export function resetProcessingMetrics(): void {
   processingMetrics.totalProcessed = 0;
@@ -146,24 +157,26 @@ export function resetProcessingMetrics(): void {
 
 /**
  * Log processing metrics summary
+ * @param metrics - Optional metrics object to log. If not provided, uses legacy shared metrics.
  */
-export function logProcessingMetrics(): void {
-  const total = processingMetrics.totalProcessed;
+export function logProcessingMetrics(
+  metrics: ImageProcessingMetrics = processingMetrics
+): void {
+  const total = metrics.totalProcessed;
   if (total === 0) return;
 
   const skippedTotal =
-    processingMetrics.skippedSmallSize +
-    processingMetrics.skippedAlreadyOptimized;
+    metrics.skippedSmallSize + metrics.skippedAlreadyOptimized;
   const skipRate = ((skippedTotal / total) * 100).toFixed(1);
 
   console.info(
     chalk.blue(
       `\n📊 Image Processing Performance Metrics:\n` +
         `   Total images: ${total}\n` +
-        `   Skipped (small size): ${processingMetrics.skippedSmallSize} (${((processingMetrics.skippedSmallSize / total) * 100).toFixed(1)}%)\n` +
-        `   Skipped (already optimized): ${processingMetrics.skippedAlreadyOptimized} (${((processingMetrics.skippedAlreadyOptimized / total) * 100).toFixed(1)}%)\n` +
-        `   Resize skipped: ${processingMetrics.skippedResize} (${((processingMetrics.skippedResize / total) * 100).toFixed(1)}%)\n` +
-        `   Fully processed: ${processingMetrics.fullyProcessed} (${((processingMetrics.fullyProcessed / total) * 100).toFixed(1)}%)\n` +
+        `   Skipped (small size): ${metrics.skippedSmallSize} (${((metrics.skippedSmallSize / total) * 100).toFixed(1)}%)\n` +
+        `   Skipped (already optimized): ${metrics.skippedAlreadyOptimized} (${((metrics.skippedAlreadyOptimized / total) * 100).toFixed(1)}%)\n` +
+        `   Resize skipped: ${metrics.skippedResize} (${((metrics.skippedResize / total) * 100).toFixed(1)}%)\n` +
+        `   Fully processed: ${metrics.fullyProcessed} (${((metrics.fullyProcessed / total) * 100).toFixed(1)}%)\n` +
         `   Overall skip rate: ${skipRate}%`
     )
   );
@@ -209,7 +222,8 @@ export async function processImageWithFallbacks(
   imageUrl: string,
   blockName: string,
   index: number,
-  originalMarkdown: string
+  originalMarkdown: string,
+  metrics: ImageProcessingMetrics = processingMetrics
 ): Promise<ImageProcessingResult> {
   // Step 1: Validate URL
   const validation = validateAndSanitizeImageUrl(imageUrl);
@@ -231,7 +245,8 @@ export async function processImageWithFallbacks(
     const result = await downloadAndProcessImageWithCache(
       validation.sanitizedUrl!,
       blockName,
-      index
+      index,
+      metrics
     );
     return {
       success: true,
@@ -581,12 +596,14 @@ const imageCache = new ImageCache();
  * @param url - URL of the image to download
  * @param blockName - Name of the block containing the image
  * @param index - Index of the image in the block
+ * @param metrics - Optional metrics object for per-call tracking. If not provided, uses legacy shared metrics.
  * @returns Object with newPath, savedBytes, and fromCache flag
  */
 export async function downloadAndProcessImageWithCache(
   url: string,
   blockName: string,
-  index: number
+  index: number,
+  metrics: ImageProcessingMetrics = processingMetrics
 ): Promise<{ newPath: string; savedBytes: number; fromCache: boolean }> {
   const cachedEntry = imageCache.get(url);
   if (cachedEntry) {
@@ -600,7 +617,7 @@ export async function downloadAndProcessImageWithCache(
     };
   }
 
-  const result = await downloadAndProcessImage(url, blockName, index);
+  const result = await downloadAndProcessImage(url, blockName, index, metrics);
   imageCache.set(url, result.newPath, blockName);
 
   return {
@@ -622,20 +639,22 @@ export async function downloadAndProcessImageWithCache(
  * @param url - URL of the image to download
  * @param blockName - Name of the block containing the image
  * @param index - Index of the image in the block
+ * @param metrics - Optional metrics object for per-call tracking. If not provided, uses legacy shared metrics.
  * @returns Object with newPath and savedBytes
  * @throws Error if all retry attempts fail
  */
 export async function downloadAndProcessImage(
   url: string,
   blockName: string,
-  index: number
+  index: number,
+  metrics: ImageProcessingMetrics = processingMetrics
 ): Promise<{ newPath: string; savedBytes: number }> {
   let attempt = 0;
   let lastError: unknown;
 
   // Track metrics once per URL before retries
   // Increment total here so each URL is only counted once, regardless of retries
-  processingMetrics.totalProcessed++;
+  metrics.totalProcessed++;
 
   // Track the previous attempt's promise and timeout status to prevent race conditions.
   // JavaScript promises are not cancellable - when withTimeout() rejects,
@@ -855,13 +874,13 @@ export async function downloadAndProcessImage(
 
       // Increment metrics only on successful completion (outside retry loop)
       if (result.skippedSmallSize) {
-        processingMetrics.skippedSmallSize++;
+        metrics.skippedSmallSize++;
       } else if (result.skippedAlreadyOptimized) {
-        processingMetrics.skippedAlreadyOptimized++;
+        metrics.skippedAlreadyOptimized++;
       } else if (result.fullyProcessed) {
-        processingMetrics.fullyProcessed++;
+        metrics.fullyProcessed++;
         if (result.skippedResize) {
-          processingMetrics.skippedResize++;
+          metrics.skippedResize++;
         }
       }
 

@@ -43,7 +43,13 @@ vi.mock("./imageProcessing", () => ({
   }),
   logImageFailure: vi.fn(),
   logProcessingMetrics: vi.fn(),
-  resetProcessingMetrics: vi.fn(),
+  createProcessingMetrics: vi.fn(() => ({
+    totalProcessed: 0,
+    skippedSmallSize: 0,
+    skippedAlreadyOptimized: 0,
+    skippedResize: 0,
+    fullyProcessed: 0,
+  })),
 }));
 
 vi.mock("./progressTracker", () => {
@@ -351,21 +357,33 @@ Some text after
       expect(ProgressTracker).not.toHaveBeenCalled();
     });
 
-    it("should reset processing metrics at the start of each call", async () => {
-      const { resetProcessingMetrics } = await import("./imageProcessing");
+    it("should create separate metrics for each call to avoid race conditions", async () => {
+      const { createProcessingMetrics } = await import("./imageProcessing");
       vi.clearAllMocks();
 
       // First call
       const markdown1 = "![img](https://example.com/1.png)";
       await processAndReplaceImages(markdown1, "page-1");
 
-      expect(resetProcessingMetrics).toHaveBeenCalledTimes(1);
+      expect(createProcessingMetrics).toHaveBeenCalledTimes(1);
 
-      // Second call should reset metrics again
+      // Second call should create new metrics object
       const markdown2 = "![img](https://example.com/2.png)";
       await processAndReplaceImages(markdown2, "page-2");
 
-      expect(resetProcessingMetrics).toHaveBeenCalledTimes(2);
+      expect(createProcessingMetrics).toHaveBeenCalledTimes(2);
+    });
+
+    it("should return metrics in the result", async () => {
+      const markdown = "![img](https://example.com/test.png)";
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      expect(result.metrics).toBeDefined();
+      expect(result.metrics).toHaveProperty("totalProcessed");
+      expect(result.metrics).toHaveProperty("skippedSmallSize");
+      expect(result.metrics).toHaveProperty("skippedAlreadyOptimized");
+      expect(result.metrics).toHaveProperty("skippedResize");
+      expect(result.metrics).toHaveProperty("fullyProcessed");
     });
   });
 });

@@ -6,18 +6,21 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 9/9 issues completed ✅
+**Current Status:** 9/9 issues completed ✅ + 9 critical bug fixes ✅
 
 **This PR Contains:**
 
 - ✅ RateLimitManager utility (ready for use)
-- ✅ 6 critical bug fixes (metrics, progress tracking, timeouts, double-counting)
-- ✅ **Issue #4: Parallel page processing** (complete)
+- ✅ **9 critical bug fixes** (metrics race conditions, progress tracking, timeouts, double-counting, malformed pages, spinner states, callback guards)
+- ✅ **Issue #1: CI spinner detection** (complete)
+- ✅ **Issue #2: Smart image skip optimization** (complete)
 - ✅ **Issue #3: Lazy cache loading** (complete)
+- ✅ **Issue #4: Parallel page processing** (complete)
 - ✅ **Issue #5: Error manager** (complete)
 - ✅ **Issue #6: Adaptive batch sizing** (complete)
 - ✅ **Issue #7: Cache freshness tracking** (complete)
 - ✅ **Issue #8: Timeout telemetry** (complete)
+- ✅ **Issue #9: Progress tracking** (complete)
 - ✅ Comprehensive documentation for next developer
 
 **Issue #4 Implementation Summary:**
@@ -265,48 +268,60 @@ const progressTracker =
 
 ---
 
-### Bug Fix #3: Metrics Accumulation Across Pages ✅ FIXED
+### Bug Fix #3: Metrics Race Condition in Parallel Processing ✅ FIXED
 
-**File:** `scripts/notion-fetch/imageReplacer.ts`
-**Commit:** `56c1759`
+**File:** `scripts/notion-fetch/imageProcessing.ts`, `scripts/notion-fetch/imageReplacer.ts`
+**Commits:** `56c1759` (initial), `626605c` (parallel-safe)
 
 **Problem:**
 
-- `processingMetrics` is module-level state
-- `logProcessingMetrics()` called at end of each page
-- `resetProcessingMetrics()` existed but never used
-- Metrics accumulated: Page 2 = Page 1 + Page 2 data (wrong!)
-- Telemetry unusable for multi-page runs
+- `processingMetrics` was module-level shared state
+- `resetProcessingMetrics()` called at start of each page
+- With parallel processing, multiple pages reset the shared counters while others are mid-download
+- Resulted in nondeterministic/inaccurate telemetry
 
 **Root Cause:**
 
 ```typescript
-// imageProcessing.ts - module level
+// imageProcessing.ts - module level shared state
 const processingMetrics = {
   totalProcessed: 0,
   skippedSmallSize: 0,
   // ...
 };
 
-// imageReplacer.ts - called once per page
+// imageReplacer.ts - called per page
 export async function processAndReplaceImages(...) {
-  // No reset here! ❌
+  resetProcessingMetrics();  // ❌ Resets shared state while other pages are running!
   // ... process images ...
-  logProcessingMetrics();  // Logs accumulated totals
+  logProcessingMetrics();
 }
 ```
 
 **Fix Applied:**
 
 ```typescript
+// imageProcessing.ts - factory function for per-call metrics
+export function createProcessingMetrics(): ImageProcessingMetrics {
+  return {
+    totalProcessed: 0,
+    skippedSmallSize: 0,
+    skippedAlreadyOptimized: 0,
+    skippedResize: 0,
+    fullyProcessed: 0,
+  };
+}
+
+// imageReplacer.ts - per-call metrics
 export async function processAndReplaceImages(...) {
-  resetProcessingMetrics();  // ✅ Reset at start of each page
-  // ... process images ...
-  logProcessingMetrics();  // Now logs only current page
+  const metrics = createProcessingMetrics();  // ✅ Per-call, no race conditions
+  // ... process images, passing metrics through function chain ...
+  logProcessingMetrics(metrics);  // ✅ Logs only this page's metrics
+  return { ..., metrics };  // ✅ Returns metrics for aggregation
 }
 ```
 
-**Lesson:** Module-level state requires explicit reset between logical units (pages, batches, etc.). Always reset at start of unit.
+**Lesson:** Module-level shared state causes race conditions in parallel processing. Use per-call state (factory pattern) and pass through function chains. Return metrics for caller to aggregate if needed.
 
 ---
 
@@ -454,6 +469,134 @@ return withTimeout(trackedPromise, timeoutMs, ...).catch((error) => {
 ```
 
 **Lesson:** When multiple code paths can notify a tracker for the same item (timeout + promise settlement), use a per-item guard to ensure exactly one notification. This is especially important for promises that continue running after timeout since JavaScript doesn't support native promise cancellation.
+
+---
+
+### Bug Fix #7: Malformed Pages Crash with TypeError ✅ FIXED
+
+**File:** `scripts/notion-fetch/generateBlocks.ts`
+**Commit:** `79ae069`
+
+**Problem:**
+
+- Code unconditionally accessed `page.properties["Tags"]` without null checks
+- Malformed pages with `null` or `undefined` properties caused TypeError
+- This crashed the entire run before parallel processing could catch it
+
+**Root Cause:**
+
+```typescript
+// Direct property access without null check
+let tags = ["comapeo"];
+if (page.properties["Tags"]?.multi_select) {  // ❌ Crashes if properties is null
+  tags = page.properties["Tags"].multi_select.map((tag) => tag.name);
+}
+```
+
+**Fix Applied:**
+
+```typescript
+// Guard page.properties with optional chaining
+const props = page.properties;
+
+let tags = ["comapeo"];
+if (props?.["Tags"]?.multi_select) {  // ✅ Safe access
+  tags = props["Tags"].multi_select.map((tag) => tag.name);
+}
+```
+
+**Lesson:** Always guard nested property access with optional chaining, especially for external data from APIs. Malformed data should be skipped, not crash the run.
+
+---
+
+### Bug Fix #8: Placeholder Page Spinner Overwritten ✅ FIXED
+
+**File:** `scripts/notion-fetch/generateBlocks.ts`
+**Commit:** `c2136cc`
+
+**Problem:**
+
+- `writePlaceholderFile()` correctly set `pageSpinner.warn()` for placeholder pages
+- But unconditional `pageSpinner.succeed()` immediately after overwrote the warn state
+- Operators couldn't see which pages were placeholders
+
+**Root Cause:**
+
+```typescript
+if (markdownString) {
+  // Write real content
+} else {
+  writePlaceholderFile(...);  // Sets pageSpinner.warn() ✅
+}
+pageSpinner.succeed(...);  // ❌ Always called, overwrites warn state!
+```
+
+**Fix Applied:**
+
+```typescript
+if (markdownString) {
+  // Write real content
+  pageSpinner.succeed(...);  // ✅ Only succeed for real content
+} else {
+  writePlaceholderFile(...);  // pageSpinner.warn() preserved
+}
+```
+
+**Lesson:** Don't unconditionally set final spinner state. Ensure earlier state (warn/info) is preserved when appropriate.
+
+---
+
+### Bug Fix #9: Unguarded onItemComplete Callbacks ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** `616b99e`
+
+**Problem:**
+
+- `onItemComplete` callback was wrapped in try-catch only in the fulfilled case
+- Rejected, timeout, and synchronous error cases invoked callback without guard
+- Callback errors bubbled up, masking real failures
+- `processBatch` rejected with callback error instead of underlying timeout/exception
+
+**Root Cause:**
+
+```typescript
+.then((result) => {
+  try {
+    onItemComplete(itemIndex, { status: "fulfilled", value: result });  // ✅ Guarded
+  } catch (callbackError) { /* logged */ }
+})
+.catch((error) => {
+  onItemComplete(itemIndex, { status: "rejected", reason: error });  // ❌ Unguarded!
+  throw error;
+});
+
+// Timeout handler also unguarded
+if (error instanceof TimeoutError) {
+  onItemComplete(itemIndex, { status: "rejected", reason: error });  // ❌ Unguarded!
+}
+
+// Synchronous error handler also unguarded
+catch (error) {
+  onItemComplete(itemIndex, { status: "rejected", reason: error });  // ❌ Unguarded!
+}
+```
+
+**Fix Applied:**
+
+```typescript
+// All three paths now guarded:
+.catch((error) => {
+  try {
+    onItemComplete(itemIndex, { status: "rejected", reason: error });
+  } catch (callbackError) {
+    console.error(chalk.red(`Error in onItemComplete callback: ${callbackError}`));
+  }
+  throw error;
+});
+```
+
+**Lesson:** When providing callbacks to external code, guard ALL invocation paths with try-catch. Callback errors should be logged but never mask the underlying operation's result.
 
 ---
 

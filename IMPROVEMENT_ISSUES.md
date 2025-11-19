@@ -6,17 +6,339 @@ This document contains detailed issue descriptions for improving the Notion fetc
 
 ## 📋 Progress Tracker
 
-**Current Status:** 3/9 issues completed (33% complete)
+**Current Status:** 3/9 issues completed + **Issue #4 in progress** (40% complete)
 
-**Next Recommended Task:** Issue #4 - Implement parallel page fetching (Est: 2-3hr, High Priority, High Impact)
+**⚠️ IMPORTANT:** Issue #4 (Parallel Pages) has RateLimitManager complete but page processing refactoring pending. See [Issue #4 Status](#issue-4-status) below for details.
+
+**Next Recommended Task:** Complete Issue #4 - Parallel page processing implementation (Est: 1-2hr remaining)
 
 **Quick Links:**
 
 - [Completed Issues](#-completed-issues)
+- [In Progress](#-in-progress)
+- [Critical Bug Fixes](#-critical-bug-fixes-discovered-during-implementation)
 - [Quick Wins](#-quick-wins-high-priority-low-complexity) - Issues #2-3
 - [High-Impact Improvements](#-high-impact-improvements-medium-priority-medium-complexity) - Issues #4-5
 - [Advanced Optimizations](#-advanced-optimizations-lower-priority-higher-complexity) - Issues #6-9
 - [Summary Table](#summary-table)
+
+---
+
+## 🚧 In Progress
+
+### Issue #4 Status
+
+**Status:** 🟡 IN PROGRESS (40% complete - RateLimitManager done, parallel processing pending)
+
+**What's Complete:**
+- ✅ RateLimitManager utility (118 lines, 25 tests passing)
+  - Exponential backoff (1s → 2s → 4s → ... → 60s max)
+  - Retry-After header support
+  - Global singleton pattern
+  - Async waitForBackoff() helper
+- ✅ Critical timeout bug fix (prevents hanging spinners)
+- ✅ All prerequisites (ProgressTracker from Issue #9)
+
+**What's Remaining:**
+1. **Refactor generateBlocks.ts** (~1-2 hours):
+   - Extract page processing logic into `processSinglePage()` function
+   - Flatten nested page structure into array of page tasks
+   - Replace sequential loop with `processBatch(pages, ..., { maxConcurrent: 5 })`
+   - Add ProgressTracker for aggregate progress display
+   - Integrate RateLimitManager (placeholder - actual 429 handling can be added later)
+
+2. **Important Decision Made:**
+   - Parallelize ONLY the "Page" type processing (90% of items, the actual bottleneck)
+   - Keep Toggle/Heading sequential (they modify shared state: currentSectionFolder, currentHeading)
+   - This is safer and still gives 50-70% speedup
+
+**Files Ready to Use:**
+- `scripts/notion-fetch/rateLimitManager.ts` - Ready for import
+- `scripts/notion-fetch/rateLimitManager.test.ts` - 25 tests passing
+- `scripts/notion-fetch/progressTracker.ts` - Ready for use (from Issue #9)
+- `scripts/notion-fetch/timeoutUtils.ts` - processBatch() ready with progress tracking
+
+**Next Developer Instructions:**
+
+1. **Read the current generateBlocks.ts structure** (lines 152-450)
+2. **Identify all "Page" type processing** (normalizedSectionType === "page")
+3. **Extract into async function:**
+   ```typescript
+   async function processSinglePage(
+     pageData: PageProcessingContext
+   ): Promise<PageProcessingResult> {
+     // All logic from lines 267-427
+     // Return { success, totalSaved, stats }
+   }
+   ```
+4. **Create page tasks array:**
+   ```typescript
+   const pageTasks: PageTask[] = [];
+   for (let i = 0; i < pagesByLang.length; i++) {
+     const pageByLang = pagesByLang[i];
+     if (normalizedSectionType === "page") {
+       for (const lang of Object.keys(pageByLang.content)) {
+         pageTasks.push({
+           pageByLang,
+           lang,
+           index: i,
+           // ... all context needed for processing
+         });
+       }
+     }
+   }
+   ```
+5. **Use processBatch for parallel execution:**
+   ```typescript
+   import { getRateLimitManager } from "./rateLimitManager";
+   import { ProgressTracker } from "./progressTracker";
+
+   const progressTracker = new ProgressTracker({
+     total: pageTasks.length,
+     operation: "pages",
+     spinnerTimeoutMs: 300000, // 5 minutes
+   });
+
+   const results = await processBatch(
+     pageTasks,
+     async (task) => processSinglePage(task),
+     {
+       maxConcurrent: 5,
+       timeoutMs: 180000, // 3 min per page
+       operation: "page processing",
+       progressTracker,
+     }
+   );
+   ```
+6. **Handle rate limiting (optional for now):**
+   ```typescript
+   // In processSinglePage, catch 429 errors:
+   catch (error) {
+     if (error.status === 429) {
+       const retryAfter = parseInt(error.headers?.['retry-after'] || '0');
+       getRateLimitManager().recordRateLimit(retryAfter);
+       throw error; // Let processBatch handle retry
+     }
+   }
+   ```
+
+**Testing Strategy:**
+- Run existing tests to ensure no regressions
+- Test with small dataset first (5-10 pages)
+- Verify parallel processing works correctly
+- Check that stats/counts match sequential version
+
+**Gotchas to Watch:**
+- ⚠️ Don't parallelize Toggle/Heading - they modify shared state
+- ⚠️ Preserve page order in final output
+- ⚠️ Aggregate stats correctly across parallel operations
+- ⚠️ Ensure ProgressTracker finishes even on errors
+
+---
+
+## 🐛 Critical Bug Fixes Discovered During Implementation
+
+**IMPORTANT:** These bugs were discovered and fixed while implementing Issues #2, #4, and #9. Future developers should be aware of these patterns.
+
+### Bug Fix #1: Duplicate Metric Counting in Retry Loops ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageProcessing.ts`
+**Commit:** `013fa52`
+
+**Problem:**
+- `processingMetrics.totalProcessed++` was inside retry loop (line 623)
+- Each retry attempt incremented counters again
+- Failed image retried 3x counted as 3 processed images
+- Inflated totals, corrupted percentage calculations
+
+**Root Cause:**
+```typescript
+while (attempt < maxRetries) {
+  processingMetrics.totalProcessed++;  // ❌ Wrong! Counts retries
+  try {
+    await processImage(...);
+    break;
+  } catch (error) {
+    // Retry...
+  }
+}
+```
+
+**Fix Applied:**
+```typescript
+processingMetrics.totalProcessed++;  // ✅ Once before retry loop
+
+while (attempt < maxRetries) {
+  try {
+    await processImage(...);
+    if (skipped) return { skippedSmallSize: true };  // Flags instead
+    break;
+  } catch (error) {
+    // Retry...
+  }
+}
+
+// Increment based on flags AFTER completion
+if (result.skippedSmallSize) processingMetrics.skippedSmallSize++;
+```
+
+**Lesson:** Never increment metrics inside retry loops. Use flags and increment once on completion.
+
+---
+
+### Bug Fix #2: ProgressTracker Leak on Empty Arrays ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageReplacer.ts`
+**Commit:** `66b9286`
+
+**Problem:**
+- ProgressTracker created unconditionally even when `validImages.length === 0`
+- Empty array → processBatch never calls `startItem`/`completeItem`
+- Tracker never calls `finish()`
+- Spinner with 150s timeout leaked
+- Process hung for 2.5 minutes after completion
+
+**Root Cause:**
+```typescript
+const progressTracker = new ProgressTracker({
+  total: validImages.length,  // Could be 0!
+  operation: "images",
+  spinnerTimeoutMs: 150000,
+});
+
+await processBatch(validImages, ...);  // Empty array → no items → never finishes
+```
+
+**Fix Applied:**
+```typescript
+const progressTracker = validImages.length > 0
+  ? new ProgressTracker({
+      total: validImages.length,
+      operation: "images",
+      spinnerTimeoutMs: 150000,
+    })
+  : undefined;  // Skip creation for empty arrays
+```
+
+**Lesson:** Always check array length before creating progress trackers. Empty arrays never trigger item callbacks.
+
+---
+
+### Bug Fix #3: Metrics Accumulation Across Pages ✅ FIXED
+
+**File:** `scripts/notion-fetch/imageReplacer.ts`
+**Commit:** `56c1759`
+
+**Problem:**
+- `processingMetrics` is module-level state
+- `logProcessingMetrics()` called at end of each page
+- `resetProcessingMetrics()` existed but never used
+- Metrics accumulated: Page 2 = Page 1 + Page 2 data (wrong!)
+- Telemetry unusable for multi-page runs
+
+**Root Cause:**
+```typescript
+// imageProcessing.ts - module level
+const processingMetrics = {
+  totalProcessed: 0,
+  skippedSmallSize: 0,
+  // ...
+};
+
+// imageReplacer.ts - called once per page
+export async function processAndReplaceImages(...) {
+  // No reset here! ❌
+  // ... process images ...
+  logProcessingMetrics();  // Logs accumulated totals
+}
+```
+
+**Fix Applied:**
+```typescript
+export async function processAndReplaceImages(...) {
+  resetProcessingMetrics();  // ✅ Reset at start of each page
+  // ... process images ...
+  logProcessingMetrics();  // Now logs only current page
+}
+```
+
+**Lesson:** Module-level state requires explicit reset between logical units (pages, batches, etc.). Always reset at start of unit.
+
+---
+
+### Bug Fix #4: False Success Reporting in ProgressTracker ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** `0b9a180`
+
+**Problem:**
+- `processBatch` only checked promise fulfillment/rejection
+- `processImageWithFallbacks` never rejects - returns `{ success: false }` instead
+- All failed images counted as successes
+- Progress showed "100% success" even with 404s, timeouts, crashes
+
+**Root Cause:**
+```typescript
+.then((result) => {
+  progressTracker.completeItem(true);  // ❌ Always true for fulfilled promises
+  return result;
+})
+```
+
+**Fix Applied:**
+```typescript
+.then((result) => {
+  // Check result.success property if available
+  const isSuccess =
+    typeof result === "object" &&
+    result !== null &&
+    "success" in result
+      ? result.success === true
+      : true;  // Backward compatible
+  progressTracker.completeItem(isSuccess);  // ✅ Correct status
+  return result;
+})
+```
+
+**Lesson:** Promise fulfillment ≠ success. Check result.success property for operations that return error objects instead of rejecting.
+
+---
+
+### Bug Fix #5: Timeout Hangs Progress Tracker ✅ FIXED
+
+**File:** `scripts/notion-fetch/timeoutUtils.ts`
+**Commit:** `c8fbc86`
+
+**Problem:**
+- `processBatch` wraps promises: `tracker` → `timeout`
+- Timeout fires → `withTimeout` rejects immediately
+- `trackedPromise` still pending → `.then/.catch` never run
+- `progressTracker.completeItem()` NEVER called
+- Spinner shows "N in progress" forever
+- **CLI hangs indefinitely**
+
+**Root Cause:**
+```typescript
+const trackedPromise = promise
+  .then(() => progressTracker.completeItem(true))
+  .catch(() => progressTracker.completeItem(false));
+
+return withTimeout(trackedPromise, timeoutMs, ...);  // ❌ Timeout bypasses handlers
+```
+
+**Fix Applied:**
+```typescript
+return withTimeout(trackedPromise, timeoutMs, operationDescription)
+  .catch((error) => {
+    // ✅ CRITICAL: Notify tracker on timeout
+    if (error instanceof TimeoutError && progressTracker) {
+      progressTracker.completeItem(false);
+    }
+    throw error;
+  });
+```
+
+**Lesson:** When wrapping promises with timeout, ensure progress tracking happens in BOTH paths (normal completion AND timeout). Timeouts bypass inner handlers.
 
 ---
 
@@ -1541,24 +1863,24 @@ export class ProgressTracker {
 
 ## Summary Table
 
-| Issue                | Priority | Complexity | Time Saved       | Effort | Status  |
-| -------------------- | -------- | ---------- | ---------------- | ------ | ------- |
-| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min   | ✅ DONE |
-| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr    | ✅ DONE |
-| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr    | ✅ DONE |
-| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr    | ⏳ TODO |
-| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 2-3hr  | 🔜 Next |
-| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr  | ⏳ TODO |
-| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr  | ⏳ TODO |
-| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr  | ⏳ TODO |
-| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr  | ⏳ TODO |
+| Issue                | Priority | Complexity | Time Saved       | Effort  | Status       |
+| -------------------- | -------- | ---------- | ---------------- | ------- | ------------ |
+| #1 CI Spinners       | ⭐⭐⭐   | Trivial    | 0% (noise)       | 5min    | ✅ DONE      |
+| #2 Smart Skips       | ⭐⭐⭐   | Low        | 20-30%           | 1hr     | ✅ DONE      |
+| #9 Progress Tracking | ⭐⭐     | Low        | 0% (UX)          | 2hr     | ✅ DONE      |
+| #4 Parallel Pages    | ⭐⭐⭐   | Medium     | 50-70%           | 1-2hr   | 🟡 40% DONE  |
+| #3 Lazy Cache        | ⭐⭐     | Medium     | 5-10s startup    | 2hr     | ⏳ TODO      |
+| #5 Error Manager     | ⭐⭐     | High       | 0% (quality)     | 4-6hr   | ⏳ TODO      |
+| #6 Adaptive Batch    | ⭐⭐     | High       | 20-40%           | 6-8hr   | ⏳ TODO      |
+| #7 Cache Freshness   | ⭐⭐     | Medium     | 0% (correctness) | 3-4hr   | ⏳ TODO      |
+| #8 Telemetry         | ⭐       | Medium     | 0% (insight)     | 3-4hr   | ⏳ TODO      |
 
 **Recommended Order:**
 
 1. ~~**#1 CI Spinners**~~ ✅ COMPLETED (quick win, 5min)
-2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr)
+2. ~~**#2 Smart Skips**~~ ✅ COMPLETED (high impact, low effort, 1hr) + **5 critical bug fixes**
 3. ~~**#9 Progress Tracking**~~ ✅ COMPLETED (prerequisite for #4, prevents UI regression, 2hr)
-4. **#4 Parallel Pages** 🔜 NEXT (massive performance boost, 50-70% time savings, 2-3hr)
+4. **#4 Parallel Pages** 🟡 IN PROGRESS (40% done - RateLimitManager ✅, refactoring pending, 1-2hr remaining)
 5. **#3 Lazy Cache** (good optimization, 2hr)
 6. **#5 Error Manager** (code quality, pairs with #4, 4-6hr)
 7. **#7 Cache Freshness** (correctness, 3-4hr)

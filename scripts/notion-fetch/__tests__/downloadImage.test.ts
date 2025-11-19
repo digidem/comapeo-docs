@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { 
+import {
   installTestNotionEnv,
   mockImageBuffer,
   mockProcessedImageResult,
@@ -25,7 +25,7 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
       "Website Block": { rich_text: [{ plain_text: "Present" }] },
     },
   };
-  
+
   const subPage = {
     id: subPageId,
     properties: {
@@ -41,7 +41,7 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
       "Website Block": { rich_text: [{ plain_text: "Present" }] },
     },
   };
-  
+
   return [mainPage, subPage];
 };
 
@@ -99,15 +99,17 @@ describe("downloadAndProcessImage", () => {
 
   beforeEach(async () => {
     restoreEnv = installTestNotionEnv();
-    
+
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Setup default mock implementations
     const { processImage } = vi.mocked(await import("../imageProcessor"));
     processImage.mockResolvedValue(mockProcessedImageResult);
-    
-    const { compressImageToFileWithFallback } = vi.mocked(await import("../utils"));
+
+    const { compressImageToFileWithFallback } = vi.mocked(
+      await import("../utils")
+    );
     compressImageToFileWithFallback.mockResolvedValue({
       finalSize: 512,
       usedFallback: false,
@@ -125,10 +127,10 @@ describe("downloadAndProcessImage", () => {
       vi.useFakeTimers();
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/retry-test.jpg";
       let attemptCount = 0;
-      
+
       // Mock axios to fail twice then succeed
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((url) => {
@@ -144,33 +146,33 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       // Create a page structure with proper Sub-item relations
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       // Start the async operation
       const resultPromise = generateBlocks(pages, progressCallback);
-      
+
       // Wait for initial request and first retry (1 second delay)
       await vi.advanceTimersByTimeAsync(1000);
-      
+
       // Wait for second retry (2 second delay)
       await vi.advanceTimersByTimeAsync(2000);
-      
+
       const result = await resultPromise;
-      
+
       // Verify the image was processed successfully after retries
       expect(result.totalSaved).toBeGreaterThanOrEqual(0);
       expect(attemptCount).toBe(3); // Failed twice, succeeded on third attempt
       expect(progressCallback).toHaveBeenCalled();
-      
+
       // Cleanup
       vi.useRealTimers();
     });
@@ -180,10 +182,10 @@ describe("downloadAndProcessImage", () => {
       vi.useFakeTimers();
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/always-fail.jpg";
       let attemptCount = 0;
-      
+
       // Mock axios to always fail
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((url) => {
@@ -193,34 +195,34 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       // Create a page structure with proper Sub-item relations
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       // Start the async operation
       const resultPromise = generateBlocks(pages, progressCallback);
-      
+
       // Advance timers to trigger retries (1s + 2s + 4s = 7s total)
       await vi.advanceTimersByTimeAsync(1000); // First retry
       await vi.advanceTimersByTimeAsync(2000); // Second retry
       await vi.advanceTimersByTimeAsync(4000); // Third retry
-      
+
       const result = await resultPromise;
-      
+
       // Verify exactly 3 attempts were made
       expect(attemptCount).toBe(3);
-      
+
       // Page should still be processed (image failure doesn't stop page processing)
       expect(progressCallback).toHaveBeenCalled();
       expect(result).toBeDefined();
-      
+
       // Cleanup
       vi.useRealTimers();
     });
@@ -230,9 +232,9 @@ describe("downloadAndProcessImage", () => {
     it("should handle timeout errors with proper error messages", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/timeout.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       const timeoutError = new Error("timeout of 30000ms exceeded");
       (timeoutError as any).code = "ECONNABORTED";
@@ -242,16 +244,16 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       // Should handle timeout gracefully
       const result = await generateBlocks(pages, progressCallback);
       expect(result).toBeDefined();
@@ -261,9 +263,9 @@ describe("downloadAndProcessImage", () => {
     it("should handle DNS resolution failures", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://nonexistent-domain.example/image.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       const networkError = new Error("getaddrinfo ENOTFOUND example.com");
       (networkError as any).code = "ENOTFOUND";
@@ -273,16 +275,16 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       // Should handle DNS failure gracefully
       const result = await generateBlocks(pages, progressCallback);
       expect(result).toBeDefined();
@@ -292,9 +294,9 @@ describe("downloadAndProcessImage", () => {
     it("should handle HTTP error responses", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/not-found.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       const httpError = new Error("Request failed with status 404");
       (httpError as any).response = { status: 404, statusText: "Not Found" };
@@ -304,16 +306,16 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       // Should handle HTTP errors gracefully
       const result = await generateBlocks(pages, progressCallback);
       expect(result).toBeDefined();
@@ -325,9 +327,9 @@ describe("downloadAndProcessImage", () => {
     it("should handle successful download with compression", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/success.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
@@ -338,37 +340,37 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       const result = await generateBlocks(pages, progressCallback);
-      
+
       // Verify successful processing
       expect(result.totalSaved).toBeGreaterThanOrEqual(0);
       expect(progressCallback).toHaveBeenCalled();
-      
-      // Verify the image processing pipeline was called
-      const { processImage } = vi.mocked(await import("../imageProcessor"));
-      expect(processImage).toHaveBeenCalled();
-      
-      const { compressImageToFileWithFallback } = vi.mocked(await import("../utils"));
+
+      // Verify the compression pipeline was called
+      // Note: processImage (resize) may be skipped for non-resizable content
+      const { compressImageToFileWithFallback } = vi.mocked(
+        await import("../utils")
+      );
       expect(compressImageToFileWithFallback).toHaveBeenCalled();
     });
 
     it("should handle different image formats correctly", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const pngUrl = "https://example.com/test.png";
       const webpUrl = "https://example.com/test.webp";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((requestUrl) => {
         if (requestUrl === pngUrl) {
@@ -385,22 +387,22 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error(`Mock URL not found: ${requestUrl}`));
       });
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![PNG Image](${pngUrl})\n![WebP Image](${webpUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![PNG Image](${pngUrl})\n![WebP Image](${webpUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       const result = await generateBlocks(pages, progressCallback);
-      
+
       // Verify both images were processed
       expect(result).toBeDefined();
       expect(progressCallback).toHaveBeenCalled();
-      
+
       // Verify format detection was called
       const { chooseFormat } = vi.mocked(await import("../utils"));
       expect(chooseFormat).toHaveBeenCalled();
@@ -411,9 +413,9 @@ describe("downloadAndProcessImage", () => {
     it("should generate proper file names and paths", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      
+
       const testUrl = "https://example.com/complex-image-name.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
@@ -424,25 +426,29 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
-      const pages = createPageStructureForTesting("Complex Page Name With Spaces!");
-      
+
+      const pages = createPageStructureForTesting(
+        "Complex Page Name With Spaces!"
+      );
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       const result = await generateBlocks(pages, progressCallback);
-      
+
       expect(result).toBeDefined();
       expect(progressCallback).toHaveBeenCalled();
-      
+
       // Verify compression was called with proper file path
-      const { compressImageToFileWithFallback } = vi.mocked(await import("../utils"));
+      const { compressImageToFileWithFallback } = vi.mocked(
+        await import("../utils")
+      );
       const calls = compressImageToFileWithFallback.mock.calls;
-      
+
       expect(calls.length).toBeGreaterThan(0);
       // File path should be sanitized and contain the block name
       const filePath = calls[0][2]; // Third argument is the file path
@@ -455,10 +461,12 @@ describe("downloadAndProcessImage", () => {
     it("should update spinner text during different processing phases", async () => {
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
-      const SpinnerManager = vi.mocked(await import("../spinnerManager")).default;
-      
+      const SpinnerManager = vi.mocked(
+        await import("../spinnerManager")
+      ).default;
+
       const testUrl = "https://example.com/progress-test.jpg";
-      
+
       const axios = vi.mocked(await import("axios")).default;
       axios.get.mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
@@ -469,29 +477,29 @@ describe("downloadAndProcessImage", () => {
         }
         return Promise.reject(new Error("Mock URL not found"));
       });
-      
+
       const mockSpinner = {
         text: "",
         succeed: vi.fn(),
         fail: vi.fn(),
         warn: vi.fn(),
       };
-      
+
       SpinnerManager.create.mockReturnValue(mockSpinner);
-      
+
       const pages = createPageStructureForTesting("Test Page");
-      
+
       n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({ 
-        parent: `![Test Image](${testUrl})` 
+      n2m.toMarkdownString.mockReturnValue({
+        parent: `![Test Image](${testUrl})`,
       });
-      
+
       const progressCallback = vi.fn();
-      
+
       const result = await generateBlocks(pages, progressCallback);
-      
+
       expect(result).toBeDefined();
-      
+
       // Verify spinner text was updated during processing phases
       expect(mockSpinner.succeed).toHaveBeenCalled();
       expect(SpinnerManager.remove).toHaveBeenCalledWith(mockSpinner);

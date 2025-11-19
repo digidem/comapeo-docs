@@ -56,22 +56,17 @@ interface PageTask {
   relativePath: string;
   frontmatter: string;
   customProps: Record<string, unknown>;
-  pendingHeading: string | undefined;
   pageGroupIndex: number;
   pageProcessingIndex: number;
   totalPages: number;
   PATH: string;
-  // Shared caches and counters (passed by reference)
+  // Shared caches (passed by reference for deduplication)
   blocksMap: Map<string, { key: string; data: any[] }>;
   markdownMap: Map<string, { key: string; data: any }>;
   blockPrefetchCache: any;
   markdownPrefetchCache: any;
   inFlightBlockFetches: Map<string, Promise<any[]>>;
   inFlightMarkdownFetches: Map<string, Promise<any>>;
-  blockFetchCount: { value: number };
-  blockCacheHits: { value: number };
-  markdownFetchCount: { value: number };
-  markdownCacheHits: { value: number };
   // Current section folder for this page (captured at task creation time)
   currentSectionFolderForLang: string | undefined;
   // Callback for progress
@@ -126,12 +121,28 @@ export function __resetPrefetchCaches(): void {
 // setTranslationString moved to translationManager.ts
 
 /**
+ * Result returned from processSinglePage for aggregation.
+ * Includes cache stats to avoid race conditions on shared counters.
+ */
+interface PageProcessingResult {
+  success: boolean;
+  totalSaved: number;
+  emojiCount: number;
+  pageTitle: string;
+  // Cache stats returned per-page to avoid race conditions
+  blockFetches: number;
+  blockCacheHits: number;
+  markdownFetches: number;
+  markdownCacheHits: number;
+}
+
+/**
  * Process a single page task. This function is designed to be called in parallel.
  * All dependencies are passed in via the task object to avoid shared state issues.
  */
 async function processSinglePage(
   task: PageTask
-): Promise<{ success: boolean; totalSaved: number; emojiCount: number }> {
+): Promise<PageProcessingResult> {
   const {
     lang,
     page,
@@ -140,22 +151,22 @@ async function processSinglePage(
     filePath,
     frontmatter,
     customProps,
-    pendingHeading,
     pageProcessingIndex,
     totalPages,
     blocksMap,
     markdownMap,
     inFlightBlockFetches,
     inFlightMarkdownFetches,
-    blockFetchCount,
-    blockCacheHits,
-    markdownFetchCount,
-    markdownCacheHits,
     currentSectionFolderForLang,
   } = task;
 
   let totalSaved = 0;
   let emojiCount = 0;
+  // Track cache stats locally to avoid race conditions on shared counters
+  let localBlockFetches = 0;
+  let localBlockCacheHits = 0;
+  let localMarkdownFetches = 0;
+  let localMarkdownCacheHits = 0;
 
   console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
   const pageSpinner = SpinnerManager.create(
@@ -168,6 +179,9 @@ async function processSinglePage(
     let rawBlocks: any[] = [];
     let emojiMap = new Map<string, string>();
     try {
+      // Use local counters to track this page's cache stats
+      const localBlockCacheHitsCounter = { value: 0 };
+      const localBlockFetchCounter = { value: 0 };
       const { data: blockData, source: blockSource } = await loadBlocksForPage(
         page,
         pageProcessingIndex - 1,
@@ -176,9 +190,11 @@ async function processSinglePage(
         blocksMap,
         blockPrefetchCache,
         inFlightBlockFetches,
-        blockCacheHits,
-        blockFetchCount
+        localBlockCacheHitsCounter,
+        localBlockFetchCounter
       );
+      localBlockCacheHits += localBlockCacheHitsCounter.value;
+      localBlockFetches += localBlockFetchCounter.value;
       rawBlocks = blockData;
       console.log(
         chalk.blue(
@@ -207,6 +223,9 @@ async function processSinglePage(
     }
 
     // Load markdown lazily using the same caching mechanism
+    // Use local counters to track this page's cache stats
+    const localMarkdownCacheHitsCounter = { value: 0 };
+    const localMarkdownFetchCounter = { value: 0 };
     const { data: markdownData, source: markdownSource } =
       await loadMarkdownForPage(
         page,
@@ -216,9 +235,11 @@ async function processSinglePage(
         markdownMap,
         markdownPrefetchCache,
         inFlightMarkdownFetches,
-        markdownCacheHits,
-        markdownFetchCount
+        localMarkdownCacheHitsCounter,
+        localMarkdownFetchCounter
       );
+    localMarkdownCacheHits += localMarkdownCacheHitsCounter.value;
+    localMarkdownFetches += localMarkdownFetchCounter.value;
     const markdown = markdownData;
     if (markdownSource === "fetched") {
       console.log(chalk.blue(`  ↳ Markdown generated for page`));
@@ -321,7 +342,16 @@ async function processSinglePage(
       )
     );
 
-    return { success: true, totalSaved, emojiCount };
+    return {
+      success: true,
+      totalSaved,
+      emojiCount,
+      pageTitle,
+      blockFetches: localBlockFetches,
+      blockCacheHits: localBlockCacheHits,
+      markdownFetches: localMarkdownFetches,
+      markdownCacheHits: localMarkdownCacheHits,
+    };
   } catch (pageError) {
     console.error(
       chalk.red(`Failed to process page ${pageProcessingIndex}: ${page.id}`),
@@ -332,7 +362,16 @@ async function processSinglePage(
         `Failed to process page ${pageProcessingIndex}/${totalPages}: ${page.id}`
       )
     );
-    return { success: false, totalSaved, emojiCount };
+    return {
+      success: false,
+      totalSaved,
+      emojiCount,
+      pageTitle,
+      blockFetches: localBlockFetches,
+      blockCacheHits: localBlockCacheHits,
+      markdownFetches: localMarkdownFetches,
+      markdownCacheHits: localMarkdownCacheHits,
+    };
   } finally {
     SpinnerManager.remove(pageSpinner);
   }
@@ -546,7 +585,6 @@ export async function generateBlocks(pages, progressCallback) {
             relativePath,
             frontmatter,
             customProps,
-            pendingHeading,
             pageGroupIndex: i,
             pageProcessingIndex,
             totalPages,
@@ -557,10 +595,6 @@ export async function generateBlocks(pages, progressCallback) {
             markdownPrefetchCache,
             inFlightBlockFetches,
             inFlightMarkdownFetches,
-            blockFetchCount,
-            blockCacheHits,
-            markdownFetchCount,
-            markdownCacheHits,
             currentSectionFolderForLang: currentSectionFolder[lang],
             progressCallback,
           });
@@ -592,6 +626,8 @@ export async function generateBlocks(pages, progressCallback) {
         pageTasks,
         async (task) => processSinglePage(task),
         {
+          // TODO: Make concurrency configurable via environment variable or config
+          // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md
           maxConcurrent: 5,
           timeoutMs: 180000, // 3 minutes per page
           operation: "page processing",
@@ -600,17 +636,29 @@ export async function generateBlocks(pages, progressCallback) {
       );
 
       // Aggregate results from parallel processing
+      // Cache stats are aggregated from results to avoid race conditions
       let failedCount = 0;
-      for (const result of pageResults) {
+      for (let i = 0; i < pageResults.length; i++) {
+        const result = pageResults[i];
         if (result.status === "fulfilled") {
           totalSaved += result.value.totalSaved;
           emojiCount += result.value.emojiCount;
+          blockFetchCount.value += result.value.blockFetches;
+          blockCacheHits.value += result.value.blockCacheHits;
+          markdownFetchCount.value += result.value.markdownFetches;
+          markdownCacheHits.value += result.value.markdownCacheHits;
           if (!result.value.success) {
             failedCount++;
           }
         } else {
           failedCount++;
-          console.error(chalk.red(`Page processing failed: ${result.reason}`));
+          // Include page title for better error context
+          const failedTask = pageTasks[i];
+          console.error(
+            chalk.red(
+              `Page processing failed: ${failedTask?.pageTitle || "unknown"}: ${result.reason}`
+            )
+          );
         }
         processedPages++;
         progressCallback({ current: processedPages, total: totalPages });

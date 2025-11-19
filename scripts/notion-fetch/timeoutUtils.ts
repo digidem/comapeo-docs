@@ -136,6 +136,11 @@ export interface BatchConfig {
   operation?: string;
   /** Optional progress tracker for aggregate progress display */
   progressTracker?: ProgressTracker;
+  /** Optional callback invoked when each item completes (for streaming progress updates) */
+  onItemComplete?: (
+    index: number,
+    result: PromiseSettledResult<unknown>
+  ) => void;
 }
 
 /**
@@ -186,7 +191,13 @@ export async function processBatch<T, R>(
   }
 
   const results: PromiseSettledResult<R>[] = [];
-  const { maxConcurrent, timeoutMs, operation, progressTracker } = config;
+  const {
+    maxConcurrent,
+    timeoutMs,
+    operation,
+    progressTracker,
+    onItemComplete,
+  } = config;
 
   for (let i = 0; i < items.length; i += maxConcurrent) {
     const batch = items.slice(i, i + maxConcurrent);
@@ -196,6 +207,8 @@ export async function processBatch<T, R>(
       // Per-item guard to prevent double-counting when timeout fires
       // but underlying promise eventually settles
       let hasNotifiedTracker = false;
+      // Guard for onItemComplete to ensure it's only called once per item
+      let hasCalledOnItemComplete = false;
 
       // Notify progress tracker that item is starting
       if (progressTracker) {
@@ -222,6 +235,23 @@ export async function processBatch<T, R>(
                   : true;
               progressTracker.completeItem(isSuccess);
             }
+            // Call onItemComplete for streaming progress updates
+            // Wrapped in try-catch to prevent callback errors from affecting processing
+            if (onItemComplete && !hasCalledOnItemComplete) {
+              hasCalledOnItemComplete = true;
+              try {
+                onItemComplete(itemIndex, {
+                  status: "fulfilled",
+                  value: result,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
+            }
             return result;
           })
           .catch((error) => {
@@ -230,6 +260,11 @@ export async function processBatch<T, R>(
             if (progressTracker && !hasNotifiedTracker) {
               hasNotifiedTracker = true;
               progressTracker.completeItem(false);
+            }
+            // Call onItemComplete for streaming progress updates
+            if (onItemComplete && !hasCalledOnItemComplete) {
+              hasCalledOnItemComplete = true;
+              onItemComplete(itemIndex, { status: "rejected", reason: error });
             }
             throw error;
           });
@@ -259,6 +294,15 @@ export async function processBatch<T, R>(
               hasNotifiedTracker = true;
               progressTracker.completeItem(false);
             }
+            // Call onItemComplete for streaming progress updates on timeout
+            if (
+              error instanceof TimeoutError &&
+              onItemComplete &&
+              !hasCalledOnItemComplete
+            ) {
+              hasCalledOnItemComplete = true;
+              onItemComplete(itemIndex, { status: "rejected", reason: error });
+            }
             throw error;
           });
         }
@@ -271,6 +315,11 @@ export async function processBatch<T, R>(
         if (progressTracker && !hasNotifiedTracker) {
           hasNotifiedTracker = true;
           progressTracker.completeItem(false);
+        }
+        // Call onItemComplete for streaming progress updates
+        if (onItemComplete && !hasCalledOnItemComplete) {
+          hasCalledOnItemComplete = true;
+          onItemComplete(itemIndex, { status: "rejected", reason: error });
         }
         return Promise.reject(error);
       }

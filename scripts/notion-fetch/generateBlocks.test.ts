@@ -789,7 +789,7 @@ describe("generateBlocks", () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it("should handle non-Error objects in critical error catch", async () => {
+    it("should handle non-Error objects in progress callback gracefully", async () => {
       const { generateBlocks } = await import("./generateBlocks");
       const consoleErrorSpy = vi
         .spyOn(console, "error")
@@ -808,10 +808,13 @@ describe("generateBlocks", () => {
       n2m.pageToMarkdown.mockResolvedValue([]);
       n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
 
-      await expect(generateBlocks(pages, progressCallback)).rejects.toThrow(
-        "String error thrown"
-      );
+      // With streaming progress, callback errors are caught and logged
+      // instead of crashing the entire run
+      const result = await generateBlocks(pages, progressCallback);
+      expect(result).toBeDefined();
+      expect(result.totalSaved).toBe(0);
 
+      // Verify error was logged
       expect(consoleErrorSpy).toHaveBeenCalled();
 
       consoleErrorSpy.mockRestore();

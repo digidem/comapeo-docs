@@ -619,6 +619,9 @@ export async function generateBlocks(pages, progressCallback) {
         spinnerTimeoutMs: 300000, // 5 minutes for all pages
       });
 
+      // Track failed count for summary
+      let failedCount = 0;
+
       const pageResults = await processBatch(
         pageTasks,
         async (task) => processSinglePage(task),
@@ -629,37 +632,36 @@ export async function generateBlocks(pages, progressCallback) {
           timeoutMs: 180000, // 3 minutes per page
           operation: "page processing",
           progressTracker,
+          // Stream progress updates as each page completes
+          onItemComplete: (index, result) => {
+            // Aggregate stats from this page's result
+            if (result.status === "fulfilled") {
+              const value = result.value as PageProcessingResult;
+              totalSaved += value.totalSaved;
+              emojiCount += value.emojiCount;
+              blockFetchCount.value += value.blockFetches;
+              blockCacheHits.value += value.blockCacheHits;
+              markdownFetchCount.value += value.markdownFetches;
+              markdownCacheHits.value += value.markdownCacheHits;
+              if (!value.success) {
+                failedCount++;
+              }
+            } else {
+              failedCount++;
+              // Include page title for better error context
+              const failedTask = pageTasks[index];
+              console.error(
+                chalk.red(
+                  `Page processing failed: ${failedTask?.pageTitle || "unknown"}: ${result.reason}`
+                )
+              );
+            }
+            // Emit progress update immediately as each page settles
+            processedPages++;
+            progressCallback({ current: processedPages, total: totalPages });
+          },
         }
       );
-
-      // Aggregate results from parallel processing
-      // Cache stats are aggregated from results to avoid race conditions
-      let failedCount = 0;
-      for (let i = 0; i < pageResults.length; i++) {
-        const result = pageResults[i];
-        if (result.status === "fulfilled") {
-          totalSaved += result.value.totalSaved;
-          emojiCount += result.value.emojiCount;
-          blockFetchCount.value += result.value.blockFetches;
-          blockCacheHits.value += result.value.blockCacheHits;
-          markdownFetchCount.value += result.value.markdownFetches;
-          markdownCacheHits.value += result.value.markdownCacheHits;
-          if (!result.value.success) {
-            failedCount++;
-          }
-        } else {
-          failedCount++;
-          // Include page title for better error context
-          const failedTask = pageTasks[i];
-          console.error(
-            chalk.red(
-              `Page processing failed: ${failedTask?.pageTitle || "unknown"}: ${result.reason}`
-            )
-          );
-        }
-        processedPages++;
-        progressCallback({ current: processedPages, total: totalPages });
-      }
 
       if (failedCount > 0) {
         console.warn(

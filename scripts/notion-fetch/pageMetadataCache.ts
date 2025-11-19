@@ -91,6 +91,7 @@ export function loadPageMetadataCache(): PageMetadataCache | null {
 /**
  * Save the page metadata cache to disk.
  * Creates the .cache directory if it doesn't exist.
+ * Uses atomic write pattern (write to temp, then rename) to prevent corruption.
  */
 export function savePageMetadataCache(cache: PageMetadataCache): void {
   const cacheDir = path.dirname(PAGE_METADATA_CACHE_PATH);
@@ -101,7 +102,11 @@ export function savePageMetadataCache(cache: PageMetadataCache): void {
   }
 
   const json = JSON.stringify(cache, null, 2);
-  fs.writeFileSync(PAGE_METADATA_CACHE_PATH, json, "utf-8");
+  const tempPath = `${PAGE_METADATA_CACHE_PATH}.tmp`;
+
+  // Write to temp file first, then rename for atomic operation
+  fs.writeFileSync(tempPath, json, "utf-8");
+  fs.renameSync(tempPath, PAGE_METADATA_CACHE_PATH);
 }
 
 /**

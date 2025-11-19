@@ -25,6 +25,7 @@ vi.mock("node:fs", async () => {
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
+    renameSync: vi.fn(),
   };
 });
 
@@ -111,16 +112,23 @@ describe("pageMetadataCache", () => {
       expect(fs.mkdirSync).toHaveBeenCalled();
     });
 
-    it("should write formatted JSON", () => {
+    it("should write formatted JSON using atomic write pattern", () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
 
       const cache = createEmptyCache("hash");
       savePageMetadataCache(cache);
 
+      // Should write to temp file first
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.any(String),
+        expect.stringContaining(".tmp"),
         expect.stringContaining('"version"'),
         "utf-8"
+      );
+
+      // Then rename to target path
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        expect.stringContaining(".tmp"),
+        expect.not.stringContaining(".tmp")
       );
     });
   });

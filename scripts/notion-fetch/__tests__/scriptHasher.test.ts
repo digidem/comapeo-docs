@@ -70,6 +70,7 @@ describe("scriptHasher", () => {
         hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
         filesHashed: 25,
         missingFiles: [],
+        notionSdkVersion: "^2.0.0",
       };
 
       const summary = formatScriptHashSummary(result);
@@ -83,6 +84,7 @@ describe("scriptHasher", () => {
         hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
         filesHashed: 23,
         missingFiles: ["scripts/missing.ts", "scripts/notfound.ts"],
+        notionSdkVersion: "^2.0.0",
       };
 
       const summary = formatScriptHashSummary(result);

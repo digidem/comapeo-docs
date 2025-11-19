@@ -40,11 +40,7 @@ import {
 } from "./contentWriter";
 import { processBatch } from "./timeoutUtils";
 import { ProgressTracker } from "./progressTracker";
-import {
-  computeScriptHash,
-  isScriptHashChanged,
-  formatScriptHashSummary,
-} from "./scriptHasher";
+import { computeScriptHash, formatScriptHashSummary } from "./scriptHasher";
 import {
   loadPageMetadataCache,
   savePageMetadataCache,
@@ -444,11 +440,13 @@ export async function generateBlocks(
   const syncMode = determineSyncMode(scriptHashResult.hash, force);
   let metadataCache: PageMetadataCache;
 
-  if (syncMode.fullRebuild) {
-    console.log(chalk.yellow(`\n⚠️  Full rebuild required: ${syncMode.reason}`));
+  if (syncMode.fullRebuild || !syncMode.cache) {
+    console.log(
+      chalk.yellow(`\n⚠️  Full rebuild required: ${syncMode.reason}`)
+    );
     metadataCache = createEmptyCache(scriptHashResult.hash);
   } else {
-    metadataCache = syncMode.cache!;
+    metadataCache = syncMode.cache;
     const stats = getCacheStats(metadataCache);
     console.log(
       chalk.green(
@@ -485,9 +483,7 @@ export async function generateBlocks(
               console.log(chalk.gray(`   Deleted: ${outputPath}`));
             }
           } catch (err) {
-            console.warn(
-              chalk.yellow(`   Failed to delete: ${outputPath}`)
-            );
+            console.warn(chalk.yellow(`   Failed to delete: ${outputPath}`));
           }
         }
       }
@@ -679,8 +675,11 @@ export async function generateBlocks(
 
           // Check if this page needs processing (incremental sync)
           const cachedPage = metadataCache.pages[page.id];
-          const needsProcessing = syncMode.fullRebuild || !cachedPage ||
-            new Date(page.last_edited_time).getTime() > new Date(cachedPage.lastEdited).getTime();
+          const needsProcessing =
+            syncMode.fullRebuild ||
+            !cachedPage ||
+            new Date(page.last_edited_time).getTime() >
+              new Date(cachedPage.lastEdited).getTime();
 
           if (!needsProcessing) {
             // Page unchanged, skip processing but still count it
@@ -691,9 +690,7 @@ export async function generateBlocks(
             progressCallback({ current: processedPages, total: totalPages });
           } else if (dryRun) {
             // Dry run - show what would be processed
-            console.log(
-              chalk.cyan(`  📋 Would process: ${pageTitle}`)
-            );
+            console.log(chalk.cyan(`  📋 Would process: ${pageTitle}`));
             processedPages++;
             progressCallback({ current: processedPages, total: totalPages });
           } else {
@@ -733,7 +730,8 @@ export async function generateBlocks(
 
     // Phase 2: Process all Page tasks in parallel
     if (pageTasks.length > 0) {
-      const skippedCount = totalPages - pageTasks.length - sectionCount - titleSectionCount;
+      const skippedCount =
+        totalPages - pageTasks.length - sectionCount - titleSectionCount;
       if (skippedCount > 0 && !syncMode.fullRebuild) {
         console.log(
           chalk.green(

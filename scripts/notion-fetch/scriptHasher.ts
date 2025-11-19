@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -57,6 +58,7 @@ export interface ScriptHashResult {
   hash: string;
   filesHashed: number;
   missingFiles: string[];
+  notionSdkVersion: string;
 }
 
 /**
@@ -67,45 +69,67 @@ export interface ScriptHashResult {
  * since SDK changes can affect output.
  */
 export async function computeScriptHash(): Promise<ScriptHashResult> {
-  const hasher = createHash("sha256");
   const missingFiles: string[] = [];
-  let filesHashed = 0;
 
   // Sort files for deterministic hash
   const sortedFiles = [...CRITICAL_SCRIPT_FILES].sort();
 
-  for (const relativePath of sortedFiles) {
+  // Read all files in parallel for better performance
+  const fileReadPromises = sortedFiles.map(async (relativePath) => {
     const absolutePath = path.join(PROJECT_ROOT, relativePath);
 
     try {
-      const content = fs.readFileSync(absolutePath, "utf-8");
-      // Include file path in hash to detect renames
-      hasher.update(relativePath);
-      hasher.update(content);
-      filesHashed++;
-    } catch (error) {
+      const content = await readFile(absolutePath, "utf-8");
+      return { relativePath, content, success: true as const };
+    } catch {
       // File might not exist (e.g., during development)
-      missingFiles.push(relativePath);
+      return { relativePath, content: "", success: false as const };
+    }
+  });
+
+  const fileResults = await Promise.all(fileReadPromises);
+
+  // Build hash from results (must be in sorted order for determinism)
+  const hasher = createHash("sha256");
+  let filesHashed = 0;
+
+  for (const result of fileResults) {
+    if (result.success) {
+      // Include file path in hash to detect renames
+      hasher.update(result.relativePath);
+      hasher.update(result.content);
+      filesHashed++;
+    } else {
+      missingFiles.push(result.relativePath);
     }
   }
 
   // Include Notion SDK version
+  let notionSdkVersion = "unknown";
   try {
     const packageJsonPath = path.join(PROJECT_ROOT, "package.json");
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-    const notionVersion =
+    const packageJsonContent = await readFile(packageJsonPath, "utf-8");
+    const packageJson = JSON.parse(packageJsonContent);
+    notionSdkVersion =
       packageJson.dependencies?.["@notionhq/client"] ||
       packageJson.devDependencies?.["@notionhq/client"] ||
       "unknown";
-    hasher.update(`notion-sdk:${notionVersion}`);
+    hasher.update(`notion-sdk:${notionSdkVersion}`);
   } catch {
     hasher.update("notion-sdk:unknown");
+  }
+
+  if (notionSdkVersion === "unknown") {
+    console.warn(
+      "Warning: Could not determine @notionhq/client version for hash computation"
+    );
   }
 
   return {
     hash: hasher.digest("hex"),
     filesHashed,
     missingFiles,
+    notionSdkVersion,
   };
 }
 

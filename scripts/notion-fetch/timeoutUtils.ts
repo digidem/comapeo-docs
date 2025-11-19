@@ -262,9 +262,21 @@ export async function processBatch<T, R>(
               progressTracker.completeItem(false);
             }
             // Call onItemComplete for streaming progress updates
+            // Wrapped in try-catch to prevent callback errors from affecting processing
             if (onItemComplete && !hasCalledOnItemComplete) {
               hasCalledOnItemComplete = true;
-              onItemComplete(itemIndex, { status: "rejected", reason: error });
+              try {
+                onItemComplete(itemIndex, {
+                  status: "rejected",
+                  reason: error,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
             }
             throw error;
           });
@@ -295,13 +307,25 @@ export async function processBatch<T, R>(
               progressTracker.completeItem(false);
             }
             // Call onItemComplete for streaming progress updates on timeout
+            // Wrapped in try-catch to prevent callback errors from affecting processing
             if (
               error instanceof TimeoutError &&
               onItemComplete &&
               !hasCalledOnItemComplete
             ) {
               hasCalledOnItemComplete = true;
-              onItemComplete(itemIndex, { status: "rejected", reason: error });
+              try {
+                onItemComplete(itemIndex, {
+                  status: "rejected",
+                  reason: error,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
             }
             throw error;
           });
@@ -317,9 +341,16 @@ export async function processBatch<T, R>(
           progressTracker.completeItem(false);
         }
         // Call onItemComplete for streaming progress updates
+        // Wrapped in try-catch to prevent callback errors from affecting processing
         if (onItemComplete && !hasCalledOnItemComplete) {
           hasCalledOnItemComplete = true;
-          onItemComplete(itemIndex, { status: "rejected", reason: error });
+          try {
+            onItemComplete(itemIndex, { status: "rejected", reason: error });
+          } catch (callbackError) {
+            console.error(
+              chalk.red(`Error in onItemComplete callback: ${callbackError}`)
+            );
+          }
         }
         return Promise.reject(error);
       }

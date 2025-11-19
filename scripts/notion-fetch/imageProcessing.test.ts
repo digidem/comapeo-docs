@@ -249,10 +249,12 @@ describe("imageProcessing", () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       vi.mocked(fs.readFileSync).mockReturnValue("");
       vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+      vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
+      vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
-    it("should initialize with empty cache when file doesn't exist", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+    it("should initialize with empty cache when directory is empty", () => {
+      vi.mocked(fs.readdirSync).mockReturnValue([]);
 
       const cache = new ImageCache();
       const stats = cache.getStats();
@@ -261,18 +263,17 @@ describe("imageProcessing", () => {
       expect(stats.validEntries).toBe(0);
     });
 
-    it("should load existing cache from file", () => {
-      const cacheData = {
-        "https://example.com/image1.jpg": {
-          url: "https://example.com/image1.jpg",
-          localPath: "test_0.jpg",
-          timestamp: "2024-01-01T00:00:00Z",
-          blockName: "test-block",
-        },
+    it("should count existing cache entries from directory", () => {
+      const cacheEntry = {
+        url: "https://example.com/image1.jpg",
+        localPath: "test_0.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        blockName: "test-block",
       };
 
+      vi.mocked(fs.readdirSync).mockReturnValue(["abc123.json"] as any);
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheData));
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
 
       const cache = new ImageCache();
       const stats = cache.getStats();
@@ -280,42 +281,55 @@ describe("imageProcessing", () => {
       expect(stats.totalEntries).toBe(1);
     });
 
-    it("should handle corrupt cache file gracefully", () => {
+    it("should handle corrupt cache entry gracefully", () => {
+      vi.mocked(fs.readdirSync).mockReturnValue(["corrupt.json"] as any);
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue("invalid json{{{");
 
       const cache = new ImageCache();
       const stats = cache.getStats();
 
-      expect(stats.totalEntries).toBe(0);
-      expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to load image cache")
-      );
+      // Corrupt entries are skipped but counted in total
+      expect(stats.totalEntries).toBe(1);
+      expect(stats.validEntries).toBe(0);
     });
 
     it("should check if cached image exists", () => {
       const cache = new ImageCache();
+      const cacheEntry = {
+        url: "https://example.com/image.jpg",
+        localPath: "test_0.jpg",
+        timestamp: new Date().toISOString(), // Recent timestamp to pass TTL check
+        blockName: "test-block",
+      };
 
+      // Mock: cache file exists and image file exists
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      cache.set(
-        "https://example.com/image.jpg",
-        "/images/test_0.jpg",
-        "test-block"
-      );
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
 
       expect(cache.has("https://example.com/image.jpg")).toBe(true);
+    });
+
+    it("should return false for non-existent cache entry", () => {
+      const cache = new ImageCache();
+
+      // Mock: cache file doesn't exist
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
       expect(cache.has("https://example.com/nonexistent.jpg")).toBe(false);
     });
 
     it("should get cached entry", () => {
       const cache = new ImageCache();
+      const cacheEntry = {
+        url: "https://example.com/image.jpg",
+        localPath: "test_0.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        blockName: "test-block",
+      };
 
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      cache.set(
-        "https://example.com/image.jpg",
-        "/images/test_0.jpg",
-        "test-block"
-      );
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
 
       const entry = cache.get("https://example.com/image.jpg");
 
@@ -327,12 +341,14 @@ describe("imageProcessing", () => {
     it("should return undefined for non-existent cache entry", () => {
       const cache = new ImageCache();
 
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
       const entry = cache.get("https://example.com/nonexistent.jpg");
 
       expect(entry).toBeUndefined();
     });
 
-    it("should set cache entry and save to file", () => {
+    it("should set cache entry and save to individual file", () => {
       const cache = new ImageCache();
 
       cache.set(
@@ -342,6 +358,9 @@ describe("imageProcessing", () => {
       );
 
       expect(fs.writeFileSync).toHaveBeenCalled();
+      // Verify it writes to a hash-based filename
+      const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
+      expect(writeCall[0]).toMatch(/\.cache[\/\\]images[\/\\][a-f0-9]+\.json$/);
     });
 
     it("should handle save errors gracefully", () => {
@@ -358,38 +377,53 @@ describe("imageProcessing", () => {
       );
 
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to save image cache")
+        expect.stringContaining("Failed to save cache entry")
       );
     });
 
-    it("should get cache statistics", () => {
+    it("should get cache statistics from directory", () => {
       const cache = new ImageCache();
+      const cacheEntry = {
+        url: "https://example.com/image.jpg",
+        localPath: "test_0.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        blockName: "test",
+      };
 
+      vi.mocked(fs.readdirSync).mockReturnValue([
+        "abc.json",
+        "def.json",
+      ] as any);
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      cache.set("https://example.com/image1.jpg", "/images/test_0.jpg", "test");
-      cache.set("https://example.com/image2.jpg", "/images/test_1.jpg", "test");
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
 
       const stats = cache.getStats();
 
       expect(stats.totalEntries).toBe(2);
-      expect(stats.validEntries).toBeGreaterThanOrEqual(0);
+      expect(stats.validEntries).toBe(2);
     });
 
     it("should cleanup stale entries", () => {
       const cache = new ImageCache();
+      const staleEntry = {
+        url: "https://example.com/image1.jpg",
+        localPath: "test_0.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        blockName: "test",
+      };
 
-      // Add entries
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      cache.set("https://example.com/image1.jpg", "/images/test_0.jpg", "test");
-      cache.set("https://example.com/image2.jpg", "/images/test_1.jpg", "test");
+      vi.mocked(fs.readdirSync).mockReturnValue(["stale.json"] as any);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(staleEntry));
+      vi.mocked(fs.unlinkSync).mockImplementation(() => {});
 
-      // Mock first image missing
-      vi.mocked(fs.existsSync).mockImplementation((path: any) => {
-        return !path.includes("test_0.jpg");
+      // Mock: cache file exists but image file doesn't
+      vi.mocked(fs.existsSync).mockImplementation((filePath: any) => {
+        return filePath.toString().includes(".json"); // Only cache files exist
       });
 
       cache.cleanup();
 
+      expect(fs.unlinkSync).toHaveBeenCalled();
       expect(console.info).toHaveBeenCalledWith(
         expect.stringContaining("Cleaned up")
       );
@@ -398,17 +432,26 @@ describe("imageProcessing", () => {
     it("should reject suspicious file names with path traversal", () => {
       const cache = new ImageCache();
 
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-
-      // This should sanitize the path
+      // Set with path traversal attempt
       cache.set(
         "https://example.com/image.jpg",
         "../../../etc/passwd",
         "test-block"
       );
 
-      // The cache should store only the basename
+      // Read back the entry
+      const cacheEntry = {
+        url: "https://example.com/image.jpg",
+        localPath: "passwd", // Should be sanitized to basename
+        timestamp: expect.any(String),
+        blockName: "test-block",
+      };
+
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
+
       const entry = cache.get("https://example.com/image.jpg");
+      expect(entry?.localPath).toBe("passwd");
       expect(entry?.localPath).not.toContain("..");
     });
   });
@@ -416,19 +459,21 @@ describe("imageProcessing", () => {
   describe("downloadAndProcessImageWithCache", () => {
     beforeEach(() => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
+      vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
     it("should return cached image if available", async () => {
-      // Get the global cache and populate it
-      const imageCache = getImageCache();
-      vi.mocked(fs.existsSync).mockReturnValue(true);
+      const cacheEntry = {
+        url: "https://example.com/cached.jpg",
+        localPath: "cached_0.jpg",
+        timestamp: "2024-01-01T00:00:00Z",
+        blockName: "test-block",
+      };
 
-      // Set cache entry
-      imageCache.set(
-        "https://example.com/cached.jpg",
-        "cached_0.jpg",
-        "test-block"
-      );
+      // Mock: both cache file and image file exist
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(cacheEntry));
 
       const result = await downloadAndProcessImageWithCache(
         "https://example.com/cached.jpg",

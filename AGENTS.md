@@ -230,6 +230,8 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 - Development constants: `./context/development/constants.md`
 - Script architecture: `./context/development/script-architecture.md`
 - Testing patterns: `./context/development/testing-patterns.md`
+- **Roadmap & next steps: `./context/development/roadmap.md`**
+- **Architecture & lessons learned: `./NOTION_FETCH_ARCHITECTURE.md`**
 
 ### Workflow Context (when running Notion commands)
 

@@ -18,8 +18,9 @@ import {
   processImageWithFallbacks,
   logImageFailure,
   logProcessingMetrics,
-  resetProcessingMetrics,
+  createProcessingMetrics,
   type ImageProcessingResult,
+  type ImageProcessingMetrics,
 } from "./imageProcessing";
 import { processBatch } from "./timeoutUtils";
 import { ProgressTracker } from "./progressTracker";
@@ -62,6 +63,8 @@ export interface ImageReplacementResult {
   markdown: string;
   /** Processing statistics */
   stats: ImageProcessingStats;
+  /** Performance metrics for image processing optimizations */
+  metrics: ImageProcessingMetrics;
 }
 
 const SAFETY_LIMIT = 500; // cap images processed per page to avoid runaway loops
@@ -140,8 +143,8 @@ export async function processAndReplaceImages(
   markdown: string,
   safeFilename: string
 ): Promise<ImageReplacementResult> {
-  // Reset metrics at start of each page to ensure accurate per-page telemetry
-  resetProcessingMetrics();
+  // Create per-call metrics to avoid race conditions in parallel processing
+  const metrics = createProcessingMetrics();
 
   const sourceMarkdown = markdown;
   const imageMatches = extractImageMatches(sourceMarkdown);
@@ -155,6 +158,7 @@ export async function processAndReplaceImages(
         totalFailures: 0,
         totalSaved: 0,
       },
+      metrics,
     };
   }
 
@@ -246,7 +250,8 @@ export async function processAndReplaceImages(
         validImage.sanitizedUrl,
         safeFilename,
         validImage.match.idx,
-        validImage.match.full
+        validImage.match.full,
+        metrics
       );
       return {
         ...result,
@@ -344,7 +349,7 @@ export async function processAndReplaceImages(
   }
 
   // Log performance metrics for skip optimizations
-  logProcessingMetrics();
+  logProcessingMetrics(metrics);
 
   return {
     markdown: processedMarkdown,
@@ -353,5 +358,6 @@ export async function processAndReplaceImages(
       totalFailures,
       totalSaved,
     },
+    metrics,
   };
 }

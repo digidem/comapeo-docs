@@ -29,9 +29,10 @@ test-results.json
 test-results.html
 coverage/
 
-# Image processing files  
+# Image processing files
 image-cache.json
 image-failures.json
+.cache/
 TASK.md
 
 # Generated Notion export files

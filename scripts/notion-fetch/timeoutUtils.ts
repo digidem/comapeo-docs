@@ -136,6 +136,11 @@ export interface BatchConfig {
   operation?: string;
   /** Optional progress tracker for aggregate progress display */
   progressTracker?: ProgressTracker;
+  /** Optional callback invoked when each item completes (for streaming progress updates) */
+  onItemComplete?: (
+    index: number,
+    result: PromiseSettledResult<unknown>
+  ) => void;
 }
 
 /**
@@ -186,12 +191,24 @@ export async function processBatch<T, R>(
   }
 
   const results: PromiseSettledResult<R>[] = [];
-  const { maxConcurrent, timeoutMs, operation, progressTracker } = config;
+  const {
+    maxConcurrent,
+    timeoutMs,
+    operation,
+    progressTracker,
+    onItemComplete,
+  } = config;
 
   for (let i = 0; i < items.length; i += maxConcurrent) {
     const batch = items.slice(i, i + maxConcurrent);
     const batchPromises = batch.map((item, batchIndex) => {
       const itemIndex = i + batchIndex;
+
+      // Per-item guard to prevent double-counting when timeout fires
+      // but underlying promise eventually settles
+      let hasNotifiedTracker = false;
+      // Guard for onItemComplete to ensure it's only called once per item
+      let hasCalledOnItemComplete = false;
 
       // Notify progress tracker that item is starting
       if (progressTracker) {
@@ -205,7 +222,9 @@ export async function processBatch<T, R>(
         const trackedPromise = promise
           .then((result) => {
             // Notify progress tracker - check result.success if available
-            if (progressTracker) {
+            // Skip if already notified (e.g., by timeout handler)
+            if (progressTracker && !hasNotifiedTracker) {
+              hasNotifiedTracker = true;
               // If result has a 'success' property, use it to determine status
               // Otherwise, treat promise fulfillment as success (backward compatible)
               const isSuccess =
@@ -216,12 +235,48 @@ export async function processBatch<T, R>(
                   : true;
               progressTracker.completeItem(isSuccess);
             }
+            // Call onItemComplete for streaming progress updates
+            // Wrapped in try-catch to prevent callback errors from affecting processing
+            if (onItemComplete && !hasCalledOnItemComplete) {
+              hasCalledOnItemComplete = true;
+              try {
+                onItemComplete(itemIndex, {
+                  status: "fulfilled",
+                  value: result,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
+            }
             return result;
           })
           .catch((error) => {
             // Notify progress tracker of failure
-            if (progressTracker) {
+            // Skip if already notified (e.g., by timeout handler)
+            if (progressTracker && !hasNotifiedTracker) {
+              hasNotifiedTracker = true;
               progressTracker.completeItem(false);
+            }
+            // Call onItemComplete for streaming progress updates
+            // Wrapped in try-catch to prevent callback errors from affecting processing
+            if (onItemComplete && !hasCalledOnItemComplete) {
+              hasCalledOnItemComplete = true;
+              try {
+                onItemComplete(itemIndex, {
+                  status: "rejected",
+                  reason: error,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
             }
             throw error;
           });
@@ -241,8 +296,36 @@ export async function processBatch<T, R>(
             // CRITICAL: If timeout fires before trackedPromise settles,
             // the .then/.catch handlers above won't run yet.
             // We must notify progress tracker here to prevent hanging.
-            if (error instanceof TimeoutError && progressTracker) {
+            // The per-item guard ensures we only count once even if
+            // the underlying promise settles later.
+            if (
+              error instanceof TimeoutError &&
+              progressTracker &&
+              !hasNotifiedTracker
+            ) {
+              hasNotifiedTracker = true;
               progressTracker.completeItem(false);
+            }
+            // Call onItemComplete for streaming progress updates on timeout
+            // Wrapped in try-catch to prevent callback errors from affecting processing
+            if (
+              error instanceof TimeoutError &&
+              onItemComplete &&
+              !hasCalledOnItemComplete
+            ) {
+              hasCalledOnItemComplete = true;
+              try {
+                onItemComplete(itemIndex, {
+                  status: "rejected",
+                  reason: error,
+                });
+              } catch (callbackError) {
+                console.error(
+                  chalk.red(
+                    `Error in onItemComplete callback: ${callbackError}`
+                  )
+                );
+              }
             }
             throw error;
           });
@@ -252,8 +335,22 @@ export async function processBatch<T, R>(
       } catch (error) {
         // Handle synchronous errors from processor
         // Notify progress tracker of failure
-        if (progressTracker) {
+        // Skip if already notified
+        if (progressTracker && !hasNotifiedTracker) {
+          hasNotifiedTracker = true;
           progressTracker.completeItem(false);
+        }
+        // Call onItemComplete for streaming progress updates
+        // Wrapped in try-catch to prevent callback errors from affecting processing
+        if (onItemComplete && !hasCalledOnItemComplete) {
+          hasCalledOnItemComplete = true;
+          try {
+            onItemComplete(itemIndex, { status: "rejected", reason: error });
+          } catch (callbackError) {
+            console.error(
+              chalk.red(`Error in onItemComplete callback: ${callbackError}`)
+            );
+          }
         }
         return Promise.reject(error);
       }

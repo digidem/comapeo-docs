@@ -369,7 +369,8 @@ describe("generateBlocks", () => {
 
       // Mock retry scenario - fail twice then succeed
       let retryAttempts = 0;
-      const originalImplementation = mockAxios.axios.get.getMockImplementation();
+      const originalImplementation =
+        mockAxios.axios.get.getMockImplementation();
       mockAxios.axios.get.mockImplementation((url, config) => {
         if (url === imageUrls[2]) {
           retryAttempts++;
@@ -382,7 +383,9 @@ describe("generateBlocks", () => {
           });
         }
         // Handle other URLs normally using the original implementation
-        return originalImplementation ? originalImplementation(url, config) : Promise.reject(new Error(`No mock for URL: ${url}`));
+        return originalImplementation
+          ? originalImplementation(url, config)
+          : Promise.reject(new Error(`No mock for URL: ${url}`));
       });
 
       n2m.pageToMarkdown.mockResolvedValue([]);
@@ -753,14 +756,17 @@ describe("generateBlocks", () => {
   });
 
   describe("Critical error handling", () => {
-    it("should log and rethrow critical errors in generateBlocks", async () => {
+    it("should handle malformed pages gracefully with parallel processing", async () => {
       const { generateBlocks } = await import("./generateBlocks");
       const consoleErrorSpy = vi
         .spyOn(console, "error")
         .mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
 
-      // Create a page that will cause an error during the grouping phase
-      // by having malformed properties
+      // Create a page that will cause an error during processing
+      // With parallel processing, individual page failures are handled gracefully
       const malformedPage = {
         id: "malformed-page",
         properties: null, // This will cause errors when accessing properties
@@ -768,19 +774,22 @@ describe("generateBlocks", () => {
 
       const progressCallback = vi.fn();
 
-      await expect(
-        generateBlocks([malformedPage as any], progressCallback)
-      ).rejects.toThrow();
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Critical error in generateBlocks:"),
-        expect.anything()
+      // With parallel processing, malformed pages don't crash the entire run
+      // Instead, they're processed and marked as failed
+      const result = await generateBlocks(
+        [malformedPage as any],
+        progressCallback
       );
 
+      // Processing should complete (not throw)
+      expect(result).toBeDefined();
+      expect(result.totalSaved).toBe(0);
+
       consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     });
 
-    it("should handle non-Error objects in critical error catch", async () => {
+    it("should handle non-Error objects in progress callback gracefully", async () => {
       const { generateBlocks } = await import("./generateBlocks");
       const consoleErrorSpy = vi
         .spyOn(console, "error")
@@ -799,10 +808,13 @@ describe("generateBlocks", () => {
       n2m.pageToMarkdown.mockResolvedValue([]);
       n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
 
-      await expect(generateBlocks(pages, progressCallback)).rejects.toThrow(
-        "String error thrown"
-      );
+      // With streaming progress, callback errors are caught and logged
+      // instead of crashing the entire run
+      const result = await generateBlocks(pages, progressCallback);
+      expect(result).toBeDefined();
+      expect(result.totalSaved).toBe(0);
 
+      // Verify error was logged
       expect(consoleErrorSpy).toHaveBeenCalled();
 
       consoleErrorSpy.mockRestore();

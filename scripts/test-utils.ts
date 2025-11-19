@@ -625,8 +625,9 @@ export function createMockHeadingPage(
 
 /**
  * Mock image buffer for testing
+ * Buffer must be >50KB to trigger image processing (optimization skips smaller images)
  */
-export const mockImageBuffer = Buffer.from("mock-image-data");
+export const mockImageBuffer = Buffer.alloc(52000, "mock-image-data");
 
 /**
  * Create mock markdown with embedded images

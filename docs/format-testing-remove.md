@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /format-testing-remove
 last_update:
-  date: 11/10/2025
+  date: 11/18/2025
   author: Awana Digital
 ---
 
@@ -101,10 +101,40 @@ line break
 for different pages in documentation
 
 
-🔗 Go to [Name of page in bold with added link](http://awana.digital/) 
+The idea is to always use relative links. This means that instead of linking to something like `https://comapeo.app/docs/creating-observations` you would link to `/creating-observations`. This allows that if in the future we change the URL (to, lets say `https://docs.comapeo.app`) we don’t need to change anything in notion. 
 
 
-🔗 [**Blog**](https://awana.digital/blog/stability-co-design-our-comapeo-release-strategy)[ | Stability & Co-Design: Our CoMapeo Release Strategy](https://awana.digital/blog/stability-co-design-our-comapeo-release-strategy)
+But there’s a catch. Cause some pages (like `introduction`) live in different sections/paths, so relative linking needs to take that into account. For example, linking **from** the `introduction` page **to** the `creating-a-new-observation` page means linking to `../creating-observation` (so, go up one level and then to the page). As most of this, there’s a bit of trial and error to make it work and I (@Tomás Ciccola) as made some tests in the page directly and _imagining_ how the actual thing is going to work.
+
+
+There’s 4 types of internal links:
+
+1. [Link to a different section of the page](#my-title-in-lowercase-separated-by-dashes)
+
+Basically one can use a hashtag (#) followed by the title section, but transforming the title to be lowercase and replacing spaces by dashes (-). This will mean that clicking the link will scroll the page to that section 
+
+1. [Link to a different page](/anotherpage)
+
+by writing a forward slash (/) followed by the title of the page in lowercase and separated by spaces, one can link to a whole other page (again, always use a relative link)
+
+1. [Link to a specific section of another page](/page#section)
+
+This is basically a combination of the other two, were one writes a forward slash (/), followed by the name of the page, followed by a hashtag (#) to the specific section (always use dashes for spaces and everything lowercase)
+
+1. [Link to a toggle (Collapsible section that contains documents)](/category/getting-started---essentials/)
+
+This are pages that have no content but contain other pages, to correctly link to this, one needs to add the `/category` path to the link
+
+
+@Tomás Ciccola has tried manually in the page itself all this linking and it worked, but we still need to check if its viable to do it from notion. **Notion is really picky when linking, so at a glance it doesn’t allow this type of link. To make it work I first needed to create a link to a valid URL (so, create a link to https://comapeo.app/something) and then edit the link and QUICKLY add the actual link that I wanted and press ENTER…**
+
+
+
+For internal links, I think the struggle is to being able to predict the relative path of the URL; from what I’ve seen it always follows the rule of: `title-in-lowercase-separated-by-dashes`, but it may not always be the case and we may need to manually adjust after trial and error
+
+1. [Link to an URL outside of the documentation site](https://comapeo.app/)
+
+This is for an external resource that we want to link from inside the documentation site
 
 
 # Example [H1]
@@ -148,7 +178,7 @@ Manually styled lists
 
 > ### 👣 **Steps: Start recording audio**  
 >   
-> **Step 1: Select** <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11518593.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**add audio**  
+> **Step 1: Select** <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11518585.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**add audio**  
 >   
 > Recording will begin immediately.  
 >   
@@ -176,7 +206,7 @@ Manually styled lists
 >   
 > _**Step 3**_**: Choose next step**  
 >   
-> Choose to ▶️ listen to the recorded audio, <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11518593.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation  
+> Choose to ▶️ listen to the recorded audio, <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_11518585.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation  
 >   
 > ![1000029414.jpg](/images/formattestingremove_5.jpg)
 

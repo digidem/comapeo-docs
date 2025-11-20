@@ -299,6 +299,8 @@ const config: Config = {
     ],
   ],
 
+  clientModules: [require.resolve("./src/client/breadcrumbs-scroll-to-top.ts")],
+
   themeConfig: {
     // Replace with your project's social card
     image: "img/comapeo-social-card.jpg",

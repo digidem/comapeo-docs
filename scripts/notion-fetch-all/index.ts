@@ -167,14 +167,18 @@ const printHelp = () => {
   console.log(
     "  --preview-only             Generate preview only, no file export"
   );
-  console.log("  --perf-log                 Enable performance summary logging");
+  console.log(
+    "  --perf-log                 Enable performance summary logging"
+  );
   console.log(
     "  --perf-output <file>       Write performance JSON to provided path"
   );
   console.log("  --status-filter <status>   Filter by specific status");
   console.log("  --max-pages <number>       Limit number of pages to process");
   console.log("  --force                    Force full rebuild, ignore cache");
-  console.log("  --dry-run                  Show what would be processed without doing it");
+  console.log(
+    "  --dry-run                  Show what would be processed without doing it"
+  );
   console.log("  --help, -h                 Show this help message\\n");
   console.log(chalk.bold("Examples:"));
   console.log("  npm run notion:fetch-all");
@@ -242,6 +246,8 @@ async function main() {
       generateOptions: {
         force: options.force,
         dryRun: options.dryRun,
+        // Skip deletion when fetch is limited to avoid removing valid files
+        isPartialFetch: !!(options.maxPages || options.statusFilter),
       },
     };
 

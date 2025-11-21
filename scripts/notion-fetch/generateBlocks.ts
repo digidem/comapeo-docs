@@ -139,6 +139,8 @@ export interface GenerateBlocksOptions {
   force?: boolean;
   /** Show what would be processed without actually doing it */
   dryRun?: boolean;
+  /** Skip deletion of orphaned files (use when fetch is limited by --max-pages or --status-filter) */
+  isPartialFetch?: boolean;
 }
 
 /**
@@ -429,7 +431,7 @@ export async function generateBlocks(
   const pagesByLang = [];
 
   // --- Incremental Sync Setup ---
-  const { force = false, dryRun = false } = options;
+  const { force = false, dryRun = false, isPartialFetch = false } = options;
 
   // Compute script hash
   console.log(chalk.blue("\n🔍 Computing script hash for incremental sync..."));
@@ -466,28 +468,36 @@ export async function generateBlocks(
     }
   }
 
-  // Find and handle deleted pages
-  const deletedPages = findDeletedPages(currentPageIds, metadataCache);
-  if (deletedPages.length > 0) {
+  // Find and handle deleted pages (only when we have the full dataset)
+  if (isPartialFetch) {
     console.log(
-      chalk.yellow(`\n🗑️  Found ${deletedPages.length} deleted pages`)
+      chalk.gray(
+        "\n⏭️  Skipping deleted page detection (partial fetch with --max-pages or --status-filter)"
+      )
     );
-    for (const deleted of deletedPages) {
-      for (const outputPath of deleted.outputPaths) {
-        if (dryRun) {
-          console.log(chalk.gray(`   Would delete: ${outputPath}`));
-        } else {
-          try {
-            if (fs.existsSync(outputPath)) {
-              fs.unlinkSync(outputPath);
-              console.log(chalk.gray(`   Deleted: ${outputPath}`));
+  } else {
+    const deletedPages = findDeletedPages(currentPageIds, metadataCache);
+    if (deletedPages.length > 0) {
+      console.log(
+        chalk.yellow(`\n🗑️  Found ${deletedPages.length} deleted pages`)
+      );
+      for (const deleted of deletedPages) {
+        for (const outputPath of deleted.outputPaths) {
+          if (dryRun) {
+            console.log(chalk.gray(`   Would delete: ${outputPath}`));
+          } else {
+            try {
+              if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+                console.log(chalk.gray(`   Deleted: ${outputPath}`));
+              }
+            } catch (err) {
+              console.warn(chalk.yellow(`   Failed to delete: ${outputPath}`));
             }
-          } catch (err) {
-            console.warn(chalk.yellow(`   Failed to delete: ${outputPath}`));
           }
         }
+        removePageFromCache(metadataCache, deleted.pageId);
       }
-      removePageFromCache(metadataCache, deleted.pageId);
     }
   }
 

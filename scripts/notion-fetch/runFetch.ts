@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
-import { generateBlocks } from "./generateBlocks";
+import { generateBlocks, GenerateBlocksOptions } from "./generateBlocks";
 import { trackSpinner } from "./runtime";
 import { perfTelemetry } from "../perfTelemetry";
 import SpinnerManager from "./spinnerManager";
@@ -14,6 +14,8 @@ export interface FetchPipelineOptions {
     data: Array<Record<string, unknown>>
   ) => Array<Record<string, unknown>> | Promise<Array<Record<string, unknown>>>;
   shouldGenerate?: boolean;
+  /** Options for incremental sync */
+  generateOptions?: GenerateBlocksOptions;
 }
 
 export interface FetchPipelineResult {
@@ -41,6 +43,7 @@ export async function runFetchPipeline(
     onProgress,
     transform,
     shouldGenerate = true,
+    generateOptions = {},
   } = options;
 
   console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
@@ -108,14 +111,18 @@ export async function runFetchPipeline(
     try {
       perfTelemetry.phaseStart("generate");
       unregisterGenerateSpinner = trackSpinner(generateSpinner);
-      const metrics = await generateBlocks(data, (progress) => {
-        if (generateSpinner.isSpinning) {
-          generateSpinner.text = chalk.blue(
-            `${generateSpinnerText}: ${progress.current}/${progress.total}`
-          );
-        }
-        onProgress?.(progress);
-      });
+      const metrics = await generateBlocks(
+        data,
+        (progress) => {
+          if (generateSpinner.isSpinning) {
+            generateSpinner.text = chalk.blue(
+              `${generateSpinnerText}: ${progress.current}/${progress.total}`
+            );
+          }
+          onProgress?.(progress);
+        },
+        generateOptions
+      );
       perfTelemetry.phaseEnd("generate");
 
       generateSpinner.succeed(chalk.green("Blocks generated successfully"));

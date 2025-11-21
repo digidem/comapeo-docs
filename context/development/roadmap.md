@@ -2,7 +2,7 @@
 
 This document tracks future improvements and next steps for the Notion fetch system.
 
-**Last Updated:** 2025-01-XX (after completing 9 improvement issues + 9 bug fixes)
+**Last Updated:** 2025-11-19 (after implementing incremental sync)
 
 ---
 
@@ -51,16 +51,6 @@ This document tracks future improvements and next steps for the Notion fetch sys
 ---
 
 ## Medium-Term Enhancements
-
-### Incremental Sync
-- [ ] Currently fetches all pages every run
-- [ ] Use `notionLastEdited` to skip unchanged pages
-- [ ] Could reduce runtime by 80%+ for incremental updates
-
-**Implementation Notes:**
-- Cache stores `notionLastEdited` already
-- Compare with Notion API's `last_edited_time`
-- Skip page processing if unchanged
 
 ### Preview Deployment Optimization
 - [ ] Use incremental sync for PR previews
@@ -119,6 +109,27 @@ After each major change, verify:
 ---
 
 ## Completed Work
+
+### Incremental Sync (Nov 2025)
+- [x] Script change detection via SHA256 hashing
+- [x] Page metadata cache for tracking processed pages
+- [x] Skip unchanged pages based on `last_edited_time`
+- [x] Automatic full rebuild when script files change
+- [x] Deleted page detection and cleanup
+- [x] CLI flags: `--force` (full rebuild), `--dry-run` (preview)
+- [x] Cache version migration support
+
+**Files created:**
+- `scripts/notion-fetch/scriptHasher.ts` - Hash critical files
+- `scripts/notion-fetch/pageMetadataCache.ts` - Page metadata storage
+- `scripts/notion-fetch/__tests__/scriptHasher.test.ts`
+- `scripts/notion-fetch/__tests__/pageMetadataCache.test.ts`
+
+**Files modified:**
+- `scripts/notion-fetch/generateBlocks.ts` - Core incremental logic
+- `scripts/notion-fetch/runFetch.ts` - Pass options through
+- `scripts/notion-fetch-all/fetchAll.ts` - Generate options support
+- `scripts/notion-fetch-all/index.ts` - CLI flag parsing
 
 ### Performance Improvements (Jan 2025)
 - [x] Issue #1: CI spinner detection

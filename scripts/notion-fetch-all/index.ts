@@ -40,6 +40,8 @@ interface CliOptions {
   exportFiles: boolean;
   statusFilter?: string;
   maxPages?: number;
+  force: boolean;
+  dryRun: boolean;
 }
 
 const parseArgs = (): CliOptions => {
@@ -54,6 +56,8 @@ const parseArgs = (): CliOptions => {
     comparison: false,
     previewOnly: false,
     exportFiles: true,
+    force: false,
+    dryRun: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -117,6 +121,12 @@ const parseArgs = (): CliOptions => {
       case "--max-pages":
         options.maxPages = parseInt(args[++i]);
         break;
+      case "--force":
+        options.force = true;
+        break;
+      case "--dry-run":
+        options.dryRun = true;
+        break;
       case "--help":
       case "-h":
         printHelp();
@@ -157,12 +167,18 @@ const printHelp = () => {
   console.log(
     "  --preview-only             Generate preview only, no file export"
   );
-  console.log("  --perf-log                 Enable performance summary logging");
+  console.log(
+    "  --perf-log                 Enable performance summary logging"
+  );
   console.log(
     "  --perf-output <file>       Write performance JSON to provided path"
   );
   console.log("  --status-filter <status>   Filter by specific status");
   console.log("  --max-pages <number>       Limit number of pages to process");
+  console.log("  --force                    Force full rebuild, ignore cache");
+  console.log(
+    "  --dry-run                  Show what would be processed without doing it"
+  );
   console.log("  --help, -h                 Show this help message\\n");
   console.log(chalk.bold("Examples:"));
   console.log("  npm run notion:fetch-all");
@@ -227,6 +243,12 @@ async function main() {
         "Fetching ALL pages from Notion (excluding removed items by default)...",
       generateSpinnerText: "Exporting pages to markdown files",
       progressLogger,
+      generateOptions: {
+        force: options.force,
+        dryRun: options.dryRun,
+        // Only enable deletion when we have the full dataset (no filters/limits)
+        enableDeletion: !options.maxPages && !options.statusFilter,
+      },
     };
 
     const fetchResult = await fetchAllNotionData(fetchOptions);

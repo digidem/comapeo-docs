@@ -149,11 +149,11 @@ describe("Incremental Sync Integration", () => {
     });
   });
 
-  describe("Partial fetch safety", () => {
-    it("should not delete pages when isPartialFetch is true", () => {
-      // This test verifies that when using --max-pages or --status-filter,
+  describe("Deletion safety (enableDeletion option)", () => {
+    it("should only delete pages when enableDeletion is explicitly true", () => {
+      // This test verifies that deletion is OFF by default.
+      // When using --max-pages, --status-filter, or single-page fetch,
       // pages missing from the current fetch are NOT treated as deleted.
-      // The deletion logic should be skipped entirely for partial fetches.
 
       const cache: PageMetadataCache = {
         version: CACHE_VERSION,
@@ -178,15 +178,15 @@ describe("Incremental Sync Integration", () => {
         },
       };
 
-      // Simulate partial fetch with only page-1 (e.g., --max-pages 1)
+      // Simulate partial fetch with only page-1 (e.g., --max-pages 1 or notion-fetch-one)
       const partialPageIds = new Set(["page-1"]);
 
-      // Without isPartialFetch protection, this would incorrectly return page-2 and page-3
+      // findDeletedPages would return page-2 and page-3 as "deleted"
       const wouldBeDeleted = findDeletedPages(partialPageIds, cache);
-      expect(wouldBeDeleted).toHaveLength(2); // This is what WOULD happen
+      expect(wouldBeDeleted).toHaveLength(2);
 
-      // With isPartialFetch=true in generateBlocks, the deletion logic is skipped entirely
-      // This test documents the expected behavior: partial fetches should NOT trigger deletion
+      // But with enableDeletion=false (the default), the deletion logic is skipped entirely.
+      // Only full fetches without filters should set enableDeletion=true.
     });
   });
 

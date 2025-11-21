@@ -246,8 +246,8 @@ async function main() {
       generateOptions: {
         force: options.force,
         dryRun: options.dryRun,
-        // Skip deletion when fetch is limited to avoid removing valid files
-        isPartialFetch: !!(options.maxPages || options.statusFilter),
+        // Only enable deletion when we have the full dataset (no filters/limits)
+        enableDeletion: !options.maxPages && !options.statusFilter,
       },
     };
 

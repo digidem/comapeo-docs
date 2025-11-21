@@ -139,8 +139,12 @@ export interface GenerateBlocksOptions {
   force?: boolean;
   /** Show what would be processed without actually doing it */
   dryRun?: boolean;
-  /** Skip deletion of orphaned files (use when fetch is limited by --max-pages or --status-filter) */
-  isPartialFetch?: boolean;
+  /**
+   * Enable deletion of orphaned files. Only set to true when you're certain
+   * the pages array contains the FULL dataset (not filtered by --max-pages,
+   * --status-filter, or single-page fetch). Defaults to false for safety.
+   */
+  enableDeletion?: boolean;
 }
 
 /**
@@ -431,7 +435,7 @@ export async function generateBlocks(
   const pagesByLang = [];
 
   // --- Incremental Sync Setup ---
-  const { force = false, dryRun = false, isPartialFetch = false } = options;
+  const { force = false, dryRun = false, enableDeletion = false } = options;
 
   // Compute script hash
   console.log(chalk.blue("\n🔍 Computing script hash for incremental sync..."));
@@ -468,11 +472,11 @@ export async function generateBlocks(
     }
   }
 
-  // Find and handle deleted pages (only when we have the full dataset)
-  if (isPartialFetch) {
+  // Find and handle deleted pages (only when explicitly enabled with full dataset)
+  if (!enableDeletion) {
     console.log(
       chalk.gray(
-        "\n⏭️  Skipping deleted page detection (partial fetch with --max-pages or --status-filter)"
+        "\n⏭️  Skipping deleted page detection (use full fetch without filters to enable)"
       )
     );
   } else {

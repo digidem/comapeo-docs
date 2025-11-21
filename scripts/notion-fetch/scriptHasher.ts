@@ -49,6 +49,10 @@ export const CRITICAL_SCRIPT_FILES = [
   "scripts/constants.ts",
   "scripts/notionClient.ts",
   "scripts/notionPageUtils.ts",
+
+  // Incremental sync (changes here should invalidate cache)
+  "scripts/notion-fetch/scriptHasher.ts",
+  "scripts/notion-fetch/pageMetadataCache.ts",
 ];
 
 /**

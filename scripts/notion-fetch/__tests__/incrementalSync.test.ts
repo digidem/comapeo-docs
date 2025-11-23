@@ -8,6 +8,7 @@ import {
   createEmptyCache,
   determineSyncMode,
   filterChangedPages,
+  findDeletedPages,
   updatePageInCache,
   CACHE_VERSION,
   PAGE_METADATA_CACHE_PATH,

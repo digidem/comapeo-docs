@@ -42,12 +42,20 @@ img.emoji {
   background: transparent !important;
 }
 
-/* Custom */
+/* Custom navbar overflow containment - only clip vertically */
+.navbar,
+nav.navbar {
+  overflow-x: visible; /* Allow horizontal overflow for dropdowns */
+  overflow-y: hidden; /* Clip vertical overflow (logo) within navbar bounds */
+}
+
 .navbar__logo {
   margin-top: -100px;
+  pointer-events: none; /* Prevent overflow from blocking clicks */
 }
 .navbar__logo img {
   height: 135px;
+  pointer-events: auto; /* Re-enable clicks on the actual logo */
 }
 
 /* Sidebar title/branding area styling - CSS variables for theme support */
@@ -363,4 +371,119 @@ details {
   height: var(--notion-spacer-gap);
   margin: 0;
   pointer-events: none;
+}
+
+/*
+ * Sticky Breadcrumbs with Scroll-to-Top
+ * Issue #61: Make breadcrumbs stay fixed at top when scrolling
+ *
+ * Implementation: Breadcrumbs start in normal document flow, but when user
+ * scrolls down and they would go out of view, they stick to the top of the
+ * viewport (below the navbar) and remain visible.
+ */
+
+/* Ensure parent containers allow sticky positioning */
+.theme-doc-page,
+.docMainContainer_node_modules-\@docusaurus-theme-classic-lib-theme-DocPage-Layout-Main-styles-module,
+article {
+  overflow: visible !important;
+}
+
+/* Make breadcrumbs sticky at the top of the page */
+.theme-doc-breadcrumbs {
+  position: -webkit-sticky; /* Safari */
+  position: sticky;
+  top: calc(
+    var(--ifm-navbar-height, 60px) + 2px
+  ); /* Small offset to show navbar shadow */
+  z-index: 200; /* Higher than navbar to prevent logo overflow interference */
+  background-color: #ffffff;
+  cursor: pointer;
+
+  /* Add padding for breathing room when sticky */
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+
+  /* Professional border for clean separation */
+  border-bottom: 1px solid #e8e8e8;
+}
+
+/* Refined hover effect - subtle but visible */
+.theme-doc-breadcrumbs:hover {
+  background-color: #f8f9fa;
+}
+
+/* Ensure breadcrumbs nav doesn't have conflicting margins */
+.theme-doc-breadcrumbs nav {
+  margin: 0;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .theme-doc-breadcrumbs {
+  background-color: #1b1b1d;
+  border-bottom-color: #2e2e2e;
+}
+
+[data-theme="dark"] .theme-doc-breadcrumbs:hover {
+  background-color: #242526;
+}
+
+/*
+ * Table of Contents Styling Enhancement
+ * Active item with royal blue background and sliding animation
+ */
+
+/* Add smooth transitions to all TOC links */
+.table-of-contents__link {
+  position: relative;
+  padding-left: 1rem;
+  transition: all 0.2s ease-in-out;
+  border-left: 3px solid transparent;
+}
+
+/* Sliding animation on hover */
+.table-of-contents__link:hover {
+  padding-left: 1.25rem;
+  color: var(--ifm-color-primary);
+  border-left-color: var(--ifm-color-primary-light);
+}
+
+/* Active state with royal blue background */
+.table-of-contents__link--active,
+.table-of-contents__link--active:hover {
+  background-color: var(--ifm-color-primary);
+  color: #ffffff;
+  padding-left: 1.25rem;
+  border-left-color: var(--ifm-color-primary-dark);
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Smooth sliding animation when becoming active */
+.table-of-contents__link--active {
+  animation: slideInFromLeft 0.3s ease-out;
+}
+
+@keyframes slideInFromLeft {
+  from {
+    padding-left: 1rem;
+    opacity: 0.7;
+  }
+  to {
+    padding-left: 1.25rem;
+    opacity: 1;
+  }
+}
+
+/* Dark mode adjustments for TOC */
+[data-theme="dark"] .table-of-contents__link:hover {
+  color: var(--ifm-color-primary-lighter);
+  border-left-color: var(--ifm-color-primary);
+}
+
+[data-theme="dark"] .table-of-contents__link--active,
+[data-theme="dark"] .table-of-contents__link--active:hover {
+  background-color: var(--ifm-color-primary);
+  color: #ffffff;
 }

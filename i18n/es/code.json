@@ -668,5 +668,8 @@
     },
     "Troubleshooting: Moving Observations & Tracks outside of CoMapeo": {
         "message": "Nueva Página"
+    },
+    "Testing: slug": {
+        "message": "Elementos de contenido de prueba"
     }
 }

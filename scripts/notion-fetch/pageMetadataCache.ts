@@ -215,6 +215,13 @@ export function findDeletedPages(
     return [];
   }
 
+  // Safety guard: an empty currentPageIds set likely means the fetch returned
+  // no results (e.g., temporary API failure). Treat this as "no deletions"
+  // to avoid wiping all cached pages.
+  if (currentPageIds.size === 0) {
+    return [];
+  }
+
   const deleted: Array<{ pageId: string; outputPaths: string[] }> = [];
 
   for (const [pageId, metadata] of Object.entries(cache.pages)) {

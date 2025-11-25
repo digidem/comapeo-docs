@@ -189,6 +189,30 @@ describe("Incremental Sync Integration", () => {
       // But with enableDeletion=false (the default), the deletion logic is skipped entirely.
       // Only full fetches without filters should set enableDeletion=true.
     });
+
+    it("should skip deletion entirely when the fetch returns zero pages", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "test-hash",
+        lastSync: "2024-01-01",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: ["/docs/page-1.md"],
+            processedAt: "2024-01-01",
+          },
+          "page-2": {
+            lastEdited: "2024-01-01",
+            outputPaths: ["/docs/page-2.md"],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const emptyFetchIds = new Set<string>(); // Simulates Notion returning no rows
+      const deleted = findDeletedPages(emptyFetchIds, cache);
+      expect(deleted).toHaveLength(0);
+    });
   });
 
   describe("Script hash stability", () => {

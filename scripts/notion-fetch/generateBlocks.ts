@@ -479,6 +479,12 @@ export async function generateBlocks(
         "\n⏭️  Skipping deleted page detection (use full fetch without filters to enable)"
       )
     );
+  } else if (currentPageIds.size === 0) {
+    console.log(
+      chalk.yellow(
+        "\n⚠️  Deletion skipped: enableDeletion=true but zero pages were fetched. This typically indicates a temporary Notion/API issue or an overly strict filter. No files will be removed."
+      )
+    );
   } else {
     const deletedPages = findDeletedPages(currentPageIds, metadataCache);
     if (deletedPages.length > 0) {

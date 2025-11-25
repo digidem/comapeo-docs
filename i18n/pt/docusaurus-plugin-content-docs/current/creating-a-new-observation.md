@@ -1,17 +1,17 @@
 ---
-id: doc-testing-links
+id: doc-creating-a-new-observation
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 3
+sidebar_position: 2
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/testing-links.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/creating-a-new-observation.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /testing-links
+slug: /creating-a-new-observation
 last_update:
-  date: 11/25/2025
+  date: 9/22/2025
   author: Awana Digital
 ---
 

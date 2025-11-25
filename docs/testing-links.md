@@ -2,7 +2,7 @@
 id: doc-testing-links
 title: Testing links
 sidebar_label: Testing links
-sidebar_position: 2
+sidebar_position: 3
 pagination_label: Testing links
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/testing-links.md
 keywords:

@@ -671,5 +671,8 @@
     },
     "Testing: slug": {
         "message": "Elementos de contenido de prueba"
+    },
+    "Testing links": {
+        "message": "Nueva Página"
     }
 }

@@ -209,7 +209,7 @@ Manually styled lists
 
 > ### 👣 **Steps: Start recording audio**  
 >   
-> **Step 1: Select** <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_91432594.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**add audio**  
+> **Step 1: Select** <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_91432603.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**add audio**  
 >   
 > Recording will begin immediately.  
 >   
@@ -237,7 +237,7 @@ Manually styled lists
 >   
 > _**Step 3**_**: Choose next step**  
 >   
-> Choose to ▶️ listen to the recorded audio, <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_91432594.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation  
+> Choose to ▶️ listen to the recorded audio, <img src="/comapeo-docs/images/emojis/icon-add-audio_64fdb41aa5ff26ba_91432603.jpg" alt="icon-add-audio-low" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />add another audio, or ➡️ continue to edit the observation  
 >   
 > ![1000029414.jpg](/images/testingslug_5.jpg)
 

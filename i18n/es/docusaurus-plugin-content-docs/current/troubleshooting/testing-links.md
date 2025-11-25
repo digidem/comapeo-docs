@@ -2,7 +2,7 @@
 id: doc-testing-links
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 7
+sidebar_position: 50
 pagination_label: Nueva Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/testing-links.md
 keywords:

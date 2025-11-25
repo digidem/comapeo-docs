@@ -278,5 +278,12 @@
     "localPath": "/home/runner/work/comapeo-docs/comapeo-docs/static/images/emojis/add_observation_a29cca65239d48f0_91433117.png",
     "hash": "a29cca65239d48f0",
     "size": 17778
+  },
+  "https://s3-us-west-2.amazonaws.com/public.notion-static.com/db301238-d770-4428-9270-4be9f70197fb/comapeo_logo_circle.png": {
+    "url": "https://s3-us-west-2.amazonaws.com/public.notion-static.com/db301238-d770-4428-9270-4be9f70197fb/comapeo_logo_circle.png",
+    "filename": "comapeo_logo_ci_3a40065bd081188f_93106581.png",
+    "localPath": "/home/runner/work/comapeo-docs/comapeo-docs/static/images/emojis/comapeo_logo_ci_3a40065bd081188f_93106581.png",
+    "hash": "3a40065bd081188f",
+    "size": 82388
   }
 }

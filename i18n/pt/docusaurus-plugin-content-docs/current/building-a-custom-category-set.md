@@ -1,15 +1,15 @@
 ---
-id: doc-creating-a-new-observation
+id: doc-building-a-custom-category-set
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 4
+sidebar_position: 2
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/gathering-observations--tracks/creating-a-new-observation.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/building-a-custom-category-set.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /creating-a-new-observation
+slug: /building-a-custom-category-set
 last_update:
   date: 9/22/2025
   author: Awana Digital

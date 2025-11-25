@@ -140,7 +140,7 @@ Ex.
 
     🔗 Go to [**Creating a New Observation - Adding Details**](/docs/creating-a-new-observation#adding-details) 
 
-1. [Link to a toggle (Collapsible section that contains documents)](/docs/category/getting-started---essentials/)
+1. [Link to a toggle (Collapsible section that contains documents)](/docs/category/getting-started---essentials)
 
 This are pages that have no content but contain other pages, to correctly link to this, one needs to add the `/category` path to the link
 
@@ -155,7 +155,7 @@ For internal links, I think the struggle is to being able to predict the relativ
 Ex. 
 
 
-    🔗 Go to [**Troubleshooting**](/docs/category/troubleshooting)
+    🔗 Go to [**Troubleshooting**](/docs/category/troubleshoting)
 
 1. [Link to an URL outside of the documentation site](https://comapeo.app/)
 

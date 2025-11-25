@@ -34,6 +34,8 @@ describe("Incremental Sync Integration", () => {
     });
 
     it("should filter pages correctly based on timestamps", () => {
+      vi.spyOn(fs, "existsSync").mockReturnValue(true);
+
       const pages = [
         { id: "page-1", last_edited_time: "2024-01-01T00:00:00.000Z" },
         { id: "page-2", last_edited_time: "2024-01-05T00:00:00.000Z" },
@@ -68,6 +70,8 @@ describe("Incremental Sync Integration", () => {
         "page-2",
         "page-3",
       ]);
+
+      vi.restoreAllMocks();
     });
 
     it("should update cache correctly after processing", () => {

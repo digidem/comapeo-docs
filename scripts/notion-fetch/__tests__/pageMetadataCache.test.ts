@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+
+const {
+  existsSyncMock,
+  readFileSyncMock,
+  writeFileSyncMock,
+  mkdirSyncMock,
+  renameSyncMock,
+} = vi.hoisted(() => ({
+  existsSyncMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
+  writeFileSyncMock: vi.fn(),
+  mkdirSyncMock: vi.fn(),
+  renameSyncMock: vi.fn(),
+}));
 import {
   loadPageMetadataCache,
   savePageMetadataCache,
@@ -11,6 +25,7 @@ import {
   updatePageInCache,
   removePageFromCache,
   getCacheStats,
+  hasMissingOutputs,
   CACHE_VERSION,
   PAGE_METADATA_CACHE_PATH,
   type PageMetadataCache,
@@ -21,17 +36,30 @@ vi.mock("node:fs", async () => {
   const actual = await vi.importActual("node:fs");
   return {
     ...actual,
-    existsSync: vi.fn(),
-    readFileSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    renameSync: vi.fn(),
+    default: {
+      ...(actual as Record<string, unknown>),
+      existsSync: existsSyncMock,
+      readFileSync: readFileSyncMock,
+      writeFileSync: writeFileSyncMock,
+      mkdirSync: mkdirSyncMock,
+      renameSync: renameSyncMock,
+    },
+    existsSync: existsSyncMock,
+    readFileSync: readFileSyncMock,
+    writeFileSync: writeFileSyncMock,
+    mkdirSync: mkdirSyncMock,
+    renameSync: renameSyncMock,
   };
 });
 
 describe("pageMetadataCache", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    existsSyncMock.mockReset();
+    readFileSyncMock.mockReset();
+    writeFileSyncMock.mockReset();
+    mkdirSyncMock.mockReset();
+    renameSyncMock.mockReset();
   });
 
   describe("createEmptyCache", () => {
@@ -47,7 +75,7 @@ describe("pageMetadataCache", () => {
 
   describe("loadPageMetadataCache", () => {
     it("should return null when cache file does not exist", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      existsSyncMock.mockReturnValue(false);
 
       const result = loadPageMetadataCache();
 
@@ -55,8 +83,8 @@ describe("pageMetadataCache", () => {
     });
 
     it("should return null for invalid JSON", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue("not valid json");
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue("not valid json");
 
       const result = loadPageMetadataCache();
 
@@ -70,10 +98,8 @@ describe("pageMetadataCache", () => {
         lastSync: "2024-01-01",
         pages: {},
       };
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify(oldVersionCache)
-      );
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(JSON.stringify(oldVersionCache));
 
       const result = loadPageMetadataCache();
 
@@ -93,8 +119,8 @@ describe("pageMetadataCache", () => {
           },
         },
       };
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(validCache));
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(JSON.stringify(validCache));
 
       const result = loadPageMetadataCache();
 
@@ -104,7 +130,7 @@ describe("pageMetadataCache", () => {
 
   describe("savePageMetadataCache", () => {
     it("should create directory if needed", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      existsSyncMock.mockReturnValue(false);
 
       const cache = createEmptyCache("hash");
       savePageMetadataCache(cache);
@@ -113,7 +139,7 @@ describe("pageMetadataCache", () => {
     });
 
     it("should write formatted JSON using atomic write pattern", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
+      existsSyncMock.mockReturnValue(true);
 
       const cache = createEmptyCache("hash");
       savePageMetadataCache(cache);
@@ -143,7 +169,7 @@ describe("pageMetadataCache", () => {
     });
 
     it("should return full rebuild when no cache exists", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      existsSyncMock.mockReturnValue(false);
 
       const result = determineSyncMode("hash", false);
 
@@ -158,8 +184,8 @@ describe("pageMetadataCache", () => {
         lastSync: "2024-01-01T00:00:00.000Z",
         pages: {},
       };
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(validCache));
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(JSON.stringify(validCache));
 
       const result = determineSyncMode("new-hash", false);
 
@@ -180,8 +206,8 @@ describe("pageMetadataCache", () => {
           },
         },
       };
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(validCache));
+      existsSyncMock.mockReturnValue(true);
+      readFileSyncMock.mockReturnValue(JSON.stringify(validCache));
 
       const result = determineSyncMode("same-hash", false);
 
@@ -250,6 +276,55 @@ describe("pageMetadataCache", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("new");
+    });
+
+    it("should treat missing output files as changed", () => {
+      const pages = [{ id: "1", last_edited_time: "2024-01-01T00:00:00.000Z" }];
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {
+          "1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/page-1.md"],
+            processedAt: "",
+          },
+        },
+      };
+
+      existsSyncMock.mockReturnValue(false);
+
+      const result = filterChangedPages(pages, cache);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("1");
+    });
+  });
+
+  describe("hasMissingOutputs", () => {
+    it("returns true when any cached output file is missing", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {
+          "1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/page-1.md", "docs/page-1.fr.md"],
+            processedAt: "",
+          },
+        },
+      };
+
+      existsSyncMock.mockImplementation((p) => {
+        if (typeof p === "string" && p.endsWith("page-1.fr.md")) {
+          return false;
+        }
+        return true;
+      });
+
+      expect(hasMissingOutputs(cache, "1")).toBe(true);
     });
   });
 

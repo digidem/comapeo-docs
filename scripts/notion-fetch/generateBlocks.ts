@@ -51,6 +51,7 @@ import {
   updatePageInCache,
   removePageFromCache,
   getCacheStats,
+  hasMissingOutputs,
   type PageMetadataCache,
 } from "./pageMetadataCache";
 
@@ -698,6 +699,7 @@ export async function generateBlocks(
           const needsProcessing =
             syncMode.fullRebuild ||
             !cachedPage ||
+            hasMissingOutputs(metadataCache, page.id) ||
             new Date(page.last_edited_time).getTime() >
               new Date(cachedPage.lastEdited).getTime();
 

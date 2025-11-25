@@ -191,6 +191,11 @@ export function filterChangedPages<
       return true;
     }
 
+    // If any expected outputs are missing, force regeneration
+    if (hasMissingOutputs(cache, page.id)) {
+      return true;
+    }
+
     // Compare timestamps
     const notionTime = new Date(page.last_edited_time).getTime();
     const cachedTime = new Date(cached.lastEdited).getTime();
@@ -234,6 +239,37 @@ export function findDeletedPages(
   }
 
   return deleted;
+}
+
+/**
+ * Determine whether any cached output files for a page are missing on disk.
+ * Missing outputs should trigger regeneration even if the Notion timestamp
+ * hasn't changed (e.g., manual deletion or previous failed write).
+ */
+export function hasMissingOutputs(
+  cache: PageMetadataCache | null,
+  pageId: string
+): boolean {
+  if (!cache) {
+    return false;
+  }
+
+  const cached = cache.pages[pageId];
+  if (!cached || !cached.outputPaths) {
+    return false;
+  }
+
+  return cached.outputPaths.some((outputPath) => {
+    if (!outputPath) {
+      return true;
+    }
+
+    const absolutePath = path.isAbsolute(outputPath)
+      ? outputPath
+      : path.join(PROJECT_ROOT, outputPath.replace(/^\//, ""));
+
+    return !fs.existsSync(absolutePath);
+  });
 }
 
 /**

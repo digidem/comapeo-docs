@@ -155,7 +155,7 @@ For internal links, I think the struggle is to being able to predict the relativ
 Ex. 
 
 
-    🔗 Go to [**Troubleshooting**](/docs/category/troubleshoting)
+    🔗 Go to [**Troubleshooting**](/docs/category/troubleshooting)
 
 1. [Link to an URL outside of the documentation site](https://comapeo.app/)
 

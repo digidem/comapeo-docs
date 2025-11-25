@@ -114,6 +114,7 @@ There’s 4 types of internal links:
 Basically one can use a hashtag (#) followed by the title section, but transforming the title to be lowercase and replacing spaces by dashes (-). This will mean that clicking the link will scroll the page to that section 
 
 
+
     Ex. 
 
 
@@ -127,7 +128,7 @@ by writing a forward slash (/) followed by the title of the page in lowercase an
 Ex. 
 
 
-    🔗 Go to [**Understanding How Exchange Works**](/2381b08162d580e2a5eecae57f6f02ed) 
+    🔗 Go to [**Understanding How Exchange Works**](/docs/understanding-how-exchange-works) 
 
 1. [Link to a specific section of another page](/docs/testing-links#some-subtitle)
 
@@ -154,7 +155,7 @@ For internal links, I think the struggle is to being able to predict the relativ
 Ex. 
 
 
-    🔗 Go to [**Troubleshooting**](/2a71b08162d580b1beb3e72f4587a1c4)
+    🔗 Go to [**Troubleshooting**](/docs/category/troubleshooting)
 
 1. [Link to an URL outside of the documentation site](https://comapeo.app/)
 

@@ -119,7 +119,7 @@ Basically one can use a hashtag (#) followed by the title section, but transform
 
         🔗 Go to [**Emoji Shortlist**](#emoji-shortlist)  
 
-1. [Link to a different page](/testing-links)
+1. [Link to a different page](/docs/testing-links)
 
 by writing a forward slash (/) followed by the title of the page in lowercase and separated by spaces, one can link to a whole other page (again, always use a relative link)
 
@@ -127,9 +127,9 @@ by writing a forward slash (/) followed by the title of the page in lowercase an
 Ex. 
 
 
-    🔗 Go to [**Understanding How Exchange Works**](/understanding-how-exchange-works) 
+    🔗 Go to [**Understanding How Exchange Works**](/2381b08162d580e2a5eecae57f6f02ed) 
 
-1. [Link to a specific section of another page](/testing-links#some-subtitle)
+1. [Link to a specific section of another page](/docs/testing-links#some-subtitle)
 
 This is basically a combination of the other two, were one writes a forward slash (/), followed by the name of the page, followed by a hashtag (#) to the specific section (always use dashes for spaces and everything lowercase)
 
@@ -137,9 +137,9 @@ This is basically a combination of the other two, were one writes a forward slas
 Ex. 
 
 
-    🔗 Go to [**Creating a New Observation - Adding Details**](/creating-a-new-observation#adding-details) 
+    🔗 Go to [**Creating a New Observation - Adding Details**](/docs/creating-a-new-observation#adding-details) 
 
-1. [Link to a toggle (Collapsible section that contains documents)](/category/getting-started---essentials/)
+1. [Link to a toggle (Collapsible section that contains documents)](/docs/category/getting-started---essentials/)
 
 This are pages that have no content but contain other pages, to correctly link to this, one needs to add the `/category` path to the link
 

@@ -2,7 +2,7 @@
 id: doc-understanding-comapeos-core-concepts-and-functions
 title: Understanding CoMapeo’s Core Concepts & Functions
 sidebar_label: Understanding CoMapeo’s Core Concepts & Functions
-sidebar_position: 4
+sidebar_position: 1
 pagination_label: Understanding CoMapeo’s Core Concepts & Functions
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/understanding-comapeos-core-concepts-and-functions.md
 keywords:
@@ -11,10 +11,8 @@ keywords:
 tags: []
 slug: /understanding-comapeos-core-concepts-and-functions
 last_update:
-  date: 10/9/2025
+  date: 11/26/2025
   author: Awana Digital
-sidebar_custom_props:
-  title: Preparing to Use CoMapeo
 ---
 ![ComingSoon-CoMapeo-BlogPost-Oct2024%281%29.png](/images/understandingcomapeo_0.png)
 
@@ -67,9 +65,6 @@ CoMapeo is designed for teams of people to work together to collect data while w
 ---
 
 
----
-
-
 ## Coming Soon
 
 
@@ -82,14 +77,11 @@ While we continue to improve CoMapeo there will be new releases, technical summa
 [**Blog**](https://awana.digital/blog/stability-co-design-our-comapeo-release-strategy)[ | Stability & Co-Design: Our CoMapeo Release Strategy](https://awana.digital/blog/stability-co-design-our-comapeo-release-strategy)
 
 
+---
+
+
 > 👉🏽 For general information, newsletter signup, and access to blogs about CoMapeo, visit [comapeo.app](http://comapeo.app/) 
 
 
 ---
-
-
-The directory  was : docs/understanding-comapeos-core-concepts-and-functions
-
-
-What happens with an & (look at address)
 

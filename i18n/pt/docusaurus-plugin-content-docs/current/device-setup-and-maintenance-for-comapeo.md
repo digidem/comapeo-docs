@@ -1,17 +1,17 @@
 ---
-id: doc-understanding-comapeos-core-concepts-and-functions
+id: doc-device-setup-and-maintenance-for-comapeo
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 1
+sidebar_position: 2
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/understanding-comapeos-core-concepts-and-functions.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/device-setup-and-maintenance-for-comapeo.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /understanding-comapeos-core-concepts-and-functions
+slug: /device-setup-and-maintenance-for-comapeo
 last_update:
-  date: 9/23/2025
+  date: 9/22/2025
   author: Awana Digital
 ---
 

@@ -1,17 +1,17 @@
 ---
-id: doc-understanding-comapeos-core-concepts-and-functions
+id: doc-troubleshooting-mapping-with-collaborators
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 1
+sidebar_position: 4
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/understanding-comapeos-core-concepts-and-functions.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting-mapping-with-collaborators.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /understanding-comapeos-core-concepts-and-functions
+slug: /troubleshooting-mapping-with-collaborators
 last_update:
-  date: 9/23/2025
+  date: 11/18/2025
   author: Awana Digital
 ---
 

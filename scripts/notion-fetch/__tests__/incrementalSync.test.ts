@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
-import path from "node:path";
 import { computeScriptHash, CRITICAL_SCRIPT_FILES } from "../scriptHasher";
 import {
   loadPageMetadataCache,

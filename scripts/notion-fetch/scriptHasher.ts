@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";

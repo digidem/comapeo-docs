@@ -96,7 +96,11 @@ describe("runFetchPipeline", () => {
       // Verify pipeline coordination
       expect(fetchNotionData).toHaveBeenCalled();
       expect(sortAndExpandNotionData).toHaveBeenCalled();
-      expect(generateBlocks).toHaveBeenCalled();
+      expect(generateBlocks).toHaveBeenCalledWith(
+        mockSortedData,
+        expect.any(Function),
+        expect.anything()
+      );
 
       expect(result).toEqual({
         data: mockSortedData,
@@ -131,7 +135,11 @@ describe("runFetchPipeline", () => {
 
       // Verify transform was applied
       expect(customTransform).toHaveBeenCalled();
-      expect(generateBlocks).toHaveBeenCalled();
+      expect(generateBlocks).toHaveBeenCalledWith(
+        mockTransformedData,
+        expect.any(Function),
+        expect.anything()
+      );
     });
 
     it("should pass onProgress callback through to generateBlocks", async () => {
@@ -306,7 +314,11 @@ describe("runFetchPipeline", () => {
       const result = await runFetchPipeline({});
 
       expect(result).toEqual({ data: mockData, metrics: expectedMetrics });
-      expect(generateBlocks).toHaveBeenCalled();
+      expect(generateBlocks).toHaveBeenCalledWith(
+        mockData,
+        expect.any(Function),
+        expect.anything()
+      );
     });
   });
 
@@ -369,7 +381,11 @@ describe("runFetchPipeline", () => {
       await runFetchPipeline({ transform: customTransform });
 
       expect(customTransform).toHaveBeenCalledWith(sortedData);
-      expect(generateBlocks).toHaveBeenCalled();
+      expect(generateBlocks).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Function),
+        expect.anything()
+      );
     });
 
     it("should handle empty data sets gracefully", async () => {
@@ -398,7 +414,11 @@ describe("runFetchPipeline", () => {
         },
       });
 
-      expect(generateBlocks).toHaveBeenCalled();
+      expect(generateBlocks).toHaveBeenCalledWith(
+        [],
+        expect.any(Function),
+        expect.anything()
+      );
     });
   });
 });

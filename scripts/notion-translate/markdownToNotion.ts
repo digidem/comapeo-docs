@@ -582,8 +582,9 @@ export async function createNotionPageFromMarkdown(
       const nonEnglishResults = language
         ? response.results
         : response.results.filter((page) => {
-            const pageLanguage =
-              (page as any).properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name;
+            const pageLanguage = (page as any).properties?.[
+              NOTION_PROPERTIES.LANGUAGE
+            ]?.select?.name;
             return pageLanguage !== MAIN_LANGUAGE;
           });
 

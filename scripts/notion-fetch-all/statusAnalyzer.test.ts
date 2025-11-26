@@ -86,7 +86,9 @@ describe("StatusAnalyzer", () => {
       expect(result.languages).toBeDefined();
       expect(result.languages.length).toBe(3); // English, Spanish, Portuguese
 
-      const englishLang = result.languages.find((l) => l.language === "English");
+      const englishLang = result.languages.find(
+        (l) => l.language === "English"
+      );
       expect(englishLang).toBeDefined();
       expect(englishLang?.totalPages).toBe(2);
       expect(englishLang?.readyPages).toBe(2);
@@ -130,7 +132,9 @@ describe("StatusAnalyzer", () => {
       const result = StatusAnalyzer.analyzePublicationStatus(pages);
 
       expect(result.languages).toBeDefined();
-      const defaultLang = result.languages.find((l) => l.language === "English");
+      const defaultLang = result.languages.find(
+        (l) => l.language === "English"
+      );
       expect(defaultLang).toBeDefined();
       expect(defaultLang?.totalPages).toBe(2);
     });
@@ -203,8 +207,8 @@ describe("StatusAnalyzer", () => {
 
       const result = StatusAnalyzer.identifyContentGaps(pages);
 
-      const translationGaps = result.missingPages.filter(
-        (p) => p.reason.includes("translation")
+      const translationGaps = result.missingPages.filter((p) =>
+        p.reason.includes("translation")
       );
 
       expect(translationGaps.length).toBeGreaterThan(0);
@@ -490,7 +494,11 @@ describe("StatusAnalyzer", () => {
 
     it("should handle duplicate page titles", () => {
       const pages: PageWithStatus[] = [
-        createMockPage({ id: "1", title: "Duplicate", status: "Ready to publish" }),
+        createMockPage({
+          id: "1",
+          title: "Duplicate",
+          status: "Ready to publish",
+        }),
         createMockPage({ id: "2", title: "Duplicate", status: "Draft" }),
       ];
 
@@ -578,9 +586,7 @@ describe("StatusAnalyzer", () => {
 });
 
 // Helper function to create mock PageWithStatus
-function createMockPage(
-  options: Partial<PageWithStatus> = {}
-): PageWithStatus {
+function createMockPage(options: Partial<PageWithStatus> = {}): PageWithStatus {
   return {
     id: options.id || "page-" + Math.random().toString(36).substr(2, 9),
     url:

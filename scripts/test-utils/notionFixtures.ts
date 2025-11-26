@@ -71,13 +71,13 @@ export const createMockNotionPage = (options: MockNotionPageOptions = {}) => {
         select: { name: elementType },
       },
       "Sub-item": {
-        relation: subItemIds.map(id => ({ id })),
+        relation: subItemIds.map((id) => ({ id })),
       },
       Tags: {
-        multi_select: tags.map(tag => ({ name: tag })),
+        multi_select: tags.map((tag) => ({ name: tag })),
       },
       Keywords: {
-        multi_select: keywords.map(keyword => ({ name: keyword })),
+        multi_select: keywords.map((keyword) => ({ name: keyword })),
       },
       Icon: {
         rich_text: icon ? [{ plain_text: icon }] : [],
@@ -112,14 +112,18 @@ export const createMockNotionPage = (options: MockNotionPageOptions = {}) => {
 /**
  * Create a mock Notion page without Title property (for fallback testing)
  */
-export const createMockNotionPageWithoutTitle = (options: MockNotionPageOptions = {}) => {
+export const createMockNotionPageWithoutTitle = (
+  options: MockNotionPageOptions = {}
+) => {
   return createMockNotionPage({ ...options, hasTitle: false });
 };
 
 /**
  * Create a mock Notion page without Website Block (for placeholder testing)
  */
-export const createMockNotionPageWithoutWebsiteBlock = (options: MockNotionPageOptions = {}) => {
+export const createMockNotionPageWithoutWebsiteBlock = (
+  options: MockNotionPageOptions = {}
+) => {
   return createMockNotionPage({ ...options, hasWebsiteBlock: false });
 };
 
@@ -127,8 +131,8 @@ export const createMockNotionPageWithoutWebsiteBlock = (options: MockNotionPageO
  * Create a mock Toggle section page
  */
 export const createMockTogglePage = (options: MockNotionPageOptions = {}) => {
-  return createMockNotionPage({ 
-    ...options, 
+  return createMockNotionPage({
+    ...options,
     elementType: "Toggle",
     hasSubItems: true,
     subItemIds: options.subItemIds || [generateMockUUID(), generateMockUUID()],
@@ -139,8 +143,8 @@ export const createMockTogglePage = (options: MockNotionPageOptions = {}) => {
  * Create a mock Heading section page
  */
 export const createMockHeadingPage = (options: MockNotionPageOptions = {}) => {
-  return createMockNotionPage({ 
-    ...options, 
+  return createMockNotionPage({
+    ...options,
     elementType: "Title",
   });
 };
@@ -148,7 +152,9 @@ export const createMockHeadingPage = (options: MockNotionPageOptions = {}) => {
 /**
  * Create a mock page with translation (Portuguese)
  */
-export const createMockPortuguesePage = (options: MockNotionPageOptions = {}) => {
+export const createMockPortuguesePage = (
+  options: MockNotionPageOptions = {}
+) => {
   return createMockNotionPage({
     ...options,
     title: options.title || "Página de Teste",
@@ -254,7 +260,10 @@ export const createMockNotionBlock = (options: MockNotionBlockOptions = {}) => {
 /**
  * Create a mock image block with specific URL
  */
-export const createMockImageBlock = (imageUrl: string, options: MockNotionBlockOptions = {}) => {
+export const createMockImageBlock = (
+  imageUrl: string,
+  options: MockNotionBlockOptions = {}
+) => {
   return createMockNotionBlock({
     ...options,
     type: "image",
@@ -283,7 +292,11 @@ export const createMockCalloutBlock = (
 /**
  * Create a mock database query response
  */
-export const createMockDatabaseResponse = (pages: any[], hasMore = false, nextCursor?: string) => {
+export const createMockDatabaseResponse = (
+  pages: any[],
+  hasMore = false,
+  nextCursor?: string
+) => {
   return {
     results: pages,
     next_cursor: nextCursor || null,
@@ -294,7 +307,11 @@ export const createMockDatabaseResponse = (pages: any[], hasMore = false, nextCu
 /**
  * Create a mock blocks list response
  */
-export const createMockBlocksResponse = (blocks: any[], hasMore = false, nextCursor?: string) => {
+export const createMockBlocksResponse = (
+  blocks: any[],
+  hasMore = false,
+  nextCursor?: string
+) => {
   return {
     results: blocks,
     next_cursor: nextCursor || null,
@@ -305,7 +322,10 @@ export const createMockBlocksResponse = (blocks: any[], hasMore = false, nextCur
 /**
  * Create a complete page family with main page and translations
  */
-export const createMockPageFamily = (mainTitle: string, elementType: string = "Page") => {
+export const createMockPageFamily = (
+  mainTitle: string,
+  elementType: string = "Page"
+) => {
   const mainPageId = generateMockUUID();
   const enPageId = generateMockUUID();
   const ptPageId = generateMockUUID();
@@ -349,7 +369,7 @@ export const createMockPageFamily = (mainTitle: string, elementType: string = "P
  */
 export const createMockMarkdownWithImages = (imageUrls: string[] = []) => {
   let content = "# Test Content\n\nThis is test content.\n\n";
-  
+
   imageUrls.forEach((url, index) => {
     content += `![Test Image ${index + 1}](${url})\n\n`;
   });

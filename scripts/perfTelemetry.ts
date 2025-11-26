@@ -93,7 +93,7 @@ const SUMMARY_PATH =
 const MAX_QUEUE_SAMPLES = parsePositiveInt(
   process.env.NOTION_PERF_MAX_QUEUE_SAMPLES,
   1000, // Default: keep last 1000 samples
-  100,  // Min: 100 samples
+  100, // Min: 100 samples
   10000 // Max: 10000 samples
 );
 
@@ -279,9 +279,7 @@ class PerfTelemetry {
       lines.push("### Events");
       events.forEach((event) => {
         const iso = new Date(event.timestamp).toISOString();
-        const detail = event.detail
-          ? ` – ${JSON.stringify(event.detail)}`
-          : "";
+        const detail = event.detail ? ` – ${JSON.stringify(event.detail)}` : "";
         lines.push(`- ${iso} • ${event.type}${detail}`);
       });
     }

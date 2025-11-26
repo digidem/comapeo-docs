@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { 
+import {
   installTestNotionEnv,
   createMockNotionPage,
   createMockAxios,
@@ -25,7 +25,7 @@ describe("Notion Fetch Integration Tests", () => {
       title: "Test Page",
       elementType: "Page",
     });
-    
+
     expect(mockPage).toBeDefined();
     expect(mockPage.properties.Title.title[0].plain_text).toBe("Test Page");
     expect(mockPage.properties["Element Type"].select.name).toBe("Page");
@@ -34,12 +34,12 @@ describe("Notion Fetch Integration Tests", () => {
   it("should create mock axios with image download functionality", async () => {
     const testUrl = "https://example.com/test.jpg";
     const testBuffer = Buffer.from("test-image-data");
-    
+
     mockAxios.mockImageDownload(testUrl, testBuffer);
-    
+
     // Verify the mock was set up correctly
     expect(mockAxios.axios.get).toBeDefined();
-    
+
     const response = await mockAxios.axios.get(testUrl);
     expect(response.data).toEqual(testBuffer);
     expect(response.headers["content-type"]).toBe("image/jpeg");
@@ -48,9 +48,9 @@ describe("Notion Fetch Integration Tests", () => {
   it("should handle axios errors correctly", async () => {
     const testUrl = "https://example.com/fail.jpg";
     const testError = new Error("Network error");
-    
+
     mockAxios.mockImageDownloadFailure(testUrl, testError);
-    
+
     await expect(mockAxios.axios.get(testUrl)).rejects.toThrow("Network error");
   });
 
@@ -61,9 +61,9 @@ describe("Notion Fetch Integration Tests", () => {
 
   it("should create mock page families correctly", async () => {
     const { createMockPageFamily } = await import("../../test-utils");
-    
+
     const family = createMockPageFamily("Test Section", "Toggle");
-    
+
     expect(family.mainPage).toBeDefined();
     expect(family.pages).toHaveLength(4); // main + en + pt + es
     expect(family.enPage.properties.Language.select.name).toBe("English");
@@ -72,34 +72,43 @@ describe("Notion Fetch Integration Tests", () => {
   });
 
   it("should create different page types correctly", async () => {
-    const { 
+    const {
       createMockNotionPageWithoutTitle,
       createMockNotionPageWithoutWebsiteBlock,
       createMockTogglePage,
-      createMockHeadingPage 
+      createMockHeadingPage,
     } = await import("../../test-utils");
-    
+
     const pageWithoutTitle = createMockNotionPageWithoutTitle();
     expect(pageWithoutTitle.properties.Title).toBeUndefined();
-    
+
     const pageWithoutWebsite = createMockNotionPageWithoutWebsiteBlock();
     expect(pageWithoutWebsite.properties["Website Block"]).toBeUndefined();
-    
+
     const togglePage = createMockTogglePage();
     expect(togglePage.properties["Element Type"].select.name).toBe("Toggle");
-    
+
     const headingPage = createMockHeadingPage();
     expect(headingPage.properties["Element Type"].select.name).toBe("Title");
   });
 
   it("should handle image processing mock data", async () => {
-    const { createMockMarkdownWithImages, mockImageBuffer } = await import("../../test-utils");
-    
-    const imageUrls = ["https://example.com/1.jpg", "https://example.com/2.jpg"];
+    const { createMockMarkdownWithImages, mockImageBuffer } = await import(
+      "../../test-utils"
+    );
+
+    const imageUrls = [
+      "https://example.com/1.jpg",
+      "https://example.com/2.jpg",
+    ];
     const markdown = createMockMarkdownWithImages(imageUrls);
-    
-    expect(markdown.parent).toContain("![Test Image 1](https://example.com/1.jpg)");
-    expect(markdown.parent).toContain("![Test Image 2](https://example.com/2.jpg)");
+
+    expect(markdown.parent).toContain(
+      "![Test Image 1](https://example.com/1.jpg)"
+    );
+    expect(markdown.parent).toContain(
+      "![Test Image 2](https://example.com/2.jpg)"
+    );
     expect(mockImageBuffer).toBeInstanceOf(Buffer);
   });
 
@@ -118,7 +127,9 @@ describe("Notion Fetch Integration Tests", () => {
     });
 
     // Verify all properties are set correctly
-    expect(page.properties.Title.title[0].plain_text).toBe("Complete Test Page");
+    expect(page.properties.Title.title[0].plain_text).toBe(
+      "Complete Test Page"
+    );
     expect(page.properties.Status.select.name).toBe("Ready to publish");
     expect(page.properties.Order.number).toBe(5);
     expect(page.properties.Language.select.name).toBe("English");

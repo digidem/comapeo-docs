@@ -103,12 +103,15 @@ function shouldSkipOptimization(
 }
 
 const __filename = fileURLToPath(import.meta.url);
+
 const __dirname = path.dirname(__filename);
 
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
 
 /**
+
  * Performance metrics for image processing skip optimizations
+
  */
 export interface ImageProcessingMetrics {
   totalProcessed: number;
@@ -393,8 +396,11 @@ export class ImageCache {
 
   constructor() {
     this.cacheDir = path.join(process.cwd(), ".cache", "images");
-    // Ensure cache directory exists - instant startup, no loading
-    fs.mkdirSync(this.cacheDir, { recursive: true });
+    try {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
+    } catch {
+      // ignore
+    }
   }
 
   /**

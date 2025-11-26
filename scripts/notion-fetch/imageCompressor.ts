@@ -39,8 +39,7 @@ const PNGQUANT_FALLBACK_QUALITY =
   process.env.PNGQUANT_FALLBACK_QUALITY ?? "0-100";
 
 // Enable verbose logging for compression details
-const PNGQUANT_VERBOSE =
-  process.env.PNGQUANT_VERBOSE?.toLowerCase() === "true";
+const PNGQUANT_VERBOSE = process.env.PNGQUANT_VERBOSE?.toLowerCase() === "true";
 
 // Minimum file size to attempt compression (bytes)
 // Files smaller than this will skip compression to save time
@@ -113,10 +112,7 @@ function detectPngBitDepth(buffer: Buffer): number | null {
  */
 function shouldSkipPngCompression(buffer: Buffer): string | null {
   // Check file size threshold
-  if (
-    PNGQUANT_MIN_SIZE_BYTES > 0 &&
-    buffer.length < PNGQUANT_MIN_SIZE_BYTES
-  ) {
+  if (PNGQUANT_MIN_SIZE_BYTES > 0 && buffer.length < PNGQUANT_MIN_SIZE_BYTES) {
     return `file too small (${buffer.length} bytes < ${PNGQUANT_MIN_SIZE_BYTES} bytes threshold)`;
   }
 

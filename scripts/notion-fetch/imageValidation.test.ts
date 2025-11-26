@@ -16,7 +16,9 @@ describe("imageValidation", () => {
     });
 
     it("should validate correct HTTP URLs", () => {
-      const result = validateAndSanitizeImageUrl("http://example.com/image.jpg");
+      const result = validateAndSanitizeImageUrl(
+        "http://example.com/image.jpg"
+      );
       expect(result.isValid).toBe(true);
       expect(result.sanitizedUrl).toBe("http://example.com/image.jpg");
     });
@@ -132,7 +134,9 @@ describe("imageValidation", () => {
         "https://user:pass@example.com/image.png"
       );
       expect(result.isValid).toBe(true);
-      expect(result.sanitizedUrl).toBe("https://user:pass@example.com/image.png");
+      expect(result.sanitizedUrl).toBe(
+        "https://user:pass@example.com/image.png"
+      );
     });
   });
 
@@ -162,7 +166,9 @@ describe("imageValidation", () => {
       const url = "https://example.com/image.png";
       const result = createFallbackImageMarkdown(original, url, 5);
 
-      expect(result).toContain("**[Image 6: Screenshot of the settings page]**");
+      expect(result).toContain(
+        "**[Image 6: Screenshot of the settings page]**"
+      );
     });
 
     it("should include URL in HTML comment", () => {
@@ -201,7 +207,8 @@ describe("imageValidation", () => {
     });
 
     it("should handle alt text with special characters", () => {
-      const original = "![Image with & and : chars](https://example.com/img.png)";
+      const original =
+        "![Image with & and : chars](https://example.com/img.png)";
       const url = "https://example.com/img.png";
       const result = createFallbackImageMarkdown(original, url, 0);
 

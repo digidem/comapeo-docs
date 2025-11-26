@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
+import { describe, it, expect } from "vitest";
 import {
   computeScriptHash,
   isScriptHashChanged,

@@ -23,11 +23,17 @@ describe("ComparisonEngine", () => {
       ];
 
       const previewPages: PageWithStatus[] = [
-        createMockPage({ title: "Getting Started", status: "Ready to publish" }),
+        createMockPage({
+          title: "Getting Started",
+          status: "Ready to publish",
+        }),
         createMockPage({ title: "Overview", status: "Ready to publish" }),
         createMockPage({ title: "Installation", status: "Ready to publish" }),
         createMockPage({ title: "Configuration", status: "Ready to publish" }),
-        createMockPage({ title: "Advanced Topics", status: "Ready to publish" }),
+        createMockPage({
+          title: "Advanced Topics",
+          status: "Ready to publish",
+        }),
       ];
 
       const result = await ComparisonEngine.compareWithPublished(
@@ -80,11 +86,13 @@ describe("ComparisonEngine", () => {
         createMockPreviewSection({ title: "Introduction" }),
       ];
 
-      const previewPages: PageWithStatus[] = Array.from({ length: 20 }, (_, i) =>
-        createMockPage({
-          title: `Page ${i}`,
-          status: "Ready to publish",
-        })
+      const previewPages: PageWithStatus[] = Array.from(
+        { length: 20 },
+        (_, i) =>
+          createMockPage({
+            title: `Page ${i}`,
+            status: "Ready to publish",
+          })
       );
 
       const result = await ComparisonEngine.compareWithPublished(
@@ -174,7 +182,10 @@ describe("ComparisonEngine", () => {
       ];
 
       const previewPages: PageWithStatus[] = [
-        createMockPage({ title: "Brand New Feature", status: "Ready to publish" }),
+        createMockPage({
+          title: "Brand New Feature",
+          status: "Ready to publish",
+        }),
       ];
 
       const comparison = await ComparisonEngine.compareWithPublished(
@@ -379,9 +390,9 @@ describe("ComparisonEngine", () => {
       const checklist = ComparisonEngine.generateMigrationChecklist(comparison);
 
       expect(checklist.rollback.length).toBeGreaterThan(0);
-      expect(
-        checklist.rollback.some((task) => task.includes("Backup"))
-      ).toBe(true);
+      expect(checklist.rollback.some((task) => task.includes("Backup"))).toBe(
+        true
+      );
     });
 
     it("should add extra review task for large content additions", async () => {
@@ -389,11 +400,13 @@ describe("ComparisonEngine", () => {
         createMockPreviewSection({ title: "Introduction" }),
       ];
 
-      const previewPages: PageWithStatus[] = Array.from({ length: 10 }, (_, i) =>
-        createMockPage({
-          title: `New Page ${i}`,
-          status: "Ready to publish",
-        })
+      const previewPages: PageWithStatus[] = Array.from(
+        { length: 10 },
+        (_, i) =>
+          createMockPage({
+            title: `New Page ${i}`,
+            status: "Ready to publish",
+          })
       );
 
       const comparison = await ComparisonEngine.compareWithPublished(
@@ -485,7 +498,10 @@ describe("ComparisonEngine", () => {
       ];
 
       const previewPages: PageWithStatus[] = [
-        createMockPage({ title: "Getting Started", status: "Ready to publish" }),
+        createMockPage({
+          title: "Getting Started",
+          status: "Ready to publish",
+        }),
         createMockPage({ title: "Overview", status: "Ready to publish" }),
       ];
 
@@ -504,7 +520,7 @@ describe("ComparisonEngine", () => {
 
       const previewPages: PageWithStatus[] = [
         createMockPage({
-          title: "Page with <html> & \"quotes\"",
+          title: 'Page with <html> & "quotes"',
           status: "Ready to publish",
         }),
         createMockPage({
@@ -520,7 +536,7 @@ describe("ComparisonEngine", () => {
 
       const report = ComparisonEngine.generateComparisonReport(result);
 
-      expect(report).toContain("Page with <html> & \"quotes\"");
+      expect(report).toContain('Page with <html> & "quotes"');
       expect(report).toContain("Page with 中文");
     });
 
@@ -530,11 +546,13 @@ describe("ComparisonEngine", () => {
         (_, i) => createMockPreviewSection({ title: `Section ${i}` })
       );
 
-      const previewPages: PageWithStatus[] = Array.from({ length: 200 }, (_, i) =>
-        createMockPage({
-          title: `Page ${i}`,
-          status: i % 2 === 0 ? "Ready to publish" : "Draft",
-        })
+      const previewPages: PageWithStatus[] = Array.from(
+        { length: 200 },
+        (_, i) =>
+          createMockPage({
+            title: `Page ${i}`,
+            status: i % 2 === 0 ? "Ready to publish" : "Draft",
+          })
       );
 
       const startTime = Date.now();
@@ -648,9 +666,7 @@ function createMockPreviewSection(options: {
   };
 }
 
-function createMockPage(
-  options: Partial<PageWithStatus> = {}
-): PageWithStatus {
+function createMockPage(options: Partial<PageWithStatus> = {}): PageWithStatus {
   return {
     id: options.id || "page-" + Math.random().toString(36).substr(2, 9),
     url:

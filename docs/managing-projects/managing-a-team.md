@@ -2,7 +2,7 @@
 id: doc-managing-a-team
 title: Managing a Team
 sidebar_label: Managing a Team
-sidebar_position: 34
+sidebar_position: 20
 pagination_label: Managing a Team
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/managing-projects/managing-a-team.md
 keywords:

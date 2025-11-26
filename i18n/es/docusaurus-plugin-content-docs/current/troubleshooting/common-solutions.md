@@ -2,7 +2,7 @@
 id: doc-common-solutions
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 48
+sidebar_position: 28
 pagination_label: Nueva Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/common-solutions.md
 keywords:
@@ -13,6 +13,8 @@ slug: /common-solutions
 last_update:
   date: 11/18/2025
   author: Awana Digital
+sidebar_custom_props:
+  title: "Misceláneas"
 ---
 
 <!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->

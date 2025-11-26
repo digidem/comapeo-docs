@@ -2,7 +2,7 @@
 id: doc-troubleshooting-data-privacy-and-security
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 51
+sidebar_position: 31
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-data-privacy-and-security.md
 keywords:

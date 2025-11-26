@@ -2,7 +2,7 @@
 id: doc-understanding-how-exchange-works
 title: Understanding How Exchange Works
 sidebar_label: Understanding How Exchange Works
-sidebar_position: 37
+sidebar_position: 22
 pagination_label: Understanding How Exchange Works
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exchanging-project-data/understanding-how-exchange-works.md
 keywords:

@@ -2,7 +2,7 @@
 id: doc-setting-up-a-device--maintaining-it
 title: Setting up a mobile device and maintaining it
 sidebar_label: Setting up a mobile device and maintaining it
-sidebar_position: 7
+sidebar_position: 5
 pagination_label: Setting up a mobile device and maintaining it
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/setting-up-a-device--maintaining-it.md
 keywords:

@@ -1,12 +1,12 @@
 {
   "label": "Getting Started - Essentials",
-  "position": 5,
+  "position": 4,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index"
   },
   "customProps": {
-    "title": null
+    "title": "Preparing to Use CoMapeo"
   }
 }

@@ -2,7 +2,7 @@
 id: doc-using-a-remote-archive
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 39
+sidebar_position: 24
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exchanging-project-data/using-a-remote-archive.md
 keywords:

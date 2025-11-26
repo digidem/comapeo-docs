@@ -2,7 +2,7 @@
 id: doc-using-a-remote-archive
 title: Using a Remote Archive
 sidebar_label: Using a Remote Archive
-sidebar_position: 39
+sidebar_position: 24
 pagination_label: Using a Remote Archive
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exchanging-project-data/using-a-remote-archive.md
 keywords:

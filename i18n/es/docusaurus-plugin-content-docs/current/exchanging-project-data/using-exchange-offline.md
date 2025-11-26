@@ -2,7 +2,7 @@
 id: doc-using-exchange-offline
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 38
+sidebar_position: 23
 pagination_label: Nueva Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exchanging-project-data/using-exchange-offline.md
 keywords:

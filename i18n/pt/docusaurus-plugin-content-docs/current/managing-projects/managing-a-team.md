@@ -2,7 +2,7 @@
 id: doc-managing-a-team
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 34
+sidebar_position: 20
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/managing-projects/managing-a-team.md
 keywords:

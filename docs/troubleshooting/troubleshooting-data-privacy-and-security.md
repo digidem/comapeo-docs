@@ -2,7 +2,7 @@
 id: doc-troubleshooting-data-privacy-and-security
 title: Troubleshooting: Data Privacy & Security
 sidebar_label: Troubleshooting: Data Privacy & Security
-sidebar_position: 51
+sidebar_position: 31
 pagination_label: Troubleshooting: Data Privacy & Security
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-data-privacy-and-security.md
 keywords:

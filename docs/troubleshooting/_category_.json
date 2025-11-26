@@ -1,12 +1,12 @@
 {
   "label": "Troubleshooting",
-  "position": 47,
+  "position": 27,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index"
   },
   "customProps": {
-    "title": null
+    "title": "Miscellaneous"
   }
 }

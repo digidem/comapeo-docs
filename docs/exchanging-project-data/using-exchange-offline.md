@@ -2,7 +2,7 @@
 id: doc-using-exchange-offline
 title: Using Exchange Offline
 sidebar_label: Using Exchange Offline
-sidebar_position: 38
+sidebar_position: 23
 pagination_label: Using Exchange Offline
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exchanging-project-data/using-exchange-offline.md
 keywords:

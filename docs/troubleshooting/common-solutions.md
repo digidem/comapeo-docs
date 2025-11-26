@@ -2,7 +2,7 @@
 id: doc-common-solutions
 title: Common Solutions
 sidebar_label: Common Solutions
-sidebar_position: 48
+sidebar_position: 28
 pagination_label: Common Solutions
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/common-solutions.md
 keywords:

@@ -2,7 +2,7 @@
 id: doc-troubleshooting-observations-and-tracks
 title: Troubleshooting: Observations & Tracks
 sidebar_label: Troubleshooting: Observations & Tracks
-sidebar_position: 50
+sidebar_position: 30
 pagination_label: Troubleshooting: Observations & Tracks
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-observations-and-tracks.md
 keywords:

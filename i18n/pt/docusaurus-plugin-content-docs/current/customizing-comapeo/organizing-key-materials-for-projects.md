@@ -2,7 +2,7 @@
 id: doc-organizing-key-materials-for-projects
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 12
+sidebar_position: 9
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/customizing-comapeo/organizing-key-materials-for-projects.md
 keywords:

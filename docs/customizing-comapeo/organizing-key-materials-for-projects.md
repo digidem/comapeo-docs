@@ -2,7 +2,7 @@
 id: doc-organizing-key-materials-for-projects
 title: Organizing Key Materials for Projects
 sidebar_label: Organizing Key Materials for Projects
-sidebar_position: 12
+sidebar_position: 9
 pagination_label: Organizing Key Materials for Projects
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/customizing-comapeo/organizing-key-materials-for-projects.md
 keywords:

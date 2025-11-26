@@ -2,7 +2,7 @@
 id: doc-creating-a-new-observation
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 17
+sidebar_position: 13
 pagination_label: Nueva Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/gathering-observations--tracks/creating-a-new-observation.md
 keywords:

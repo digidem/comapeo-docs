@@ -2,7 +2,7 @@
 id: doc-installing-comapeo--onboarding
 title: Installing CoMapeo & Onboarding
 sidebar_label: Installing CoMapeo & Onboarding
-sidebar_position: 8
+sidebar_position: 6
 pagination_label: Installing CoMapeo & Onboarding
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/installing-comapeo--onboarding.md
 keywords:

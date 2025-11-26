@@ -2,7 +2,7 @@
 id: doc-changing-categories-set
 title: Changing Categories Set
 sidebar_label: Changing Categories Set
-sidebar_position: 32
+sidebar_position: 19
 pagination_label: Changing Categories Set
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/managing-projects/changing-categories-set.md
 keywords:

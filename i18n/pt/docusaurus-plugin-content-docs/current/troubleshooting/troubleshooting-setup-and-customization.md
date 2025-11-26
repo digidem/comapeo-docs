@@ -2,7 +2,7 @@
 id: doc-troubleshooting-setup-and-customization
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 49
+sidebar_position: 29
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-setup-and-customization.md
 keywords:

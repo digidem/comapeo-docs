@@ -2,7 +2,7 @@
 id: doc-troubleshooting-mapping-with-collaborators
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 52
+sidebar_position: 32
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-mapping-with-collaborators.md
 keywords:

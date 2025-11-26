@@ -2,7 +2,7 @@
 id: doc-troubleshooting-setup-and-customization
 title: Troubleshooting: Setup & Customization
 sidebar_label: Troubleshooting: Setup & Customization
-sidebar_position: 49
+sidebar_position: 29
 pagination_label: Troubleshooting: Setup & Customization
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting/troubleshooting-setup-and-customization.md
 keywords:

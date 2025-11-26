@@ -1,12 +1,12 @@
 {
   "label": "Managing Data Privacy & Security",
-  "position": 25,
+  "position": 16,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index"
   },
   "customProps": {
-    "title": null
+    "title": "Data Privacy & Security"
   }
 }

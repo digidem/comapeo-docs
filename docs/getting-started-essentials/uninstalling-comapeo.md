@@ -2,7 +2,7 @@
 id: doc-uninstalling-comapeo
 title: Uninstalling CoMapeo
 sidebar_label: Uninstalling CoMapeo
-sidebar_position: 10
+sidebar_position: 7
 pagination_label: Uninstalling CoMapeo
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/uninstalling-comapeo.md
 keywords:

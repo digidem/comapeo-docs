@@ -1,15 +1,15 @@
 ---
-id: doc-common-solutions
+id: doc-troubleshooting-setup-and-customization
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 1
+sidebar_position: 2
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/common-solutions.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting-setup-and-customization.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /common-solutions
+slug: /troubleshooting-setup-and-customization
 last_update:
   date: 11/18/2025
   author: Awana Digital

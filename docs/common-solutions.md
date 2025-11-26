@@ -2,7 +2,7 @@
 id: doc-common-solutions
 title: Common Solutions
 sidebar_label: Common Solutions
-sidebar_position: 3
+sidebar_position: 1
 pagination_label: Common Solutions
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/common-solutions.md
 keywords:
@@ -147,12 +147,4 @@ To make sure the device is actually connected to the desired network check the f
 
 :::note 👉🏽
 To better understand specific problems to avoid them in the future, explore the following troubleshooting pages selecting the specific topic in question (See pages under Troubleshooting)
-
-
-# 📨 **Contact Awana Digital for Support**
-
-If you have not been able to resolve issues with the resources shared here, write us by
-email us at [help@comapeo.app](mailto:help@comapeo.app)
-
-You can also chat with us on [Discord](https://discord.gg/kWp34am3)!
 :::

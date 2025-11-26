@@ -1,15 +1,15 @@
 ---
-id: doc-common-solutions
+id: doc-troubleshooting-observations-and-tracks
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 1
+sidebar_position: 3
 pagination_label: Nueva Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/common-solutions.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting-observations-and-tracks.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /common-solutions
+slug: /troubleshooting-observations-and-tracks
 last_update:
   date: 11/18/2025
   author: Awana Digital

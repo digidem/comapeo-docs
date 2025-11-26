@@ -61,7 +61,13 @@ vi.mock("../notionClient", () => ({
     toMarkdownString: vi.fn(),
   },
   enhancedNotion: {
-    blocksChildrenList: vi.fn(),
+    blocksChildrenList: vi.fn(() =>
+      Promise.resolve({
+        results: [],
+        has_more: false,
+        next_cursor: null,
+      })
+    ),
   },
 }));
 
@@ -118,13 +124,14 @@ vi.mock("node:fs", () => ({
   default: {
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
-    readFileSync: vi.fn(),
+    readFileSync: vi.fn(() => "{}"),
     existsSync: vi.fn(() => true),
     readdirSync: vi.fn(() => []),
     statSync: vi.fn(() => ({
       isDirectory: () => false,
       isFile: () => true,
     })),
+    renameSync: vi.fn(),
   },
 }));
 

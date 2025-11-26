@@ -12,6 +12,10 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
   const subPageId = "sub-page-en";
   const mainPage = {
     id: "test-page",
+    created_time: "2025-11-19T10:16:11.471Z",
+    last_edited_time: "2025-11-26T10:16:11.471Z",
+    archived: false,
+    url: "https://notion.so/test-page",
     properties: {
       "Content elements": { title: [{ plain_text: testTitle }] },
       Status: { select: { name: "Ready to publish" } },
@@ -28,6 +32,10 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
 
   const subPage = {
     id: subPageId,
+    created_time: "2025-11-19T10:16:11.471Z",
+    last_edited_time: "2025-11-26T10:16:11.471Z",
+    archived: false,
+    url: "https://notion.so/sub-page-en",
     properties: {
       "Content elements": { title: [{ plain_text: `${testTitle} EN` }] },
       Status: { select: { name: "Ready to publish" } },
@@ -52,6 +60,15 @@ vi.mock("../../notionClient", () => ({
     pageToMarkdown: vi.fn(),
     toMarkdownString: vi.fn(),
   },
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(() =>
+      Promise.resolve({
+        results: [],
+        has_more: false,
+        next_cursor: null,
+      })
+    ),
+  },
 }));
 vi.mock("../spinnerManager", () => ({
   default: {
@@ -70,6 +87,20 @@ vi.mock("../imageProcessor", () => ({
   processImage: vi.fn(),
 }));
 
+vi.mock("../imageProcessing", () => {
+  const actual = vi.importActual("../imageProcessing");
+  return {
+    ...actual,
+    getImageCache: vi.fn(() => ({
+      cleanup: vi.fn(),
+      getStats: vi.fn(() => ({
+        totalEntries: 0,
+        validEntries: 0,
+      })),
+    })),
+  };
+});
+
 vi.mock("../utils", () => ({
   compressImageToFileWithFallback: vi.fn(),
   detectFormatFromBuffer: vi.fn(() => "jpeg"),
@@ -84,13 +115,14 @@ vi.mock("node:fs", () => ({
   default: {
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
-    readFileSync: vi.fn(),
+    readFileSync: vi.fn(() => "{}"),
     existsSync: vi.fn(() => true),
     readdirSync: vi.fn(() => []),
     statSync: vi.fn(() => ({
       isDirectory: () => false,
       isFile: () => true,
     })),
+    renameSync: vi.fn(),
   },
 }));
 

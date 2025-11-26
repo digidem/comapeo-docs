@@ -700,6 +700,8 @@ export async function generateBlocks(
             syncMode.fullRebuild ||
             !cachedPage ||
             hasMissingOutputs(metadataCache, page.id) ||
+            // If path changed (e.g. moved/renamed), we must re-process even if timestamp is same
+            !cachedPage.outputPaths?.includes(filePath) ||
             new Date(page.last_edited_time).getTime() >
               new Date(cachedPage.lastEdited).getTime();
 

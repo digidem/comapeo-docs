@@ -689,5 +689,32 @@
     },
     "Testing links": {
         "message": "Nova Página"
+    },
+    "Building a Custom Categories Set": {
+        "message": "Nova Página"
+    },
+    "Encryption and Security": {
+        "message": "Nova Página"
+    },
+    "Adjusting Data Sharing and Privacy": {
+        "message": "Nova Página"
+    },
+    "Using Exchange Offline": {
+        "message": "Nova Página"
+    },
+    "Sharing a Single Observation and Metadata": {
+        "message": "Nova Página"
+    },
+    "Troubleshooting: Setup and Customization": {
+        "message": "Nova Página"
+    },
+    "Troubleshooting:  Observations and Tracks": {
+        "message": "Nova Página"
+    },
+    "Troubleshooting: Data Privacy and Security": {
+        "message": "Nova Página"
+    },
+    "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
+        "message": "Nova Página"
     }
 }

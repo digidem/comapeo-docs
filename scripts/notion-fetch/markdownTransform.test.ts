@@ -165,10 +165,7 @@ describe("markdownTransform", () => {
     it("should extract plain text from callout rich_text", () => {
       const block = {
         callout: {
-          rich_text: [
-            { plain_text: "This is " },
-            { plain_text: "a callout" },
-          ],
+          rich_text: [{ plain_text: "This is " }, { plain_text: "a callout" }],
         },
       };
       expect(extractTextFromCalloutBlock(block)).toBe("This is a callout");
@@ -183,9 +180,7 @@ describe("markdownTransform", () => {
           ],
         },
       };
-      expect(extractTextFromCalloutBlock(block)).toBe(
-        "Text content and plain"
-      );
+      expect(extractTextFromCalloutBlock(block)).toBe("Text content and plain");
     });
 
     it("should add spaces between parts when needed", () => {
@@ -269,12 +264,7 @@ describe("markdownTransform", () => {
     });
 
     it("should handle blockquote with blank lines", () => {
-      const lines = [
-        "> Quote line 1",
-        "",
-        "> Quote line 2",
-        "Text after",
-      ];
+      const lines = ["> Quote line 1", "", "> Quote line 2", "Text after"];
       const match = findMatchingBlockquote(lines, "Quote line 1", 0);
 
       expect(match).toBeTruthy();
@@ -282,12 +272,7 @@ describe("markdownTransform", () => {
     });
 
     it("should respect fromIndex parameter", () => {
-      const lines = [
-        "> First quote",
-        "Text",
-        "> Second quote",
-        "More text",
-      ];
+      const lines = ["> First quote", "Text", "> Second quote", "More text"];
       const match = findMatchingBlockquote(lines, "Second quote", 2);
 
       expect(match).toBeTruthy();

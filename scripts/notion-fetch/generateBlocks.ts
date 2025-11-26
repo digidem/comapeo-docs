@@ -40,6 +40,20 @@ import {
 } from "./contentWriter";
 import { processBatch } from "./timeoutUtils";
 import { ProgressTracker } from "./progressTracker";
+import { computeScriptHash, formatScriptHashSummary } from "./scriptHasher";
+import {
+  loadPageMetadataCache,
+  savePageMetadataCache,
+  createEmptyCache,
+  determineSyncMode,
+  filterChangedPages,
+  findDeletedPages,
+  updatePageInCache,
+  removePageFromCache,
+  getCacheStats,
+  hasMissingOutputs,
+  type PageMetadataCache,
+} from "./pageMetadataCache";
 
 /**
  * Context captured for each page task during sequential pre-processing.
@@ -119,6 +133,22 @@ export function __resetPrefetchCaches(): void {
 // setTranslationString moved to translationManager.ts
 
 /**
+ * Options for generateBlocks function
+ */
+export interface GenerateBlocksOptions {
+  /** Force full rebuild, ignoring cache */
+  force?: boolean;
+  /** Show what would be processed without actually doing it */
+  dryRun?: boolean;
+  /**
+   * Enable deletion of orphaned files. Only set to true when you're certain
+   * the pages array contains the FULL dataset (not filtered by --max-pages,
+   * --status-filter, or single-page fetch). Defaults to false for safety.
+   */
+  enableDeletion?: boolean;
+}
+
+/**
  * Result returned from processSinglePage for aggregation.
  * Includes cache stats to avoid race conditions on shared counters.
  */
@@ -127,6 +157,9 @@ interface PageProcessingResult {
   totalSaved: number;
   emojiCount: number;
   pageTitle: string;
+  pageId: string;
+  lastEdited: string;
+  outputPath: string;
   // Cache stats returned per-page to avoid race conditions
   blockFetches: number;
   blockCacheHits: number;
@@ -346,6 +379,9 @@ async function processSinglePage(
       totalSaved,
       emojiCount,
       pageTitle,
+      pageId: page.id,
+      lastEdited: page.last_edited_time,
+      outputPath: filePath,
       blockFetches: localBlockFetches,
       blockCacheHits: localBlockCacheHits,
       markdownFetches: localMarkdownFetches,
@@ -366,6 +402,9 @@ async function processSinglePage(
       totalSaved,
       emojiCount,
       pageTitle,
+      pageId: page.id,
+      lastEdited: page.last_edited_time,
+      outputPath: filePath,
       blockFetches: localBlockFetches,
       blockCacheHits: localBlockCacheHits,
       markdownFetches: localMarkdownFetches,
@@ -376,7 +415,11 @@ async function processSinglePage(
   }
 }
 
-export async function generateBlocks(pages, progressCallback) {
+export async function generateBlocks(
+  pages,
+  progressCallback,
+  options: GenerateBlocksOptions = {}
+) {
   // pages are already sorted by Order property in fetchNotion.ts
   let totalSaved = 0;
   let processedPages = 0;
@@ -391,6 +434,88 @@ export async function generateBlocks(pages, progressCallback) {
   let emojiCount = 0;
 
   const pagesByLang = [];
+
+  // --- Incremental Sync Setup ---
+  const { force = false, dryRun = false, enableDeletion = false } = options;
+
+  // Compute script hash
+  console.log(chalk.blue("\n🔍 Computing script hash for incremental sync..."));
+  const scriptHashResult = await computeScriptHash();
+  console.log(chalk.gray(formatScriptHashSummary(scriptHashResult)));
+
+  // Load existing cache for deletion detection (even if we do a full rebuild)
+  const existingCache = loadPageMetadataCache();
+
+  // Determine sync mode
+  const syncMode = determineSyncMode(scriptHashResult.hash, force);
+  let metadataCache: PageMetadataCache;
+
+  if (syncMode.fullRebuild || !syncMode.cache) {
+    console.log(
+      chalk.yellow(`\n⚠️  Full rebuild required: ${syncMode.reason}`)
+    );
+    metadataCache = createEmptyCache(scriptHashResult.hash);
+  } else {
+    metadataCache = syncMode.cache;
+    const stats = getCacheStats(metadataCache);
+    console.log(
+      chalk.green(
+        `\n✅ Incremental sync enabled: ${stats.totalPages} pages in cache`
+      )
+    );
+    if (stats.lastSync) {
+      console.log(chalk.gray(`   Last sync: ${stats.lastSync}`));
+    }
+  }
+
+  // Build set of current page IDs for deleted page detection
+  const currentPageIds = new Set<string>();
+  for (const page of pages) {
+    if (page?.id) {
+      currentPageIds.add(page.id);
+    }
+  }
+
+  // Find and handle deleted pages (only when explicitly enabled with full dataset)
+  if (!enableDeletion) {
+    console.log(
+      chalk.gray(
+        "\n⏭️  Skipping deleted page detection (use full fetch without filters to enable)"
+      )
+    );
+  } else if (currentPageIds.size === 0) {
+    console.log(
+      chalk.yellow(
+        "\n⚠️  Deletion skipped: enableDeletion=true but zero pages were fetched. This typically indicates a temporary Notion/API issue or an overly strict filter. No files will be removed."
+      )
+    );
+  } else {
+    // Use existingCache for deletion detection to handle cases where metadataCache
+    // is a fresh empty cache (e.g., during full rebuild due to script changes)
+    const deletedPages = findDeletedPages(currentPageIds, existingCache);
+    if (deletedPages.length > 0) {
+      console.log(
+        chalk.yellow(`\n🗑️  Found ${deletedPages.length} deleted pages`)
+      );
+      for (const deleted of deletedPages) {
+        for (const outputPath of deleted.outputPaths) {
+          if (dryRun) {
+            console.log(chalk.gray(`   Would delete: ${outputPath}`));
+          } else {
+            try {
+              if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+                console.log(chalk.gray(`   Deleted: ${outputPath}`));
+              }
+            } catch (err) {
+              console.warn(chalk.yellow(`   Failed to delete: ${outputPath}`));
+            }
+          }
+        }
+        removePageFromCache(metadataCache, deleted.pageId);
+      }
+    }
+  }
 
   const subpageIdSet = new Set<string>();
   for (const page of pages) {
@@ -574,30 +699,55 @@ export async function generateBlocks(pages, progressCallback) {
             page
           );
 
-          // Capture current context for this page task
-          pageTasks.push({
-            pageByLang,
-            lang,
-            page,
-            pageTitle,
-            filename,
-            safeFilename,
-            filePath,
-            relativePath,
-            frontmatter,
-            customProps,
-            pageGroupIndex: i,
-            pageProcessingIndex,
-            totalPages,
-            PATH,
-            blocksMap,
-            markdownMap,
-            blockPrefetchCache,
-            markdownPrefetchCache,
-            inFlightBlockFetches,
-            inFlightMarkdownFetches,
-            currentSectionFolderForLang: currentSectionFolder[lang],
-          });
+          // Check if this page needs processing (incremental sync)
+          const cachedPage = metadataCache.pages[page.id];
+          const needsProcessing =
+            syncMode.fullRebuild ||
+            !cachedPage ||
+            hasMissingOutputs(metadataCache, page.id) ||
+            // If path changed (e.g. moved/renamed), we must re-process even if timestamp is same
+            !cachedPage.outputPaths?.includes(filePath) ||
+            new Date(page.last_edited_time).getTime() >
+              new Date(cachedPage.lastEdited).getTime();
+
+          if (!needsProcessing) {
+            // Page unchanged, skip processing but still count it
+            console.log(
+              chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
+            );
+            processedPages++;
+            progressCallback({ current: processedPages, total: totalPages });
+          } else if (dryRun) {
+            // Dry run - show what would be processed
+            console.log(chalk.cyan(`  📋 Would process: ${pageTitle}`));
+            processedPages++;
+            progressCallback({ current: processedPages, total: totalPages });
+          } else {
+            // Capture current context for this page task
+            pageTasks.push({
+              pageByLang,
+              lang,
+              page,
+              pageTitle,
+              filename,
+              safeFilename,
+              filePath,
+              relativePath,
+              frontmatter,
+              customProps,
+              pageGroupIndex: i,
+              pageProcessingIndex,
+              totalPages,
+              PATH,
+              blocksMap,
+              markdownMap,
+              blockPrefetchCache,
+              markdownPrefetchCache,
+              inFlightBlockFetches,
+              inFlightMarkdownFetches,
+              currentSectionFolderForLang: currentSectionFolder[lang],
+            });
+          }
 
           // Clear pending heading after capturing it
           if (pendingHeading) {
@@ -609,6 +759,16 @@ export async function generateBlocks(pages, progressCallback) {
 
     // Phase 2: Process all Page tasks in parallel
     if (pageTasks.length > 0) {
+      const skippedCount =
+        totalPages - pageTasks.length - sectionCount - titleSectionCount;
+      if (skippedCount > 0 && !syncMode.fullRebuild) {
+        console.log(
+          chalk.green(
+            `\n⏭️  Skipped ${skippedCount} unchanged pages (incremental sync)`
+          )
+        );
+      }
+
       console.log(
         chalk.blue(
           `\n🚀 Processing ${pageTasks.length} pages in parallel (max 5 concurrent)...`
@@ -648,6 +808,14 @@ export async function generateBlocks(pages, progressCallback) {
               markdownCacheHits.value += value.markdownCacheHits;
               if (!value.success) {
                 failedCount++;
+              } else {
+                // Update cache with successful page processing
+                updatePageInCache(
+                  metadataCache,
+                  value.pageId,
+                  value.lastEdited,
+                  [value.outputPath]
+                );
               }
             } else {
               failedCount++;
@@ -727,6 +895,18 @@ export async function generateBlocks(pages, progressCallback) {
       console.info(
         chalk.green(
           `   🚀 Future runs will be faster with ${cacheStats.validEntries} cached images`
+        )
+      );
+    }
+
+    // Save page metadata cache for incremental sync
+    if (!dryRun) {
+      metadataCache.lastSync = new Date().toISOString();
+      savePageMetadataCache(metadataCache);
+      const finalCacheStats = getCacheStats(metadataCache);
+      console.info(
+        chalk.green(
+          `\n💾 Saved incremental sync cache with ${finalCacheStats.totalPages} pages`
         )
       );
     }

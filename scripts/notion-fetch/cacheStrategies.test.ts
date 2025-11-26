@@ -8,11 +8,7 @@ import {
   afterAll,
   vi,
 } from "vitest";
-import {
-  LRUCache,
-  validateCacheSize,
-  buildCacheKey,
-} from "./cacheStrategies";
+import { LRUCache, validateCacheSize, buildCacheKey } from "./cacheStrategies";
 
 describe("cacheStrategies", () => {
   describe("LRUCache", () => {

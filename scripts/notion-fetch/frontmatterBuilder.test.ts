@@ -64,7 +64,7 @@ describe("frontmatterBuilder", () => {
 
     it("should quote strings with leading or trailing quotes", () => {
       expect(quoteYamlValue('"Quoted"')).toBe('"\\"Quoted\\""');
-      expect(quoteYamlValue("'Quoted'")).toBe('"\'Quoted\'"');
+      expect(quoteYamlValue("'Quoted'")).toBe("\"'Quoted'\"");
     });
 
     it("should escape existing double quotes when quoting", () => {
@@ -315,7 +315,7 @@ describe("frontmatterBuilder", () => {
 
       expect(result).toContain("sidebar_custom_props:");
       expect(result).toContain("description: 'Value with \"double quotes\"'");
-      expect(result).toContain('note: "Value with \'single quotes\'"');
+      expect(result).toContain("note: \"Value with 'single quotes'\"");
     });
 
     it("should handle custom props with non-ASCII characters", () => {

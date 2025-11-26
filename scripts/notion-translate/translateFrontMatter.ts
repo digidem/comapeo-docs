@@ -173,7 +173,7 @@ export async function translateText(
     // Return a fallback translation message instead of throwing
     return {
       markdown: `# Translation Error\n\nUnable to translate content to ${targetLanguage}. Please try again later.\n\nOriginal content:\n\n${text}`,
-      title: title
+      title: title,
     };
   }
 }

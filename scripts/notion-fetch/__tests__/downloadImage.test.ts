@@ -12,6 +12,10 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
   const subPageId = "sub-page-en";
   const mainPage = {
     id: "test-page",
+    created_time: "2025-11-19T10:16:11.471Z",
+    last_edited_time: "2025-11-26T10:16:11.471Z",
+    archived: false,
+    url: "https://notion.so/test-page",
     properties: {
       "Content elements": { title: [{ plain_text: testTitle }] },
       Status: { select: { name: "Ready to publish" } },
@@ -28,6 +32,10 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
 
   const subPage = {
     id: subPageId,
+    created_time: "2025-11-19T10:16:11.471Z",
+    last_edited_time: "2025-11-26T10:16:11.471Z",
+    archived: false,
+    url: "https://notion.so/sub-page-en",
     properties: {
       "Content elements": { title: [{ plain_text: `${testTitle} EN` }] },
       Status: { select: { name: "Ready to publish" } },
@@ -46,11 +54,48 @@ const createPageStructureForTesting = (testTitle = "Test Page") => {
 };
 
 // Mock external dependencies
+vi.mock("sharp", () => ({
+  default: vi.fn(() => ({
+    metadata: vi.fn().mockResolvedValue({ width: 100, height: 100 }),
+    resize: vi.fn().mockReturnThis(),
+    toBuffer: vi.fn().mockResolvedValue(Buffer.from("resized")),
+  })),
+}));
+
+vi.mock("chalk", () => ({
+  default: {
+    yellow: vi.fn((text) => text),
+    red: vi.fn((text) => text),
+    green: vi.fn((text) => text),
+    blue: vi.fn((text) => text),
+    gray: vi.fn((text) => text),
+    cyan: vi.fn((text) => text),
+    magenta: vi.fn((text) => text),
+    bold: {
+      cyan: vi.fn((text) => text),
+      red: vi.fn((text) => text),
+      green: vi.fn((text) => text),
+      yellow: vi.fn((text) => text),
+      magenta: vi.fn((text) => text),
+      blue: vi.fn((text) => text),
+    },
+  },
+}));
+
 vi.mock("axios");
 vi.mock("../../notionClient", () => ({
   n2m: {
     pageToMarkdown: vi.fn(),
     toMarkdownString: vi.fn(),
+  },
+  enhancedNotion: {
+    blocksChildrenList: vi.fn(() =>
+      Promise.resolve({
+        results: [],
+        has_more: false,
+        next_cursor: null,
+      })
+    ),
   },
 }));
 vi.mock("../spinnerManager", () => ({
@@ -66,9 +111,34 @@ vi.mock("../spinnerManager", () => ({
   },
 }));
 
+vi.mock("../scriptHasher", () => ({
+  computeScriptHash: vi.fn().mockResolvedValue({
+    hash: "mock-hash",
+    filesHashed: 0,
+    missingFiles: [],
+    notionSdkVersion: "0.0.0",
+  }),
+  formatScriptHashSummary: vi.fn(() => "Mock script hash summary"),
+  isScriptHashChanged: vi.fn(() => false),
+}));
+
 vi.mock("../imageProcessor", () => ({
   processImage: vi.fn(),
 }));
+
+vi.mock("../imageProcessing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../imageProcessing")>();
+  return {
+    ...actual,
+    getImageCache: vi.fn(() => ({
+      cleanup: vi.fn(),
+      getStats: vi.fn(() => ({
+        totalEntries: 0,
+        validEntries: 0,
+      })),
+    })),
+  };
+});
 
 vi.mock("../utils", () => ({
   compressImageToFileWithFallback: vi.fn(),
@@ -84,13 +154,16 @@ vi.mock("node:fs", () => ({
   default: {
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
-    readFileSync: vi.fn(),
-    existsSync: vi.fn(() => true),
+    readFileSync: vi.fn(() => "{}"),
+    existsSync: vi.fn(() => false), // Default to false to avoid cache hits
     readdirSync: vi.fn(() => []),
     statSync: vi.fn(() => ({
       isDirectory: () => false,
       isFile: () => true,
     })),
+    renameSync: vi.fn(),
+    unlinkSync: vi.fn(),
+    unlink: vi.fn(),
   },
 }));
 
@@ -119,12 +192,11 @@ describe("downloadAndProcessImage", () => {
   afterEach(() => {
     restoreEnv();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("Retry mechanism", () => {
     it("should retry failed downloads with exponential backoff", async () => {
-      // Use fake timers to avoid real delays
-      vi.useFakeTimers();
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
 
@@ -158,28 +230,15 @@ describe("downloadAndProcessImage", () => {
       const progressCallback = vi.fn();
 
       // Start the async operation
-      const resultPromise = generateBlocks(pages, progressCallback);
-
-      // Wait for initial request and first retry (1 second delay)
-      await vi.advanceTimersByTimeAsync(1000);
-
-      // Wait for second retry (2 second delay)
-      await vi.advanceTimersByTimeAsync(2000);
-
-      const result = await resultPromise;
+      const result = await generateBlocks(pages, progressCallback);
 
       // Verify the image was processed successfully after retries
       expect(result.totalSaved).toBeGreaterThanOrEqual(0);
       expect(attemptCount).toBe(3); // Failed twice, succeeded on third attempt
       expect(progressCallback).toHaveBeenCalled();
-
-      // Cleanup
-      vi.useRealTimers();
-    });
+    }, 30000);
 
     it("should fail permanently after three attempts and leave no partial file", async () => {
-      // Use fake timers to avoid real delays
-      vi.useFakeTimers();
       const { generateBlocks } = await import("../generateBlocks");
       const { n2m } = vi.mocked(await import("../../notionClient"));
 
@@ -207,14 +266,7 @@ describe("downloadAndProcessImage", () => {
       const progressCallback = vi.fn();
 
       // Start the async operation
-      const resultPromise = generateBlocks(pages, progressCallback);
-
-      // Advance timers to trigger retries (1s + 2s + 4s = 7s total)
-      await vi.advanceTimersByTimeAsync(1000); // First retry
-      await vi.advanceTimersByTimeAsync(2000); // Second retry
-      await vi.advanceTimersByTimeAsync(4000); // Third retry
-
-      const result = await resultPromise;
+      const result = await generateBlocks(pages, progressCallback);
 
       // Verify exactly 3 attempts were made
       expect(attemptCount).toBe(3);
@@ -222,10 +274,7 @@ describe("downloadAndProcessImage", () => {
       // Page should still be processed (image failure doesn't stop page processing)
       expect(progressCallback).toHaveBeenCalled();
       expect(result).toBeDefined();
-
-      // Cleanup
-      vi.useRealTimers();
-    });
+    }, 30000);
   });
 
   describe("Error handling", () => {

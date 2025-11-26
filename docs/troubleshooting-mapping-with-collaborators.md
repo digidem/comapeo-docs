@@ -2,7 +2,7 @@
 id: doc-troubleshooting-mapping-with-collaborators
 title: Troubleshooting: Mapping with Collaborators
 sidebar_label: Troubleshooting: Mapping with Collaborators
-sidebar_position: 4
+sidebar_position: 1
 pagination_label: Troubleshooting: Mapping with Collaborators
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/troubleshooting-mapping-with-collaborators.md
 keywords:
@@ -31,8 +31,8 @@ This troubleshooting guide helps you diagnose and resolve issues systematically.
 
 There are a number of issues that can happen when trying to invite collaborators to a team. The most common solutions are the following:
 
-- [🟩  Solution: Check that every device is actually connected to the WiFi network](/docs/common-solutions#solution--check-that-every-device-is-actually-connected-to-the-wifi-network)
-- [🟩  Solution: Check that every device is on the same WiFi network](/docs/common-solutions#solution--check-that-every-device-is-on-the-same-wifi-network)
+- [🟩  Solution: Check that every device is actually connected to the WiFi network](/docs/common-solutions#solution-check-that-every-device-is-actually-connected-to-the-wifi-network)
+- [🟩  Solution: Check that every device is on the same WiFi network](/docs/common-solutions#solution-check-that-every-device-is-on-the-same-wifi-network)
 
 ## Teammate removal problems
 
@@ -75,7 +75,7 @@ When trying to exchange data between devices, it can happen that you don’t see
 :::note 👉🏽
 Devices that are in multiple projects together will discover each other even when different projects are open.
 :::
-⚠️ **Connecting to WiFi networks that don’t have internet access may bring some additional issues that need the user’s attention. For a common solution to this case, see** [🟩  Solution: Check that every device is actually connected to the WiFi network](/docs/common-solutions#solution--check-that-every-device-is-actually-connected-to-the-wifi-network)
+⚠️ **Connecting to WiFi networks that don’t have internet access may bring some additional issues that need the user’s attention. For a common solution to this case, see** [🟩  Solution: Check that every device is actually connected to the WiFi network](/docs/common-solutions#solution-check-that-every-device-is-actually-connected-to-the-wifi-network)
 
 
 </details>

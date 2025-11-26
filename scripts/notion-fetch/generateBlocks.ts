@@ -443,6 +443,9 @@ export async function generateBlocks(
   const scriptHashResult = await computeScriptHash();
   console.log(chalk.gray(formatScriptHashSummary(scriptHashResult)));
 
+  // Load existing cache for deletion detection (even if we do a full rebuild)
+  const existingCache = loadPageMetadataCache();
+
   // Determine sync mode
   const syncMode = determineSyncMode(scriptHashResult.hash, force);
   let metadataCache: PageMetadataCache;
@@ -487,7 +490,9 @@ export async function generateBlocks(
       )
     );
   } else {
-    const deletedPages = findDeletedPages(currentPageIds, metadataCache);
+    // Use existingCache for deletion detection to handle cases where metadataCache
+    // is a fresh empty cache (e.g., during full rebuild due to script changes)
+    const deletedPages = findDeletedPages(currentPageIds, existingCache);
     if (deletedPages.length > 0) {
       console.log(
         chalk.yellow(`\n🗑️  Found ${deletedPages.length} deleted pages`)

@@ -388,7 +388,25 @@ describe("pageMetadataCache", () => {
       updatePageInCache(cache, "page-1", "2024-01-02", ["/docs/new.md"]);
 
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-02");
-      expect(cache.pages["page-1"].outputPaths).toEqual(["/docs/new.md"]);
+      expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
+        "/docs/new.md",
+        "/docs/old.md",
+      ]);
+    });
+
+    it("should merge and deduplicate output paths across languages", () => {
+      const cache = createEmptyCache("hash");
+
+      updatePageInCache(cache, "page-1", "2024-01-01", ["/docs/page-1.md"]);
+      updatePageInCache(cache, "page-1", "2024-01-01", [
+        "/docs/fr/page-1.md",
+        "/docs/page-1.md", // duplicate should be ignored
+      ]);
+
+      expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
+        "/docs/fr/page-1.md",
+        "/docs/page-1.md",
+      ]);
     });
   });
 

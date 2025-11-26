@@ -287,9 +287,32 @@ export function updatePageInCache(
   lastEdited: string,
   outputPaths: string[]
 ): void {
+  const existing = cache.pages[pageId];
+  const mergedOutputs = new Set<string>();
+
+  if (existing?.outputPaths?.length) {
+    for (const p of existing.outputPaths) {
+      if (p) {
+        mergedOutputs.add(p);
+      }
+    }
+  }
+
+  for (const p of outputPaths) {
+    if (p) {
+      mergedOutputs.add(p);
+    }
+  }
+
+  const latestLastEdited =
+    existing &&
+    new Date(existing.lastEdited).getTime() > new Date(lastEdited).getTime()
+      ? existing.lastEdited
+      : lastEdited;
+
   cache.pages[pageId] = {
-    lastEdited,
-    outputPaths,
+    lastEdited: latestLastEdited,
+    outputPaths: Array.from(mergedOutputs),
     processedAt: new Date().toISOString(),
   };
 }

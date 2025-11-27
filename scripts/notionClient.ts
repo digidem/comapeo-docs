@@ -330,6 +330,74 @@ const paragraphTransformer: BlockToMarkdown = async (block) => {
 
 n2m.setCustomTransformer("paragraph", paragraphTransformer);
 
+/**
+ * Custom image transformer that preserves hyperlinks from Notion.
+ * When an image has a hyperlink in Notion, this transformer wraps the
+ * markdown image syntax with a link: [![alt](img-url)](link-url)
+ */
+const imageTransformer: BlockToMarkdown = async (block) => {
+  const imageBlock = block as any;
+
+  if (imageBlock?.type !== "image") {
+    return "";
+  }
+
+  const image = imageBlock.image;
+  if (!image) {
+    return "";
+  }
+
+  // Get image URL from external or file
+  const imageUrl = image.external?.url || image.file?.url || image.url || "";
+
+  if (!imageUrl) {
+    return "";
+  }
+
+  // Get caption for alt text
+  let altText = "";
+  if (image.caption && Array.isArray(image.caption)) {
+    altText = image.caption.map((item: any) => item.plain_text || "").join("");
+  }
+
+  // Check if image has a hyperlink
+  // In Notion, hyperlinks can be stored in:
+  // 1. A dedicated 'link' property on the image block
+  // 2. In the caption's rich_text with link annotations
+  let linkUrl = "";
+
+  // Check for dedicated link property (if Notion API supports it)
+  if (image.link) {
+    linkUrl = image.link;
+  }
+
+  // Check for links in caption rich_text
+  if (!linkUrl && image.caption && Array.isArray(image.caption)) {
+    for (const captionItem of image.caption) {
+      if (
+        captionItem.type === "text" &&
+        captionItem.text?.link?.url &&
+        captionItem.plain_text
+      ) {
+        linkUrl = captionItem.text.link.url;
+        break; // Use the first link found
+      }
+    }
+  }
+
+  // Generate markdown
+  const imageMarkdown = `![${altText}](${imageUrl})`;
+
+  // If there's a hyperlink, wrap the image in a link
+  if (linkUrl) {
+    return `[${imageMarkdown}](${linkUrl})` as MarkdownBlock;
+  }
+
+  return imageMarkdown as MarkdownBlock;
+};
+
+n2m.setCustomTransformer("image", imageTransformer);
+
 export const DATABASE_ID = resolvedDatabaseId;
 
 // For v5 API compatibility - export data source ID

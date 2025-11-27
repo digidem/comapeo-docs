@@ -159,6 +159,63 @@ Some text
         "![alt text](https://example.com/image.png)"
       );
     });
+
+    it("should extract hyperlinked images", () => {
+      const markdown =
+        "[![alt text](https://example.com/image.png)](https://example.com/link)";
+      const matches = extractImageMatches(markdown);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        alt: "alt text",
+        url: "https://example.com/image.png",
+        linkUrl: "https://example.com/link",
+        idx: 0,
+      });
+      expect(matches[0].full).toBe(
+        "[![alt text](https://example.com/image.png)](https://example.com/link)"
+      );
+    });
+
+    it("should extract both regular and hyperlinked images", () => {
+      const markdown = `
+![regular](https://example.com/regular.png)
+[![hyperlinked](https://example.com/linked.png)](https://example.com)
+      `;
+      const matches = extractImageMatches(markdown);
+
+      expect(matches).toHaveLength(2);
+
+      // Regular image
+      expect(matches[0].alt).toBe("regular");
+      expect(matches[0].url).toBe("https://example.com/regular.png");
+      expect(matches[0].linkUrl).toBeUndefined();
+
+      // Hyperlinked image
+      expect(matches[1].alt).toBe("hyperlinked");
+      expect(matches[1].url).toBe("https://example.com/linked.png");
+      expect(matches[1].linkUrl).toBe("https://example.com");
+    });
+
+    it("should handle hyperlinked images with escaped parentheses", () => {
+      const markdown =
+        "[![alt](https://example.com/image\\).png)](https://link.com/page\\))";
+      const matches = extractImageMatches(markdown);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0].url).toBe("https://example.com/image).png");
+      expect(matches[0].linkUrl).toBe("https://link.com/page)");
+    });
+
+    it("should handle hyperlinked images with empty alt text", () => {
+      const markdown =
+        "[![](https://example.com/image.png)](https://example.com/link)";
+      const matches = extractImageMatches(markdown);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0].alt).toBe("");
+      expect(matches[0].linkUrl).toBe("https://example.com/link");
+    });
   });
 
   describe("processAndReplaceImages", () => {
@@ -384,6 +441,52 @@ Some text after
       expect(result.metrics).toHaveProperty("skippedAlreadyOptimized");
       expect(result.metrics).toHaveProperty("skippedResize");
       expect(result.metrics).toHaveProperty("fullyProcessed");
+    });
+
+    it("should preserve hyperlinks when replacing image URLs", async () => {
+      const markdown =
+        "[![alt text](https://example.com/image.png)](https://example.com/link)";
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      // Should replace the image URL but keep the hyperlink wrapper
+      expect(result.markdown).toContain("/images/downloaded-image.png");
+      expect(result.markdown).toContain("https://example.com/link");
+      expect(result.markdown).toBe(
+        "[![alt text](/images/downloaded-image.png)](https://example.com/link)"
+      );
+      expect(result.stats.successfulImages).toBe(1);
+    });
+
+    it("should handle multiple hyperlinked images", async () => {
+      const markdown = `
+[![img1](https://example.com/1.png)](https://link1.com)
+[![img2](https://example.com/2.png)](https://link2.com)
+      `;
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      expect(result.stats.successfulImages).toBe(2);
+      expect(result.markdown).toContain(
+        "[![img1](/images/downloaded-1.png)](https://link1.com)"
+      );
+      expect(result.markdown).toContain(
+        "[![img2](/images/downloaded-2.png)](https://link2.com)"
+      );
+    });
+
+    it("should handle mix of regular and hyperlinked images", async () => {
+      const markdown = `
+![regular](https://example.com/regular.png)
+[![linked](https://example.com/linked.png)](https://example.com)
+      `;
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      expect(result.stats.successfulImages).toBe(2);
+      expect(result.markdown).toContain(
+        "![regular](/images/downloaded-regular.png)"
+      );
+      expect(result.markdown).toContain(
+        "[![linked](/images/downloaded-linked.png)](https://example.com)"
+      );
     });
   });
 });

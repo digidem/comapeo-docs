@@ -29,7 +29,7 @@ import { ProgressTracker } from "./progressTracker";
  * Image match information extracted from markdown
  */
 export interface ImageMatch {
-  /** Full markdown image syntax */
+  /** Full markdown image syntax (including link wrapper if present) */
   full: string;
   /** Image URL */
   url: string;
@@ -41,6 +41,8 @@ export interface ImageMatch {
   start: number;
   /** End position in source markdown */
   end: number;
+  /** Hyperlink URL if image is wrapped in a link */
+  linkUrl?: string;
 }
 
 /**
@@ -76,23 +78,29 @@ const MAX_CONCURRENT_IMAGES = 5;
 /**
  * Extracts all image matches from markdown content
  *
- * Uses an improved regex pattern that:
- * - Matches until ')' not preceded by '\'
- * - Allows spaces (trimmed)
- * - Handles escaped parentheses in URLs
+ * Handles both regular images and hyperlinked images:
+ * - Regular: ![alt](url)
+ * - Hyperlinked: [![alt](img-url)](link-url)
+ *
+ * Uses improved regex patterns that:
+ * - Match until ')' not preceded by '\'
+ * - Allow spaces (trimmed)
+ * - Handle escaped parentheses in URLs
  *
  * @param sourceMarkdown - Source markdown content
  * @returns Array of image matches with position information
  */
 export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
-  // Improved URL pattern: match until a ')' not preceded by '\', allow spaces trimmed
-  const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
   const imageMatches: ImageMatch[] = [];
-  let m: RegExpExecArray | null;
   let tmpIndex = 0;
   let safetyCounter = 0;
 
-  while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+  // First, extract hyperlinked images: [![alt](img-url)](link-url)
+  const hyperlinkedImgRegex =
+    /\[!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = hyperlinkedImgRegex.exec(sourceMarkdown)) !== null) {
     if (++safetyCounter > SAFETY_LIMIT) {
       console.warn(
         chalk.yellow(
@@ -104,8 +112,52 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
     const start = m.index;
     const full = m[0];
     const end = start + full.length;
+    const rawImgUrl = m[2];
+    const rawLinkUrl = m[3];
+    const unescapedImgUrl = rawImgUrl.replace(/\\\)/g, ")");
+    const unescapedLinkUrl = rawLinkUrl.replace(/\\\)/g, ")");
+
+    imageMatches.push({
+      full,
+      url: unescapedImgUrl,
+      alt: m[1],
+      idx: tmpIndex++,
+      start,
+      end,
+      linkUrl: unescapedLinkUrl,
+    });
+  }
+
+  // Then, extract regular images: ![alt](url)
+  // But skip positions already matched by hyperlinked images
+  const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+
+  while ((m = imgRegex.exec(sourceMarkdown)) !== null) {
+    if (++safetyCounter > SAFETY_LIMIT) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
+        )
+      );
+      break;
+    }
+
+    const start = m.index;
+    const full = m[0];
+    const end = start + full.length;
+
+    // Skip if this position overlaps with a hyperlinked image
+    const overlaps = imageMatches.some(
+      (existing) => start >= existing.start && start < existing.end
+    );
+
+    if (overlaps) {
+      continue;
+    }
+
     const rawUrl = m[2];
     const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
+
     imageMatches.push({
       full,
       url: unescapedUrl,
@@ -115,6 +167,14 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
       end,
     });
   }
+
+  // Sort by start position to maintain order
+  imageMatches.sort((a, b) => a.start - b.start);
+
+  // Reassign indices after sorting
+  imageMatches.forEach((match, index) => {
+    match.idx = index;
+  });
 
   return imageMatches;
 }
@@ -296,6 +356,9 @@ export async function processAndReplaceImages(
 
     let replacementText: string;
     if (processResult.success && processResult.newPath) {
+      // Replace the image URL with the new local path
+      // This preserves the hyperlink wrapper if present, as match.full
+      // contains the complete markdown syntax: [![alt](url)](link) or ![alt](url)
       replacementText = match.full.replace(
         processResult.imageUrl!,
         processResult.newPath

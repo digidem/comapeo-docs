@@ -35,6 +35,17 @@ interface ErrorWithResponse {
 }
 
 /**
+ * Common error messages that indicate an expired Notion image URL (AWS S3 presigned URL)
+ * These appear in 403 responses when the URL has exceeded its 1-hour validity period
+ */
+const EXPIRATION_INDICATORS = [
+  "SignatureDoesNotMatch",
+  "Request has expired",
+  "expired",
+  "Signature expired",
+] as const;
+
+/**
  * Helper function to detect if an error is due to an expired image URL (Issue #94)
  *
  * Notion image URLs are AWS S3 presigned URLs that expire after 1 hour.
@@ -62,14 +73,7 @@ export function isExpiredUrlError(error: unknown): boolean {
       ? err.response.data
       : JSON.stringify(err.response.data || "");
 
-  const expirationIndicators = [
-    "SignatureDoesNotMatch",
-    "Request has expired",
-    "expired",
-    "Signature expired",
-  ];
-
-  for (const indicator of expirationIndicators) {
+  for (const indicator of EXPIRATION_INDICATORS) {
     if (responseData.toLowerCase().includes(indicator.toLowerCase())) {
       return true;
     }

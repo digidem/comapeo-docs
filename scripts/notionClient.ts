@@ -423,9 +423,9 @@ const imageTransformer: BlockToMarkdown = async (block) => {
 
   // If there's a hyperlink, wrap the image in a link
   if (linkUrl) {
-    console.log(
-      chalk.green(`Creating hyperlinked image markdown with link: ${linkUrl}`)
-    );
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Creating hyperlinked image: ${linkUrl}`));
+    }
     return `[${imageMarkdown}](${linkUrl})` as MarkdownBlock;
   }
 

@@ -280,7 +280,19 @@ async function processSinglePage(
     const markdownString = n2m.toMarkdownString(markdown);
 
     if (markdownString?.parent) {
+      // ✅ PHASE 1 FIX: Process images IMMEDIATELY after markdown conversion
+      // This minimizes the time between URL generation (in pageToMarkdown) and download
+      // Notion image URLs expire after 1 hour, so we must download within seconds
+      // See: IMAGE_URL_EXPIRATION_SPEC.md and Issue #94
+      const imageResult = await processAndReplaceImages(
+        markdownString.parent,
+        safeFilename
+      );
+      markdownString.parent = imageResult.markdown;
+      totalSaved += imageResult.stats.totalSaved;
+
       // Apply custom emoji mappings to the markdown content
+      // This now works on local image paths (already processed), not remote URLs
       if (emojiMap.size > 0) {
         markdownString.parent = EmojiProcessor.applyEmojiMappings(
           markdownString.parent,
@@ -308,6 +320,7 @@ async function processSinglePage(
       }
 
       // Process callouts in the markdown to convert them to Docusaurus admonitions
+      // This now works on local image paths (already processed), not remote URLs
       if (rawBlocks && rawBlocks.length > 0) {
         markdownString.parent = processCalloutsInMarkdown(
           markdownString.parent,
@@ -315,14 +328,6 @@ async function processSinglePage(
         );
         console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
       }
-
-      // Enhanced image processing with comprehensive fallback handling
-      const imageResult = await processAndReplaceImages(
-        markdownString.parent,
-        safeFilename
-      );
-      markdownString.parent = imageResult.markdown;
-      totalSaved += imageResult.stats.totalSaved;
 
       // Sanitize content to fix malformed HTML/JSX tags
       markdownString.parent = sanitizeMarkdownContent(markdownString.parent);

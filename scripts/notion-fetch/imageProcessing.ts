@@ -23,6 +23,52 @@ import {
 import { withTimeout, TimeoutError } from "./timeoutUtils";
 
 /**
+ * Helper function to detect if an error is due to an expired image URL (Issue #94)
+ *
+ * Notion image URLs are AWS S3 presigned URLs that expire after 1 hour.
+ * When expired, they return 403 Forbidden with specific error messages.
+ *
+ * @param error - The error object from axios or other HTTP client
+ * @returns true if the error indicates an expired URL, false otherwise
+ */
+export function isExpiredUrlError(error: any): boolean {
+  // Must be a 403 error
+  if (error?.response?.status !== 403) {
+    return false;
+  }
+
+  // Check response data for expiration indicators
+  const responseData =
+    typeof error.response?.data === "string"
+      ? error.response.data
+      : JSON.stringify(error.response?.data || "");
+
+  const expirationIndicators = [
+    "SignatureDoesNotMatch",
+    "Request has expired",
+    "expired",
+    "Signature expired",
+  ];
+
+  for (const indicator of expirationIndicators) {
+    if (responseData.toLowerCase().includes(indicator.toLowerCase())) {
+      return true;
+    }
+  }
+
+  // Check error message for expiration indicators
+  const errorMessage = error?.message?.toLowerCase() || "";
+  if (
+    errorMessage.includes("expired") ||
+    errorMessage.includes("signature")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Check if image buffer contains optimization markers indicating it's already optimized
  * Works across different image formats (PNG, JPEG, WebP, etc.)
  */
@@ -904,6 +950,12 @@ export async function downloadAndProcessImage(
         previousTimedOut = true;
       } else if ((error as any)?.code === "ECONNABORTED") {
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
+      } else if (isExpiredUrlError(error)) {
+        // ✅ PHASE 2 FIX: Detect and log expired URL errors specifically (Issue #94)
+        errorMessage = `❌ Image URL expired (403) for image ${index + 1}: ${url}\n` +
+          `   This indicates the image was processed more than 1 hour after URL generation.\n` +
+          `   Phase 1 reordering should prevent this - if you see this message, please report it.`;
+        console.error(chalk.red(errorMessage));
       } else if ((error as any)?.response) {
         errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
       } else if ((error as any)?.code === "ENOTFOUND") {

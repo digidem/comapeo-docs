@@ -347,6 +347,14 @@ const imageTransformer: BlockToMarkdown = async (block) => {
     return "";
   }
 
+  // DEBUG: Log the complete image block structure to understand hyperlinks
+  if (!IS_TEST_ENV) {
+    console.log(
+      chalk.gray("DEBUG: Image block structure:"),
+      JSON.stringify(imageBlock, null, 2)
+    );
+  }
+
   // Get image URL from external or file
   const imageUrl = image.external?.url || image.file?.url || image.url || "";
 
@@ -354,35 +362,44 @@ const imageTransformer: BlockToMarkdown = async (block) => {
     return "";
   }
 
-  // Get caption for alt text
-  let altText = "";
-  if (image.caption && Array.isArray(image.caption)) {
-    altText = image.caption.map((item: any) => item.plain_text || "").join("");
-  }
-
   // Check if image has a hyperlink
-  // In Notion, hyperlinks can be stored in:
-  // 1. A dedicated 'link' property on the image block
-  // 2. In the caption's rich_text with link annotations
+  // In Notion, hyperlinks are typically stored in the caption as a link annotation
   let linkUrl = "";
+  let altText = "";
 
-  // Check for dedicated link property (if Notion API supports it)
-  if (image.link) {
-    linkUrl = image.link;
-  }
-
-  // Check for links in caption rich_text
-  if (!linkUrl && image.caption && Array.isArray(image.caption)) {
+  // Check for links in caption rich_text first
+  if (image.caption && Array.isArray(image.caption)) {
     for (const captionItem of image.caption) {
-      if (
-        captionItem.type === "text" &&
-        captionItem.text?.link?.url &&
-        captionItem.plain_text
-      ) {
+      // Check if this caption item is a link
+      if (captionItem.type === "text" && captionItem.text?.link?.url) {
         linkUrl = captionItem.text.link.url;
-        break; // Use the first link found
+        console.log(chalk.green(`Found link in caption: ${linkUrl}`));
+        // Don't use the linked text as alt text
+        break;
+      } else if (captionItem.plain_text && !linkUrl) {
+        // Use non-linked caption text as alt text
+        altText += captionItem.plain_text || "";
       }
     }
+
+    // If no link was found, use the full caption as alt text
+    if (!linkUrl) {
+      altText = image.caption
+        .map((item: any) => item.plain_text || "")
+        .join("");
+    }
+  }
+
+  // Check for dedicated link property on the image object (fallback)
+  if (!linkUrl && image.link) {
+    linkUrl = image.link;
+    console.log(chalk.green(`Found image link property: ${linkUrl}`));
+  }
+
+  // Check for link on the block level (fallback)
+  if (!linkUrl && imageBlock.link) {
+    linkUrl = imageBlock.link;
+    console.log(chalk.green(`Found block-level link: ${linkUrl}`));
   }
 
   // Generate markdown
@@ -390,6 +407,9 @@ const imageTransformer: BlockToMarkdown = async (block) => {
 
   // If there's a hyperlink, wrap the image in a link
   if (linkUrl) {
+    console.log(
+      chalk.green(`Creating hyperlinked image markdown with link: ${linkUrl}`)
+    );
     return `[${imageMarkdown}](${linkUrl})` as MarkdownBlock;
   }
 

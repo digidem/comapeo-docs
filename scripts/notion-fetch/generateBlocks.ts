@@ -712,9 +712,29 @@ export async function generateBlocks(
 
           if (!needsProcessing) {
             // Page unchanged, skip processing but still count it
-            console.log(
-              chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
-            );
+            // Determine the specific reason for skipping (for diagnostics)
+            let skipReason: string;
+            if (syncMode.fullRebuild) {
+              // This condition can't be reached if !needsProcessing, but for completeness
+              skipReason = "full rebuild mode";
+            } else if (!cachedPage) {
+              skipReason = "not in cache (NEW PAGE - should not skip)";
+            } else if (hasMissingOutputs(metadataCache, page.id)) {
+              skipReason = "missing output files (should not skip)";
+            } else if (!cachedPage.outputPaths?.includes(filePath)) {
+              skipReason = `path changed from [${cachedPage.outputPaths?.join(", ") || "none"}] to [${filePath}] (should not skip)`;
+            } else {
+              const notionTime = new Date(page.last_edited_time).getTime();
+              const cachedTime = new Date(cachedPage.lastEdited).getTime();
+              if (notionTime > cachedTime) {
+                skipReason = `timestamp updated (${page.last_edited_time} > ${cachedPage.lastEdited}) (should not skip)`;
+              } else {
+                skipReason = `unchanged since ${cachedPage.lastEdited}`;
+              }
+            }
+
+            console.log(chalk.gray(`  ⏭️  Skipping page: ${pageTitle}`));
+            console.log(chalk.dim(`      Reason: ${skipReason}`));
             processedPages++;
             progressCallback({ current: processedPages, total: totalPages });
           } else if (dryRun) {

@@ -186,7 +186,9 @@ export async function sortAndExpandNotionData(
           try {
             // Add explicit timeout to prevent hanging indefinitely
             // GitHub Actions seems to have issues with Notion API calls hanging
-            const TIMEOUT_MS = 10000; // 10 second timeout
+            // Increased from 10s to 30s to handle slow Notion API responses,
+            // particularly for pages with large blocks or many nested children
+            const TIMEOUT_MS = 30000; // 30 second timeout
             const timeoutPromise = new Promise((_resolve, reject) =>
               setTimeout(
                 () =>
@@ -221,9 +223,28 @@ export async function sortAndExpandNotionData(
           } catch (pageError) {
             // Log the error but don't let it fail the entire batch
             // Timeouts and individual page failures should be handled gracefully
+            const errorMessage =
+              pageError instanceof Error
+                ? pageError.message
+                : String(pageError);
+            const errorType =
+              pageError instanceof Error
+                ? pageError.constructor.name
+                : typeof pageError;
+            const isTimeout = errorMessage.toLowerCase().includes("timeout");
+
             console.warn(
-              `⚠️  Skipping sub-page ${rel.subId} (parent: "${rel.parentTitle}"): ${pageError.message}`
+              `⚠️  Skipping sub-page ${rel.subId} (parent: "${rel.parentTitle}")`
             );
+            console.warn(`    Error: ${errorMessage}`);
+            console.warn(`    Type: ${errorType}`);
+
+            if (isTimeout) {
+              console.warn(
+                `    💡 Hint: This page timed out. Consider increasing TIMEOUT_MS in fetchNotionData.ts`
+              );
+            }
+
             return null; // Return null for failed pages, filter them out later
           }
         })

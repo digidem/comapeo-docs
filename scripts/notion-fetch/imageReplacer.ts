@@ -426,6 +426,20 @@ export async function processAndReplaceImages(
 }
 
 /**
+ * Checks if markdown content contains AWS S3 URLs (expiring links).
+ *
+ * @param content - Markdown content to check
+ * @returns true if S3 URLs are found
+ */
+export function hasS3Urls(content: string): boolean {
+  // Regex for AWS S3 URLs in markdown image syntax
+  // Matches: ![alt](https://prod-files-secure.s3...amazonaws.com/...)
+  const s3Regex =
+    /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
+  return s3Regex.test(content);
+}
+
+/**
  * Validates final markdown for remaining S3 URLs and attempts to fix them.
  * This acts as a safety net for images missed by the initial pass or re-introduced
  * by subsequent processing (e.g. callouts).
@@ -438,12 +452,7 @@ export async function validateAndFixRemainingImages(
   markdown: string,
   safeFilename: string
 ): Promise<string> {
-  // Regex for AWS S3 URLs in markdown image syntax
-  // Matches: ![alt](https://prod-files-secure.s3...amazonaws.com/...)
-  const s3Regex =
-    /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
-
-  if (!s3Regex.test(markdown)) {
+  if (!hasS3Urls(markdown)) {
     return markdown;
   }
 
@@ -457,7 +466,7 @@ export async function validateAndFixRemainingImages(
   const result = await processAndReplaceImages(markdown, safeFilename);
 
   // Check if any remain (indicating persistent failure)
-  if (s3Regex.test(result.markdown)) {
+  if (hasS3Urls(result.markdown)) {
     console.warn(
       chalk.red(
         `❌ Failed to replace all S3 URLs in final pass for ${safeFilename}. Some images may expire.`

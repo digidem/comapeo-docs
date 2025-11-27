@@ -31,6 +31,7 @@ import { loadBlocksForPage, loadMarkdownForPage } from "./cacheLoaders";
 import {
   processAndReplaceImages,
   validateAndFixRemainingImages,
+  hasS3Urls,
 } from "./imageReplacer";
 import {
   processToggleSection,
@@ -726,12 +727,64 @@ export async function generateBlocks(
               new Date(cachedPage.lastEdited).getTime();
 
           if (!needsProcessing) {
-            // Page unchanged, skip processing but still count it
-            console.log(
-              chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
-            );
-            processedPages++;
-            progressCallback({ current: processedPages, total: totalPages });
+            // OPTIMIZATION: Check if ANY of the existing output files contain S3 URLs
+            // We use the cached output paths because they represent exactly what is on disk
+            let hasExpiringLinks = false;
+            if (cachedPage && cachedPage.outputPaths) {
+              for (const outputPath of cachedPage.outputPaths) {
+                // Handle both absolute and relative paths from cache
+                const absPath = path.isAbsolute(outputPath)
+                  ? outputPath
+                  : path.join(process.cwd(), outputPath);
+
+                if (fs.existsSync(absPath)) {
+                  const content = fs.readFileSync(absPath, "utf-8");
+                  if (hasS3Urls(content)) {
+                    hasExpiringLinks = true;
+                    console.warn(
+                      chalk.yellow(
+                        `  ⚠️  Found expiring S3 URLs in ${path.basename(absPath)}, forcing update: ${pageTitle}`
+                      )
+                    );
+                    break; // Found one, that's enough to force update
+                  }
+                }
+              }
+            }
+
+            if (!hasExpiringLinks) {
+              // Page unchanged, skip processing but still count it
+              console.log(
+                chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
+              );
+              processedPages++;
+              progressCallback({ current: processedPages, total: totalPages });
+            } else {
+              // Force processing because of bad content
+              pageTasks.push({
+                pageByLang,
+                lang,
+                page,
+                pageTitle,
+                filename,
+                safeFilename,
+                filePath,
+                relativePath,
+                frontmatter,
+                customProps,
+                pageGroupIndex: i,
+                pageProcessingIndex,
+                totalPages,
+                PATH,
+                blocksMap,
+                markdownMap,
+                blockPrefetchCache,
+                markdownPrefetchCache,
+                inFlightBlockFetches,
+                inFlightMarkdownFetches,
+                currentSectionFolderForLang: currentSectionFolder[lang],
+              });
+            }
           } else if (dryRun) {
             // Dry run - show what would be processed
             console.log(chalk.cyan(`  📋 Would process: ${pageTitle}`));

@@ -23,6 +23,7 @@
     "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
+    "notion:validate-cache": "bun scripts/notion-fetch/validateCache.ts",
     "clean:generated": "bun scripts/cleanup-generated-content.ts",
     "scaffold:test": "bun run scripts/test-scaffold/index.ts",
     "scaffold:test:all": "bun run scripts/test-scaffold/index.ts --all",

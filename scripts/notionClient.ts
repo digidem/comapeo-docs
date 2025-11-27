@@ -347,14 +347,6 @@ const imageTransformer: BlockToMarkdown = async (block) => {
     return "";
   }
 
-  // DEBUG: Log the complete image block structure to understand hyperlinks
-  if (!IS_TEST_ENV) {
-    console.log(
-      chalk.gray("DEBUG: Image block structure:"),
-      JSON.stringify(imageBlock, null, 2)
-    );
-  }
-
   // Get image URL from external or file
   const imageUrl = image.external?.url || image.file?.url || image.url || "";
 
@@ -363,18 +355,21 @@ const imageTransformer: BlockToMarkdown = async (block) => {
   }
 
   // Check if image has a hyperlink
-  // In Notion, hyperlinks are typically stored in the caption as a link annotation
+  // WORKAROUND: Since Notion's "Add link" feature doesn't expose links via the API,
+  // we detect URLs in captions as an alternative approach
   let linkUrl = "";
   let altText = "";
 
-  // Check for links in caption rich_text first
+  // Method 1: Check for links in caption rich_text (when URL is formatted as a link)
   if (image.caption && Array.isArray(image.caption)) {
     for (const captionItem of image.caption) {
-      // Check if this caption item is a link
+      // Check if this caption item has a link annotation
       if (captionItem.type === "text" && captionItem.text?.link?.url) {
         linkUrl = captionItem.text.link.url;
-        console.log(chalk.green(`Found link in caption: ${linkUrl}`));
-        // Don't use the linked text as alt text
+        if (!IS_TEST_ENV) {
+          console.log(chalk.green(`✓ Found link in caption: ${linkUrl}`));
+        }
+        // Don't use the linked text as alt text - it's the URL destination
         break;
       } else if (captionItem.plain_text && !linkUrl) {
         // Use non-linked caption text as alt text
@@ -382,24 +377,45 @@ const imageTransformer: BlockToMarkdown = async (block) => {
       }
     }
 
-    // If no link was found, use the full caption as alt text
+    // Method 2: Check for plain text URLs in caption (fallback)
+    // This catches cases where users type URLs without Notion converting them
     if (!linkUrl) {
-      altText = image.caption
+      const fullCaption = image.caption
         .map((item: any) => item.plain_text || "")
         .join("");
+
+      // Simple URL regex to detect http(s) URLs
+      const urlMatch = fullCaption.match(/https?:\/\/[^\s]+/);
+      if (urlMatch) {
+        linkUrl = urlMatch[0];
+        if (!IS_TEST_ENV) {
+          console.log(
+            chalk.green(`✓ Found plain text URL in caption: ${linkUrl}`)
+          );
+        }
+        // Use the rest of the caption as alt text
+        altText = fullCaption.replace(linkUrl, "").trim();
+      } else {
+        // No URL found, use full caption as alt text
+        altText = fullCaption;
+      }
     }
   }
 
-  // Check for dedicated link property on the image object (fallback)
+  // Method 3: Check for dedicated link property on the image object (API support if added)
   if (!linkUrl && image.link) {
     linkUrl = image.link;
-    console.log(chalk.green(`Found image link property: ${linkUrl}`));
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Found image link property: ${linkUrl}`));
+    }
   }
 
-  // Check for link on the block level (fallback)
+  // Method 4: Check for link on the block level (API support if added)
   if (!linkUrl && imageBlock.link) {
     linkUrl = imageBlock.link;
-    console.log(chalk.green(`Found block-level link: ${linkUrl}`));
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Found block-level link: ${linkUrl}`));
+    }
   }
 
   // Generate markdown

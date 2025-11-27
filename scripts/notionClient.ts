@@ -330,6 +330,110 @@ const paragraphTransformer: BlockToMarkdown = async (block) => {
 
 n2m.setCustomTransformer("paragraph", paragraphTransformer);
 
+/**
+ * Custom image transformer that preserves hyperlinks from Notion.
+ * When an image has a hyperlink in Notion, this transformer wraps the
+ * markdown image syntax with a link: [![alt](img-url)](link-url)
+ */
+const imageTransformer: BlockToMarkdown = async (block) => {
+  const imageBlock = block as any;
+
+  if (imageBlock?.type !== "image") {
+    return "";
+  }
+
+  const image = imageBlock.image;
+  if (!image) {
+    return "";
+  }
+
+  // Get image URL from external or file
+  const imageUrl = image.external?.url || image.file?.url || image.url || "";
+
+  if (!imageUrl) {
+    return "";
+  }
+
+  // Check if image has a hyperlink
+  // WORKAROUND: Since Notion's "Add link" feature doesn't expose links via the API,
+  // we detect URLs in captions as an alternative approach
+  let linkUrl = "";
+  let altText = "";
+
+  // Method 1: Check for links in caption rich_text (when URL is formatted as a link)
+  if (image.caption && Array.isArray(image.caption)) {
+    for (const captionItem of image.caption) {
+      // Check if this caption item has a link annotation
+      if (captionItem.type === "text" && captionItem.text?.link?.url) {
+        linkUrl = captionItem.text.link.url;
+        if (!IS_TEST_ENV) {
+          console.log(chalk.green(`✓ Found link in caption: ${linkUrl}`));
+        }
+        // Don't use the linked text as alt text - it's the URL destination
+        break;
+      } else if (captionItem.plain_text && !linkUrl) {
+        // Use non-linked caption text as alt text
+        altText += captionItem.plain_text || "";
+      }
+    }
+
+    // Method 2: Check for plain text URLs in caption (fallback)
+    // This catches cases where users type URLs without Notion converting them
+    if (!linkUrl) {
+      const fullCaption = image.caption
+        .map((item: any) => item.plain_text || "")
+        .join("");
+
+      // Simple URL regex to detect http(s) URLs
+      const urlMatch = fullCaption.match(/https?:\/\/[^\s]+/);
+      if (urlMatch) {
+        linkUrl = urlMatch[0];
+        if (!IS_TEST_ENV) {
+          console.log(
+            chalk.green(`✓ Found plain text URL in caption: ${linkUrl}`)
+          );
+        }
+        // Use the rest of the caption as alt text
+        altText = fullCaption.replace(linkUrl, "").trim();
+      } else {
+        // No URL found, use full caption as alt text
+        altText = fullCaption;
+      }
+    }
+  }
+
+  // Method 3: Check for dedicated link property on the image object (API support if added)
+  if (!linkUrl && image.link) {
+    linkUrl = image.link;
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Found image link property: ${linkUrl}`));
+    }
+  }
+
+  // Method 4: Check for link on the block level (API support if added)
+  if (!linkUrl && imageBlock.link) {
+    linkUrl = imageBlock.link;
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Found block-level link: ${linkUrl}`));
+    }
+  }
+
+  // Generate markdown
+  const imageMarkdown = `![${altText}](${imageUrl})`;
+
+  // If there's a hyperlink, wrap the image in a link
+  if (linkUrl) {
+    if (!IS_TEST_ENV) {
+      console.log(chalk.green(`✓ Creating hyperlinked image: ${linkUrl}`));
+    }
+    return `[${imageMarkdown}](${linkUrl})` as MarkdownBlock;
+  }
+
+  return imageMarkdown as MarkdownBlock;
+};
+
+n2m.setCustomTransformer("image", imageTransformer);
+
 export const DATABASE_ID = resolvedDatabaseId;
 
 // For v5 API compatibility - export data source ID

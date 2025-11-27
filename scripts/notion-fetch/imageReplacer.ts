@@ -424,3 +424,50 @@ export async function processAndReplaceImages(
     metrics,
   };
 }
+
+/**
+ * Validates final markdown for remaining S3 URLs and attempts to fix them.
+ * This acts as a safety net for images missed by the initial pass or re-introduced
+ * by subsequent processing (e.g. callouts).
+ *
+ * @param markdown - The final markdown content to check
+ * @param safeFilename - Safe filename for logging
+ * @returns The processed markdown (potentially with fixes applied)
+ */
+export async function validateAndFixRemainingImages(
+  markdown: string,
+  safeFilename: string
+): Promise<string> {
+  // Regex for AWS S3 URLs in markdown image syntax
+  // Matches: ![alt](https://prod-files-secure.s3...amazonaws.com/...)
+  const s3Regex =
+    /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
+
+  if (!s3Regex.test(markdown)) {
+    return markdown;
+  }
+
+  console.warn(
+    chalk.yellow(
+      `⚠️  Found AWS S3 URLs in final markdown for ${safeFilename}. Running final replacement pass...`
+    )
+  );
+
+  // Re-run processAndReplaceImages
+  const result = await processAndReplaceImages(markdown, safeFilename);
+
+  // Check if any remain (indicating persistent failure)
+  if (s3Regex.test(result.markdown)) {
+    console.warn(
+      chalk.red(
+        `❌ Failed to replace all S3 URLs in final pass for ${safeFilename}. Some images may expire.`
+      )
+    );
+  } else {
+    console.info(
+      chalk.green(`✅ Successfully fixed remaining S3 URLs in ${safeFilename}`)
+    );
+  }
+
+  return result.markdown;
+}

@@ -351,7 +351,48 @@ if (markdownString?.parent) {
 **Complexity**: MEDIUM (requires API integration for full refresh)
 **Risk**: LOW (detection/logging only)
 
-### Phase 3: Monitoring and Metrics (LOW PRIORITY - OPTIONAL/FUTURE WORK)
+### Phase 3: Final Pass Safety Net (HIGH PRIORITY) ⭐
+
+**Goal**: Catch and fix any S3 URLs that remain in the final markdown (e.g., re-introduced by callouts or missed by initial regex)
+
+**Changes**:
+
+1. **Add `validateAndFixRemainingImages` in `imageReplacer.ts`**:
+   - Scans final markdown for any remaining `amazonaws.com` URLs
+   - Uses specific regex to target S3 paths
+   - Re-runs `processAndReplaceImages` if found
+   - Logs warnings if they persist
+
+2. **Call in `processSinglePage`**:
+   - Run this check just before writing the file (after all other processing)
+
+**Specific Code Changes**:
+
+```typescript
+// In imageReplacer.ts
+export async function validateAndFixRemainingImages(markdown, safeFilename) {
+  const s3Regex = /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
+  if (s3Regex.test(markdown)) {
+    console.warn(`Found S3 URLs in final markdown...`);
+    return processAndReplaceImages(markdown, safeFilename);
+  }
+  return markdown;
+}
+
+// In generateBlocks.ts
+markdownString.parent = await validateAndFixRemainingImages(
+  markdownString.parent,
+  safeFilename
+);
+```
+
+**Benefits**:
+
+- ✅ Catch-all safety net for edge cases
+- ✅ Handles re-introduced URLs from callouts/emojis
+- ✅ Provides final guarantee before file write
+
+### Phase 4: Monitoring and Metrics (LOW PRIORITY - OPTIONAL/FUTURE WORK)
 
 **Status**: NOT IMPLEMENTED - Future enhancement
 

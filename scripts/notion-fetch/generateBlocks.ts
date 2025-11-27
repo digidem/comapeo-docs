@@ -28,7 +28,10 @@ import { LRUCache, validateCacheSize } from "./cacheStrategies";
 import { getImageCache, logImageFailure } from "./imageProcessing";
 import { setTranslationString, getI18NPath } from "./translationManager";
 import { loadBlocksForPage, loadMarkdownForPage } from "./cacheLoaders";
-import { processAndReplaceImages } from "./imageReplacer";
+import {
+  processAndReplaceImages,
+  validateAndFixRemainingImages,
+} from "./imageReplacer";
 import {
   processToggleSection,
   processHeadingSection,
@@ -328,6 +331,13 @@ async function processSinglePage(
         );
         console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
       }
+
+      // ✅ FINAL PASS: Check for any AWS S3 URLs that might have been re-introduced
+      // (e.g. by callout processing or missed in the first pass) and fix them.
+      markdownString.parent = await validateAndFixRemainingImages(
+        markdownString.parent,
+        safeFilename
+      );
 
       // Sanitize content to fix malformed HTML/JSX tags
       markdownString.parent = sanitizeMarkdownContent(markdownString.parent);

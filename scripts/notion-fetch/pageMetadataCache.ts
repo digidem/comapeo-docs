@@ -173,6 +173,11 @@ export function determineSyncMode(
  * Filter pages to only those that need processing.
  * Returns pages that are new or have been edited since last sync.
  *
+ * NOTE: This function is currently not used in production code.
+ * The inline needsProcessing logic in generateBlocks.ts (lines 704-711)
+ * performs the same checks. This function is maintained for testing and
+ * potential future refactoring to avoid code duplication.
+ *
  * @param pages - All pages from Notion
  * @param cache - Loaded page metadata cache
  * @param options - Optional configuration
@@ -211,6 +216,12 @@ export function filterChangedPages<
     // even if their Notion timestamp hasn't changed yet
     if (options?.getFilePath) {
       const currentPath = options.getFilePath(page);
+
+      // Safety: If path is empty/invalid, regenerate to be safe
+      if (!currentPath || currentPath.trim() === "") {
+        return true;
+      }
+
       if (!cached.outputPaths?.includes(currentPath)) {
         return true;
       }

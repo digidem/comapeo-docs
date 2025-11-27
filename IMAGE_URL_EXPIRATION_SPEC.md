@@ -5,6 +5,7 @@
 Notion's image URLs expire after **1 hour** from generation. When processing large batches of documentation pages, the delay between URL generation (during API fetches) and actual image downloads can exceed this window, causing 403 errors and failed downloads.
 
 ### Issue Reference
+
 - **GitHub Issue**: #94 - Images being skipped during fetch
 
 ## Root Cause Analysis
@@ -28,6 +29,7 @@ Notion's image URLs expire after **1 hour** from generation. When processing lar
 ### Failure Scenarios
 
 #### Scenario 1: Large Page Batches
+
 ```
 Timeline with 50 pages (5 concurrent, 10 batches):
 
@@ -43,6 +45,7 @@ T+1:10  → Batch 2 URLs EXPIRE ❌
 **Risk**: Early batches' URLs expire before late batches finish processing.
 
 #### Scenario 2: Pages with Many Images
+
 ```
 Single page with 50 images:
 
@@ -56,6 +59,7 @@ T+0:50  → Images 46-50 downloaded (batch 10)
 **Lower risk** but still possible with very image-heavy pages and processing delays.
 
 #### Scenario 3: Processing Delays
+
 ```
 T+0:00  → URLs generated for page
 T+0:05  → Heavy markdown processing (callouts, emojis, formatting)
@@ -91,6 +95,7 @@ The safest approach is to **download images immediately after URLs are generated
 #### 1. **Download Images Immediately Within Page Processing**
 
 **Current Flow (in `processSinglePage()` in generateBlocks.ts):**
+
 ```typescript
 // Line 260-274: Load markdown from Notion
 const markdown = await loadMarkdownForPage(...);  // URLs generated here via n2m.pageToMarkdown()
@@ -110,6 +115,7 @@ const imageResult = await processAndReplaceImages(markdownString.parent, safeFil
 ```
 
 **Time Gap Analysis:**
+
 - Emoji processing: ~2-5 seconds per page
 - Callout processing: ~1-2 seconds per page
 - Total overhead: **~3-7 seconds per page** before images are downloaded
@@ -117,6 +123,7 @@ const imageResult = await processAndReplaceImages(markdownString.parent, safeFil
 - Plus network delays, retries, and processing time can push this over 1 hour
 
 **Proposed Flow (SIMPLE REORDERING):**
+
 ```typescript
 // Line 260-274: Load markdown from Notion
 const markdown = await loadMarkdownForPage(...);  // URLs generated here
@@ -133,6 +140,7 @@ markdownString.parent = processCalloutsInMarkdown(...);
 ```
 
 **Benefits:**
+
 - ✅ Minimizes time between URL generation and download (within seconds)
 - ✅ Simple code reordering - no new functions needed
 - ✅ No architectural changes (still processes 5 pages concurrently)
@@ -147,17 +155,20 @@ Track when URLs are generated and prioritize downloads based on age:
 ```typescript
 interface ImageDownloadTask {
   url: string;
-  generatedAt: number;  // timestamp
-  expiresAt: number;    // timestamp + 3600000ms
-  priority: number;     // based on time remaining
+  generatedAt: number; // timestamp
+  expiresAt: number; // timestamp + 3600000ms
+  priority: number; // based on time remaining
 }
 
-function prioritizeImageDownloads(tasks: ImageDownloadTask[]): ImageDownloadTask[] {
-  return tasks.sort((a, b) => a.expiresAt - b.expiresAt);  // oldest first
+function prioritizeImageDownloads(
+  tasks: ImageDownloadTask[]
+): ImageDownloadTask[] {
+  return tasks.sort((a, b) => a.expiresAt - b.expiresAt); // oldest first
 }
 ```
 
 **Benefits:**
+
 - ✅ Ensures oldest URLs are downloaded first
 - ✅ Provides visibility into URL age at download time
 - ✅ Can log warnings for URLs approaching expiration
@@ -181,7 +192,7 @@ async function downloadImageWithRefresh(
         console.warn(`Image URL expired, fetching fresh URL...`);
         // Re-fetch just this block to get fresh URL
         const freshUrl = await refetchImageUrl(pageId, blockId);
-        url = freshUrl;  // Use fresh URL for next attempt
+        url = freshUrl; // Use fresh URL for next attempt
         continue;
       }
       throw error;
@@ -192,13 +203,14 @@ async function downloadImageWithRefresh(
 function isExpiredUrlError(error: any): boolean {
   return (
     error.response?.status === 403 &&
-    (error.message?.includes('SignatureDoesNotMatch') ||
-     error.message?.includes('expired'))
+    (error.message?.includes("SignatureDoesNotMatch") ||
+      error.message?.includes("expired"))
   );
 }
 ```
 
 **Benefits:**
+
 - ✅ Automatic recovery from expired URLs
 - ✅ No manual intervention required
 - ✅ Works as safety net for edge cases
@@ -212,7 +224,7 @@ interface ImageDownloadMetrics {
   urlGeneratedAt: number;
   downloadStartedAt: number;
   downloadCompletedAt: number;
-  ageAtDownload: number;  // milliseconds
+  ageAtDownload: number; // milliseconds
   success: boolean;
 }
 
@@ -220,7 +232,9 @@ function logImageDownloadMetrics(metrics: ImageDownloadMetrics): void {
   const ageMinutes = metrics.ageAtDownload / 60000;
 
   if (ageMinutes > 45) {
-    console.warn(`⚠️  Image URL is ${ageMinutes.toFixed(1)}min old (approaching expiry)`);
+    console.warn(
+      `⚠️  Image URL is ${ageMinutes.toFixed(1)}min old (approaching expiry)`
+    );
   }
 
   if (ageMinutes > 60) {
@@ -230,6 +244,7 @@ function logImageDownloadMetrics(metrics: ImageDownloadMetrics): void {
 ```
 
 **Benefits:**
+
 - ✅ Visibility into URL freshness
 - ✅ Early warning system for potential issues
 - ✅ Helps diagnose timing issues
@@ -241,6 +256,7 @@ function logImageDownloadMetrics(metrics: ImageDownloadMetrics): void {
 **Goal**: Download images immediately after markdown conversion, before other processing
 
 **Changes**:
+
 1. **Reorder operations in `processSinglePage()`** in `generateBlocks.ts` (lines 280-325):
    - Move `processAndReplaceImages()` call from line 320 to immediately after line 280
    - Place it BEFORE emoji processing (line 284) and callout processing (line 311)
@@ -249,6 +265,7 @@ function logImageDownloadMetrics(metrics: ImageDownloadMetrics): void {
 3. **Verify emoji and callout processing** still work correctly with already-processed images
 
 **Specific Code Changes**:
+
 ```typescript
 // In processSinglePage() function, around line 280:
 const markdownString = n2m.toMarkdownString(markdown);
@@ -290,14 +307,16 @@ if (markdownString?.parent) {
 **Goal**: Add safety net for URLs that still expire despite Phase 1
 
 **Changes**:
+
 1. **Add `isExpiredUrlError()` helper** in `imageProcessing.ts`:
+
    ```typescript
    function isExpiredUrlError(error: any): boolean {
      return (
        error.response?.status === 403 &&
-       (error.response?.data?.includes?.('SignatureDoesNotMatch') ||
-        error.response?.data?.includes?.('Request has expired') ||
-        error.message?.toLowerCase().includes('expired'))
+       (error.response?.data?.includes?.("SignatureDoesNotMatch") ||
+         error.response?.data?.includes?.("Request has expired") ||
+         error.message?.toLowerCase().includes("expired"))
      );
    }
    ```
@@ -313,14 +332,15 @@ if (markdownString?.parent) {
      console.error(
        chalk.red(
          `❌ Image URL expired (403): ${url}\n` +
-         `   This indicates the image was processed more than 1 hour after fetching.\n` +
-         `   Phase 1 reordering should prevent this.`
+           `   This indicates the image was processed more than 1 hour after fetching.\n` +
+           `   Phase 1 reordering should prevent this.`
        )
      );
    }
    ```
 
 **Note**: Full URL refresh (re-fetching from Notion) is complex and requires:
+
 - Storing block IDs with image URLs
 - Calling `notion.blocks.retrieve()` to get fresh URLs
 - Additional API rate limiting considerations
@@ -331,11 +351,14 @@ if (markdownString?.parent) {
 **Complexity**: MEDIUM (requires API integration for full refresh)
 **Risk**: LOW (detection/logging only)
 
-### Phase 3: Monitoring and Metrics (LOW PRIORITY)
+### Phase 3: Monitoring and Metrics (LOW PRIORITY - OPTIONAL/FUTURE WORK)
+
+**Status**: NOT IMPLEMENTED - Future enhancement
 
 **Goal**: Add visibility into URL freshness and download timing
 
 **Changes**:
+
 1. Add timestamp tracking for URL generation
 2. Log URL age at download time
 3. Add warnings for URLs approaching expiration
@@ -343,13 +366,21 @@ if (markdownString?.parent) {
 
 **Timeline**: Implement for long-term monitoring and optimization
 
+**Note**: This phase is **optional** and should only be implemented if:
+
+- Phase 2 detects expired URLs in production (indicating Phase 1 isn't sufficient)
+- We need detailed metrics for performance tuning
+- Debugging timing issues requires more granular data
+
+**Current Status**: Phases 1 & 2 are sufficient for solving Issue #94. Phase 3 can be tracked in a separate issue if needed.
+
 ## Testing Strategy
 
 ### Unit Tests
 
 ```typescript
-describe('Image URL Expiration Handling', () => {
-  it('should download images immediately after markdown generation', async () => {
+describe("Image URL Expiration Handling", () => {
+  it("should download images immediately after markdown generation", async () => {
     const markdown = await fetchMarkdownWithImages(pageId);
     const urlsBefore = extractImageUrls(markdown);
 
@@ -364,16 +395,16 @@ describe('Image URL Expiration Handling', () => {
     expect(downloadTime).toBeLessThan(30000);
   });
 
-  it('should detect and refresh expired URLs', async () => {
-    const expiredUrl = 'https://notion.so/image?...&X-Amz-Expires=3600...';
+  it("should detect and refresh expired URLs", async () => {
+    const expiredUrl = "https://notion.so/image?...&X-Amz-Expires=3600...";
 
     // Mock 403 expired error
-    mockAxios.onGet(expiredUrl).reply(403, { error: 'SignatureDoesNotMatch' });
+    mockAxios.onGet(expiredUrl).reply(403, { error: "SignatureDoesNotMatch" });
 
     // Mock fresh URL fetch
-    const freshUrl = 'https://notion.so/image?...&new-signature...';
+    const freshUrl = "https://notion.so/image?...&new-signature...";
     mockNotion.blocks.retrieve.mockResolvedValue({
-      image: { file: { url: freshUrl } }
+      image: { file: { url: freshUrl } },
     });
 
     mockAxios.onGet(freshUrl).reply(200, imageBuffer);
@@ -384,18 +415,18 @@ describe('Image URL Expiration Handling', () => {
     expect(mockNotion.blocks.retrieve).toHaveBeenCalledTimes(1);
   });
 
-  it('should log warnings for URLs approaching expiration', async () => {
-    const consoleWarnSpy = vi.spyOn(console, 'warn');
+  it("should log warnings for URLs approaching expiration", async () => {
+    const consoleWarnSpy = vi.spyOn(console, "warn");
 
     // Mock URL generated 50 minutes ago
-    const oldTimestamp = Date.now() - (50 * 60 * 1000);
+    const oldTimestamp = Date.now() - 50 * 60 * 1000;
 
     await downloadImageWithMetrics(imageUrl, {
-      generatedAt: oldTimestamp
+      generatedAt: oldTimestamp,
     });
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('approaching expiry')
+      expect.stringContaining("approaching expiry")
     );
   });
 });
@@ -404,8 +435,8 @@ describe('Image URL Expiration Handling', () => {
 ### Integration Tests
 
 ```typescript
-describe('End-to-End Image Download', () => {
-  it('should successfully download all images in large batch', async () => {
+describe("End-to-End Image Download", () => {
+  it("should successfully download all images in large batch", async () => {
     // Create 50 pages with 10 images each (500 total images)
     const pages = createMockPages(50, 10);
 
@@ -416,7 +447,7 @@ describe('End-to-End Image Download', () => {
     expect(result.failedImages).toBe(0);
   });
 
-  it('should handle pages with many images without expiration', async () => {
+  it("should handle pages with many images without expiration", async () => {
     // Single page with 100 images
     const page = createMockPageWithImages(100);
 
@@ -434,8 +465,8 @@ describe('End-to-End Image Download', () => {
 ### Performance Tests
 
 ```typescript
-describe('Performance Impact', () => {
-  it('should not significantly slow down page processing', async () => {
+describe("Performance Impact", () => {
+  it("should not significantly slow down page processing", async () => {
     const pageWithoutImages = createMockPage(0);
     const pageWithImages = createMockPage(10);
 
@@ -444,7 +475,7 @@ describe('Performance Impact', () => {
 
     // Image processing should not add more than 10s per image
     const overhead = withImagesTime - baselineTime;
-    expect(overhead).toBeLessThan(10000 * 10);  // 10s per image
+    expect(overhead).toBeLessThan(10000 * 10); // 10s per image
   });
 });
 ```
@@ -452,9 +483,10 @@ describe('Performance Impact', () => {
 ## Rollout Plan
 
 ### Step 1: Feature Flag
+
 ```typescript
 const ENABLE_IMMEDIATE_IMAGE_DOWNLOAD =
-  process.env.ENABLE_IMMEDIATE_IMAGE_DOWNLOAD === 'true';
+  process.env.ENABLE_IMMEDIATE_IMAGE_DOWNLOAD === "true";
 
 if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
   // Use new immediate download approach
@@ -464,12 +496,14 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ```
 
 ### Step 2: Gradual Rollout
+
 1. Enable for CI/PR previews first (low risk)
 2. Monitor for issues in preview deployments
 3. Enable for production builds
 4. Remove feature flag after stable for 2 weeks
 
 ### Step 3: Monitoring
+
 - Track success/failure rates
 - Monitor URL age at download time
 - Log any 403 errors with URL details
@@ -478,11 +512,13 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ## Success Metrics
 
 ### Primary Metrics
+
 - **Image download success rate**: Should be >99%
 - **403 errors due to expiration**: Should be <1%
 - **URL age at download**: Should be <5 minutes on average
 
 ### Secondary Metrics
+
 - **Total processing time**: Should not increase by >10%
 - **Memory usage**: Should remain stable
 - **Cache hit rate**: Should remain above 80%
@@ -490,26 +526,32 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ## Alternative Approaches Considered
 
 ### Option A: Download All Images First (REJECTED)
+
 **Approach**: Fetch all pages first, extract all image URLs, download all images, then process pages.
 
 **Rejected because**:
+
 - ❌ Breaks existing parallel processing architecture
 - ❌ Increases memory usage (all URLs in memory)
 - ❌ Reduces incremental sync benefits
 - ❌ Complex coordination between phases
 
 ### Option B: Increase Batch Size (REJECTED)
+
 **Approach**: Process more pages concurrently (10-15 instead of 5).
 
 **Rejected because**:
+
 - ❌ Doesn't solve the fundamental timing issue
 - ❌ Increases resource usage and rate limit pressure
 - ❌ May make timing worse for later batches
 
 ### Option C: Use Notion's Hosted Images (NOT AVAILABLE)
+
 **Approach**: Have Notion host images permanently.
 
 **Rejected because**:
+
 - ❌ Not supported by Notion API (intentional security feature)
 - ❌ Would require Notion to change their architecture
 - ❌ Not under our control
@@ -517,17 +559,20 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ## Risk Assessment
 
 ### Low Risk
+
 - ✅ Changes are isolated to image processing logic
 - ✅ Existing retry mechanisms remain in place
 - ✅ Cache system continues to work
 - ✅ Can be feature-flagged for safe rollout
 
 ### Medium Risk
+
 - ⚠️ May increase memory usage slightly (images in memory earlier)
 - ⚠️ Processing order changes (images before other markdown processing)
 - ⚠️ URL refresh logic adds complexity
 
 ### Mitigation Strategies
+
 - Implement feature flag for gradual rollout
 - Add comprehensive testing at each phase
 - Monitor metrics closely during rollout

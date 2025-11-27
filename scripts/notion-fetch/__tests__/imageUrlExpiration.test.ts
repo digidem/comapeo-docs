@@ -299,6 +299,9 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       await generateBlocks(pages);
 
+      // NOTE: Timing-based assertion - may be flaky in heavily loaded CI environments
+      // If this test fails intermittently in CI, consider increasing timeout or adding retry logic
+      // The 30-second threshold is generous (actual should be <1 second), but accounts for CI overhead
       // Verify all images were downloaded within 30 seconds of URL generation
       for (const downloadTime of downloadTimes) {
         const timeSinceGeneration = downloadTime - urlGenerationTime;
@@ -418,6 +421,8 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       await generateBlocks(allPages);
       const duration = Date.now() - startTime;
 
+      // NOTE: Timing-based assertion - may be flaky in heavily loaded CI environments
+      // The 10-minute threshold is very generous for 150 images (50 pages * 3 images)
       // With Phase 1 implemented, all downloads should succeed
       // and complete well before 1 hour
       expect(duration).toBeLessThan(600000); // Should finish in < 10 minutes
@@ -459,6 +464,8 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       // All 50 images should be downloaded
       expect(downloadTimes.length).toBeGreaterThanOrEqual(1);
 
+      // NOTE: Timing-based assertion - may be flaky in heavily loaded CI environments
+      // The 30-second threshold is generous (actual should be ~1-2 seconds), accounting for CI overhead
       // Total time should be reasonable (images downloaded in batches of 5)
       // 50 images / 5 concurrent = 10 batches * 100ms = ~1 second + overhead
       expect(duration).toBeLessThan(30000); // 30 seconds
@@ -518,6 +525,34 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       // Callout processing should still work
       expect(result).toBeDefined();
+    });
+
+    it("should handle callouts containing images after reordering", async () => {
+      const { generateBlocks } = await import("../generateBlocks");
+      const { n2m } = vi.mocked(await import("../../notionClient"));
+
+      const { pages } = createPageStructureForTesting("Test Page", 0);
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent:
+          "> **Note**: This callout contains an image:\n" +
+          "> ![Callout Image](https://example.com/callout-image.jpg)\n" +
+          "> This ensures image processing happens before callout transformation.",
+      });
+
+      const axios = vi.mocked(await import("axios")).default;
+      axios.get.mockResolvedValue({
+        data: mockImageBuffer,
+        headers: { "content-type": "image/jpeg" },
+      });
+
+      const result = await generateBlocks(pages);
+
+      // Both image download and callout processing should work correctly
+      // Images are downloaded first, then callouts are transformed
+      expect(result).toBeDefined();
+      expect(axios.get).toHaveBeenCalled(); // Image was downloaded
     });
   });
 

@@ -23,6 +23,18 @@ import {
 import { withTimeout, TimeoutError } from "./timeoutUtils";
 
 /**
+ * Type definition for axios-like error responses
+ * Supports various error formats while maintaining type safety
+ */
+interface ErrorWithResponse {
+  response?: {
+    status?: number;
+    data?: string | Record<string, unknown>;
+  };
+  message?: string;
+}
+
+/**
  * Helper function to detect if an error is due to an expired image URL (Issue #94)
  *
  * Notion image URLs are AWS S3 presigned URLs that expire after 1 hour.
@@ -31,17 +43,24 @@ import { withTimeout, TimeoutError } from "./timeoutUtils";
  * @param error - The error object from axios or other HTTP client
  * @returns true if the error indicates an expired URL, false otherwise
  */
-export function isExpiredUrlError(error: any): boolean {
+export function isExpiredUrlError(error: unknown): boolean {
+  // Type guard: ensure error is an object
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const err = error as ErrorWithResponse;
+
   // Must be a 403 error
-  if (error?.response?.status !== 403) {
+  if (err.response?.status !== 403) {
     return false;
   }
 
   // Check response data for expiration indicators
   const responseData =
-    typeof error.response?.data === "string"
-      ? error.response.data
-      : JSON.stringify(error.response?.data || "");
+    typeof err.response.data === "string"
+      ? err.response.data
+      : JSON.stringify(err.response.data || "");
 
   const expirationIndicators = [
     "SignatureDoesNotMatch",
@@ -57,7 +76,7 @@ export function isExpiredUrlError(error: any): boolean {
   }
 
   // Check error message for expiration indicators
-  const errorMessage = error?.message?.toLowerCase() || "";
+  const errorMessage = err.message?.toLowerCase() || "";
   if (errorMessage.includes("expired") || errorMessage.includes("signature")) {
     return true;
   }

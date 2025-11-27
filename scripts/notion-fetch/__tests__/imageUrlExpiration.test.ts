@@ -278,10 +278,12 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         5
       );
 
-      let urlGenerationTime = 0;
+      // Initialize to current time to have a valid baseline
+      let urlGenerationTime = Date.now();
       const downloadTimes: number[] = [];
 
       n2m.pageToMarkdown.mockImplementation(async () => {
+        // Update to exact time when markdown is generated
         urlGenerationTime = Date.now();
         return [];
       });

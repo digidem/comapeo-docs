@@ -90,34 +90,55 @@ The safest approach is to **download images immediately after URLs are generated
 
 #### 1. **Download Images Immediately Within Page Processing**
 
-**Current Flow:**
+**Current Flow (in `processSinglePage()` in generateBlocks.ts):**
 ```typescript
-// Page processing task
-const markdown = await n2m.pageToMarkdown(pageId);  // URLs generated here
-const markdownString = n2m.toMarkdownString(markdown);
-// ... other processing (emojis, callouts, formatting)
-await processAndReplaceImages(markdownString);  // Download here (TOO LATE)
+// Line 260-274: Load markdown from Notion
+const markdown = await loadMarkdownForPage(...);  // URLs generated here via n2m.pageToMarkdown()
+const markdownString = n2m.toMarkdownString(markdown);  // Line 280
+
+// Lines 284-294: Apply emoji mappings
+markdownString.parent = EmojiProcessor.applyEmojiMappings(...);
+
+// Lines 298-308: Process fallback emojis
+const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(...);
+
+// Lines 311-317: Process callouts
+markdownString.parent = processCalloutsInMarkdown(...);
+
+// Lines 320-325: Download images (TOO LATE! After all other processing)
+const imageResult = await processAndReplaceImages(markdownString.parent, safeFilename);
 ```
 
-**Proposed Flow:**
-```typescript
-// Page processing task
-const markdown = await n2m.pageToMarkdown(pageId);  // URLs generated here
-// ✅ IMMEDIATELY extract and download images
-const imageUrls = extractImageUrlsFromBlocks(markdown);
-await downloadImagesImmediately(imageUrls);  // Download within seconds
+**Time Gap Analysis:**
+- Emoji processing: ~2-5 seconds per page
+- Callout processing: ~1-2 seconds per page
+- Total overhead: **~3-7 seconds per page** before images are downloaded
+- With 50 pages at 5 concurrent: **~30-70 seconds** of cumulative delay
+- Plus network delays, retries, and processing time can push this over 1 hour
 
-// Continue with rest of processing
-const markdownString = n2m.toMarkdownString(markdown);
-// ... other processing
-await replaceImagesInMarkdown(markdownString);  // Just replace URLs, already downloaded
+**Proposed Flow (SIMPLE REORDERING):**
+```typescript
+// Line 260-274: Load markdown from Notion
+const markdown = await loadMarkdownForPage(...);  // URLs generated here
+const markdownString = n2m.toMarkdownString(markdown);  // Line 280
+
+// ✅ MOVE IMAGE PROCESSING HERE (immediately after markdown conversion)
+const imageResult = await processAndReplaceImages(markdownString.parent, safeFilename);
+markdownString.parent = imageResult.markdown;
+
+// THEN do other processing (emojis and callouts work on already-processed images)
+markdownString.parent = EmojiProcessor.applyEmojiMappings(...);
+const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(...);
+markdownString.parent = processCalloutsInMarkdown(...);
 ```
 
 **Benefits:**
-- ✅ Minimizes time between URL generation and download
-- ✅ No architectural changes needed (still processes 5 pages concurrently)
-- ✅ Downloads happen while URLs are fresh (within seconds)
+- ✅ Minimizes time between URL generation and download (within seconds)
+- ✅ Simple code reordering - no new functions needed
+- ✅ No architectural changes (still processes 5 pages concurrently)
+- ✅ Downloads happen while URLs are fresh (< 10 seconds old)
 - ✅ Respects existing rate limits and concurrency controls
+- ✅ Emoji and callout processing still work correctly
 
 #### 2. **Add URL Expiry Tracking and Prioritization**
 
@@ -215,29 +236,100 @@ function logImageDownloadMetrics(metrics: ImageDownloadMetrics): void {
 
 ## Recommended Implementation Plan
 
-### Phase 1: Immediate Download (HIGH PRIORITY)
+### Phase 1: Immediate Download (HIGH PRIORITY) ⭐
 
-**Goal**: Download images immediately after markdown generation
+**Goal**: Download images immediately after markdown conversion, before other processing
 
 **Changes**:
-1. Modify `processSinglePage()` in `generateBlocks.ts` to extract and download images right after `pageToMarkdown()`
-2. Create `extractImageUrlsFromBlocks()` to parse image URLs from raw markdown blocks
-3. Call `downloadImagesImmediately()` before continuing with other processing
-4. Modify `processAndReplaceImages()` to skip already-downloaded images
+1. **Reorder operations in `processSinglePage()`** in `generateBlocks.ts` (lines 280-325):
+   - Move `processAndReplaceImages()` call from line 320 to immediately after line 280
+   - Place it BEFORE emoji processing (line 284) and callout processing (line 311)
+   - This ensures images are downloaded within seconds of URL generation
+2. **No new functions needed** - just reordering existing code
+3. **Verify emoji and callout processing** still work correctly with already-processed images
+
+**Specific Code Changes**:
+```typescript
+// In processSinglePage() function, around line 280:
+const markdownString = n2m.toMarkdownString(markdown);
+
+if (markdownString?.parent) {
+  // ✅ MOVE IMAGE PROCESSING HERE (was at line 320)
+  const imageResult = await processAndReplaceImages(
+    markdownString.parent,
+    safeFilename
+  );
+  markdownString.parent = imageResult.markdown;
+  totalSaved += imageResult.stats.totalSaved;
+
+  // THEN process emojis (they work on local image paths now, not remote URLs)
+  if (emojiMap.size > 0) {
+    markdownString.parent = EmojiProcessor.applyEmojiMappings(...);
+  }
+
+  // Process fallback emojis
+  if (emojiMap.size === 0) {
+    const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(...);
+  }
+
+  // Process callouts
+  if (rawBlocks && rawBlocks.length > 0) {
+    markdownString.parent = processCalloutsInMarkdown(...);
+  }
+
+  // Continue with sanitization...
+}
+```
 
 **Timeline**: This is the critical fix - should be implemented first
+**Complexity**: LOW (simple reordering)
+**Risk**: LOW (no new logic, just changing order)
 
 ### Phase 2: URL Refresh on Expiry (MEDIUM PRIORITY)
 
-**Goal**: Add safety net for URLs that still expire
+**Goal**: Add safety net for URLs that still expire despite Phase 1
 
 **Changes**:
-1. Add `isExpiredUrlError()` detection in `downloadAndProcessImage()`
-2. Add `refetchImageUrl()` to fetch fresh URLs for specific blocks
-3. Modify retry logic to refresh URLs on 403 errors
-4. Add tests for URL refresh behavior
+1. **Add `isExpiredUrlError()` helper** in `imageProcessing.ts`:
+   ```typescript
+   function isExpiredUrlError(error: any): boolean {
+     return (
+       error.response?.status === 403 &&
+       (error.response?.data?.includes?.('SignatureDoesNotMatch') ||
+        error.response?.data?.includes?.('Request has expired') ||
+        error.message?.toLowerCase().includes('expired'))
+     );
+   }
+   ```
 
-**Timeline**: Implement after Phase 1 as complementary safety measure
+2. **Modify retry logic in `downloadAndProcessImage()`** (line 686-953):
+   - Detect 403 expired errors specifically
+   - Log clear warnings when URLs expire
+   - For now, fail gracefully and use fallback (URL refresh requires additional Notion API calls)
+
+3. **Add logging for expired URL detection**:
+   ```typescript
+   if (isExpiredUrlError(error)) {
+     console.error(
+       chalk.red(
+         `❌ Image URL expired (403): ${url}\n` +
+         `   This indicates the image was processed more than 1 hour after fetching.\n` +
+         `   Phase 1 reordering should prevent this.`
+       )
+     );
+   }
+   ```
+
+**Note**: Full URL refresh (re-fetching from Notion) is complex and requires:
+- Storing block IDs with image URLs
+- Calling `notion.blocks.retrieve()` to get fresh URLs
+- Additional API rate limiting considerations
+
+**For now, Phase 2 focuses on detection and logging. Full URL refresh can be added later if needed after Phase 1.**
+
+**Timeline**: Implement after Phase 1 and validate if still needed
+**Complexity**: MEDIUM (requires API integration for full refresh)
+**Risk**: LOW (detection/logging only)
 
 ### Phase 3: Monitoring and Metrics (LOW PRIORITY)
 

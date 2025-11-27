@@ -712,23 +712,35 @@ export async function generateBlocks(
 
           if (!needsProcessing) {
             // Page unchanged, skip processing but still count it
-            // Determine the specific reason for skipping (for diagnostics)
+            // Since !needsProcessing is true, we know ALL these conditions are false:
+            //   - syncMode.fullRebuild === false
+            //   - cachedPage exists
+            //   - no missing outputs
+            //   - path hasn't changed
+            //   - timestamp hasn't changed
+            // If any "ERROR:" appears in logs, it indicates a logic bug in needsProcessing calculation
             let skipReason: string;
             if (syncMode.fullRebuild) {
-              // This condition can't be reached if !needsProcessing, but for completeness
-              skipReason = "full rebuild mode";
+              // Should be unreachable (fullRebuild would make needsProcessing=true)
+              skipReason = "🔴 ERROR: fullRebuild=true but !needsProcessing";
             } else if (!cachedPage) {
-              skipReason = "not in cache (NEW PAGE - should not skip)";
+              // Should be unreachable (!cachedPage would make needsProcessing=true)
+              skipReason = "🔴 ERROR: not in cache but !needsProcessing";
             } else if (hasMissingOutputs(metadataCache, page.id)) {
-              skipReason = "missing output files (should not skip)";
+              // Should be unreachable (missing outputs would make needsProcessing=true)
+              skipReason =
+                "🔴 ERROR: missing output files but !needsProcessing";
             } else if (!cachedPage.outputPaths?.includes(filePath)) {
-              skipReason = `path changed from [${cachedPage.outputPaths?.join(", ") || "none"}] to [${filePath}] (should not skip)`;
+              // Should be unreachable (path change would make needsProcessing=true)
+              skipReason = `🔴 ERROR: path changed [${cachedPage.outputPaths?.join(", ") || "none"}] → [${filePath}] but !needsProcessing`;
             } else {
               const notionTime = new Date(page.last_edited_time).getTime();
               const cachedTime = new Date(cachedPage.lastEdited).getTime();
               if (notionTime > cachedTime) {
-                skipReason = `timestamp updated (${page.last_edited_time} > ${cachedPage.lastEdited}) (should not skip)`;
+                // Should be unreachable (newer timestamp would make needsProcessing=true)
+                skipReason = `🔴 ERROR: timestamp newer (${page.last_edited_time} > ${cachedPage.lastEdited}) but !needsProcessing`;
               } else {
+                // This is the ONLY valid reason for !needsProcessing
                 skipReason = `unchanged since ${cachedPage.lastEdited}`;
               }
             }

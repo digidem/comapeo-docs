@@ -58,10 +58,7 @@ export function isExpiredUrlError(error: any): boolean {
 
   // Check error message for expiration indicators
   const errorMessage = error?.message?.toLowerCase() || "";
-  if (
-    errorMessage.includes("expired") ||
-    errorMessage.includes("signature")
-  ) {
+  if (errorMessage.includes("expired") || errorMessage.includes("signature")) {
     return true;
   }
 
@@ -952,7 +949,8 @@ export async function downloadAndProcessImage(
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
       } else if (isExpiredUrlError(error)) {
         // ✅ PHASE 2 FIX: Detect and log expired URL errors specifically (Issue #94)
-        errorMessage = `❌ Image URL expired (403) for image ${index + 1}: ${url}\n` +
+        errorMessage =
+          `❌ Image URL expired (403) for image ${index + 1}: ${url}\n` +
           `   This indicates the image was processed more than 1 hour after URL generation.\n` +
           `   Phase 1 reordering should prevent this - if you see this message, please report it.`;
         console.error(chalk.red(errorMessage));

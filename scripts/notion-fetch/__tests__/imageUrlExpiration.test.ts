@@ -481,8 +481,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       n2m.pageToMarkdown.mockResolvedValue([]);
       n2m.toMarkdownString.mockReturnValue({
-        parent:
-          "![Image](https://example.com/image.jpg)\n\n:smile: Emoji text",
+        parent: "![Image](https://example.com/image.jpg)\n\n:smile: Emoji text",
       });
 
       const axios = vi.mocked(await import("axios")).default;

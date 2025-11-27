@@ -200,6 +200,11 @@ const config: Config = {
       "@docusaurus/plugin-client-redirects",
       {
         redirects: [
+          // Redirect root to default docs page (skip landing page)
+          {
+            to: `/docs/${DEFAULT_DOCS_PAGE}`,
+            from: "/",
+          },
           // Redirect `/docs` and `/docs/` to default docs page (configurable via DEFAULT_DOCS_PAGE env var)
           {
             to: `/docs/${DEFAULT_DOCS_PAGE}`,

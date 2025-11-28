@@ -206,8 +206,8 @@ async function processSinglePage(
   console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
   const pageSpinner = SpinnerManager.create(
     `Processing page ${pageProcessingIndex}/${totalPages}`,
-    120000
-  ); // 2 minute timeout per page
+    300000
+  ); // 5 minute timeout per page
 
   try {
     // Fetch raw block data first for emoji and callout processing
@@ -860,7 +860,7 @@ export async function generateBlocks(
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md
           maxConcurrent: 5,
-          timeoutMs: 180000, // 3 minutes per page
+          timeoutMs: 600000, // 10 minutes per batch item (allows for 5 min page timeout + buffer)
           operation: "page processing",
           progressTracker,
           // Stream progress updates as each page completes

@@ -736,14 +736,14 @@ export async function downloadAndProcessImage(
   let previousAttempt: Promise<any> | null = null;
   let previousTimedOut = false;
 
-  // Overall timeout per attempt: 120 seconds
+  // Overall timeout per attempt: 300 seconds (5 minutes)
   // Must be LONGER than sum of individual timeouts to avoid false positives:
   // - Download: 30s (axios timeout)
   // - Sharp resize: 30s (withTimeout in imageProcessor.ts)
   // - Compression: 45s (withTimeout in utils.ts)
   // - Worst case total: 105s
-  // - Overall timeout: 120s (safety buffer for legitimate slow images)
-  const OVERALL_TIMEOUT_MS = 120000;
+  // - Overall timeout: 300s (generous safety buffer for slow networks/large files)
+  const OVERALL_TIMEOUT_MS = 300000;
 
   // Grace period for timed-out operations to finish disk writes
   // If the operation is truly deadlocked, we give up after this period

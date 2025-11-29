@@ -509,6 +509,14 @@ article {
   }
 }
 
+/* TOC wrapper with sticky positioning */
+.toc-wrapper {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height, 60px) + 1rem);
+  max-height: calc(100vh - var(--ifm-navbar-height, 60px) - 2rem);
+  overflow-y: auto;
+}
+
 /* TOC heading styling */
 .toc-heading {
   font-size: 0.875rem;

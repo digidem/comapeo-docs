@@ -8,7 +8,7 @@ type Props = WrapperProps<typeof TOCType>;
 
 export default function TOCWrapper(props: Props): JSX.Element {
   return (
-    <div>
+    <div className="toc-wrapper">
       <h2 className="toc-heading">
         {translate({
           id: "theme.TOC.title",

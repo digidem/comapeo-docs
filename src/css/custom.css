@@ -508,3 +508,18 @@ article {
     padding-top: 2rem;
   }
 }
+
+/* TOC heading styling */
+.toc-heading {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0 0 0.75rem 0;
+  padding-left: 0.5rem;
+}
+
+[data-theme="dark"] .toc-heading {
+  color: var(--ifm-color-emphasis-600);
+}

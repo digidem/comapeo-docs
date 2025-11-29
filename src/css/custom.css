@@ -534,5 +534,11 @@ article {
 
 /* Add padding to pagination nav to allow last TOC item to scroll into view */
 .pagination-nav {
-  padding-bottom: 50vh;
+  padding-top: 2rem;
+  padding-bottom: 20vh;
+}
+
+/* Add bottom margin to doc footer matching top margin */
+.theme-doc-footer {
+  margin-bottom: 3rem;
 }

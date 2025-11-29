@@ -46,7 +46,7 @@ import {
   savePageMetadataCache,
   createEmptyCache,
   determineSyncMode,
-  filterChangedPages,
+  // filterChangedPages, // NOTE: Not used - inline logic at lines 704-711 used instead for performance/clarity
   findDeletedPages,
   updatePageInCache,
   removePageFromCache,
@@ -700,6 +700,8 @@ export async function generateBlocks(
           );
 
           // Check if this page needs processing (incremental sync)
+          // TODO: Consider using filterChangedPages() from pageMetadataCache.ts
+          // Currently using inline logic for performance and clarity in this context
           const cachedPage = metadataCache.pages[page.id];
           const needsProcessing =
             syncMode.fullRebuild ||
@@ -743,6 +745,26 @@ export async function generateBlocks(
                 // This is the ONLY valid reason for !needsProcessing
                 skipReason = `unchanged since ${cachedPage.lastEdited}`;
               }
+            }
+
+            // Log ERROR conditions to console.error for visibility
+            if (skipReason.includes("🔴 ERROR:")) {
+              console.error(
+                chalk.red(
+                  `\n⚠️  CRITICAL LOGIC BUG DETECTED - Page: ${pageTitle}`
+                )
+              );
+              console.error(chalk.red(`    ${skipReason}`));
+              console.error(
+                chalk.yellow(
+                  `    This indicates a bug in the needsProcessing logic at lines 706-713`
+                )
+              );
+              console.error(
+                chalk.yellow(
+                  `    Please report this issue with the above details\n`
+                )
+              );
             }
 
             console.log(chalk.gray(`  ⏭️  Skipping page: ${pageTitle}`));

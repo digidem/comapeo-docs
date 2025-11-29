@@ -186,8 +186,12 @@ export async function sortAndExpandNotionData(
           try {
             // Add explicit timeout to prevent hanging indefinitely
             // GitHub Actions seems to have issues with Notion API calls hanging
-            // Increased from 10s to 30s to handle slow Notion API responses,
-            // particularly for pages with large blocks or many nested children
+            //
+            // Timeout Configuration:
+            // - Increased from 10s to 30s (Issue #95, Nov 2025)
+            // - Rationale: Reduces false-positive timeouts for complex pages
+            // - Trade-off: Slower failure detection vs fewer skipped pages
+            // - Monitor: If timeouts are frequent, consider network/API issues
             const TIMEOUT_MS = 30000; // 30 second timeout
             const timeoutPromise = new Promise((_resolve, reject) =>
               setTimeout(

@@ -29,6 +29,19 @@ export interface CacheValidationResult {
 /**
  * Validate the page metadata cache and check for inconsistencies.
  * This helps diagnose issues with incremental sync.
+ *
+ * IMPORTANT: Run this when no fetch operations are in progress.
+ * Concurrent fetch operations may cause inaccurate results as files
+ * and cache are being modified during validation.
+ *
+ * Safe to run:
+ * - After a fetch completes
+ * - Before starting a fetch
+ * - When investigating cache issues
+ *
+ * Not recommended:
+ * - While `notion:fetch-all` is running
+ * - During CI/CD builds with concurrent jobs
  */
 export async function validateCache(
   options: { verbose?: boolean } = {}
@@ -66,6 +79,12 @@ export async function validateCache(
   let missingFilesCount = 0;
   let orphanedFilesCount = 0;
 
+  // Helper function to normalize paths for consistent comparison
+  // Converts backslashes to forward slashes and removes leading slashes
+  const normalizePath = (p: string): string => {
+    return path.normalize(p).replace(/\\/g, "/").replace(/^\//, "");
+  };
+
   // Check 1: Verify output files exist
   console.log(chalk.bold("\n1️⃣  Checking output files exist..."));
   const cachedPaths = new Set<string>();
@@ -79,7 +98,8 @@ export async function validateCache(
         continue;
       }
 
-      cachedPaths.add(outputPath);
+      // Store normalized path for comparison
+      cachedPaths.add(normalizePath(outputPath));
 
       const absolutePath = path.isAbsolute(outputPath)
         ? outputPath
@@ -127,16 +147,10 @@ export async function validateCache(
           }
         } else if (entry.isFile() && entry.name.endsWith(".md")) {
           // Check if this markdown file is in our cache
-          const normalizedPath = relativePath.replace(/\\/g, "/");
+          // Use same normalization as when adding to cachedPaths
+          const normalizedPath = normalizePath(relativePath);
 
-          // Also check with leading slash
-          const withLeadingSlash = `/${normalizedPath}`;
-
-          if (
-            !cachedPaths.has(normalizedPath) &&
-            !cachedPaths.has(withLeadingSlash) &&
-            !cachedPaths.has(fullPath)
-          ) {
+          if (!cachedPaths.has(normalizedPath)) {
             orphanedFiles.push(normalizedPath);
             orphanedFilesCount++;
             if (verbose) {

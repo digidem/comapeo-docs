@@ -508,3 +508,36 @@ article {
     padding-top: 2rem;
   }
 }
+
+/* TOC wrapper with sticky positioning */
+.toc-wrapper {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height, 60px) + 1rem);
+  max-height: calc(100vh - var(--ifm-navbar-height, 60px) - 2rem);
+  overflow-y: auto;
+}
+
+/* TOC heading styling */
+.toc-heading {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0 0 0.75rem 0;
+  padding-left: 0.5rem;
+}
+
+[data-theme="dark"] .toc-heading {
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Add padding to pagination nav to allow last TOC item to scroll into view */
+.pagination-nav {
+  padding-bottom: 20vh;
+}
+
+/* Add bottom margin to doc footer matching top margin */
+.theme-doc-footer {
+  margin-bottom: 3rem;
+}

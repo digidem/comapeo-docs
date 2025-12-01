@@ -31,6 +31,8 @@ export interface PageMetadata {
   outputPaths: string[];
   /** ISO timestamp when we processed this page */
   processedAt: string;
+  /** Whether the generated content still contains S3 URLs */
+  containsS3?: boolean;
 }
 
 /**
@@ -285,7 +287,8 @@ export function updatePageInCache(
   cache: PageMetadataCache,
   pageId: string,
   lastEdited: string,
-  outputPaths: string[]
+  outputPaths: string[],
+  containsS3?: boolean
 ): void {
   const existing = cache.pages[pageId];
   const mergedOutputs = new Set<string>();
@@ -314,6 +317,7 @@ export function updatePageInCache(
     lastEdited: latestLastEdited,
     outputPaths: Array.from(mergedOutputs),
     processedAt: new Date().toISOString(),
+    containsS3,
   };
 }
 

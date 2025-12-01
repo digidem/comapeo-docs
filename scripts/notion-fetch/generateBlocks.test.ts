@@ -120,20 +120,64 @@ vi.mock("./utils", () => ({
 }));
 
 // Mock filesystem operations
-vi.mock("node:fs", () => ({
-  default: {
-    mkdirSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    readFileSync: vi.fn(() => "{}"),
-    existsSync: vi.fn(() => true),
+vi.mock("node:fs", () => {
+  const files = new Map<string, string>();
+  const directories = new Set<string>();
+
+  const ensureDir = (dirPath: string) => {
+    if (dirPath) {
+      directories.add(dirPath);
+    }
+  };
+
+  const api = {
+    mkdirSync: vi.fn((dirPath: string) => {
+      ensureDir(dirPath);
+    }),
+    writeFileSync: vi.fn((filePath: string, content: string | Buffer) => {
+      const value = typeof content === "string" ? content : content.toString();
+      files.set(filePath, value);
+      const dirPath = filePath?.includes("/")
+        ? filePath.slice(0, filePath.lastIndexOf("/"))
+        : "";
+      ensureDir(dirPath);
+    }),
+    readFileSync: vi.fn((filePath: string) => {
+      if (files.has(filePath)) {
+        return files.get(filePath);
+      }
+      if (filePath.endsWith("code.json")) {
+        return "{}";
+      }
+      return "";
+    }),
+    existsSync: vi.fn((target: string) => {
+      return files.has(target) || directories.has(target);
+    }),
     readdirSync: vi.fn(() => []),
     statSync: vi.fn(() => ({
       isDirectory: () => false,
       isFile: () => true,
     })),
-    renameSync: vi.fn(),
-  },
-}));
+    renameSync: vi.fn((from: string, to: string) => {
+      if (files.has(from)) {
+        files.set(to, files.get(from) ?? "");
+        files.delete(from);
+      }
+    }),
+    unlinkSync: vi.fn((target: string) => {
+      files.delete(target);
+    }),
+    __reset: () => {
+      files.clear();
+      directories.clear();
+    },
+  };
+
+  return {
+    default: api,
+  };
+});
 
 // Mock the docusaurus config to prevent file system issues
 vi.mock("../../docusaurus.config", () => ({

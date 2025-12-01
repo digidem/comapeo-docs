@@ -77,12 +77,20 @@ describe("Incremental Sync Integration", () => {
       const cache = createEmptyCache("test-hash");
 
       // Simulate processing pages
-      updatePageInCache(cache, "page-1", "2024-01-01T00:00:00.000Z", [
-        "/docs/page-1.md",
-      ]);
-      updatePageInCache(cache, "page-2", "2024-01-02T00:00:00.000Z", [
-        "/docs/page-2.md",
-      ]);
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["/docs/page-1.md"],
+        false
+      );
+      updatePageInCache(
+        cache,
+        "page-2",
+        "2024-01-02T00:00:00.000Z",
+        ["/docs/page-2.md"],
+        false
+      );
 
       expect(Object.keys(cache.pages)).toHaveLength(2);
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-01T00:00:00.000Z");

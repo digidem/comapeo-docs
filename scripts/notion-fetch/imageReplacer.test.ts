@@ -216,6 +216,46 @@ Some text
       expect(matches[0].alt).toBe("");
       expect(matches[0].linkUrl).toBe("https://example.com/link");
     });
+
+    it("should recover missing matches on large markdown when regex stops early", () => {
+      const filler = "x".repeat(750_000);
+      const imageMarkdown = Array.from(
+        { length: 5 },
+        (_, i) =>
+          `![img${i}](https://prod-files-secure.s3.us-west-2.amazonaws.com/image-${i}.png)`
+      ).join("\n");
+      const markdown = `${filler}\n${imageMarkdown}`;
+
+      const originalExec = RegExp.prototype.exec;
+      const imageRegexSource = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/
+        .source;
+
+      RegExp.prototype.exec = function patchedExec(this: RegExp, str: string) {
+        if (
+          this instanceof RegExp &&
+          this.source === imageRegexSource &&
+          this.global &&
+          str.length > 700000
+        ) {
+          if ((this as any).__forcedBugTriggered) {
+            return null;
+          }
+          (this as any).__forcedBugTriggered = true;
+        }
+        return originalExec.call(this, str);
+      };
+
+      try {
+        const matches = extractImageMatches(markdown);
+        expect(matches).toHaveLength(5);
+        const s3Matches = matches.filter((m) =>
+          m.url.includes("https://prod-files-secure.s3.us-west-2.amazonaws.com")
+        );
+        expect(s3Matches).toHaveLength(5);
+      } finally {
+        RegExp.prototype.exec = originalExec;
+      }
+    });
   });
 
   describe("processAndReplaceImages", () => {

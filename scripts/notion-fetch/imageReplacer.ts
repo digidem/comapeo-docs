@@ -78,6 +78,8 @@ const MAX_CONCURRENT_IMAGES = 5;
 const DEBUG_S3_IMAGES =
   (process.env.DEBUG_S3_IMAGES ?? "").toLowerCase() === "true";
 
+const LARGE_MARKDOWN_THRESHOLD = 700_000;
+
 function debugS3(message: string): void {
   if (DEBUG_S3_IMAGES) {
     console.log(chalk.magenta(`[s3-debug] ${message}`));
@@ -153,7 +155,7 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
 
   const imgRegex = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
 
-  if (DEBUG_S3_IMAGES && plainString.length > 700000) {
+  if (DEBUG_S3_IMAGES && plainString.length > LARGE_MARKDOWN_THRESHOLD) {
     debugS3(
       `About to execute regex on ${plainString.length} chars, regex pattern: ${imgRegex.source}`
     );
@@ -188,7 +190,7 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
     }
   }
 
-  if (DEBUG_S3_IMAGES && plainString.length > 700000) {
+  if (DEBUG_S3_IMAGES && plainString.length > LARGE_MARKDOWN_THRESHOLD) {
     debugS3(`Testing alternative matching methods...`);
     const matchAllTest = Array.from(plainString.matchAll(imgRegex));
     debugS3(`matchAll() found ${matchAllTest.length} matches`);
@@ -200,7 +202,7 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
   }
 
   while ((m = imgRegex.exec(plainString)) !== null) {
-    if (DEBUG_S3_IMAGES && plainString.length > 700000) {
+    if (DEBUG_S3_IMAGES && plainString.length > LARGE_MARKDOWN_THRESHOLD) {
       debugS3(
         `Found match #${tmpIndex + 1}: alt="${m[1]}", url start="${m[2].substring(0, 50)}"`
       );
@@ -238,59 +240,36 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
     });
   }
 
-  if (
-    imageMatches.length === 0 &&
-    plainString.length > 700000 &&
-    plainString.includes("![")
-  ) {
+  const shouldAugmentWithManual =
+    plainString.length > LARGE_MARKDOWN_THRESHOLD &&
+    plainString.includes("![") &&
+    imageMatches.length < SAFETY_LIMIT;
+
+  if (shouldAugmentWithManual) {
     debugS3(`⚠️  Bun regex bug detected! Falling back to manual parsing...`);
-
-    let position = 0;
-    let manualMatches = 0;
-
-    while (position < plainString.length) {
-      const imageStart = plainString.indexOf("![", position);
-      if (imageStart === -1) break;
-
-      const altEnd = plainString.indexOf("]", imageStart + 2);
-      if (altEnd === -1) break;
-
-      const urlStart = plainString.indexOf("(", altEnd);
-      if (urlStart === -1 || urlStart !== altEnd + 1) {
-        position = imageStart + 2;
-        continue;
+    const remainingCapacity = SAFETY_LIMIT - imageMatches.length;
+    if (remainingCapacity > 0) {
+      const existingStarts = new Set<number>();
+      for (const match of imageMatches) {
+        existingStarts.add(match.start);
       }
+      const { matches: manualMatches, nextIndex } = extractImagesManually(
+        plainString,
+        tmpIndex,
+        existingStarts,
+        remainingCapacity
+      );
 
-      const urlEnd = plainString.indexOf(")", urlStart + 1);
-      if (urlEnd === -1) break;
-
-      const alt = plainString.substring(imageStart + 2, altEnd);
-      const url = plainString.substring(urlStart + 1, urlEnd).trim();
-      const full = plainString.substring(imageStart, urlEnd + 1);
-
-      imageMatches.push({
-        full,
-        url,
-        alt,
-        idx: tmpIndex++,
-        start: imageStart,
-        end: urlEnd + 1,
-      });
-
-      manualMatches++;
-      position = urlEnd + 1;
-
-      if (manualMatches >= SAFETY_LIMIT) {
-        console.warn(
-          chalk.yellow(
-            `⚠️  Manual parsing image match limit (${SAFETY_LIMIT}) reached; skipping remaining.`
-          )
-        );
-        break;
+      if (manualMatches.length > 0) {
+        if (DEBUG_S3_IMAGES) {
+          debugS3(
+            `⚠️  Manual parsing fallback added ${manualMatches.length} image match(es)`
+          );
+        }
+        imageMatches.push(...manualMatches);
+        tmpIndex = nextIndex;
       }
     }
-
-    debugS3(`✅ Manual parsing found ${manualMatches} images`);
   }
 
   if (imageMatches.length > 1) {
@@ -300,13 +279,77 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
     });
   }
 
-  if (DEBUG_S3_IMAGES && plainString.length > 700000) {
+  if (DEBUG_S3_IMAGES && plainString.length > LARGE_MARKDOWN_THRESHOLD) {
     debugS3(
       `extractImageMatches returning ${imageMatches.length} matches after ${safetyCounter} iterations`
     );
   }
 
   return imageMatches;
+}
+
+function findClosingParenIndex(source: string, startIndex: number): number {
+  let escaped = false;
+  for (let i = startIndex; i < source.length; i++) {
+    const char = source.charAt(i);
+    if (char === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (char === ")" && !escaped) {
+      return i;
+    }
+    escaped = false;
+  }
+  return -1;
+}
+
+function extractImagesManually(
+  source: string,
+  startingIndex: number,
+  existingStarts: Set<number>,
+  remainingCapacity: number
+): { matches: ImageMatch[]; nextIndex: number } {
+  const matches: ImageMatch[] = [];
+  let nextIndex = startingIndex;
+  let position = 0;
+
+  while (position < source.length && matches.length < remainingCapacity) {
+    const imageStart = source.indexOf("![", position);
+    if (imageStart === -1) break;
+
+    const altEnd = source.indexOf("]", imageStart + 2);
+    if (altEnd === -1) break;
+
+    const urlStart = source.indexOf("(", altEnd);
+    if (urlStart === -1 || urlStart !== altEnd + 1) {
+      position = imageStart + 2;
+      continue;
+    }
+
+    const urlEnd = findClosingParenIndex(source, urlStart + 1);
+    if (urlEnd === -1) break;
+
+    if (!existingStarts.has(imageStart)) {
+      const rawUrl = source.substring(urlStart + 1, urlEnd).trim();
+      const unescapedUrl = rawUrl.replace(/\\\)/g, ")");
+      const full = source.substring(imageStart, urlEnd + 1);
+
+      matches.push({
+        full,
+        url: unescapedUrl,
+        alt: source.substring(imageStart + 2, altEnd),
+        idx: nextIndex++,
+        start: imageStart,
+        end: urlEnd + 1,
+      });
+      existingStarts.add(imageStart);
+    }
+
+    position = urlEnd + 1;
+  }
+
+  return { matches, nextIndex };
 }
 
 function extractHtmlImageMatches(

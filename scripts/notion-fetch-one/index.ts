@@ -3,8 +3,9 @@ import chalk from "chalk";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { fetchNotionData } from "../fetchNotionData";
-import { runFetchPipeline } from "../notion-fetch/runFetch";
 import { NOTION_PROPERTIES } from "../constants";
+import { buildFetchOneSelection } from "./buildFetchOneSelection";
+import { runContentGeneration } from "../notion-fetch/runFetch";
 import {
   gracefulShutdown,
   initializeGracefulShutdownHandlers,
@@ -279,41 +280,36 @@ async function main(): Promise<number> {
     console.log(chalk.gray(`   Score: ${match.score.toFixed(2)}`));
     console.log(chalk.gray(`   ID: ${matchedId}\n`));
 
-    // Step 3: Fetch and process only the matched page (+ its children)
-    // Create a filter that matches only this specific page ID
-    const filter = {
-      or: [
-        {
-          property: "Parent item",
-          relation: {
-            contains: matchedId,
-          },
-        },
-      ],
-    };
+    const { orderedPages, stats } = buildFetchOneSelection(allPages, matchedId);
+
+    if (orderedPages.length === 0) {
+      console.error(
+        chalk.red(
+          `❌ Unable to build fetch selection for page ${matchedTitle} (${matchedId})`
+        )
+      );
+      await gracefulShutdown(1);
+      return 1;
+    }
 
     console.log(
       chalk.bold.cyan(
-        `🚀 Fetching and processing "${chalk.yellow(matchedTitle)}" and its children...\n`
+        `🚀 Processing ${orderedPages.length} page(s) related to "${chalk.yellow(matchedTitle)}"\n`
+      )
+    );
+    console.log(
+      chalk.gray(
+        `  📚 Selection stats → ancestors: ${stats.ancestors}, descendants: ${stats.descendants}, translations: ${stats.translations}`
       )
     );
 
-    // Use the existing pipeline but with:
-    // 1. A transform that includes our matched page
-    // 2. A filter that gets its children
-    const { metrics } = await runFetchPipeline({
-      filter,
-      fetchSpinnerText: `Fetching children of "${matchedTitle}"`,
-      generateSpinnerText: "Generating blocks",
-      transform: async (childPages) => {
-        // Include the parent page itself + its children
-        const allRelatedPages = [match.page, ...childPages];
-        console.log(
-          chalk.gray(
-            `  Found ${childPages.length} child page(s) for "${matchedTitle}"`
-          )
-        );
-        return allRelatedPages;
+    const { metrics } = await runContentGeneration({
+      pages: orderedPages,
+      generateSpinnerText: `Generating "${matchedTitle}" and related pages`,
+      onProgress: undefined,
+      generateOptions: {
+        force: true,
+        enableDeletion: false,
       },
     });
 
@@ -387,6 +383,7 @@ function printHelp() {
 }
 
 export {
+  buildFetchOneSelection,
   extractFullTitle,
   findBestMatch,
   fuzzyMatchScore,

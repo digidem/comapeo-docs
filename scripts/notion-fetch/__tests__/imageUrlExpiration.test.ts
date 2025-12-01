@@ -340,6 +340,13 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       // Note: Current implementation logs this as a general failure
       // Phase 2 will add specific expired URL detection
       expect(consoleWarnSpy).toHaveBeenCalled();
+      expect(
+        consoleErrorSpy.mock.calls.some(
+          (call) =>
+            typeof call[0] === "string" &&
+            call[0].toString().includes("expired (403)")
+        )
+      ).toBe(true);
     });
 
     it("should distinguish expired URLs from other 403 errors", async () => {

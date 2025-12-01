@@ -290,4 +290,37 @@ describe("Retry loop behavior", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("stops after max retries when no progress is made", async () => {
+    const { generateBlocks } = await getGenerateBlocks();
+    const page = createMockNotionPage({ title: "Maxed Out" });
+
+    const stuckContent =
+      "# Title\n\n![s3](https://prod-files-secure.s3.us-west-2.amazonaws.com/image.png?X-Amz-Expires=1)";
+
+    n2m.pageToMarkdown.mockResolvedValue([]);
+    n2m.toMarkdownString.mockReturnValue({ parent: stuckContent });
+
+    processAndReplaceImages.mockResolvedValue({
+      markdown: stuckContent,
+      stats: { successfulImages: 0, totalFailures: 1, totalSaved: 0 },
+    });
+    validateAndFixRemainingImages.mockResolvedValue(stuckContent);
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await generateBlocks([page]);
+
+    expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
+    expect(
+      warnSpy.mock.calls.some(
+        (call) =>
+          typeof call[0] === "string" &&
+          (call[0].includes("still reference expiring URLs after") ||
+            call[0].includes("No progress made in retry"))
+      )
+    ).toBe(true);
+
+    warnSpy.mockRestore();
+  });
 });

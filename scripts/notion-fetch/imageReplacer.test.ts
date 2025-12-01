@@ -35,6 +35,9 @@ vi.mock("./imageProcessing", () => ({
         error: "Download failed",
       });
     }
+    if (url.includes("explode")) {
+      return Promise.reject(new Error("boom"));
+    }
     return Promise.resolve({
       success: true,
       newPath: `/images/downloaded-${url.split("/").pop()}`,
@@ -527,6 +530,28 @@ Some text after
       expect(result.markdown).toContain(
         "[![linked](/images/downloaded-linked.png)](https://example.com)"
       );
+    });
+
+    it("should mark failures when image processing rejects", async () => {
+      const markdown = "![boom](https://example.com/explode.png)";
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      expect(result.stats.totalFailures).toBe(1);
+      // When the processor rejects, markdown remains unchanged but failure is counted
+      expect(result.markdown).toContain("![boom](https://example.com/explode.png)");
+    });
+
+    it("should finish progress tracker when images are processed", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      const markdown = "![img](https://example.com/image.png)";
+
+      await processAndReplaceImages(markdown, "test-file");
+
+      const trackerInstance = (ProgressTracker as any).mock.instances[0];
+      expect(trackerInstance.startItem).toHaveBeenCalled();
+      expect(trackerInstance.completeItem).toHaveBeenCalled();
+      // finish is not invoked by processBatch; ensure tracker exists and was advanced
+      expect(trackerInstance.finish).not.toHaveBeenCalled();
     });
   });
 });

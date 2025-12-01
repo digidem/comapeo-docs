@@ -111,6 +111,17 @@ describe("Expired URL Detection", () => {
       expect(isExpiredUrlError(error)).toBe(false);
     });
 
+    it("should handle HTML 403 body gracefully", () => {
+      const error = {
+        response: {
+          status: 403,
+          data: "<html><body><h1>Expired</h1></body></html>",
+        },
+      };
+
+      expect(isExpiredUrlError(error)).toBe(true);
+    });
+
     it("should return false for network errors without status", () => {
       const error = {
         message: "Network Error",

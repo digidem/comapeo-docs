@@ -284,6 +284,58 @@ describe("processMarkdownWithRetry", () => {
     });
   });
 
+  describe("error handling and configuration", () => {
+    it("should surface errors from processAndReplaceImages", async () => {
+      expect(processMarkdownWithRetry).toBeDefined();
+
+      const boom = new Error("pipeline failed");
+      processAndReplaceImages.mockRejectedValue(boom);
+
+      await expect(
+        processMarkdownWithRetry(
+          "![img](https://example.com/img.png)",
+          { pageId: "err", pageTitle: "Err", safeFilename: "err" },
+          [],
+          new Map()
+        )
+      ).rejects.toThrow("pipeline failed");
+    });
+
+    it("should honor MAX_IMAGE_RETRIES env override", async () => {
+      expect(processMarkdownWithRetry).toBeDefined();
+      process.env.MAX_IMAGE_RETRIES = "2";
+
+      const stuckContent =
+        "![s3](https://prod-files-secure.s3.us-west-2.amazonaws.com/stuck.png?X-Amz-Expires=1)";
+
+      processAndReplaceImages.mockResolvedValue({
+        markdown: stuckContent,
+        stats: { successfulImages: 0, totalFailures: 1, totalSaved: 0 },
+      });
+      validateAndFixRemainingImages.mockResolvedValue(stuckContent);
+      hasS3Urls.mockReturnValue(true);
+      getImageDiagnostics.mockReturnValue({
+        totalMatches: 1,
+        markdownMatches: 1,
+        htmlMatches: 0,
+        s3Matches: 1,
+        s3Samples: ["https://prod-files-secure.s3.us-west-2.amazonaws.com/..."],
+      });
+
+      const result = await processMarkdownWithRetry(
+        stuckContent,
+        { pageId: "env", pageTitle: "Env", safeFilename: "env" },
+        [],
+        new Map()
+      );
+
+      expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
+      expect(result.retryAttempts).toBe(1); // one retry attempt allowed by env override
+
+      delete process.env.MAX_IMAGE_RETRIES;
+    });
+  });
+
   describe("retry metrics tracking", () => {
     it("should return correct retry attempt count", async () => {
       expect(processMarkdownWithRetry).toBeDefined();

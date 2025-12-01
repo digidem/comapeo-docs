@@ -5,6 +5,64 @@ import { trackSpinner } from "./runtime";
 import { perfTelemetry } from "../perfTelemetry";
 import SpinnerManager from "./spinnerManager";
 
+const FETCH_TIMEOUT = 300000; // 5 minutes
+
+export interface ContentGenerationOptions {
+  pages: Array<Record<string, unknown>>;
+  generateSpinnerText?: string;
+  onProgress?: (progress: { current: number; total: number }) => void;
+  generateOptions?: GenerateBlocksOptions;
+  flushTelemetry?: boolean;
+}
+
+export interface ContentGenerationResult {
+  metrics: Awaited<ReturnType<typeof generateBlocks>>;
+}
+
+export async function runContentGeneration({
+  pages,
+  generateSpinnerText = "Generating blocks",
+  onProgress,
+  generateOptions = {},
+  flushTelemetry = true,
+}: ContentGenerationOptions): Promise<ContentGenerationResult> {
+  const generateSpinner = SpinnerManager.create(
+    generateSpinnerText,
+    FETCH_TIMEOUT
+  );
+  const safePages = Array.isArray(pages) ? pages : [];
+  let unregisterGenerateSpinner: (() => void) | undefined;
+
+  try {
+    perfTelemetry.phaseStart("generate");
+    unregisterGenerateSpinner = trackSpinner(generateSpinner);
+    const metrics = await generateBlocks(
+      safePages,
+      (progress) => {
+        if (generateSpinner.isSpinning) {
+          generateSpinner.text = chalk.blue(
+            `${generateSpinnerText}: ${progress.current}/${progress.total}`
+          );
+        }
+        onProgress?.(progress);
+      },
+      generateOptions
+    );
+    generateSpinner.succeed(chalk.green("Blocks generated successfully"));
+    return { metrics };
+  } catch (error) {
+    generateSpinner.fail(chalk.red("Failed to generate blocks"));
+    throw error;
+  } finally {
+    perfTelemetry.phaseEnd("generate");
+    unregisterGenerateSpinner?.();
+    SpinnerManager.remove(generateSpinner);
+    if (flushTelemetry) {
+      perfTelemetry.flush();
+    }
+  }
+}
+
 export interface FetchPipelineOptions {
   filter?: any; // QueryDatabase filter parameter
   fetchSpinnerText?: string;
@@ -47,10 +105,6 @@ export async function runFetchPipeline(
   } = options;
 
   console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
-
-  // Use 5-minute timeout for fetch/generate operations
-  // (can take longer with large databases or many images)
-  const FETCH_TIMEOUT = 300000; // 5 minutes
 
   const fetchSpinner = SpinnerManager.create(fetchSpinnerText, FETCH_TIMEOUT);
   let unregisterFetchSpinner: (() => void) | undefined;
@@ -102,43 +156,16 @@ export async function runFetchPipeline(
       return { data };
     }
 
-    const generateSpinner = SpinnerManager.create(
+    const { metrics } = await runContentGeneration({
+      pages: data,
       generateSpinnerText,
-      FETCH_TIMEOUT
-    );
-    let unregisterGenerateSpinner: (() => void) | undefined;
-    let generateSucceeded = false;
-    try {
-      perfTelemetry.phaseStart("generate");
-      unregisterGenerateSpinner = trackSpinner(generateSpinner);
-      const metrics = await generateBlocks(
-        data,
-        (progress) => {
-          if (generateSpinner.isSpinning) {
-            generateSpinner.text = chalk.blue(
-              `${generateSpinnerText}: ${progress.current}/${progress.total}`
-            );
-          }
-          onProgress?.(progress);
-        },
-        generateOptions
-      );
-      perfTelemetry.phaseEnd("generate");
+      onProgress,
+      generateOptions,
+      flushTelemetry: false,
+    });
 
-      generateSpinner.succeed(chalk.green("Blocks generated successfully"));
-      generateSucceeded = true;
-
-      perfTelemetry.flush();
-      return { data, metrics };
-    } catch (error) {
-      if (!generateSucceeded) {
-        generateSpinner.fail(chalk.red("Failed to generate blocks"));
-      }
-      throw error;
-    } finally {
-      unregisterGenerateSpinner?.();
-      SpinnerManager.remove(generateSpinner);
-    }
+    perfTelemetry.flush();
+    return { data, metrics };
   } catch (error) {
     if (!fetchSucceeded) {
       fetchSpinner.fail(chalk.red("Failed to fetch data from Notion"));

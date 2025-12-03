@@ -173,12 +173,27 @@ export function determineSyncMode(
  * Filter pages to only those that need processing.
  * Returns pages that are new or have been edited since last sync.
  *
+ * NOTE: This function is currently not used in production code.
+ * The inline needsProcessing logic in generateBlocks.ts (lines 704-711)
+ * performs the same checks. This function is maintained for testing and
+ * potential future refactoring to avoid code duplication.
+ *
  * @param pages - All pages from Notion
  * @param cache - Loaded page metadata cache
+ * @param options - Optional configuration
+ * @param options.getFilePath - Optional callback to get the current file path for a page.
+ *                              If provided, pages with changed paths will be marked as needing update.
+ *                              This is critical for detecting renamed/moved pages.
  */
 export function filterChangedPages<
   T extends { id: string; last_edited_time: string },
->(pages: T[], cache: PageMetadataCache | null): T[] {
+>(
+  pages: T[],
+  cache: PageMetadataCache | null,
+  options?: {
+    getFilePath?: (page: T) => string;
+  }
+): T[] {
   if (!cache) {
     return pages; // No cache, process all
   }
@@ -194,6 +209,22 @@ export function filterChangedPages<
     // If any expected outputs are missing, force regeneration
     if (hasMissingOutputs(cache, page.id)) {
       return true;
+    }
+
+    // Check if path changed (only if callback provided)
+    // This is important for detecting renamed/moved pages that need regeneration
+    // even if their Notion timestamp hasn't changed yet
+    if (options?.getFilePath) {
+      const currentPath = options.getFilePath(page);
+
+      // Safety: If path is empty/invalid, regenerate to be safe
+      if (!currentPath || currentPath.trim() === "") {
+        return true;
+      }
+
+      if (!cached.outputPaths?.includes(currentPath)) {
+        return true;
+      }
     }
 
     // Compare timestamps

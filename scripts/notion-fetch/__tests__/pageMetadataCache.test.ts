@@ -299,6 +299,66 @@ describe("pageMetadataCache", () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("1");
     });
+
+    it("should include pages when path changes even if timestamp unchanged", () => {
+      const pages = [
+        { id: "page-1", last_edited_time: "2024-01-01T00:00:00.000Z" },
+        { id: "page-2", last_edited_time: "2024-01-01T00:00:00.000Z" },
+      ];
+
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "test",
+        lastSync: "2024-01-01",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/old-path.md"],
+            processedAt: "2024-01-01",
+          },
+          "page-2": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/unchanged-path.md"],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      // Simulate path changes: page-1 moved, page-2 stayed same
+      const result = filterChangedPages(pages, cache, {
+        getFilePath: (page) =>
+          page.id === "page-1" ? "docs/new-path.md" : "docs/unchanged-path.md",
+      });
+
+      // Only page-1 should be included (path changed)
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("page-1");
+    });
+
+    it("should work without getFilePath callback (backward compatible)", () => {
+      const pages = [
+        { id: "page-1", last_edited_time: "2024-01-01T00:00:00.000Z" },
+      ];
+
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "test",
+        lastSync: "2024-01-01",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/old-path.md"],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      // Without getFilePath callback, should only check timestamp (backward compatible)
+      const result = filterChangedPages(pages, cache);
+
+      // Page unchanged by timestamp, so should be filtered out
+      expect(result).toHaveLength(0);
+    });
   });
 
   describe("hasMissingOutputs", () => {

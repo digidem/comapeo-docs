@@ -722,5 +722,20 @@
     },
     "Initial Use and CoMapeo Settings": {
         "message": "Nova Página"
+    },
+    "Installing CoMapeo and Onboarding": {
+        "message": "Nova Página"
+    },
+    "Observations and Tracks": {
+        "message": "Novo título da seção"
+    },
+    "Data Privacy and Security": {
+        "message": "Novo título da seção"
+    },
+    "Managing Data Privacy and Security": {
+        "message": "Gerenciamento de dados e privacidade"
+    },
+    "Moving Observations and Tracks Outside of CoMapeo": {
+        "message": "Compartilhando observações fora do CoMapeo"
     }
 }

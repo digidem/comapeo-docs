@@ -552,7 +552,7 @@ export function createMockHeadingBlock(text: string, level: 1 | 2 | 3 = 1) {
 /**
  * Create mock page without title (for testing edge cases)
  */
-export function createMockNotionPageWithoutTitle() {
+export function createMockNotionPageWithoutTitle(overrides?: any) {
   const id = "page-" + Math.random().toString(36).substr(2, 9);
   return {
     id,
@@ -574,7 +574,7 @@ export function createMockNotionPageWithoutTitle() {
 /**
  * Create mock page without website block
  */
-export function createMockNotionPageWithoutWebsiteBlock() {
+export function createMockNotionPageWithoutWebsiteBlock(overrides?: any) {
   const id = "page-" + Math.random().toString(36).substr(2, 9);
   return {
     id,
@@ -599,10 +599,11 @@ export function createMockNotionPageWithoutWebsiteBlock() {
 /**
  * Create mock toggle page
  */
-export function createMockTogglePage() {
+export function createMockTogglePage(overrides?: any) {
   return createMockNotionPage({
     elementType: "Toggle",
     title: "Toggle Item",
+    ...overrides,
   });
 }
 

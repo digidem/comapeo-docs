@@ -332,10 +332,14 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
     // Setup default mock implementations
     const { processImage } = await import("../imageProcessor");
-    (processImage as any).mockResolvedValue(mockProcessedImageResult);
+    // Use the fixture from test-utils/fixtures.ts which matches processImage return type
+    const { mockProcessedImageResult: fixtureResult } = await import(
+      "../../test-utils/fixtures"
+    );
+    vi.mocked(processImage).mockResolvedValue(fixtureResult);
 
     const { compressImageToFileWithFallback } = await import("../utils");
-    (compressImageToFileWithFallback as any).mockResolvedValue({
+    vi.mocked(compressImageToFileWithFallback).mockResolvedValue({
       finalSize: 512,
       usedFallback: false,
     });
@@ -363,19 +367,19 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       const operationOrder: string[] = [];
 
       // Mock markdown conversion to track when it's called
-      n2m.pageToMarkdown.mockImplementation(async () => {
+      vi.mocked(n2m.pageToMarkdown).mockImplementation(async () => {
         operationOrder.push("pageToMarkdown");
         return [];
       });
 
-      n2m.toMarkdownString.mockImplementation(() => {
+      vi.mocked(n2m.toMarkdownString).mockImplementation(() => {
         operationOrder.push("toMarkdownString");
         return { parent: imageMarkdown };
       });
 
       // Mock axios to track when image download is called
-      const axios = (await import("axios")).default;
-      axios.get.mockImplementation(async (url) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation(async (url) => {
         operationOrder.push(`downloadImage:${url}`);
         return {
           data: mockImageBuffer,
@@ -383,7 +387,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         };
       });
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Verify operation order:
       // 1. pageToMarkdown (URL generation)
@@ -410,15 +414,15 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       );
 
       // Setup mocks
-      (n2m.pageToMarkdown as any).mockResolvedValue([]);
-      (n2m.toMarkdownString as any).mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: imageMarkdown,
       });
 
-      const axios = (await import("axios")).default;
+      const axios = vi.mocked(await import("axios"));
       let downloadCount = 0;
 
-      (axios.get as any).mockImplementation(async (url: string) => {
+      vi.mocked(axios.default.get).mockImplementation(async (url: string) => {
         downloadCount++;
         return {
           data: mockImageBuffer,
@@ -426,7 +430,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         };
       });
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Verify all 5 images were downloaded successfully
       // This confirms that images are processed immediately after markdown conversion,
@@ -452,21 +456,25 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       const testUrl = "https://example.com/expired-image.jpg";
       const { pages } = createPageStructureForTesting("Test Page", 1);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Expired Image](${testUrl})`,
       });
 
       // Mock 403 error with expired signature
-      const axios = (await import("axios")).default;
-      const expiredError = new Error("Request failed with status code 403");
-      (expiredError as any).response = {
-        status: 403,
-        data: "SignatureDoesNotMatch: The request signature we calculated does not match",
-      };
-      axios.get.mockRejectedValue(expiredError);
+      const axios = vi.mocked(await import("axios"));
+      const expiredError = Object.assign(
+        new Error("Request failed with status code 403"),
+        {
+          response: {
+            status: 403,
+            data: "SignatureDoesNotMatch: The request signature we calculated does not match",
+          },
+        }
+      );
+      vi.mocked(axios.default.get).mockRejectedValue(expiredError);
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Should log error about expired URL
       // Note: Current implementation logs this as a general failure
@@ -487,21 +495,25 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       const { pages } = createPageStructureForTesting("Test Page", 1);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Forbidden Image](https://example.com/forbidden.jpg)`,
       });
 
       // Mock 403 error without expired signature (access denied)
-      const axios = (await import("axios")).default;
-      const forbiddenError = new Error("Request failed with status code 403");
-      (forbiddenError as any).response = {
-        status: 403,
-        data: "Access Denied",
-      };
-      axios.get.mockRejectedValue(forbiddenError);
+      const axios = vi.mocked(await import("axios"));
+      const forbiddenError = Object.assign(
+        new Error("Request failed with status code 403"),
+        {
+          response: {
+            status: 403,
+            data: "Access Denied",
+          },
+        }
+      );
+      vi.mocked(axios.default.get).mockRejectedValue(forbiddenError);
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Should handle gracefully without expired URL message
       expect(consoleWarnSpy).toHaveBeenCalled();
@@ -532,22 +544,22 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       }
 
       // Setup mocks once to handle all pages dynamically
-      (n2m.pageToMarkdown as any).mockResolvedValue([]);
-      (n2m.toMarkdownString as any).mockImplementation(() => {
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockImplementation(() => {
         // Return markdown with 3 images for all pages
         return {
           parent: `![Image 1](https://example.com/image1.jpg)\n\n![Image 2](https://example.com/image2.jpg)\n\n![Image 3](https://example.com/image3.jpg)`,
         };
       });
 
-      const axios = (await import("axios")).default;
+      const axios = vi.mocked(await import("axios"));
       let successfulDownloads = 0;
       let expiredErrors = 0;
 
       // Track which pages have been processed (by sequence, not time)
       const processedPages = new Set<string>();
 
-      (axios.get as any).mockImplementation(async (url: string) => {
+      vi.mocked(axios.default.get).mockImplementation(async (url: string) => {
         // No artificial delays - test pure event ordering
         // In real scenario, Phase 1 ensures URLs are fresh when downloaded
         successfulDownloads++;
@@ -564,7 +576,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         };
       });
 
-      await generateBlocks(allPages);
+      await generateBlocks(allPages, vi.fn());
 
       // Verify all images downloaded successfully without expiration errors
       // Success is measured by completion, not timing
@@ -583,16 +595,16 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         50
       );
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: imageMarkdown,
       });
 
-      const axios = (await import("axios")).default;
+      const axios = vi.mocked(await import("axios"));
       const downloadSequence: string[] = [];
 
       // Track download order without timing dependencies
-      axios.get.mockImplementation(async (url) => {
+      vi.mocked(axios.default.get).mockImplementation(async (url) => {
         // Extract image number from URL to track batch processing
         const match = url.match(/image(\d+)/);
         if (match) {
@@ -605,7 +617,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         };
       });
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Verify all 50 images were downloaded
       expect(downloadSequence.length).toBe(50);
@@ -635,18 +647,18 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       const { pages } = createPageStructureForTesting("Test Page", 0);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: "![Image](https://example.com/image.jpg)\n\n:smile: Emoji text",
       });
 
-      const axios = (await import("axios")).default;
-      axios.get.mockResolvedValue({
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockResolvedValue({
         data: mockImageBuffer,
         headers: { "content-type": "image/jpeg" },
       });
 
-      const result = await generateBlocks(pages);
+      const result = await generateBlocks(pages, vi.fn());
 
       // Emoji processing should still work
       expect(result).toBeDefined();
@@ -658,19 +670,19 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       const { pages } = createPageStructureForTesting("Test Page", 0);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent:
           "![Image](https://example.com/image.jpg)\n\n> **Note**: Callout text",
       });
 
-      const axios = (await import("axios")).default;
-      axios.get.mockResolvedValue({
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockResolvedValue({
         data: mockImageBuffer,
         headers: { "content-type": "image/jpeg" },
       });
 
-      const result = await generateBlocks(pages);
+      const result = await generateBlocks(pages, vi.fn());
 
       // Callout processing should still work
       expect(result).toBeDefined();
@@ -682,26 +694,26 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
 
       const { pages } = createPageStructureForTesting("Test Page", 0);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent:
           "> **Note**: This callout contains an image:\n" +
           "> ![Callout Image](https://example.com/callout-image.jpg)\n" +
           "> This ensures image processing happens before callout transformation.",
       });
 
-      const axios = (await import("axios")).default;
-      axios.get.mockResolvedValue({
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockResolvedValue({
         data: mockImageBuffer,
         headers: { "content-type": "image/jpeg" },
       });
 
-      const result = await generateBlocks(pages);
+      const result = await generateBlocks(pages, vi.fn());
 
       // Both image download and callout processing should work correctly
       // Images are downloaded first, then callouts are transformed
       expect(result).toBeDefined();
-      expect(axios.get).toHaveBeenCalled(); // Image was downloaded
+      expect(vi.mocked(axios.default.get)).toHaveBeenCalled(); // Image was downloaded
     });
   });
 
@@ -714,13 +726,13 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       const testUrl = "https://example.com/cached-image.jpg";
       const { pages } = createPageStructureForTesting("Test Page", 1);
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Cached Image](${testUrl})`,
       });
 
       // Mock cache file exists
-      fs.existsSync.mockImplementation((path) => {
+      vi.mocked(fs.existsSync).mockImplementation((path) => {
         if (typeof path === "string" && path.includes(".cache/images")) {
           return true; // Cache entry exists
         }
@@ -731,7 +743,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
       });
 
       // Mock cache file read
-      fs.readFileSync.mockImplementation((path) => {
+      vi.mocked(fs.readFileSync).mockImplementation((path) => {
         if (typeof path === "string" && path.includes(".cache/images")) {
           return JSON.stringify({
             url: testUrl,
@@ -743,9 +755,9 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         return "{}";
       });
 
-      const axios = (await import("axios")).default;
+      const axios = vi.mocked(await import("axios"));
       let downloadAttempts = 0;
-      axios.get.mockImplementation(async () => {
+      vi.mocked(axios.default.get).mockImplementation(async () => {
         downloadAttempts++;
         return {
           data: mockImageBuffer,
@@ -753,7 +765,7 @@ describe("Image URL Expiration Handling (Issue #94)", () => {
         };
       });
 
-      await generateBlocks(pages);
+      await generateBlocks(pages, vi.fn());
 
       // Should use cache, not download again
       expect(downloadAttempts).toBe(0);

@@ -371,7 +371,7 @@ describe("generateBlocks", () => {
 
       const page = createMockNotionPage({
         id: "cache-page",
-        lastEditedTime: "2025-01-01T00:00:00.000Z",
+        lastEdited: "2025-01-01T00:00:00.000Z",
         elementType: "Page",
       });
 
@@ -537,7 +537,7 @@ describe("generateBlocks", () => {
       const togglePage = createMockNotionPage({
         title: "Following Section",
         elementType: "Toggle",
-        hasSubItems: false,
+        subItems: [],
       });
 
       const pages = [headingPage, togglePage];
@@ -675,9 +675,35 @@ describe("generateBlocks", () => {
           if (args.length === 0) {
             // new Date() without arguments should return fixed date
             super(fixedDate.getTime());
+          } else if (args.length === 1) {
+            // new Date(value) with single argument
+            super(args[0]);
+          } else if (args.length === 2) {
+            // new Date(year, month)
+            super(args[0], args[1]);
+          } else if (args.length === 3) {
+            // new Date(year, month, day)
+            super(args[0], args[1], args[2]);
+          } else if (args.length === 4) {
+            // new Date(year, month, day, hours)
+            super(args[0], args[1], args[2], args[3]);
+          } else if (args.length === 5) {
+            // new Date(year, month, day, hours, minutes)
+            super(args[0], args[1], args[2], args[3], args[4]);
+          } else if (args.length === 6) {
+            // new Date(year, month, day, hours, minutes, seconds)
+            super(args[0], args[1], args[2], args[3], args[4], args[5]);
           } else {
-            // new Date(value) with arguments should work normally
-            super(...args);
+            // new Date(year, month, day, hours, minutes, seconds, milliseconds)
+            super(
+              args[0],
+              args[1],
+              args[2],
+              args[3],
+              args[4],
+              args[5],
+              args[6]
+            );
           }
         }
         static now() {

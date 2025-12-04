@@ -178,7 +178,12 @@ describe("downloadAndProcessImage", () => {
 
     // Setup default mock implementations
     const { processImage } = vi.mocked(await import("../imageProcessor"));
-    processImage.mockResolvedValue(mockProcessedImageResult);
+    // processImage returns { outputBuffer, originalSize, processedSize }
+    // Use the fixture from test-utils/fixtures.ts which has the correct structure
+    const { mockProcessedImageResult: fixtureResult } = await import(
+      "../../test-utils/fixtures"
+    );
+    processImage.mockResolvedValue(fixtureResult);
 
     const { compressImageToFileWithFallback } = vi.mocked(
       await import("../utils")
@@ -204,8 +209,8 @@ describe("downloadAndProcessImage", () => {
       let attemptCount = 0;
 
       // Mock axios to fail twice then succeed
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((url) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((url) => {
         if (url === testUrl) {
           attemptCount++;
           if (attemptCount <= 2) {
@@ -222,8 +227,8 @@ describe("downloadAndProcessImage", () => {
       // Create a page structure with proper Sub-item relations
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -246,8 +251,8 @@ describe("downloadAndProcessImage", () => {
       let attemptCount = 0;
 
       // Mock axios to always fail
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((url) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((url) => {
         if (url === testUrl) {
           attemptCount++;
           return Promise.reject(new Error("Permanent network failure"));
@@ -258,8 +263,8 @@ describe("downloadAndProcessImage", () => {
       // Create a page structure with proper Sub-item relations
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -284,10 +289,13 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://example.com/timeout.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      const timeoutError = new Error("timeout of 30000ms exceeded");
-      (timeoutError as any).code = "ECONNABORTED";
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      // Create timeout error with code property
+      const timeoutError = Object.assign(
+        new Error("timeout of 30000ms exceeded"),
+        { code: "ECONNABORTED" }
+      );
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.reject(timeoutError);
         }
@@ -296,8 +304,8 @@ describe("downloadAndProcessImage", () => {
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -315,10 +323,13 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://nonexistent-domain.example/image.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      const networkError = new Error("getaddrinfo ENOTFOUND example.com");
-      (networkError as any).code = "ENOTFOUND";
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      // Create network error with code property
+      const networkError = Object.assign(
+        new Error("getaddrinfo ENOTFOUND example.com"),
+        { code: "ENOTFOUND" }
+      );
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.reject(networkError);
         }
@@ -327,8 +338,8 @@ describe("downloadAndProcessImage", () => {
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -346,10 +357,13 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://example.com/not-found.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      const httpError = new Error("Request failed with status 404");
-      (httpError as any).response = { status: 404, statusText: "Not Found" };
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      // Create HTTP error with response property
+      const httpError = Object.assign(
+        new Error("Request failed with status 404"),
+        { response: { status: 404, statusText: "Not Found" } }
+      );
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.reject(httpError);
         }
@@ -358,8 +372,8 @@ describe("downloadAndProcessImage", () => {
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -379,8 +393,8 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://example.com/success.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.resolve({
             data: mockImageBuffer,
@@ -392,8 +406,8 @@ describe("downloadAndProcessImage", () => {
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -420,8 +434,8 @@ describe("downloadAndProcessImage", () => {
       const pngUrl = "https://example.com/test.png";
       const webpUrl = "https://example.com/test.webp";
 
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === pngUrl) {
           return Promise.resolve({
             data: mockImageBuffer,
@@ -439,8 +453,8 @@ describe("downloadAndProcessImage", () => {
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![PNG Image](${pngUrl})\n![WebP Image](${webpUrl})`,
       });
 
@@ -465,8 +479,8 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://example.com/complex-image-name.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.resolve({
             data: mockImageBuffer,
@@ -480,8 +494,8 @@ describe("downloadAndProcessImage", () => {
         "Complex Page Name With Spaces!"
       );
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 
@@ -516,8 +530,8 @@ describe("downloadAndProcessImage", () => {
 
       const testUrl = "https://example.com/progress-test.jpg";
 
-      const axios = vi.mocked(await import("axios")).default;
-      axios.get.mockImplementation((requestUrl) => {
+      const axios = vi.mocked(await import("axios"));
+      vi.mocked(axios.default.get).mockImplementation((requestUrl) => {
         if (requestUrl === testUrl) {
           return Promise.resolve({
             data: mockImageBuffer,
@@ -527,19 +541,45 @@ describe("downloadAndProcessImage", () => {
         return Promise.reject(new Error("Mock URL not found"));
       });
 
+      // Create a mock spinner that satisfies the Ora interface
+      // Methods should return `this` to support method chaining
       const mockSpinner = {
         text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-        warn: vi.fn(),
+        succeed: vi.fn(function (this: any) {
+          return this;
+        }),
+        fail: vi.fn(function (this: any) {
+          return this;
+        }),
+        warn: vi.fn(function (this: any) {
+          return this;
+        }),
+        info: vi.fn(function (this: any) {
+          return this;
+        }),
+        start: vi.fn(function (this: any) {
+          return this;
+        }),
+        stop: vi.fn(function (this: any) {
+          return this;
+        }),
+        clear: vi.fn(function (this: any) {
+          return this;
+        }),
+        render: vi.fn(function (this: any) {
+          return this;
+        }),
+        isSpinning: false,
       };
 
-      SpinnerManager.create.mockReturnValue(mockSpinner);
+      vi.mocked(SpinnerManager.create).mockReturnValue(
+        mockSpinner as any as ReturnType<typeof SpinnerManager.create>
+      );
 
       const pages = createPageStructureForTesting("Test Page");
 
-      n2m.pageToMarkdown.mockResolvedValue([]);
-      n2m.toMarkdownString.mockReturnValue({
+      vi.mocked(n2m.pageToMarkdown).mockResolvedValue([]);
+      vi.mocked(n2m.toMarkdownString).mockReturnValue({
         parent: `![Test Image](${testUrl})`,
       });
 

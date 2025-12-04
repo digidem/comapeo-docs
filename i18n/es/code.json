@@ -722,5 +722,11 @@
     },
     "Moving Observations and Tracks Outside of CoMapeo": {
         "message": "Compartir observaciones fuera de CoMapeo"
+    },
+    "Gathering Observations and Tracks": {
+        "message": "Recopilación de observaciones"
+    },
+    "Nueva Página": {
+        "message": "Nueva Página"
     }
 }

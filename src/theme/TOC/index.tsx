@@ -6,7 +6,7 @@ import { translate } from "@docusaurus/Translate";
 
 type Props = WrapperProps<typeof TOCType>;
 
-export default function TOCWrapper(props: Props): JSX.Element {
+export default function TOCWrapper(props: Props): React.JSX.Element {
   return (
     <div className="toc-wrapper">
       <h2 className="toc-heading">

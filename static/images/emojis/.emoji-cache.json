@@ -208,5 +208,19 @@
     "localPath": "/home/runner/work/comapeo-docs/comapeo-docs/static/images/emojis/comapeo_logo_ci_3a40065bd081188f_86169786.png",
     "hash": "3a40065bd081188f",
     "size": 82388
+  },
+  "https://s3-us-west-2.amazonaws.com/public.notion-static.com/7508fda7-b890-43b0-b337-483475ae4795/Screenshot_2025-12-03_at_6.11.34_PM.png": {
+    "url": "https://s3-us-west-2.amazonaws.com/public.notion-static.com/7508fda7-b890-43b0-b337-483475ae4795/Screenshot_2025-12-03_at_6.11.34_PM.png",
+    "filename": "screenshot_2025_7137da8bdb898dbb_06927382.png",
+    "localPath": "/home/runner/work/comapeo-docs/comapeo-docs/static/images/emojis/screenshot_2025_7137da8bdb898dbb_06927382.png",
+    "hash": "7137da8bdb898dbb",
+    "size": 5167
+  },
+  "https://s3-us-west-2.amazonaws.com/public.notion-static.com/76534801-dbdc-4a9b-a19a-8e904eeab7a2/Screenshot_2025-12-03_at_6.11.50_PM.png": {
+    "url": "https://s3-us-west-2.amazonaws.com/public.notion-static.com/76534801-dbdc-4a9b-a19a-8e904eeab7a2/Screenshot_2025-12-03_at_6.11.50_PM.png",
+    "filename": "screenshot_2025_b35b1e92faac791f_06927394.png",
+    "localPath": "/home/runner/work/comapeo-docs/comapeo-docs/static/images/emojis/screenshot_2025_b35b1e92faac791f_06927394.png",
+    "hash": "b35b1e92faac791f",
+    "size": 5239
   }
 }

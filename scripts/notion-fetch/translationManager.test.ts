@@ -82,7 +82,7 @@ describe("translationManager", () => {
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining("i18n"),
-        { recursive: true }
+        expect.objectContaining({ recursive: true })
       );
       expect(fs.writeFileSync).toHaveBeenCalled();
       expect(console.warn).toHaveBeenCalledWith(
@@ -243,7 +243,9 @@ describe("translationManager", () => {
       expect(paths.some((p) => (p as string).includes("es"))).toBe(true);
       expect(paths.some((p) => (p as string).includes("pt"))).toBe(true);
       // Should have recursive: true option
-      expect(calls.every((call) => call[1]?.recursive === true)).toBe(true);
+      expect(
+        calls.every((call) => (call[1] as any)?.recursive === true)
+      ).toBe(true);
     });
 
     it("should handle mkdir errors gracefully", () => {

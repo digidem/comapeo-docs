@@ -92,7 +92,7 @@ describe("cacheLoaders", () => {
         inFlightMap,
         cacheHits,
         fetchCount,
-        fetchFn,
+        fetchFn: fetchFn as unknown as (pageId: string) => Promise<TestData>,
         normalizeResult,
         logPrefix: "Test",
       };

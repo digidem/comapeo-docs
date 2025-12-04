@@ -309,7 +309,7 @@ describe("Retry loop behavior", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    await generateBlocks([page]);
+    await generateBlocks([page], vi.fn());
 
     expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
     expect(

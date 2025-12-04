@@ -101,7 +101,7 @@ describe("imageProcessing", () => {
 
     it("should process image successfully", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake image data"),
         headers: { "content-type": "image/jpeg" },
       });
@@ -122,7 +122,7 @@ describe("imageProcessing", () => {
 
     it("should handle download failure and log error", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockRejectedValue(new Error("Network error"));
+      vi.mocked(mockAxios.get).mockRejectedValue(new Error("Network error"));
 
       const result = await processImageWithFallbacks(
         "https://example.com/image.jpg",
@@ -141,7 +141,7 @@ describe("imageProcessing", () => {
 
     it("should handle non-Error exceptions", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockRejectedValue("String error");
+      vi.mocked(mockAxios.get).mockRejectedValue("String error");
 
       const result = await processImageWithFallbacks(
         "https://example.com/image.jpg",
@@ -490,7 +490,7 @@ describe("imageProcessing", () => {
 
     it("should download and cache new image", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake image data"),
         headers: { "content-type": "image/jpeg" },
       });
@@ -512,7 +512,7 @@ describe("imageProcessing", () => {
   describe("downloadAndProcessImage", () => {
     it("should download and process image successfully", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake image data"),
         headers: { "content-type": "image/jpeg" },
       });
@@ -531,7 +531,7 @@ describe("imageProcessing", () => {
 
     it("should retry on failure", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get
+      vi.mocked(mockAxios.get)
         .mockRejectedValueOnce(new Error("Network error"))
         .mockRejectedValueOnce(new Error("Network error"))
         .mockResolvedValueOnce({
@@ -554,7 +554,7 @@ describe("imageProcessing", () => {
     it("should throw error after 3 failed attempts", async () => {
       const mockAxios = vi.mocked(axios);
       const error = new Error("Network error");
-      mockAxios.get.mockRejectedValue(error);
+      vi.mocked(mockAxios.get).mockRejectedValue(error);
 
       await expect(
         downloadAndProcessImage(
@@ -576,7 +576,7 @@ describe("imageProcessing", () => {
         const mockAxios = vi.mocked(axios);
         const error: any = new Error("Timeout");
         error.code = "ECONNABORTED";
-        mockAxios.get.mockRejectedValue(error);
+        vi.mocked(mockAxios.get).mockRejectedValue(error);
 
         await expect(
           downloadAndProcessImage(
@@ -604,7 +604,7 @@ describe("imageProcessing", () => {
       const mockAxios = vi.mocked(axios);
       const error: any = new Error("HTTP error");
       error.response = { status: 404 };
-      mockAxios.get.mockRejectedValue(error);
+      vi.mocked(mockAxios.get).mockRejectedValue(error);
 
       await expect(
         downloadAndProcessImage(
@@ -619,7 +619,7 @@ describe("imageProcessing", () => {
       const mockAxios = vi.mocked(axios);
       const error: any = new Error("DNS error");
       error.code = "ENOTFOUND";
-      mockAxios.get.mockRejectedValue(error);
+      vi.mocked(mockAxios.get).mockRejectedValue(error);
 
       await expect(
         downloadAndProcessImage(
@@ -633,7 +633,7 @@ describe("imageProcessing", () => {
     it("should use test-aware retry delays", async () => {
       process.env.NODE_ENV = "test";
       const mockAxios = vi.mocked(axios);
-      mockAxios.get
+      vi.mocked(mockAxios.get)
         .mockRejectedValueOnce(new Error("Network error"))
         .mockResolvedValueOnce({
           data: Buffer.from("fake image data"),
@@ -653,7 +653,7 @@ describe("imageProcessing", () => {
 
     it("should sanitize block name for filename", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake image data"),
         headers: { "content-type": "image/jpeg" },
       });
@@ -672,7 +672,7 @@ describe("imageProcessing", () => {
 
     it("should handle array content-type headers", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake image data"),
         headers: { "content-type": ["image/jpeg", "charset=utf-8"] },
       });
@@ -690,7 +690,7 @@ describe("imageProcessing", () => {
 
     it("should handle non-resizable image formats", async () => {
       const mockAxios = vi.mocked(axios);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: Buffer.from("fake svg data"),
         headers: { "content-type": "image/svg+xml" },
       });
@@ -733,7 +733,7 @@ describe("imageProcessing", () => {
     it("should skip processing for small images (< 50KB)", async () => {
       const mockAxios = vi.mocked(axios);
       const smallImageBuffer = Buffer.alloc(30 * 1024); // 30KB
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: smallImageBuffer,
         headers: { "content-type": "image/jpeg" },
       });
@@ -762,7 +762,7 @@ describe("imageProcessing", () => {
     it("should process images larger than 50KB threshold", async () => {
       const mockAxios = vi.mocked(axios);
       const largeImageBuffer = Buffer.alloc(100 * 1024); // 100KB
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: largeImageBuffer,
         headers: { "content-type": "image/jpeg" },
       });
@@ -798,7 +798,7 @@ describe("imageProcessing", () => {
         Buffer.alloc(paddingSize),
       ]);
 
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: imageBuffer,
         headers: { "content-type": "image/png" },
       });
@@ -835,7 +835,7 @@ describe("imageProcessing", () => {
 
       // Small image (skip)
       const smallBuffer = Buffer.alloc(30 * 1024);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: smallBuffer,
         headers: { "content-type": "image/jpeg" },
       });
@@ -846,7 +846,7 @@ describe("imageProcessing", () => {
 
       // Large image (process)
       const largeBuffer = Buffer.alloc(100 * 1024);
-      mockAxios.get.mockResolvedValueOnce({
+      vi.mocked(mockAxios.get).mockResolvedValueOnce({
         data: largeBuffer,
         headers: { "content-type": "image/jpeg" },
       });

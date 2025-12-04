@@ -77,6 +77,7 @@ describe("runFetchPipeline", () => {
         totalSaved: 1024,
         sectionCount: 2,
         titleSectionCount: 1,
+        emojiCount: 0,
       };
 
       // Setup mocks
@@ -129,6 +130,7 @@ describe("runFetchPipeline", () => {
         totalSaved: 0,
         sectionCount: 0,
         titleSectionCount: 0,
+        emojiCount: 0,
       });
 
       await runFetchPipeline({ transform: customTransform });
@@ -160,6 +162,7 @@ describe("runFetchPipeline", () => {
           totalSaved: 0,
           sectionCount: 0,
           titleSectionCount: 0,
+          emojiCount: 0,
         };
       });
 
@@ -283,11 +286,17 @@ describe("runFetchPipeline", () => {
 
       fetchNotionData.mockResolvedValue(mockData);
       sortAndExpandNotionData.mockResolvedValue(mockData);
-      generateBlocks.mockResolvedValue(expectedMetrics);
+      generateBlocks.mockResolvedValue({
+        ...expectedMetrics,
+        emojiCount: 0,
+      });
 
       const result = await runFetchPipeline({});
 
-      expect(result).toEqual({ data: mockData, metrics: expectedMetrics });
+      expect(result).toEqual({
+        data: mockData,
+        metrics: { ...expectedMetrics, emojiCount: 0 },
+      });
     });
 
     it("should handle complex page structures with multiple sections", async () => {
@@ -305,6 +314,7 @@ describe("runFetchPipeline", () => {
         totalSaved: 4096,
         sectionCount: 8,
         titleSectionCount: 3,
+        emojiCount: 0,
       };
 
       fetchNotionData.mockResolvedValue(mockData);
@@ -376,6 +386,7 @@ describe("runFetchPipeline", () => {
         totalSaved: 512,
         sectionCount: 1,
         titleSectionCount: 0,
+        emojiCount: 0,
       });
 
       await runFetchPipeline({ transform: customTransform });
@@ -401,6 +412,7 @@ describe("runFetchPipeline", () => {
         totalSaved: 0,
         sectionCount: 0,
         titleSectionCount: 0,
+        emojiCount: 0,
       });
 
       const result = await runFetchPipeline({});
@@ -411,6 +423,7 @@ describe("runFetchPipeline", () => {
           totalSaved: 0,
           sectionCount: 0,
           titleSectionCount: 0,
+          emojiCount: 0,
         },
       });
 

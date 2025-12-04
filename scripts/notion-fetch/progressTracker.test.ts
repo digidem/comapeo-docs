@@ -14,6 +14,20 @@ vi.mock("./spinnerManager", () => ({
   },
 }));
 
+// Helper to create a mock spinner with all required Ora properties
+const createMockSpinner = () =>
+  ({
+    text: "",
+    succeed: vi.fn(),
+    fail: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+    clear: vi.fn(),
+    render: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  }) as any;
+
 describe("ProgressTracker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,11 +93,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should update spinner text", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 10, operation: "images" });
@@ -120,11 +130,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should update spinner text with progress", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 10, operation: "images" });
@@ -137,11 +143,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should finish when all items are complete", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 2, operation: "images" });
@@ -168,11 +170,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should calculate ETA based on average time per item", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 10, operation: "images" });
@@ -187,11 +185,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should not show ETA when all items are in progress or complete", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 3, operation: "images" });
@@ -234,11 +228,7 @@ describe("ProgressTracker", () => {
 
   describe("finish", () => {
     it("should show success message when no failures", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 2, operation: "images" });
@@ -254,11 +244,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should show failure summary when there are failures", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 3, operation: "images" });
@@ -276,11 +262,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should not finish twice", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 1, operation: "images" });
@@ -298,11 +280,7 @@ describe("ProgressTracker", () => {
 
   describe("fail", () => {
     it("should fail the tracker with custom message", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 10, operation: "images" });
@@ -314,11 +292,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should use default message if none provided", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 10, operation: "images" });
@@ -338,11 +312,7 @@ describe("ProgressTracker", () => {
 
   describe("duration formatting", () => {
     it("should format milliseconds correctly", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 1, operation: "images" });
@@ -357,11 +327,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should format seconds correctly", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 1, operation: "images" });
@@ -376,11 +342,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should format minutes and seconds correctly", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 1, operation: "images" });
@@ -395,11 +357,7 @@ describe("ProgressTracker", () => {
     });
 
     it("should format whole minutes correctly", () => {
-      const mockSpinner = {
-        text: "",
-        succeed: vi.fn(),
-        fail: vi.fn(),
-      };
+      const mockSpinner = createMockSpinner();
       vi.mocked(SpinnerManager.create).mockReturnValue(mockSpinner);
 
       const tracker = new ProgressTracker({ total: 1, operation: "images" });

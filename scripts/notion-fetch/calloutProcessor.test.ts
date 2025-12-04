@@ -72,9 +72,18 @@ describe("calloutProcessor", () => {
       const calloutProperties = {
         rich_text: [
           {
-            type: "text",
-            text: { content: "This is a callout without icon" },
+            type: "text" as const,
+            text: { content: "This is a callout without icon", link: null },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
             plain_text: "This is a callout without icon",
+            href: null,
           },
         ],
         color: "blue_background" as const,
@@ -102,9 +111,18 @@ describe("calloutProcessor", () => {
         const calloutProperties = {
           rich_text: [
             {
-              type: "text",
-              text: { content: "Test content" },
+              type: "text" as const,
+              text: { content: "Test content", link: null },
+              annotations: {
+                bold: false,
+                italic: false,
+                strikethrough: false,
+                underline: false,
+                code: false,
+                color: "default" as const,
+              },
               plain_text: "Test content",
+              href: null,
             },
           ],
           color,
@@ -121,9 +139,21 @@ describe("calloutProcessor", () => {
       const calloutProperties = {
         rich_text: [
           {
-            type: "text",
-            text: { content: "**Important Note:**\nThis is the content" },
+            type: "text" as const,
+            text: {
+              content: "**Important Note:**\nThis is the content",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
             plain_text: "**Important Note:**\nThis is the content",
+            href: null,
           },
         ],
         color: "default" as const,
@@ -141,12 +171,22 @@ describe("calloutProcessor", () => {
       const calloutProperties = {
         rich_text: [
           {
-            type: "text",
+            type: "text" as const,
             text: {
               content: "**Heads up:** Remember to `bun install` before running",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
             },
             plain_text:
               "**Heads up:** Remember to `bun install` before running",
+            href: null,
           },
         ],
         color: "yellow_background" as const,
@@ -170,14 +210,32 @@ describe("calloutProcessor", () => {
       const calloutProperties = {
         rich_text: [
           {
-            type: "text",
-            text: { content: "First part " },
+            type: "text" as const,
+            text: { content: "First part ", link: null },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
             plain_text: "First part ",
+            href: null,
           },
           {
-            type: "text",
-            text: { content: "second part" },
+            type: "text" as const,
+            text: { content: "second part", link: null },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
             plain_text: "second part",
+            href: null,
           },
         ],
         icon: {
@@ -255,16 +313,25 @@ describe("calloutProcessor", () => {
         callout: {
           rich_text: [
             {
-              type: "text",
-              text: { content: "See screen capture below" },
+              type: "text" as const,
+              text: { content: "See screen capture below", link: null },
+              annotations: {
+                bold: false,
+                italic: false,
+                strikethrough: false,
+                underline: false,
+                code: false,
+                color: "default" as const,
+              },
               plain_text: "See screen capture below",
+              href: null,
             },
           ],
           icon: {
-            type: "emoji",
+            type: "emoji" as const,
             emoji: "👁️",
           },
-          color: "green_background",
+          color: "green_background" as const,
         },
       };
 
@@ -282,9 +349,18 @@ describe("calloutProcessor", () => {
         paragraph: {
           rich_text: [
             {
-              type: "text",
-              text: { content: "Regular paragraph" },
+              type: "text" as const,
+              text: { content: "Regular paragraph", link: null },
+              annotations: {
+                bold: false,
+                italic: false,
+                strikethrough: false,
+                underline: false,
+                code: false,
+                color: "default" as const,
+              },
               plain_text: "Regular paragraph",
+              href: null,
             },
           ],
         },

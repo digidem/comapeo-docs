@@ -17,7 +17,7 @@ const imageminBufferMock = vi
 const jpegtranMock = vi.fn(() => ({ name: "jpegtran" }));
 const svgoMock = vi.fn(() => ({ name: "svgo" }));
 const webpMock = vi.fn(() => ({ name: "webp" }));
-const spawnMock = vi.fn(() => createFakeChildProcess(spawnScenarios.shift()));
+const spawnMock = vi.fn((..._args: any[]) => createFakeChildProcess(spawnScenarios.shift()));
 
 vi.mock("imagemin", () => ({
   default: {

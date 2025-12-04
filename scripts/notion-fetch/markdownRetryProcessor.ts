@@ -283,8 +283,9 @@ export async function processMarkdownWithRetry(
     const attemptLabel =
       attempt === 0 ? safeFilename : `${safeFilename}-retry-${attempt}`;
 
-    // Safety check: Ensure we have content to process
-    if (!currentSource || typeof currentSource !== "string") {
+    // Safety check: Ensure we have valid content to process
+    // Note: Empty strings are valid (pages with only title or filtered content)
+    if (currentSource == null || typeof currentSource !== "string") {
       throw new Error(
         `Unable to load markdown content for ${pageTitle} (attempt ${attempt + 1}): content is ${typeof currentSource}`
       );

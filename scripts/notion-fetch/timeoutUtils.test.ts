@@ -147,7 +147,9 @@ describe("timeoutUtils", () => {
     });
 
     it("should log warning when timeout occurs", async () => {
-      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
       const promise = new Promise(() => {
         /* never resolves */
       });

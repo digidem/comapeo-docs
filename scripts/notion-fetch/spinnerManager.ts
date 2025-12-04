@@ -74,7 +74,10 @@ class SpinnerManager {
       frame: () => "",
       isSpinning: false,
       indent: 0,
-      spinner: { frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], interval: 80 } as Spinner,
+      spinner: {
+        frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+        interval: 80,
+      } as Spinner,
       color: "cyan" as const,
       interval: 0,
       prefixText: "",

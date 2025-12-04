@@ -9,6 +9,7 @@
  */
 
 import chalk from "chalk";
+import { writeFileSync } from "node:fs";
 import {
   validateAndSanitizeImageUrl,
   createFallbackImageMarkdown,
@@ -161,11 +162,7 @@ export function extractImageMatches(sourceMarkdown: string): ImageMatch[] {
     );
 
     try {
-      require("node:fs").writeFileSync(
-        "/tmp/test-regex-input.md",
-        plainString,
-        "utf-8"
-      );
+      writeFileSync("/tmp/test-regex-input.md", plainString, "utf-8");
       debugS3(`Saved actual input to /tmp/test-regex-input.md`);
     } catch (e) {
       debugS3(`Failed to save debug file: ${e}`);

@@ -538,7 +538,9 @@ Some text after
 
       expect(result.stats.totalFailures).toBe(1);
       // When the processor rejects, markdown remains unchanged but failure is counted
-      expect(result.markdown).toContain("![boom](https://example.com/explode.png)");
+      expect(result.markdown).toContain(
+        "![boom](https://example.com/explode.png)"
+      );
     });
 
     it("should finish progress tracker when images are processed", async () => {
@@ -552,6 +554,26 @@ Some text after
       expect(trackerInstance.completeItem).toHaveBeenCalled();
       // finish is not invoked by processBatch; ensure tracker exists and was advanced
       expect(trackerInstance.finish).not.toHaveBeenCalled();
+    });
+
+    it("should not throw ReferenceError when DEBUG_S3_IMAGES is enabled on large markdown", () => {
+      // This test ensures that the debug path in extractImageMatches doesn't use
+      // require() which is not available in ESM modules
+      const originalEnv = process.env.DEBUG_S3_IMAGES;
+      try {
+        process.env.DEBUG_S3_IMAGES = "true";
+
+        // Create large markdown >700KB to trigger the debug branch
+        const largeMarkdown = "x".repeat(750_000);
+        const imageMarkdown =
+          "![test](https://prod-files-secure.s3.us-west-2.amazonaws.com/test.png)";
+        const markdown = `${largeMarkdown}\n${imageMarkdown}`;
+
+        // This should not throw ReferenceError: require is not defined
+        expect(() => extractImageMatches(markdown)).not.toThrow(ReferenceError);
+      } finally {
+        process.env.DEBUG_S3_IMAGES = originalEnv;
+      }
     });
   });
 });

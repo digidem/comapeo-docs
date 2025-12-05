@@ -14,6 +14,39 @@ const DEBUG_S3_IMAGES =
   (process.env.DEBUG_S3_IMAGES ?? "").toLowerCase() === "true";
 
 /**
+ * Feature flag to enable/disable the retry-based image processing system.
+ *
+ * **Purpose**: Allows safe rollback to simpler single-pass processing if issues occur.
+ *
+ * **Default**: `true` (retry system enabled)
+ *
+ * **Usage**:
+ * - Set to `"true"` (default): Use intelligent retry loop with progress validation
+ * - Set to `"false"`: Use simple single-pass processing (faster, no retry safety net)
+ *
+ * **When to disable**:
+ * - If retry loop causes performance degradation
+ * - If issues with retry logic are discovered in production
+ * - For debugging/testing simpler processing flow
+ *
+ * **Environment Variable**: `ENABLE_RETRY_IMAGE_PROCESSING`
+ *
+ * @example
+ * // Enable retry processing (default)
+ * ENABLE_RETRY_IMAGE_PROCESSING=true bun run notion:fetch
+ *
+ * @example
+ * // Disable retry processing (rollback to simple mode)
+ * ENABLE_RETRY_IMAGE_PROCESSING=false bun run notion:fetch
+ *
+ * @see {@link processMarkdownWithRetry} - Retry-based processing (when enabled)
+ * @see {@link processMarkdownSinglePass} - Simple processing (when disabled)
+ */
+const ENABLE_RETRY_IMAGE_PROCESSING =
+  (process.env.ENABLE_RETRY_IMAGE_PROCESSING ?? "true").toLowerCase() ===
+  "true";
+
+/**
  * Maximum number of retry attempts for image processing when S3 URLs remain.
  * Can be configured via MAX_IMAGE_RETRIES environment variable.
  * Default: 3 attempts (initial + 2 retries)
@@ -506,4 +539,203 @@ export async function processMarkdownWithRetry(
     containsS3: finalDiagnostics.s3Matches > 0,
     retryAttempts: actualRetryCount, // Number of retries (0 if succeeded on first attempt)
   };
+}
+
+/**
+ * Process markdown content with simple single-pass image processing (no retries).
+ *
+ * This is the fallback function used when `ENABLE_RETRY_IMAGE_PROCESSING=false`.
+ * It processes content in a single pass without retry logic, making it faster but
+ * less robust to transient issues like regex bugs or timing problems.
+ *
+ * **Processing Pipeline** (single pass):
+ * 1. Process callouts (convert Notion callouts to Docusaurus admonitions)
+ * 2. Process and replace images (fetch S3 images and save locally)
+ * 3. Apply emoji mappings (replace custom emoji references)
+ * 4. Validate and fix remaining images (final S3 URL cleanup)
+ *
+ * **Compared to retry-based processing**:
+ * - ✅ Faster execution (no retry overhead)
+ * - ❌ No automatic recovery from transient failures
+ * - ❌ No progress validation
+ * - ❌ May leave S3 URLs in output if initial processing fails
+ *
+ * @param markdownContent - Initial markdown content to process (from Notion API)
+ * @param pageContext - Page metadata for logging and debugging
+ * @param pageContext.pageId - Notion page ID for emoji processing
+ * @param pageContext.pageTitle - Page title for user-friendly logging
+ * @param pageContext.safeFilename - Sanitized filename for image downloads
+ * @param rawBlocks - Raw Notion blocks for callout and emoji processing
+ * @param emojiMap - Pre-processed custom emoji mappings from block-level emojis
+ * @param retryMetrics - Optional metrics tracking object (not used in single-pass mode)
+ *
+ * @returns Promise resolving to processing results
+ * @returns result.content - Final processed markdown content
+ * @returns result.totalSaved - Total bytes saved from image downloads
+ * @returns result.fallbackEmojiCount - Number of fallback emojis processed
+ * @returns result.containsS3 - Whether final content still contains S3 URLs
+ * @returns result.retryAttempts - Always 0 (no retries in single-pass mode)
+ *
+ * @see {@link processMarkdownWithRetry} - Retry-based alternative (when flag enabled)
+ * @see {@link ENABLE_RETRY_IMAGE_PROCESSING} - Feature flag controlling which function is used
+ */
+export async function processMarkdownSinglePass(
+  markdownContent: string,
+  pageContext: {
+    pageId: string;
+    pageTitle: string;
+    safeFilename: string;
+  },
+  rawBlocks: any[],
+  emojiMap: Map<string, string>,
+  retryMetrics?: RetryMetrics
+): Promise<{
+  content: string;
+  totalSaved: number;
+  fallbackEmojiCount: number;
+  containsS3: boolean;
+  retryAttempts: number;
+}> {
+  const { pageId, pageTitle, safeFilename } = pageContext;
+
+  let workingContent = markdownContent;
+  let totalSaved = 0;
+  let fallbackEmojiCount = 0;
+
+  console.log(
+    chalk.gray(`  ℹ️  Using single-pass processing (retry disabled)`)
+  );
+
+  // Process callouts
+  if (rawBlocks && rawBlocks.length > 0) {
+    workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
+    console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
+  }
+
+  // Process and replace images
+  const imageResult = await processAndReplaceImages(
+    workingContent,
+    safeFilename
+  );
+  workingContent = imageResult.markdown;
+  totalSaved += imageResult.stats.totalSaved;
+
+  // Apply emoji mappings
+  if (emojiMap.size > 0) {
+    workingContent = EmojiProcessor.applyEmojiMappings(
+      workingContent,
+      emojiMap
+    );
+    console.log(
+      chalk.green(
+        `  ↳ Applied ${emojiMap.size} custom emoji mappings to markdown`
+      )
+    );
+  }
+
+  // Process fallback emojis
+  if (emojiMap.size === 0) {
+    const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(
+      pageId,
+      workingContent
+    );
+    if (fallbackEmojiResult) {
+      workingContent = fallbackEmojiResult.content;
+      totalSaved += fallbackEmojiResult.totalSaved ?? 0;
+      fallbackEmojiCount += fallbackEmojiResult.processedCount ?? 0;
+    }
+  }
+
+  // Validate and fix remaining images (final pass)
+  workingContent = await validateAndFixRemainingImages(
+    workingContent,
+    safeFilename
+  );
+
+  const finalDiagnostics = getImageDiagnostics(workingContent);
+
+  // Warn if S3 URLs remain (but don't retry in single-pass mode)
+  if (finalDiagnostics.s3Matches > 0) {
+    console.warn(
+      chalk.yellow(
+        `  ⚠️  ${finalDiagnostics.s3Matches} S3 URL(s) remain in ${pageTitle} (single-pass mode, no retries)`
+      )
+    );
+    console.warn(
+      chalk.yellow(
+        `  💡 Tip: Enable retry mode with ENABLE_RETRY_IMAGE_PROCESSING=true for automatic recovery`
+      )
+    );
+  }
+
+  return {
+    content: workingContent,
+    totalSaved,
+    fallbackEmojiCount,
+    containsS3: finalDiagnostics.s3Matches > 0,
+    retryAttempts: 0, // No retries in single-pass mode
+  };
+}
+
+/**
+ * Process markdown content using the appropriate strategy based on feature flag.
+ *
+ * This is the main entry point for markdown processing. It automatically selects
+ * between retry-based processing (default) and single-pass processing based on
+ * the `ENABLE_RETRY_IMAGE_PROCESSING` environment variable.
+ *
+ * **Behavior**:
+ * - If `ENABLE_RETRY_IMAGE_PROCESSING=true` (default): Uses {@link processMarkdownWithRetry}
+ * - If `ENABLE_RETRY_IMAGE_PROCESSING=false`: Uses {@link processMarkdownSinglePass}
+ *
+ * **When to use which mode**:
+ * - **Retry mode (default)**: Production use, handles transient failures automatically
+ * - **Single-pass mode**: Debugging, performance testing, or emergency rollback
+ *
+ * @param markdownContent - Initial markdown content to process
+ * @param pageContext - Page metadata for logging and debugging
+ * @param rawBlocks - Raw Notion blocks for callout and emoji processing
+ * @param emojiMap - Pre-processed custom emoji mappings
+ * @param retryMetrics - Optional metrics tracking object
+ *
+ * @returns Promise resolving to processing results (same interface for both modes)
+ *
+ * @see {@link ENABLE_RETRY_IMAGE_PROCESSING} - Feature flag controlling behavior
+ * @see {@link processMarkdownWithRetry} - Retry-based processing
+ * @see {@link processMarkdownSinglePass} - Single-pass processing
+ */
+export async function processMarkdown(
+  markdownContent: string,
+  pageContext: {
+    pageId: string;
+    pageTitle: string;
+    safeFilename: string;
+  },
+  rawBlocks: any[],
+  emojiMap: Map<string, string>,
+  retryMetrics?: RetryMetrics
+): Promise<{
+  content: string;
+  totalSaved: number;
+  fallbackEmojiCount: number;
+  containsS3: boolean;
+  retryAttempts: number;
+}> {
+  if (ENABLE_RETRY_IMAGE_PROCESSING) {
+    return processMarkdownWithRetry(
+      markdownContent,
+      pageContext,
+      rawBlocks,
+      emojiMap,
+      retryMetrics
+    );
+  } else {
+    return processMarkdownSinglePass(
+      markdownContent,
+      pageContext,
+      rawBlocks,
+      emojiMap,
+      retryMetrics
+    );
+  }
 }

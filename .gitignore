@@ -84,3 +84,6 @@ NEXT_STEPS.md
 # The project uses TypeScript (.ts) - compiled .js files should not be committed
 *.js
 !eslint.config.mjs
+
+# Runtime metrics files
+retry-metrics.json

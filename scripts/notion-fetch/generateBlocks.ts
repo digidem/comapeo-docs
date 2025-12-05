@@ -35,10 +35,7 @@ import {
   getImageDiagnostics,
   type ImageProcessingStats,
 } from "./imageReplacer";
-import {
-  processMarkdownWithRetry,
-  type RetryMetrics,
-} from "./markdownRetryProcessor";
+import { processMarkdown, type RetryMetrics } from "./markdownRetryProcessor";
 import {
   processToggleSection,
   processHeadingSection,
@@ -301,8 +298,8 @@ async function processSinglePage(
     const markdownString = n2m.toMarkdownString(markdown);
 
     if (markdownString?.parent) {
-      // Use the extracted retry processing function
-      const result = await processMarkdownWithRetry(
+      // Use the markdown processing function (automatically selects retry or single-pass based on feature flag)
+      const result = await processMarkdown(
         markdownString.parent,
         {
           pageId: page.id,
@@ -1011,6 +1008,64 @@ export async function generateBlocks(
           `   📈 Avg attempts/page: ${retryMetrics.averageAttemptsPerPage.toFixed(1)}`
         )
       );
+
+      // Save retry metrics to JSON file for production monitoring
+      try {
+        const metricsPath = path.join(__dirname, "../../retry-metrics.json");
+        const retryEnabled =
+          (
+            process.env.ENABLE_RETRY_IMAGE_PROCESSING ?? "true"
+          ).toLowerCase() === "true";
+        const maxRetries = parseInt(process.env.MAX_IMAGE_RETRIES ?? "3", 10);
+
+        const metricsData = {
+          timestamp: new Date().toISOString(),
+          configuration: {
+            retryEnabled,
+            maxRetries,
+            concurrency: 5,
+          },
+          summary: {
+            totalPagesProcessed: totalPages,
+            totalPagesWithRetries: retryMetrics.totalPagesWithRetries,
+            retrySuccessRate:
+              retryMetrics.totalPagesWithRetries > 0
+                ? (
+                    (retryMetrics.successfulRetries /
+                      retryMetrics.totalPagesWithRetries) *
+                    100
+                  ).toFixed(1) + "%"
+                : "N/A",
+          },
+          metrics: {
+            ...retryMetrics,
+            retryFrequency:
+              totalPages > 0
+                ? (
+                    (retryMetrics.totalPagesWithRetries / totalPages) *
+                    100
+                  ).toFixed(1) + "%"
+                : "0%",
+          },
+        };
+
+        fs.writeFileSync(
+          metricsPath,
+          JSON.stringify(metricsData, null, 2),
+          "utf-8"
+        );
+        console.info(
+          chalk.gray(
+            `   💾 Retry metrics saved to ${path.basename(metricsPath)}`
+          )
+        );
+      } catch (metricsError) {
+        console.warn(
+          chalk.yellow(
+            `   ⚠️  Failed to save retry metrics: ${metricsError instanceof Error ? metricsError.message : String(metricsError)}`
+          )
+        );
+      }
     }
 
     if (cacheStats.validEntries > 0) {

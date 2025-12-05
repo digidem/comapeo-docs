@@ -378,7 +378,8 @@ export async function processMarkdownWithRetry(
       // Track failed retry metrics
       if (retryMetrics) {
         retryMetrics.totalPagesWithRetries++;
-        retryMetrics.totalRetryAttempts += attempt;
+        // Use actual retry count (attempt - 1) since we've incremented past the last retry
+        retryMetrics.totalRetryAttempts += attempt - 1;
         retryMetrics.failedRetries++;
       }
       break;
@@ -481,6 +482,7 @@ export async function processMarkdownWithRetry(
   // Scenario 1: Success on first attempt (attempt=0, no loop increment) → return 0 ✓
   // Scenario 2: Success after 1 retry (attempt=1, broke at success check) → return 1 ✓
   // Scenario 3: Hit max attempts (attempt=3 after increment, but only did 2 retries) → return 2 ✓
+  //   Note: This matches the metrics update at line 382 which also uses (attempt - 1)
   // Scenario 4: Aborted due to no progress (variable, depends on when detected)
   const actualRetryCount =
     attempt >= MAX_IMAGE_REFRESH_ATTEMPTS ? attempt - 1 : attempt;

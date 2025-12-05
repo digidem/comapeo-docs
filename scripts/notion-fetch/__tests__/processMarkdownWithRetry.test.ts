@@ -1995,11 +1995,12 @@ describe("processMarkdownWithRetry", () => {
         );
 
         // Verify retry metrics
-        // Pages with retries: p2 (1), p3 (2), p5 (3 failed) = 3 pages
+        // Pages with retries: p2 (1), p3 (2), p5 (2 failed at max attempts) = 3 pages
         expect(retryMetrics.totalPagesWithRetries).toBe(3);
 
-        // Total retry attempts: p2(1) + p3(2) + p5(3) = 6
-        expect(retryMetrics.totalRetryAttempts).toBe(6);
+        // Total retry attempts: p2(1) + p3(2) + p5(2) = 5
+        // Note: p5 performs 2 retries (3 total attempts) before hitting MAX_IMAGE_REFRESH_ATTEMPTS
+        expect(retryMetrics.totalRetryAttempts).toBe(5);
 
         // Successful retries: p2, p3 = 2
         expect(retryMetrics.successfulRetries).toBe(2);

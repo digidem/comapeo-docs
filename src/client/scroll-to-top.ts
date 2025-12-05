@@ -26,7 +26,8 @@ if (ExecutionEnvironment.canUseDOM) {
     {
       selector: ".theme-doc-breadcrumbs",
       shouldScrollToTop: (target: HTMLElement): boolean => {
-        // Check if clicked element is the active/current breadcrumb item
+        // Only scroll when clicking the active/current breadcrumb item
+        // This prevents scrolling when clicking on navigation links or empty space
         return (
           // Direct class check on the clicked element
           target.classList?.contains("breadcrumbs__item--active") ||
@@ -35,15 +36,15 @@ if (ExecutionEnvironment.canUseDOM) {
           // Check for aria-current attribute (accessibility marker)
           target.getAttribute("aria-current") === "page" ||
           target.closest('[aria-current="page"]') !== null ||
-          // Check if parent <li> is the last breadcrumb item
+          // Check if parent <li> is the last breadcrumb item (usually the active one)
           (target.closest(".breadcrumbs__item") !== null &&
             target.closest(".breadcrumbs__item") ===
               target
                 .closest(".breadcrumbs")
-                ?.querySelector(".breadcrumbs__item:last-child")) ||
-          // If not clicking a link and not active breadcrumb, still scroll
-          // (clicking container or empty space)
-          target.closest("a") === null
+                ?.querySelector(".breadcrumbs__item:last-child") &&
+            // Additional check: ensure we're NOT clicking a link within the last item
+            // (some themes might have links in the last breadcrumb)
+            target.closest("a") === null)
         );
       },
     },

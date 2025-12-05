@@ -26,26 +26,15 @@ if (ExecutionEnvironment.canUseDOM) {
     {
       selector: ".theme-doc-breadcrumbs",
       shouldScrollToTop: (target: HTMLElement): boolean => {
-        // Only scroll when clicking the active/current breadcrumb item
-        // This prevents scrolling when clicking on navigation links or empty space
-        return (
-          // Direct class check on the clicked element
-          target.classList?.contains("breadcrumbs__item--active") ||
-          // Check parent <li> for active class
-          target.closest(".breadcrumbs__item--active") !== null ||
-          // Check for aria-current attribute (accessibility marker)
-          target.getAttribute("aria-current") === "page" ||
-          target.closest('[aria-current="page"]') !== null ||
-          // Check if parent <li> is the last breadcrumb item (usually the active one)
-          (target.closest(".breadcrumbs__item") !== null &&
-            target.closest(".breadcrumbs__item") ===
-              target
-                .closest(".breadcrumbs")
-                ?.querySelector(".breadcrumbs__item:last-child") &&
-            // Additional check: ensure we're NOT clicking a link within the last item
-            // (some themes might have links in the last breadcrumb)
-            target.closest("a") === null)
-        );
+        // First check: Never scroll if clicking on or inside a link (navigation)
+        if (target.closest("a") !== null) {
+          return false;
+        }
+
+        // Second check: Only scroll if clicking inside the active breadcrumb item
+        // Docusaurus renders active breadcrumb as: <li class="breadcrumbs__item--active"><span>Current Page</span></li>
+        // This prevents scrolling when clicking on empty space around breadcrumbs
+        return target.closest(".breadcrumbs__item--active") !== null;
       },
     },
     {

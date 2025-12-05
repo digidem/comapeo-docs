@@ -299,7 +299,7 @@ const config: Config = {
     ],
   ],
 
-  clientModules: [require.resolve("./src/client/breadcrumbs-scroll-to-top.ts")],
+  clientModules: [require.resolve("./src/client/scroll-to-top.ts")],
 
   themeConfig: {
     // Replace with your project's social card

@@ -409,6 +409,13 @@ article {
   border-bottom: 1px solid #e8e8e8;
 }
 
+/* Lower z-index on mobile to prevent overlapping the mobile sidebar/menu */
+@media (max-width: 996px) {
+  .theme-doc-breadcrumbs {
+    z-index: 90; /* Below mobile sidebar (typically 200+) */
+  }
+}
+
 /* Refined hover effect - subtle but visible */
 .theme-doc-breadcrumbs:hover {
   background-color: #f8f9fa;

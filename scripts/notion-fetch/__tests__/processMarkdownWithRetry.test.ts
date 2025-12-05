@@ -338,7 +338,7 @@ describe("processMarkdownWithRetry", () => {
       );
 
       expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
-      expect(result.retryAttempts).toBe(1); // one retry attempt allowed by env override
+      expect(result.retryAttempts).toBe(0); // 0 retries (no-progress detected on first attempt)
 
       delete process.env.MAX_IMAGE_RETRIES;
     });
@@ -547,7 +547,7 @@ describe("processMarkdownWithRetry", () => {
 
         // With no progress, should process once then abort
         expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
-        expect(result.retryAttempts).toBe(1); // 1 retry attempted before detecting no progress
+        expect(result.retryAttempts).toBe(0); // 0 retries (no-progress detected on first attempt)
         expect(result.containsS3).toBe(true);
       });
 
@@ -1260,7 +1260,7 @@ describe("processMarkdownWithRetry", () => {
           }
           return {
             markdown: fullSuccess,
-            stats: { successfulImages: 2, totalFailures: 0, totalSaved: 1024 },
+            stats: { successfulImages: 1, totalFailures: 0, totalSaved: 512 }, // Per-attempt delta, not cumulative
           };
         });
 
@@ -1296,7 +1296,7 @@ describe("processMarkdownWithRetry", () => {
 
         expect(result.containsS3).toBe(false);
         expect(result.retryAttempts).toBe(1);
-        expect(result.totalSaved).toBe(1024);
+        expect(result.totalSaved).toBe(1024); // 512 + 512 = 1024 (cumulative across attempts)
       });
 
       it("should handle persistent partial failures", async () => {
@@ -1362,9 +1362,9 @@ describe("processMarkdownWithRetry", () => {
           return {
             markdown,
             stats: {
-              successfulImages: attemptCount,
-              totalFailures: 3 - attemptCount,
-              totalSaved: attemptCount * 512,
+              successfulImages: 1, // Each attempt processes 1 image
+              totalFailures: Math.max(0, 3 - attemptCount),
+              totalSaved: 512, // Constant delta per attempt
             },
           };
         });
@@ -1410,12 +1410,19 @@ describe("processMarkdownWithRetry", () => {
         expect(processMarkdownWithRetry).toBeDefined();
 
         const s3Content = `![s3](${generateRealisticS3Url("fail.png")})`;
+        let attemptCount = 0;
 
-        processAndReplaceImages.mockResolvedValue({
-          markdown: s3Content,
-          stats: { successfulImages: 0, totalFailures: 1, totalSaved: 0 },
+        // Return different content each time to trigger retries
+        processAndReplaceImages.mockImplementation(async () => {
+          attemptCount++;
+          return {
+            markdown: `${s3Content}-attempt-${attemptCount}`, // Different content each attempt
+            stats: { successfulImages: 0, totalFailures: 1, totalSaved: 0 },
+          };
         });
-        validateAndFixRemainingImages.mockResolvedValue(s3Content);
+        validateAndFixRemainingImages.mockImplementation(
+          async (content: string) => content
+        );
         hasS3Urls.mockReturnValue(true);
         getImageDiagnostics.mockReturnValue({
           totalMatches: 1,
@@ -1439,7 +1446,7 @@ describe("processMarkdownWithRetry", () => {
         // Error state should be preserved
         expect(result.containsS3).toBe(true);
         expect(result.retryAttempts).toBeGreaterThan(0);
-        expect(result.content).toBe(s3Content);
+        expect(result.content).toContain(s3Content); // Content will have attempt suffix
       });
 
       it("should track failure stats accurately across retries", async () => {
@@ -1829,6 +1836,9 @@ describe("processMarkdownWithRetry", () => {
         const s3Content = `![s3](${generateRealisticS3Url("test.png")})`;
         const fixedContent = "![local](/images/test.png)";
 
+        // Track attempt counts per page for fail pages to make progress
+        const attemptCounts = new Map<string, number>();
+
         processAndReplaceImages.mockImplementation(
           async (content: string, attemptLabel: string) => {
             const page = pages.find((p) => attemptLabel.startsWith(p.id));
@@ -1843,9 +1853,13 @@ describe("processMarkdownWithRetry", () => {
                 },
               };
             }
-            // Fail pages return same S3 content (stuck)
+            // Fail pages return different content each time to trigger retries
+            const pageId = attemptLabel.split("-")[0];
+            const currentAttempt = (attemptCounts.get(pageId) || 0) + 1;
+            attemptCounts.set(pageId, currentAttempt);
+
             return {
-              markdown: s3Content,
+              markdown: `${s3Content}-attempt-${currentAttempt}`, // Different content each attempt
               stats: { successfulImages: 0, totalFailures: 1, totalSaved: 0 },
             };
           }
@@ -1896,8 +1910,8 @@ describe("processMarkdownWithRetry", () => {
         });
 
         // Success pages: 3 * 1 = 3 attempts
-        // Fail pages: 2 * 1 = 2 attempts (no-progress detection aborts early)
-        expect(processAndReplaceImages).toHaveBeenCalledTimes(5);
+        // Fail pages: 2 * 3 = 6 attempts (each makes progress, exhausts max retries)
+        expect(processAndReplaceImages).toHaveBeenCalledTimes(9);
       });
     });
 

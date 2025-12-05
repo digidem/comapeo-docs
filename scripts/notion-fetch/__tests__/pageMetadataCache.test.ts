@@ -369,7 +369,13 @@ describe("pageMetadataCache", () => {
     it("should add new page to cache", () => {
       const cache = createEmptyCache("hash");
 
-      updatePageInCache(cache, "page-1", "2024-01-01", ["/docs/test.md"]);
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01",
+        ["/docs/test.md"],
+        false
+      );
 
       expect(cache.pages["page-1"]).toBeDefined();
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-01");
@@ -384,7 +390,7 @@ describe("pageMetadataCache", () => {
         processedAt: "2024-01-01",
       };
 
-      updatePageInCache(cache, "page-1", "2024-01-02", ["/docs/new.md"]);
+      updatePageInCache(cache, "page-1", "2024-01-02", ["/docs/new.md"], false);
 
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-02");
       expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
@@ -396,15 +402,25 @@ describe("pageMetadataCache", () => {
     it("should merge and deduplicate output paths across languages", () => {
       const cache = createEmptyCache("hash");
 
-      updatePageInCache(cache, "page-1", "2024-01-01", ["/docs/page-1.md"]);
-      updatePageInCache(cache, "page-1", "2024-01-01", [
-        "/docs/fr/page-1.md",
-        "/docs/page-1.md", // duplicate should be ignored
-      ]);
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01",
+        ["/docs/page-1.md"],
+        false
+      );
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01",
+        ["/docs/fr/page-1.md", "/docs/page-1.md", "/docs/page-2.md"],
+        false
+      );
 
       expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
         "/docs/fr/page-1.md",
         "/docs/page-1.md",
+        "/docs/page-2.md",
       ]);
     });
   });

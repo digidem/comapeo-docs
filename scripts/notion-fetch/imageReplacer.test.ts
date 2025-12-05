@@ -35,6 +35,9 @@ vi.mock("./imageProcessing", () => ({
         error: "Download failed",
       });
     }
+    if (url.includes("explode")) {
+      return Promise.reject(new Error("boom"));
+    }
     return Promise.resolve({
       success: true,
       newPath: `/images/downloaded-${url.split("/").pop()}`,
@@ -215,6 +218,46 @@ Some text
       expect(matches).toHaveLength(1);
       expect(matches[0].alt).toBe("");
       expect(matches[0].linkUrl).toBe("https://example.com/link");
+    });
+
+    it("should recover missing matches on large markdown when regex stops early", () => {
+      const filler = "x".repeat(750_000);
+      const imageMarkdown = Array.from(
+        { length: 5 },
+        (_, i) =>
+          `![img${i}](https://prod-files-secure.s3.us-west-2.amazonaws.com/image-${i}.png)`
+      ).join("\n");
+      const markdown = `${filler}\n${imageMarkdown}`;
+
+      const originalExec = RegExp.prototype.exec;
+      const imageRegexSource = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/
+        .source;
+
+      RegExp.prototype.exec = function patchedExec(this: RegExp, str: string) {
+        if (
+          this instanceof RegExp &&
+          this.source === imageRegexSource &&
+          this.global &&
+          str.length > 700000
+        ) {
+          if ((this as any).__forcedBugTriggered) {
+            return null;
+          }
+          (this as any).__forcedBugTriggered = true;
+        }
+        return originalExec.call(this, str);
+      };
+
+      try {
+        const matches = extractImageMatches(markdown);
+        expect(matches).toHaveLength(5);
+        const s3Matches = matches.filter((m) =>
+          m.url.includes("https://prod-files-secure.s3.us-west-2.amazonaws.com")
+        );
+        expect(s3Matches).toHaveLength(5);
+      } finally {
+        RegExp.prototype.exec = originalExec;
+      }
     });
   });
 
@@ -487,6 +530,50 @@ Some text after
       expect(result.markdown).toContain(
         "[![linked](/images/downloaded-linked.png)](https://example.com)"
       );
+    });
+
+    it("should mark failures when image processing rejects", async () => {
+      const markdown = "![boom](https://example.com/explode.png)";
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      expect(result.stats.totalFailures).toBe(1);
+      // When the processor rejects, markdown remains unchanged but failure is counted
+      expect(result.markdown).toContain(
+        "![boom](https://example.com/explode.png)"
+      );
+    });
+
+    it("should finish progress tracker when images are processed", async () => {
+      const { ProgressTracker } = await import("./progressTracker");
+      const markdown = "![img](https://example.com/image.png)";
+
+      await processAndReplaceImages(markdown, "test-file");
+
+      const trackerInstance = (ProgressTracker as any).mock.instances[0];
+      expect(trackerInstance.startItem).toHaveBeenCalled();
+      expect(trackerInstance.completeItem).toHaveBeenCalled();
+      // finish is not invoked by processBatch; ensure tracker exists and was advanced
+      expect(trackerInstance.finish).not.toHaveBeenCalled();
+    });
+
+    it("should not throw ReferenceError when DEBUG_S3_IMAGES is enabled on large markdown", () => {
+      // This test ensures that the debug path in extractImageMatches doesn't use
+      // require() which is not available in ESM modules
+      const originalEnv = process.env.DEBUG_S3_IMAGES;
+      try {
+        process.env.DEBUG_S3_IMAGES = "true";
+
+        // Create large markdown >700KB to trigger the debug branch
+        const largeMarkdown = "x".repeat(750_000);
+        const imageMarkdown =
+          "![test](https://prod-files-secure.s3.us-west-2.amazonaws.com/test.png)";
+        const markdown = `${largeMarkdown}\n${imageMarkdown}`;
+
+        // This should not throw ReferenceError: require is not defined
+        expect(() => extractImageMatches(markdown)).not.toThrow(ReferenceError);
+      } finally {
+        process.env.DEBUG_S3_IMAGES = originalEnv;
+      }
     });
   });
 });

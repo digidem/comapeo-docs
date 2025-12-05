@@ -23,6 +23,72 @@ import {
 import { withTimeout, TimeoutError } from "./timeoutUtils";
 
 /**
+ * Type definition for axios-like error responses
+ * Supports various error formats while maintaining type safety
+ */
+interface ErrorWithResponse {
+  response?: {
+    status?: number;
+    data?: string | Record<string, unknown>;
+  };
+  message?: string;
+}
+
+/**
+ * Common error messages that indicate an expired Notion image URL (AWS S3 presigned URL)
+ * These appear in 403 responses when the URL has exceeded its 1-hour validity period
+ */
+const EXPIRATION_INDICATORS = [
+  "SignatureDoesNotMatch",
+  "Request has expired",
+  "expired",
+  "Signature expired",
+] as const;
+
+/**
+ * Helper function to detect if an error is due to an expired image URL (Issue #94)
+ *
+ * Notion image URLs are AWS S3 presigned URLs that expire after 1 hour.
+ * When expired, they return 403 Forbidden with specific error messages.
+ *
+ * @param error - The error object from axios or other HTTP client
+ * @returns true if the error indicates an expired URL, false otherwise
+ */
+export function isExpiredUrlError(error: unknown): boolean {
+  // Type guard: ensure error is an object
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const err = error as ErrorWithResponse;
+
+  // Must be a 403 error
+  if (err.response?.status !== 403) {
+    return false;
+  }
+
+  // Check response data for expiration indicators
+  const responseData =
+    typeof err.response.data === "string"
+      ? err.response.data
+      : JSON.stringify(err.response.data || "");
+
+  for (const indicator of EXPIRATION_INDICATORS) {
+    if (responseData.toLowerCase().includes(indicator.toLowerCase())) {
+      return true;
+    }
+  }
+
+  // Check error message for expiration indicators
+  const errorMessage = err.message?.toLowerCase() || "";
+  if (errorMessage.includes("expired") || errorMessage.includes("signature")) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Check if image buffer contains optimization markers indicating it's already optimized
  * Works across different image formats (PNG, JPEG, WebP, etc.)
  */
@@ -670,14 +736,14 @@ export async function downloadAndProcessImage(
   let previousAttempt: Promise<any> | null = null;
   let previousTimedOut = false;
 
-  // Overall timeout per attempt: 120 seconds
+  // Overall timeout per attempt: 300 seconds (5 minutes)
   // Must be LONGER than sum of individual timeouts to avoid false positives:
   // - Download: 30s (axios timeout)
   // - Sharp resize: 30s (withTimeout in imageProcessor.ts)
   // - Compression: 45s (withTimeout in utils.ts)
   // - Worst case total: 105s
-  // - Overall timeout: 120s (safety buffer for legitimate slow images)
-  const OVERALL_TIMEOUT_MS = 120000;
+  // - Overall timeout: 300s (generous safety buffer for slow networks/large files)
+  const OVERALL_TIMEOUT_MS = 300000;
 
   // Grace period for timed-out operations to finish disk writes
   // If the operation is truly deadlocked, we give up after this period
@@ -904,6 +970,13 @@ export async function downloadAndProcessImage(
         previousTimedOut = true;
       } else if ((error as any)?.code === "ECONNABORTED") {
         errorMessage = `Timeout downloading image ${index + 1} from ${url}`;
+      } else if (isExpiredUrlError(error)) {
+        // ✅ PHASE 2 FIX: Detect and log expired URL errors specifically (Issue #94)
+        errorMessage =
+          `❌ Image URL expired (403) for image ${index + 1}: ${url}\n` +
+          `   This indicates the image was processed more than 1 hour after URL generation.\n` +
+          `   Phase 1 reordering should prevent this - if you see this message, please report it.`;
+        console.error(chalk.red(errorMessage));
       } else if ((error as any)?.response) {
         errorMessage = `HTTP ${(error as any).response.status} error for image ${index + 1}: ${url}`;
       } else if ((error as any)?.code === "ENOTFOUND") {

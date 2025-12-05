@@ -41,7 +41,7 @@ describe("timeoutUtils", () => {
 
       const error = await rejectionPromise;
       expect(error).toBeInstanceOf(TimeoutError);
-      expect(error.message).toContain(
+      expect((error as Error).message).toContain(
         'Operation "slow operation" timed out after 1000ms'
       );
 
@@ -147,7 +147,9 @@ describe("timeoutUtils", () => {
     });
 
     it("should log warning when timeout occurs", async () => {
-      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation();
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
       const promise = new Promise(() => {
         /* never resolves */
       });
@@ -215,14 +217,12 @@ describe("timeoutUtils", () => {
 
   describe("processBatch", () => {
     it("should validate inputs", async () => {
-      // @ts-expect-error Testing invalid input
       await expect(
-        processBatch(null, async () => {}, { maxConcurrent: 1 })
+        processBatch(null as any, async () => {}, { maxConcurrent: 1 })
       ).rejects.toThrow(TypeError);
 
-      // @ts-expect-error Testing invalid input
       await expect(
-        processBatch([1, 2], "not a function", { maxConcurrent: 1 })
+        processBatch([1, 2], "not a function" as any, { maxConcurrent: 1 })
       ).rejects.toThrow(TypeError);
 
       await expect(
@@ -434,7 +434,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       const processor = async (item: number) => ({
@@ -458,7 +458,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       const processor = async (item: number) => {
@@ -492,7 +492,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       const processor = async (item: number) => {
@@ -522,7 +522,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       // Processor returns results without 'success' property
@@ -544,7 +544,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       const processor = async () => ({ success: false, error: "All fail" });
@@ -565,7 +565,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3];
       const processor = async (item: number) => {
@@ -615,7 +615,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       let resolveSlowPromise: ((value: any) => void) | null = null;
       const items = [1];
@@ -656,7 +656,7 @@ describe("timeoutUtils", () => {
       const mockTracker = {
         startItem: vi.fn(),
         completeItem: vi.fn(),
-      };
+      } as any;
 
       const items = [1, 2, 3, 4, 5];
       const processor = async (item: number) => {

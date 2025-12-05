@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { NOTION_PROPERTIES } from "../constants";
 import { installTestNotionEnv } from "../test-utils";
+import { buildFetchOneSelection } from "./buildFetchOneSelection";
 
 vi.mock("sharp", () => {
   const createPipeline = () => {
@@ -58,6 +59,48 @@ function createMockPage(title: string, id = "mock-id"): Record<string, any> {
             plain_text: title,
           },
         ],
+      },
+    },
+  };
+}
+
+function createRelationalPage({
+  id,
+  title,
+  parentIds = [],
+  childIds = [],
+  language = "English",
+  elementType = "Page",
+  order = 1,
+}: {
+  id: string;
+  title: string;
+  parentIds?: string[];
+  childIds?: string[];
+  language?: string;
+  elementType?: string;
+  order?: number;
+}): Record<string, any> {
+  return {
+    id,
+    properties: {
+      [NOTION_PROPERTIES.TITLE]: {
+        title: [{ plain_text: title }],
+      },
+      [NOTION_PROPERTIES.LANGUAGE]: {
+        select: { name: language },
+      },
+      "Parent item": {
+        relation: parentIds.map((parentId) => ({ id: parentId })),
+      },
+      "Sub-item": {
+        relation: childIds.map((childId) => ({ id: childId })),
+      },
+      [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+        select: { name: elementType },
+      },
+      [NOTION_PROPERTIES.ORDER]: {
+        number: order,
       },
     },
   };
@@ -533,5 +576,149 @@ describe("notion-fetch-one fuzzy matching", () => {
       // Should prefer "Exchange Rate API" over other exchange pages
       expect(result?.page.id).toBe("6");
     });
+  });
+});
+
+describe("buildFetchOneSelection", () => {
+  it("includes ancestor hierarchy, descendants, and translations", () => {
+    const titlePage = createRelationalPage({
+      id: "title-en",
+      title: "Title EN",
+      elementType: "Title",
+      order: 1,
+      childIds: ["toggle-en"],
+    });
+
+    const togglePage = createRelationalPage({
+      id: "toggle-en",
+      title: "Toggle EN",
+      elementType: "Toggle",
+      order: 2,
+      parentIds: ["title-en"],
+      childIds: ["page-en"],
+    });
+
+    const pageEn = createRelationalPage({
+      id: "page-en",
+      title: "Page EN",
+      elementType: "Page",
+      order: 3,
+      parentIds: ["toggle-en"],
+      childIds: ["child-en", "page-pt", "page-es", "page-fr"],
+    });
+
+    const childPage = createRelationalPage({
+      id: "child-en",
+      title: "Child EN",
+      elementType: "Page",
+      order: 4,
+      parentIds: ["page-en"],
+    });
+
+    const translationPt = createRelationalPage({
+      id: "page-pt",
+      title: "Page PT",
+      elementType: "Page",
+      order: 5,
+      parentIds: ["page-en"],
+      language: "Portuguese",
+    });
+    const translationEs = createRelationalPage({
+      id: "page-es",
+      title: "Page ES",
+      elementType: "Page",
+      order: 6,
+      parentIds: ["page-en"],
+      language: "Spanish",
+    });
+    const translationFr = createRelationalPage({
+      id: "page-fr",
+      title: "Page FR",
+      elementType: "Page",
+      order: 7,
+      parentIds: ["page-en"],
+      language: "French",
+    });
+
+    const pages = [
+      translationFr,
+      childPage,
+      titlePage,
+      translationPt,
+      pageEn,
+      togglePage,
+      translationEs,
+    ];
+
+    const { orderedPages, stats } = buildFetchOneSelection(pages, "page-en");
+
+    expect(orderedPages.map((p) => p.id)).toEqual([
+      "title-en",
+      "toggle-en",
+      "page-en",
+      "page-pt",
+      "page-es",
+      "page-fr",
+      "child-en",
+    ]);
+    expect(stats).toEqual({ ancestors: 2, descendants: 1, translations: 3 });
+  });
+
+  it("returns empty selection when root page is missing", () => {
+    const { orderedPages, stats } = buildFetchOneSelection([], "missing");
+    expect(orderedPages).toEqual([]);
+    expect(stats).toEqual({ ancestors: 0, descendants: 0, translations: 0 });
+  });
+
+  it("includes preceding title/toggle context when parent relations are missing", () => {
+    const titlePage = createRelationalPage({
+      id: "title-context",
+      title: "Guide",
+      elementType: "Title",
+      order: 1,
+    });
+    const togglePage = createRelationalPage({
+      id: "toggle-context",
+      title: "Customizing",
+      elementType: "Toggle",
+      order: 2,
+    });
+    const englishPage = createRelationalPage({
+      id: "page-en",
+      title: "Building a Custom Categories Set",
+      elementType: "Page",
+      order: 3,
+      childIds: ["page-pt"],
+    });
+    const portuguesePage = createRelationalPage({
+      id: "page-pt",
+      title: "Construindo um conjunto personalizado",
+      elementType: "Page",
+      language: "Portuguese",
+      order: 4,
+    });
+    const unrelated = createRelationalPage({
+      id: "other",
+      title: "Other Page",
+      elementType: "Page",
+      order: 99,
+    });
+
+    const pages = [
+      togglePage,
+      englishPage,
+      portuguesePage,
+      unrelated,
+      titlePage,
+    ];
+    const { orderedPages, stats } = buildFetchOneSelection(pages, "page-en");
+
+    expect(orderedPages.map((p) => p.id)).toEqual([
+      "title-context",
+      "toggle-context",
+      "page-en",
+      "page-pt",
+    ]);
+    expect(stats).toEqual({ ancestors: 0, descendants: 0, translations: 1 });
   });
 });

@@ -28,7 +28,14 @@ import { LRUCache, validateCacheSize } from "./cacheStrategies";
 import { getImageCache, logImageFailure } from "./imageProcessing";
 import { setTranslationString, getI18NPath } from "./translationManager";
 import { loadBlocksForPage, loadMarkdownForPage } from "./cacheLoaders";
-import { processAndReplaceImages } from "./imageReplacer";
+import {
+  processAndReplaceImages,
+  validateAndFixRemainingImages,
+  hasS3Urls,
+  getImageDiagnostics,
+  type ImageProcessingStats,
+} from "./imageReplacer";
+import { processMarkdown, type RetryMetrics } from "./markdownRetryProcessor";
 import {
   processToggleSection,
   processHeadingSection,
@@ -95,6 +102,15 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
 const CONTENT_PATH = path.join(__dirname, "../../docs");
 const IMAGES_PATH = path.join(__dirname, "../../static/images/");
 const locales = config.i18n.locales;
+
+// Global retry metrics tracking across all pages in a batch
+const retryMetrics: RetryMetrics = {
+  totalPagesWithRetries: 0,
+  totalRetryAttempts: 0,
+  successfulRetries: 0,
+  failedRetries: 0,
+  averageAttemptsPerPage: 0,
+};
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
 
 // I18N_PATH and getI18NPath moved to translationManager.ts
@@ -165,6 +181,7 @@ interface PageProcessingResult {
   blockCacheHits: number;
   markdownFetches: number;
   markdownCacheHits: number;
+  containsS3: boolean;
 }
 
 /**
@@ -198,12 +215,13 @@ async function processSinglePage(
   let localBlockCacheHits = 0;
   let localMarkdownFetches = 0;
   let localMarkdownCacheHits = 0;
+  let contentHasS3 = false;
 
   console.log(chalk.blue(`Processing page: ${page.id}, ${pageTitle}`));
   const pageSpinner = SpinnerManager.create(
     `Processing page ${pageProcessingIndex}/${totalPages}`,
-    120000
-  ); // 2 minute timeout per page
+    300000
+  ); // 5 minute timeout per page
 
   try {
     // Fetch raw block data first for emoji and callout processing
@@ -280,74 +298,47 @@ async function processSinglePage(
     const markdownString = n2m.toMarkdownString(markdown);
 
     if (markdownString?.parent) {
-      // Apply custom emoji mappings to the markdown content
-      if (emojiMap.size > 0) {
-        markdownString.parent = EmojiProcessor.applyEmojiMappings(
-          markdownString.parent,
-          emojiMap
-        );
-        console.log(
-          chalk.green(
-            `  ↳ Applied ${emojiMap.size} custom emoji mappings to markdown`
-          )
-        );
-      }
-
-      // Process any remaining emoji URLs in the markdown (fallback)
-      // Only run fallback if no emoji mappings were applied to avoid overwriting processed content
-      if (emojiMap.size === 0) {
-        const fallbackEmojiResult = await EmojiProcessor.processPageEmojis(
-          page.id,
-          markdownString.parent
-        );
-        if (fallbackEmojiResult) {
-          markdownString.parent = fallbackEmojiResult.content;
-          totalSaved += fallbackEmojiResult.totalSaved ?? 0;
-          emojiCount += fallbackEmojiResult.processedCount ?? 0;
-        }
-      }
-
-      // Process callouts in the markdown to convert them to Docusaurus admonitions
-      if (rawBlocks && rawBlocks.length > 0) {
-        markdownString.parent = processCalloutsInMarkdown(
-          markdownString.parent,
-          rawBlocks
-        );
-        console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
-      }
-
-      // Enhanced image processing with comprehensive fallback handling
-      const imageResult = await processAndReplaceImages(
+      // Use the markdown processing function (automatically selects retry or single-pass based on feature flag)
+      const result = await processMarkdown(
         markdownString.parent,
-        safeFilename
+        {
+          pageId: page.id,
+          pageTitle,
+          safeFilename,
+        },
+        rawBlocks,
+        emojiMap,
+        retryMetrics
       );
-      markdownString.parent = imageResult.markdown;
-      totalSaved += imageResult.stats.totalSaved;
 
-      // Sanitize content to fix malformed HTML/JSX tags
+      markdownString.parent = result.content;
+      totalSaved += result.totalSaved;
+      emojiCount += result.fallbackEmojiCount;
+      contentHasS3 = result.containsS3;
+
       markdownString.parent = sanitizeMarkdownContent(markdownString.parent);
 
       markdownString.parent = ensureBlankLineAfterStandaloneBold(
         markdownString.parent
       );
 
-      // Remove duplicate title heading if it exists
       const contentBody = removeDuplicateTitle(
         markdownString.parent,
         pageTitle
       );
 
-      // Create a mock currentSectionFolder for writeMarkdownFile
       const sectionFolderForWrite: Record<string, string | undefined> = {};
       sectionFolderForWrite[lang] = currentSectionFolderForLang;
 
-      // Write markdown file with frontmatter
+      const finalDiagnostics = getImageDiagnostics(markdownString.parent ?? "");
+      contentHasS3 = finalDiagnostics.s3Matches > 0;
+
       writeMarkdownFile(
         filePath,
         frontmatter,
         contentBody,
         pageTitle,
-        pageProcessingIndex - 1, // processedPages
+        pageProcessingIndex - 1,
         totalPages,
         pageSpinner,
         safeFilename,
@@ -355,6 +346,46 @@ async function processSinglePage(
         sectionFolderForWrite,
         lang
       );
+
+      try {
+        if (fs.existsSync(filePath)) {
+          const writtenContent = fs.readFileSync(filePath, "utf-8");
+          const postWriteDiagnostics = getImageDiagnostics(writtenContent);
+          if (postWriteDiagnostics.s3Matches > 0) {
+            contentHasS3 = true;
+            console.warn(
+              chalk.yellow(
+                `  ⚠️  Post-write validation detected ${postWriteDiagnostics.s3Matches} S3 URL(s) in ${filePath}`
+              )
+            );
+            if (postWriteDiagnostics.s3Samples.length > 0) {
+              console.warn(
+                chalk.gray(
+                  `     Sample URLs: ${postWriteDiagnostics.s3Samples.join(", ")}`
+                )
+              );
+            }
+            logImageFailure({
+              timestamp: new Date().toISOString(),
+              pageBlock: safeFilename,
+              pageId: page.id,
+              pageTitle,
+              outputPath: filePath,
+              leftoverS3Count: postWriteDiagnostics.s3Matches,
+              samples: postWriteDiagnostics.s3Samples,
+              type: "post_write_validation_failure",
+            });
+          } else {
+            contentHasS3 = false;
+          }
+        }
+      } catch (validationError) {
+        console.warn(
+          chalk.yellow(
+            `  ⚠️  Failed to run post-write validation for ${filePath}: ${validationError instanceof Error ? validationError.message : String(validationError)}`
+          )
+        );
+      }
 
       pageSpinner.succeed(
         chalk.green(
@@ -386,6 +417,7 @@ async function processSinglePage(
       blockCacheHits: localBlockCacheHits,
       markdownFetches: localMarkdownFetches,
       markdownCacheHits: localMarkdownCacheHits,
+      containsS3: contentHasS3,
     };
   } catch (pageError) {
     console.error(
@@ -409,6 +441,7 @@ async function processSinglePage(
       blockCacheHits: localBlockCacheHits,
       markdownFetches: localMarkdownFetches,
       markdownCacheHits: localMarkdownCacheHits,
+      containsS3: true,
     };
   } finally {
     SpinnerManager.remove(pageSpinner);
@@ -711,12 +744,64 @@ export async function generateBlocks(
               new Date(cachedPage.lastEdited).getTime();
 
           if (!needsProcessing) {
-            // Page unchanged, skip processing but still count it
-            console.log(
-              chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
-            );
-            processedPages++;
-            progressCallback({ current: processedPages, total: totalPages });
+            // OPTIMIZATION: Check if ANY of the existing output files contain S3 URLs
+            // We use the cached output paths because they represent exactly what is on disk
+            let hasExpiringLinks = false;
+            if (cachedPage && cachedPage.outputPaths) {
+              for (const outputPath of cachedPage.outputPaths) {
+                // Handle both absolute and relative paths from cache
+                const absPath = path.isAbsolute(outputPath)
+                  ? outputPath
+                  : path.join(process.cwd(), outputPath);
+
+                if (fs.existsSync(absPath)) {
+                  const content = fs.readFileSync(absPath, "utf-8");
+                  if (hasS3Urls(content)) {
+                    hasExpiringLinks = true;
+                    console.warn(
+                      chalk.yellow(
+                        `  ⚠️  Found expiring S3 URLs in ${path.basename(absPath)}, forcing update: ${pageTitle}`
+                      )
+                    );
+                    break; // Found one, that's enough to force update
+                  }
+                }
+              }
+            }
+
+            if (!hasExpiringLinks) {
+              // Page unchanged, skip processing but still count it
+              console.log(
+                chalk.gray(`  ⏭️  Skipping unchanged page: ${pageTitle}`)
+              );
+              processedPages++;
+              progressCallback({ current: processedPages, total: totalPages });
+            } else {
+              // Force processing because of bad content
+              pageTasks.push({
+                pageByLang,
+                lang,
+                page,
+                pageTitle,
+                filename,
+                safeFilename,
+                filePath,
+                relativePath,
+                frontmatter,
+                customProps,
+                pageGroupIndex: i,
+                pageProcessingIndex,
+                totalPages,
+                PATH,
+                blocksMap,
+                markdownMap,
+                blockPrefetchCache,
+                markdownPrefetchCache,
+                inFlightBlockFetches,
+                inFlightMarkdownFetches,
+                currentSectionFolderForLang: currentSectionFolder[lang],
+              });
+            }
           } else if (dryRun) {
             // Dry run - show what would be processed
             console.log(chalk.cyan(`  📋 Would process: ${pageTitle}`));
@@ -792,7 +877,7 @@ export async function generateBlocks(
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md
           maxConcurrent: 5,
-          timeoutMs: 180000, // 3 minutes per page
+          timeoutMs: 600000, // 10 minutes per batch item (allows for 5 min page timeout + buffer)
           operation: "page processing",
           progressTracker,
           // Stream progress updates as each page completes
@@ -814,7 +899,8 @@ export async function generateBlocks(
                   metadataCache,
                   value.pageId,
                   value.lastEdited,
-                  [value.outputPath]
+                  [value.outputPath],
+                  value.containsS3
                 );
               }
             } else {
@@ -890,6 +976,97 @@ export async function generateBlocks(
     console.info(chalk.blue(`   📄 Sections created: ${sectionCount}`));
     console.info(chalk.blue(`   📝 Title sections: ${titleSectionCount}`));
     console.info(chalk.blue(`   🎨 Emojis processed: ${emojiCount}`));
+
+    // Report retry metrics if any retries occurred
+    if (retryMetrics.totalPagesWithRetries > 0) {
+      retryMetrics.averageAttemptsPerPage =
+        retryMetrics.totalRetryAttempts / retryMetrics.totalPagesWithRetries;
+
+      console.info(chalk.cyan(`\n🔄 Retry Metrics:`));
+      console.info(
+        chalk.blue(
+          `   📊 Pages with retries: ${retryMetrics.totalPagesWithRetries}`
+        )
+      );
+      console.info(
+        chalk.blue(
+          `   🔁 Total retry attempts: ${retryMetrics.totalRetryAttempts}`
+        )
+      );
+      console.info(
+        chalk.green(
+          `   ✅ Successful retries: ${retryMetrics.successfulRetries}`
+        )
+      );
+      if (retryMetrics.failedRetries > 0) {
+        console.info(
+          chalk.yellow(`   ⚠️  Failed retries: ${retryMetrics.failedRetries}`)
+        );
+      }
+      console.info(
+        chalk.blue(
+          `   📈 Avg attempts/page: ${retryMetrics.averageAttemptsPerPage.toFixed(1)}`
+        )
+      );
+
+      // Save retry metrics to JSON file for production monitoring
+      try {
+        const metricsPath = path.join(__dirname, "../../retry-metrics.json");
+        const retryEnabled =
+          (
+            process.env.ENABLE_RETRY_IMAGE_PROCESSING ?? "true"
+          ).toLowerCase() === "true";
+        const maxRetries = parseInt(process.env.MAX_IMAGE_RETRIES ?? "3", 10);
+
+        const metricsData = {
+          timestamp: new Date().toISOString(),
+          configuration: {
+            retryEnabled,
+            maxRetries,
+            concurrency: 5,
+          },
+          summary: {
+            totalPagesProcessed: totalPages,
+            totalPagesWithRetries: retryMetrics.totalPagesWithRetries,
+            retrySuccessRate:
+              retryMetrics.totalPagesWithRetries > 0
+                ? (
+                    (retryMetrics.successfulRetries /
+                      retryMetrics.totalPagesWithRetries) *
+                    100
+                  ).toFixed(1) + "%"
+                : "N/A",
+          },
+          metrics: {
+            ...retryMetrics,
+            retryFrequency:
+              totalPages > 0
+                ? (
+                    (retryMetrics.totalPagesWithRetries / totalPages) *
+                    100
+                  ).toFixed(1) + "%"
+                : "0%",
+          },
+        };
+
+        fs.writeFileSync(
+          metricsPath,
+          JSON.stringify(metricsData, null, 2),
+          "utf-8"
+        );
+        console.info(
+          chalk.gray(
+            `   💾 Retry metrics saved to ${path.basename(metricsPath)}`
+          )
+        );
+      } catch (metricsError) {
+        console.warn(
+          chalk.yellow(
+            `   ⚠️  Failed to save retry metrics: ${metricsError instanceof Error ? metricsError.message : String(metricsError)}`
+          )
+        );
+      }
+    }
 
     if (cacheStats.validEntries > 0) {
       console.info(

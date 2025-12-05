@@ -1,4 +1,4 @@
-import ora, { Ora } from "ora";
+import ora, { Ora, type Spinner } from "ora";
 import chalk from "chalk";
 
 /**
@@ -74,17 +74,19 @@ class SpinnerManager {
       frame: () => "",
       isSpinning: false,
       indent: 0,
-      spinner: "dots" as const,
+      spinner: {
+        frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+        interval: 80,
+      } as Spinner,
       color: "cyan" as const,
-      hideCursor: true,
       interval: 0,
-      stream: process.stdout,
-      id: undefined,
-      isEnabled: false,
       prefixText: "",
       suffixText: "",
       stopAndPersist: () => noOpSpinner as Ora,
     };
+
+    // Add isEnabled as a custom property (not part of Ora interface)
+    (noOpSpinner as any).isEnabled = false;
 
     return noOpSpinner as Ora;
   }

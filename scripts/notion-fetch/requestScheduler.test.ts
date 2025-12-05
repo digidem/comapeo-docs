@@ -525,7 +525,7 @@ describe("requestScheduler", () => {
       const error = await promise;
 
       expect(error).toBeInstanceOf(Error);
-      expect(error.message).toBe("Task failed");
+      expect((error as Error).message).toBe("Task failed");
       expect(task).toHaveBeenCalled();
 
       scheduler.destroy();
@@ -552,7 +552,7 @@ describe("requestScheduler", () => {
       const result2 = await promise2;
 
       expect(error1).toBeInstanceOf(Error);
-      expect(error1.message).toBe("Task 1 failed");
+      expect((error1 as Error).message).toBe("Task 1 failed");
       expect(result2).toBe("task2 success");
       expect(task1).toHaveBeenCalled();
       expect(task2).toHaveBeenCalled();

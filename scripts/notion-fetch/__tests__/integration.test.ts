@@ -27,7 +27,10 @@ describe("Notion Fetch Integration Tests", () => {
     });
 
     expect(mockPage).toBeDefined();
-    expect(mockPage.properties.Title.title[0].plain_text).toBe("Test Page");
+    // The createMockNotionPage uses either "Content elements" or "Title" property
+    const titleProp =
+      mockPage.properties["Content elements"] || mockPage.properties.Title;
+    expect(titleProp.title[0].plain_text).toBe("Test Page");
     expect(mockPage.properties["Element Type"].select.name).toBe("Page");
   });
 
@@ -80,7 +83,7 @@ describe("Notion Fetch Integration Tests", () => {
     } = await import("../../test-utils");
 
     const pageWithoutTitle = createMockNotionPageWithoutTitle();
-    expect(pageWithoutTitle.properties.Title).toBeUndefined();
+    expect((pageWithoutTitle.properties as any).Title).toBeUndefined();
 
     const pageWithoutWebsite = createMockNotionPageWithoutWebsiteBlock();
     expect(pageWithoutWebsite.properties["Website Block"]).toBeUndefined();
@@ -127,9 +130,9 @@ describe("Notion Fetch Integration Tests", () => {
     });
 
     // Verify all properties are set correctly
-    expect(page.properties.Title.title[0].plain_text).toBe(
-      "Complete Test Page"
-    );
+    const titleProp =
+      page.properties["Content elements"] || page.properties.Title;
+    expect(titleProp.title[0].plain_text).toBe("Complete Test Page");
     expect(page.properties.Status.select.name).toBe("Ready to publish");
     expect(page.properties.Order.number).toBe(5);
     expect(page.properties.Language.select.name).toBe("English");

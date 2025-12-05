@@ -150,7 +150,7 @@ describe("spinnerManager", () => {
 
       expect(spinner).toBeDefined();
       expect(spinner.isSpinning).toBe(false);
-      expect(spinner.isEnabled).toBe(false);
+      expect((spinner as any).isEnabled).toBe(false);
       // No-op spinners are not tracked in the active spinners set
       expect(SpinnerManager.getActiveCount()).toBe(0);
     });
@@ -162,7 +162,7 @@ describe("spinnerManager", () => {
 
       expect(spinner).toBeDefined();
       expect(spinner.isSpinning).toBe(false);
-      expect(spinner.isEnabled).toBe(false);
+      expect((spinner as any).isEnabled).toBe(false);
       expect(SpinnerManager.getActiveCount()).toBe(0);
     });
 

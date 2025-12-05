@@ -120,20 +120,64 @@ vi.mock("./utils", () => ({
 }));
 
 // Mock filesystem operations
-vi.mock("node:fs", () => ({
-  default: {
-    mkdirSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    readFileSync: vi.fn(() => "{}"),
-    existsSync: vi.fn(() => true),
+vi.mock("node:fs", () => {
+  const files = new Map<string, string>();
+  const directories = new Set<string>();
+
+  const ensureDir = (dirPath: string) => {
+    if (dirPath) {
+      directories.add(dirPath);
+    }
+  };
+
+  const api = {
+    mkdirSync: vi.fn((dirPath: string) => {
+      ensureDir(dirPath);
+    }),
+    writeFileSync: vi.fn((filePath: string, content: string | Buffer) => {
+      const value = typeof content === "string" ? content : content.toString();
+      files.set(filePath, value);
+      const dirPath = filePath?.includes("/")
+        ? filePath.slice(0, filePath.lastIndexOf("/"))
+        : "";
+      ensureDir(dirPath);
+    }),
+    readFileSync: vi.fn((filePath: string) => {
+      if (files.has(filePath)) {
+        return files.get(filePath);
+      }
+      if (filePath.endsWith("code.json")) {
+        return "{}";
+      }
+      return "";
+    }),
+    existsSync: vi.fn((target: string) => {
+      return files.has(target) || directories.has(target);
+    }),
     readdirSync: vi.fn(() => []),
     statSync: vi.fn(() => ({
       isDirectory: () => false,
       isFile: () => true,
     })),
-    renameSync: vi.fn(),
-  },
-}));
+    renameSync: vi.fn((from: string, to: string) => {
+      if (files.has(from)) {
+        files.set(to, files.get(from) ?? "");
+        files.delete(from);
+      }
+    }),
+    unlinkSync: vi.fn((target: string) => {
+      files.delete(target);
+    }),
+    __reset: () => {
+      files.clear();
+      directories.clear();
+    },
+  };
+
+  return {
+    default: api,
+  };
+});
 
 // Mock the docusaurus config to prevent file system issues
 vi.mock("../../docusaurus.config", () => ({
@@ -327,7 +371,7 @@ describe("generateBlocks", () => {
 
       const page = createMockNotionPage({
         id: "cache-page",
-        lastEditedTime: "2025-01-01T00:00:00.000Z",
+        lastEdited: "2025-01-01T00:00:00.000Z",
         elementType: "Page",
       });
 
@@ -493,7 +537,7 @@ describe("generateBlocks", () => {
       const togglePage = createMockNotionPage({
         title: "Following Section",
         elementType: "Toggle",
-        hasSubItems: false,
+        subItems: [],
       });
 
       const pages = [headingPage, togglePage];
@@ -631,9 +675,35 @@ describe("generateBlocks", () => {
           if (args.length === 0) {
             // new Date() without arguments should return fixed date
             super(fixedDate.getTime());
+          } else if (args.length === 1) {
+            // new Date(value) with single argument
+            super(args[0]);
+          } else if (args.length === 2) {
+            // new Date(year, month)
+            super(args[0], args[1]);
+          } else if (args.length === 3) {
+            // new Date(year, month, day)
+            super(args[0], args[1], args[2]);
+          } else if (args.length === 4) {
+            // new Date(year, month, day, hours)
+            super(args[0], args[1], args[2], args[3]);
+          } else if (args.length === 5) {
+            // new Date(year, month, day, hours, minutes)
+            super(args[0], args[1], args[2], args[3], args[4]);
+          } else if (args.length === 6) {
+            // new Date(year, month, day, hours, minutes, seconds)
+            super(args[0], args[1], args[2], args[3], args[4], args[5]);
           } else {
-            // new Date(value) with arguments should work normally
-            super(...args);
+            // new Date(year, month, day, hours, minutes, seconds, milliseconds)
+            super(
+              args[0],
+              args[1],
+              args[2],
+              args[3],
+              args[4],
+              args[5],
+              args[6]
+            );
           }
         }
         static now() {

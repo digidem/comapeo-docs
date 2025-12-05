@@ -237,8 +237,8 @@ describe("processMarkdownWithRetry", () => {
 
       // Should abort after detecting no progress
       expect(result.containsS3).toBe(true);
-      expect(result.retryAttempts).toBe(1); // 1 retry attempt made before detecting no progress
-      // Should have called pipeline once on first attempt, then detected identical on increment
+      expect(result.retryAttempts).toBe(0); // 0 retries (only first attempt ran, no progress detected)
+      // Should have called pipeline once on first attempt, then detected identical content
       expect(processAndReplaceImages).toHaveBeenCalledTimes(1);
     });
   });

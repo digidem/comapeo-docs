@@ -476,16 +476,24 @@ export async function processMarkdownWithRetry(
 
   // Calculate actual number of retries (not total attempts)
   // The loop counter 'attempt' starts at 0 for the first try, then increments for each retry.
-  // However, when we break due to max attempts, we've incremented one past the last actual retry.
   // We need to ensure we return the correct count: 0 = no retries, 1 = one retry, etc.
   //
-  // Scenario 1: Success on first attempt (attempt=0, no loop increment) → return 0 ✓
-  // Scenario 2: Success after 1 retry (attempt=1, broke at success check) → return 1 ✓
-  // Scenario 3: Hit max attempts (attempt=3 after increment, but only did 2 retries) → return 2 ✓
-  //   Note: This matches the metrics update at line 382 which also uses (attempt - 1)
-  // Scenario 4: Aborted due to no progress (variable, depends on when detected)
-  const actualRetryCount =
-    attempt >= MAX_IMAGE_REFRESH_ATTEMPTS ? attempt - 1 : attempt;
+  // Exit paths and their attempt values:
+  // 1. Success path (line 358): attempt = actual retry count (0, 1, 2, ...)
+  // 2. Max attempts path (line 385): attempt = MAX after increment, need (attempt - 1)
+  // 3. No progress path (line 437): attempt = incremented value, need (attempt - 1)
+  //
+  // Scenario 1: Success on first attempt (attempt=0, breaks before increment) → return 0 ✓
+  // Scenario 2: Success after 1 retry (attempt=1, breaks before increment) → return 1 ✓
+  // Scenario 3: Hit max attempts (attempt=3 after increment at line 365) → return 2 ✓
+  // Scenario 4: No progress on first attempt (attempt=1 after increment at line 365) → return 0 ✓
+  // Scenario 5: No progress after 1 retry (attempt=2 after increment at line 365) → return 1 ✓
+  //
+  // The success path breaks BEFORE the increment, so attempt is correct.
+  // The max attempts and no-progress paths break AFTER the increment, so we need (attempt - 1).
+  // We can detect this by checking if we exited with S3 URLs remaining.
+  const exitedWithS3 = finalDiagnostics.s3Matches > 0;
+  const actualRetryCount = exitedWithS3 ? attempt - 1 : attempt;
 
   return {
     content: processedContent,

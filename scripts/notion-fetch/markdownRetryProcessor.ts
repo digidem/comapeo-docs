@@ -120,7 +120,7 @@ export interface RetryMetrics {
  *
  * @returns Promise resolving to processing results
  * @returns result.content - Final processed markdown content
- * @returns result.totalSaved - Total bytes saved from image downloads
+ * @returns result.totalSaved - Total bytes saved from image downloads across ALL attempts (accumulated)
  * @returns result.fallbackEmojiCount - Number of fallback emojis processed
  * @returns result.containsS3 - Whether final content still contains S3 URLs
  * @returns result.retryAttempts - Number of retry attempts made (0 if succeeded on first try)
@@ -275,6 +275,7 @@ export async function processMarkdownWithRetry(
   let attempt = 0;
   let processedContent: string | null = null;
   let processedSavedDelta = 0;
+  let cumulativeSavedBytes = 0; // Track total bytes saved across all attempts
   let processedFallbackEmojiCount = 0;
   let currentSource = markdownContent;
 
@@ -337,11 +338,14 @@ export async function processMarkdownWithRetry(
     // Log diagnostic information (helper consolidates repeated patterns)
     logRetryAttemptDiagnostics(attempt + 1, diagnostics, imageStats);
 
+    // Accumulate bytes saved from this attempt
+    cumulativeSavedBytes += savedDelta;
+
     const remainingS3 = diagnostics.s3Matches > 0;
 
     if (!remainingS3) {
       processedContent = attemptContent;
-      processedSavedDelta = savedDelta;
+      processedSavedDelta = cumulativeSavedBytes; // Use cumulative total
       processedFallbackEmojiCount = fallbackEmojiCount;
       console.log(
         chalk.green(
@@ -359,7 +363,7 @@ export async function processMarkdownWithRetry(
     }
 
     processedContent = attemptContent;
-    processedSavedDelta = savedDelta;
+    processedSavedDelta = cumulativeSavedBytes; // Use cumulative total
     processedFallbackEmojiCount = fallbackEmojiCount;
 
     attempt += 1;
@@ -432,7 +436,7 @@ export async function processMarkdownWithRetry(
         )
       );
       processedContent = attemptContent;
-      processedSavedDelta = savedDelta;
+      processedSavedDelta = cumulativeSavedBytes; // Use cumulative total
       processedFallbackEmojiCount = fallbackEmojiCount;
       break;
     }

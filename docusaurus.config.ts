@@ -142,6 +142,10 @@ const DEFAULT_DOCS_PAGE = resolveDefaultDocsPage(
   ALL_DOC_PATHS
 );
 
+// Determine if this is a production build (for SEO settings)
+// Production allows indexing; staging/preview does not
+const isProduction = process.env.IS_PRODUCTION === "true";
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
@@ -166,6 +170,10 @@ const config: Config = {
   projectName: "comapeo-docs", // Usually your repo name.
 
   onBrokenLinks: "warn",
+
+  // Prevent search engines from indexing staging/preview builds
+  // Only production (IS_PRODUCTION=true) should be indexed
+  noIndex: !isProduction,
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -236,32 +244,6 @@ const config: Config = {
         ],
       },
     ],
-    // [
-    //   '@docusaurus/preset-classic',
-    //   {
-    //     sitemap: {
-    //       lastmod: 'date',
-    //       changefreq: 'weekly',
-    //       priority: 0.5,
-    //       ignorePatterns: ['/tags/**'],
-    //       filename: 'sitemap.xml',
-    //       createSitemapItems: async (params) => {
-    //         const { defaultCreateSitemapItems, ...rest } = params;
-    //         const items = await defaultCreateSitemapItems(rest);
-    //         return items.filter((item) => !item.url.includes('/page/'));
-    //       },
-    //     },
-    //   },
-    // ],
-    // [
-    //   '@docusaurus/preset-classic',
-    //   {
-    //     gtag: {
-    //       trackingID: 'G-999X9XX9XX',
-    //       anonymizeIP: true,
-    //     },
-    //   },
-    // ],
     [
       "@docusaurus/plugin-ideal-image",
       {
@@ -295,6 +277,16 @@ const config: Config = {
         theme: {
           customCss: "./src/css/custom.css",
         },
+        // Enable sitemap for production, disable for staging/preview
+        sitemap: isProduction
+          ? {
+              lastmod: "date",
+              changefreq: "weekly",
+              priority: 0.5,
+              ignorePatterns: ["/tags/**"],
+              filename: "sitemap.xml",
+            }
+          : false,
       } satisfies Preset.Options,
     ],
   ],

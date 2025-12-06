@@ -104,6 +104,7 @@ jobs:
         env:
           BASE_URL: /comapeo-docs/
           DEFAULT_DOCS_PAGE: ${{ secrets.DEFAULT_DOCS_PAGE }}
+          # IS_PRODUCTION not set - generates noindex meta tags and disallow robots.txt
         run: bun run build
 
       - name: Upload artifact

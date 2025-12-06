@@ -59,6 +59,9 @@ favicon.svg
 /i18n/
 /static/images/
 
+# Generated robots.txt (created at build time based on IS_PRODUCTION env var)
+/static/robots.txt
+
 # Keep .gitkeep files for directory structure
 !.gitkeep
 

@@ -20,23 +20,52 @@ if (ExecutionEnvironment.canUseDOM) {
   };
 
   /**
-   * Configuration for different navigation elements
+   * Add click handler to breadcrumbs items directly
+   */
+  const addBreadcrumbsHandler = () => {
+    const breadcrumbsContainer = document.querySelector(
+      ".theme-doc-breadcrumbs"
+    );
+
+    if (!breadcrumbsContainer) {
+      return;
+    }
+
+    // Find all breadcrumb items
+    const items = breadcrumbsContainer.querySelectorAll(".breadcrumbs__item");
+    console.log("[ScrollToTop] Found breadcrumb items:", items.length);
+
+    items.forEach((item, index) => {
+      // Skip if already has handler
+      if (item.hasAttribute("data-scroll-handler")) {
+        return;
+      }
+
+      // Check if this item contains a link or just a span (active item)
+      const link = item.querySelector("a");
+      const isActive = !link; // If no link, it's the active/current item
+
+      console.log(
+        `[ScrollToTop] Item ${index}: isActive=${isActive}, hasLink=${!!link}`
+      );
+
+      if (isActive) {
+        // This is the active breadcrumb (no link, just text)
+        item.setAttribute("data-scroll-handler", "true");
+        item.addEventListener("click", (event) => {
+          console.log("[ScrollToTop] Active breadcrumb clicked!");
+          event.preventDefault();
+          scrollToTop();
+        });
+      }
+      // If it has a link, we don't attach a handler - let it navigate normally
+    });
+  };
+
+  /**
+   * Configuration for sidebar navigation
    */
   const navigationHandlers = [
-    {
-      selector: ".theme-doc-breadcrumbs",
-      shouldScrollToTop: (target: HTMLElement): boolean => {
-        // First check: Never scroll if clicking on or inside a link (navigation)
-        if (target.closest("a") !== null) {
-          return false;
-        }
-
-        // Second check: Only scroll if clicking inside the active breadcrumb item
-        // Docusaurus renders active breadcrumb as: <li class="breadcrumbs__item--active"><span>Current Page</span></li>
-        // This prevents scrolling when clicking on empty space around breadcrumbs
-        return target.closest(".breadcrumbs__item--active") !== null;
-      },
-    },
     {
       selector: ".theme-doc-sidebar-menu",
       shouldScrollToTop: (target: HTMLElement): boolean => {
@@ -53,17 +82,25 @@ if (ExecutionEnvironment.canUseDOM) {
    * Adds click handlers to navigation elements
    */
   const addScrollHandlers = () => {
+    // Handle breadcrumbs separately
+    addBreadcrumbsHandler();
+
+    // Handle other navigation elements (sidebar, etc.)
     navigationHandlers.forEach(({ selector, shouldScrollToTop }) => {
       const element = document.querySelector(selector);
 
       if (element && !element.hasAttribute("data-scroll-handler")) {
         // Mark that we've added the handler to avoid duplicates
         element.setAttribute("data-scroll-handler", "true");
+        console.log("[ScrollToTop] Handler attached to:", selector);
 
         element.addEventListener("click", (event) => {
           const target = event.target as HTMLElement;
 
           if (shouldScrollToTop(target)) {
+            console.log(
+              "[ScrollToTop] Sidebar active item clicked, scrolling!"
+            );
             event.preventDefault();
             scrollToTop();
           }

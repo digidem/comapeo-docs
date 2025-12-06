@@ -436,6 +436,17 @@ article {
   background-color: #242526;
 }
 
+/* Active breadcrumb (current page) - clickable for scroll-to-top */
+.theme-doc-breadcrumbs .breadcrumbs__item--active,
+.theme-doc-breadcrumbs .breadcrumbs__item--active .breadcrumbs__link {
+  cursor: pointer;
+}
+
+.theme-doc-breadcrumbs .breadcrumbs__item--active:hover .breadcrumbs__link {
+  color: var(--ifm-color-primary);
+  text-decoration: underline;
+}
+
 /*
  * Table of Contents Styling Enhancement
  * Active item with royal blue background and sliding animation

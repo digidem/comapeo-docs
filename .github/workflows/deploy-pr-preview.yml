@@ -339,6 +339,7 @@ jobs:
           find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Build documentation
+        # IS_PRODUCTION not set - generates noindex meta tags and disallow robots.txt
         run: bun run build
 
       - name: Deploy to Cloudflare Pages (PR Preview)

@@ -101,6 +101,10 @@ jobs:
         run: bun install
 
       - name: Build documentation
+        env:
+          # Only set IS_PRODUCTION=true for actual production deployments
+          # Test deployments should have noindex to prevent search engine indexing
+          IS_PRODUCTION: ${{ inputs.environment != 'test' && 'true' || 'false' }}
         run: bun run build
 
       - name: Deploy to Cloudflare Pages

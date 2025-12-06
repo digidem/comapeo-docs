@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 
 const {
   existsSyncMock,
@@ -27,6 +28,7 @@ import {
   hasMissingOutputs,
   CACHE_VERSION,
   PAGE_METADATA_CACHE_PATH,
+  PROJECT_ROOT,
   type PageMetadataCache,
 } from "../pageMetadataCache";
 
@@ -228,6 +230,9 @@ describe("pageMetadataCache", () => {
     });
 
     it("should filter unchanged pages", () => {
+      // Mock files exist
+      existsSyncMock.mockReturnValue(true);
+
       const pages = [
         { id: "1", last_edited_time: "2024-01-01T00:00:00.000Z" },
         { id: "2", last_edited_time: "2024-01-03T00:00:00.000Z" },
@@ -239,12 +244,12 @@ describe("pageMetadataCache", () => {
         pages: {
           "1": {
             lastEdited: "2024-01-01T00:00:00.000Z",
-            outputPaths: [],
+            outputPaths: [path.join(PROJECT_ROOT, "docs/page-1.md")],
             processedAt: "",
           },
           "2": {
             lastEdited: "2024-01-02T00:00:00.000Z",
-            outputPaths: [],
+            outputPaths: [path.join(PROJECT_ROOT, "docs/page-2.md")],
             processedAt: "",
           },
         },
@@ -258,6 +263,9 @@ describe("pageMetadataCache", () => {
     });
 
     it("should include new pages not in cache", () => {
+      // Mock files exist
+      existsSyncMock.mockReturnValue(true);
+
       const pages = [
         { id: "1", last_edited_time: "2024-01-01" },
         { id: "new", last_edited_time: "2024-01-01" },
@@ -267,7 +275,11 @@ describe("pageMetadataCache", () => {
         scriptHash: "hash",
         lastSync: "2024-01-02",
         pages: {
-          "1": { lastEdited: "2024-01-01", outputPaths: [], processedAt: "" },
+          "1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/page-1.md")],
+            processedAt: "",
+          },
         },
       };
 
@@ -325,6 +337,75 @@ describe("pageMetadataCache", () => {
 
       expect(hasMissingOutputs(cache, "1")).toBe(true);
     });
+
+    it("returns false when page is not in cache", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {},
+      };
+
+      expect(hasMissingOutputs(cache, "non-existent")).toBe(false);
+    });
+
+    it("returns false when cache is null", () => {
+      expect(hasMissingOutputs(null, "page-1")).toBe(false);
+    });
+
+    it("returns false when outputPaths is undefined", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {
+          "1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: undefined as unknown as string[],
+            processedAt: "",
+          },
+        },
+      };
+
+      expect(hasMissingOutputs(cache, "1")).toBe(false);
+    });
+
+    it("returns true when outputPaths is empty array (Phase 3 fix)", () => {
+      // Empty outputPaths means no files were written - treat as missing
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {
+          "1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: [],
+            processedAt: "",
+          },
+        },
+      };
+
+      expect(hasMissingOutputs(cache, "1")).toBe(true);
+    });
+
+    it("returns false when all output files exist", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-02",
+        pages: {
+          "1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["/docs/page-1.md", "/i18n/pt/docs/page-1.md"],
+            processedAt: "",
+          },
+        },
+      };
+
+      existsSyncMock.mockReturnValue(true);
+
+      expect(hasMissingOutputs(cache, "1")).toBe(false);
+    });
   });
 
   describe("findDeletedPages", () => {
@@ -379,24 +460,28 @@ describe("pageMetadataCache", () => {
 
       expect(cache.pages["page-1"]).toBeDefined();
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-01");
-      expect(cache.pages["page-1"].outputPaths).toEqual(["/docs/test.md"]);
+      // Paths are normalized to absolute paths
+      expect(cache.pages["page-1"].outputPaths).toEqual([
+        path.join(PROJECT_ROOT, "docs/test.md"),
+      ]);
     });
 
     it("should update existing page in cache", () => {
       const cache = createEmptyCache("hash");
+      // Use normalized path for existing entry
+      const oldPath = path.join(PROJECT_ROOT, "docs/old.md");
       cache.pages["page-1"] = {
         lastEdited: "2024-01-01",
-        outputPaths: ["/docs/old.md"],
+        outputPaths: [oldPath],
         processedAt: "2024-01-01",
       };
 
       updatePageInCache(cache, "page-1", "2024-01-02", ["/docs/new.md"], false);
 
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-02");
-      expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
-        "/docs/new.md",
-        "/docs/old.md",
-      ]);
+      expect(cache.pages["page-1"].outputPaths.sort()).toEqual(
+        [path.join(PROJECT_ROOT, "docs/new.md"), oldPath].sort()
+      );
     });
 
     it("should merge and deduplicate output paths across languages", () => {
@@ -417,11 +502,14 @@ describe("pageMetadataCache", () => {
         false
       );
 
-      expect(cache.pages["page-1"].outputPaths.sort()).toEqual([
-        "/docs/fr/page-1.md",
-        "/docs/page-1.md",
-        "/docs/page-2.md",
-      ]);
+      // Paths are normalized to absolute paths
+      expect(cache.pages["page-1"].outputPaths.sort()).toEqual(
+        [
+          path.join(PROJECT_ROOT, "docs/fr/page-1.md"),
+          path.join(PROJECT_ROOT, "docs/page-1.md"),
+          path.join(PROJECT_ROOT, "docs/page-2.md"),
+        ].sort()
+      );
     });
   });
 

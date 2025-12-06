@@ -4,7 +4,41 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
+
+/**
+ * Project root directory, exported for consistent path resolution across modules.
+ */
+export const PROJECT_ROOT = path.resolve(__dirname, "../..");
+
+/**
+ * Normalize a file path to an absolute path for consistent comparison.
+ * Handles both absolute and relative paths, resolving relative paths
+ * against PROJECT_ROOT.
+ *
+ * Important: Paths like "/docs/intro.md" are treated as project-relative
+ * (not filesystem absolute) unless they start with PROJECT_ROOT.
+ *
+ * @param filePath - The path to normalize (can be absolute or relative)
+ * @returns Absolute, normalized path
+ */
+export function normalizePath(filePath: string): string {
+  if (!filePath) {
+    return "";
+  }
+
+  // Check if this is a truly absolute path (starts with PROJECT_ROOT)
+  // Paths like "/docs/intro.md" on Unix look absolute but are actually
+  // project-relative paths that should be resolved against PROJECT_ROOT
+  const resolvedPath = path.resolve(filePath);
+  if (resolvedPath.startsWith(PROJECT_ROOT)) {
+    return resolvedPath;
+  }
+
+  // For all other paths (including /docs/... on Unix), treat as project-relative
+  // Strip leading slash if present (common in stored paths like "/docs/...")
+  const cleanPath = filePath.replace(/^\//, "");
+  return path.resolve(PROJECT_ROOT, cleanPath);
+}
 
 /**
  * Current cache schema version.
@@ -247,6 +281,12 @@ export function findDeletedPages(
  * Determine whether any cached output files for a page are missing on disk.
  * Missing outputs should trigger regeneration even if the Notion timestamp
  * hasn't changed (e.g., manual deletion or previous failed write).
+ *
+ * Uses normalizePath for consistent path resolution across different
+ * execution environments (CI vs local, different working directories).
+ *
+ * NOTE: Returns true for empty outputPaths arrays as this indicates
+ * the page was cached but no outputs were successfully written.
  */
 export function hasMissingOutputs(
   cache: PageMetadataCache | null,
@@ -261,15 +301,18 @@ export function hasMissingOutputs(
     return false;
   }
 
+  // Empty outputPaths means no outputs were written - treat as missing
+  if (cached.outputPaths.length === 0) {
+    return true;
+  }
+
   return cached.outputPaths.some((outputPath) => {
     if (!outputPath) {
       return true;
     }
 
-    const absolutePath = path.isAbsolute(outputPath)
-      ? outputPath
-      : path.join(PROJECT_ROOT, outputPath.replace(/^\//, ""));
-
+    // Use normalizePath for consistent resolution
+    const absolutePath = normalizePath(outputPath);
     return !fs.existsSync(absolutePath);
   });
 }
@@ -277,6 +320,9 @@ export function hasMissingOutputs(
 /**
  * Update cache with a processed page's metadata.
  * This should be called after successfully processing each page.
+ *
+ * Paths are normalized before storage to ensure consistent comparison
+ * across different execution environments (CI vs local).
  *
  * @param cache - Cache to update (mutated in place)
  * @param pageId - Notion page ID
@@ -293,6 +339,7 @@ export function updatePageInCache(
   const existing = cache.pages[pageId];
   const mergedOutputs = new Set<string>();
 
+  // Existing paths are already normalized from previous runs
   if (existing?.outputPaths?.length) {
     for (const p of existing.outputPaths) {
       if (p) {
@@ -301,9 +348,13 @@ export function updatePageInCache(
     }
   }
 
+  // Normalize new paths for consistent storage and comparison
   for (const p of outputPaths) {
     if (p) {
-      mergedOutputs.add(p);
+      const normalized = normalizePath(p);
+      if (normalized) {
+        mergedOutputs.add(normalized);
+      }
     }
   }
 

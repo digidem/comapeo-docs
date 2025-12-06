@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import { computeScriptHash, CRITICAL_SCRIPT_FILES } from "../scriptHasher";
 import {
   loadPageMetadataCache,
@@ -11,6 +12,7 @@ import {
   updatePageInCache,
   CACHE_VERSION,
   PAGE_METADATA_CACHE_PATH,
+  PROJECT_ROOT,
   type PageMetadataCache,
 } from "../pageMetadataCache";
 
@@ -94,7 +96,10 @@ describe("Incremental Sync Integration", () => {
 
       expect(Object.keys(cache.pages)).toHaveLength(2);
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-01T00:00:00.000Z");
-      expect(cache.pages["page-2"].outputPaths).toEqual(["/docs/page-2.md"]);
+      // Paths are normalized to absolute paths
+      expect(cache.pages["page-2"].outputPaths).toEqual([
+        path.join(PROJECT_ROOT, "docs/page-2.md"),
+      ]);
     });
 
     it("should handle version migration correctly", () => {

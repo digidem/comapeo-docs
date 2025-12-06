@@ -1,125 +1,98 @@
 /**
- * Client module to add scroll-to-top functionality for active navigation elements
- * Handles both breadcrumbs and sidebar active items
- * Issue #014: Mobile TOC/sidebar doesn't scroll back to the top
+ * Client module to add scroll-to-top functionality for active navigation elements.
+ * Handles both breadcrumbs and sidebar active items.
+ *
+ * @see https://docusaurus.io/docs/advanced/client#client-module-lifecycles
  */
 
-import ExecutionEnvironment from "@docusaurus/ExecutionEnvironment";
+import type { ClientModule } from "@docusaurus/types";
 
-if (ExecutionEnvironment.canUseDOM) {
-  let observer: MutationObserver | null = null;
+interface NavigationHandler {
+  /** CSS selector for the container element */
+  selector: string;
+  /** Returns true if clicking this target should trigger scroll-to-top */
+  shouldScrollToTop: (target: HTMLElement) => boolean;
+}
 
-  /**
-   * Scrolls the page to top with smooth animation
-   */
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
+/**
+ * Scrolls the page to top with smooth animation.
+ */
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
-  /**
-   * Configuration for different navigation elements
-   */
-  const navigationHandlers = [
-    {
-      selector: ".theme-doc-breadcrumbs",
-      shouldScrollToTop: (target: HTMLElement): boolean => {
-        // Check if clicked element is the active/current breadcrumb item
-        return (
-          // Direct class check on the clicked element
-          target.classList?.contains("breadcrumbs__item--active") ||
-          // Check parent <li> for active class
-          target.closest(".breadcrumbs__item--active") !== null ||
-          // Check for aria-current attribute (accessibility marker)
-          target.getAttribute("aria-current") === "page" ||
-          target.closest('[aria-current="page"]') !== null ||
-          // Check if parent <li> is the last breadcrumb item
-          (target.closest(".breadcrumbs__item") !== null &&
-            target.closest(".breadcrumbs__item") ===
-              target
-                .closest(".breadcrumbs")
-                ?.querySelector(".breadcrumbs__item:last-child")) ||
-          // If not clicking a link and not active breadcrumb, still scroll
-          // (clicking container or empty space)
-          target.closest("a") === null
-        );
-      },
+/**
+ * Navigation handler configurations.
+ *
+ * Breadcrumb detection: Active breadcrumb (current page) has NO <a> tag,
+ * just a <span>. Navigation breadcrumbs have <a> tags.
+ *
+ * DOM structure:
+ *   <li class="breadcrumbs__item">
+ *     <a class="breadcrumbs__link" href="...">Navigation</a>
+ *   </li>
+ *   <li class="breadcrumbs__item breadcrumbs__item--active">
+ *     <span class="breadcrumbs__link">Current Page</span>
+ *   </li>
+ */
+const navigationHandlers: NavigationHandler[] = [
+  {
+    selector: ".theme-doc-breadcrumbs",
+    shouldScrollToTop: (target) => {
+      const breadcrumbItem = target.closest(".breadcrumbs__item");
+      if (!breadcrumbItem) return false;
+      // Active breadcrumb has no link
+      return breadcrumbItem.querySelector("a") === null;
     },
-    {
-      selector: ".theme-doc-sidebar-menu",
-      shouldScrollToTop: (target: HTMLElement): boolean => {
-        // Check if clicked element is or is within an active menu link
-        return (
-          target.closest(".menu__link--active") !== null ||
-          target.closest('[aria-current="page"]') !== null
-        );
-      },
+  },
+  {
+    selector: ".theme-doc-sidebar-menu",
+    shouldScrollToTop: (target) => {
+      return (
+        target.closest(".menu__link--active") !== null ||
+        target.closest('[aria-current="page"]') !== null
+      );
     },
-  ];
+  },
+];
 
-  /**
-   * Adds click handlers to navigation elements
-   */
-  const addScrollHandlers = () => {
-    navigationHandlers.forEach(({ selector, shouldScrollToTop }) => {
-      const element = document.querySelector(selector);
+/**
+ * Attaches click handlers to navigation elements.
+ */
+function attachScrollHandlers(): void {
+  for (const { selector, shouldScrollToTop } of navigationHandlers) {
+    const container = document.querySelector(selector);
+    if (!container || container.hasAttribute("data-scroll-handler")) {
+      continue;
+    }
 
-      if (element && !element.hasAttribute("data-scroll-handler")) {
-        // Mark that we've added the handler to avoid duplicates
-        element.setAttribute("data-scroll-handler", "true");
-
-        element.addEventListener("click", (event) => {
-          const target = event.target as HTMLElement;
-
-          if (shouldScrollToTop(target)) {
-            event.preventDefault();
-            scrollToTop();
-          }
-        });
+    container.setAttribute("data-scroll-handler", "true");
+    container.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (shouldScrollToTop(target)) {
+        event.preventDefault();
+        scrollToTop();
       }
     });
-  };
-
-  // Run on initial load
-  addScrollHandlers();
-
-  // Re-run when navigation occurs (for SPA navigation)
-  const startObserving = () => {
-    const docRoot =
-      document.querySelector('[class*="docRoot"]') ||
-      document.querySelector("main");
-
-    if (docRoot) {
-      observer = new MutationObserver(() => {
-        addScrollHandlers();
-      });
-
-      observer.observe(docRoot, {
-        childList: true,
-        subtree: false, // Only observe direct children for performance
-      });
-    }
-  };
-
-  // Start observing after DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startObserving);
-  } else {
-    startObserving();
   }
-
-  // Cleanup observer when page unloads
-  window.addEventListener("beforeunload", () => {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
-  });
 }
 
-export default function scrollToTop(): void {
-  // This function is required for Docusaurus client modules
-  // but the actual work is done in the module scope above
+/**
+ * Clears handler markers so they can be re-attached after navigation.
+ */
+function clearHandlerMarkers(): void {
+  for (const { selector } of navigationHandlers) {
+    document.querySelector(selector)?.removeAttribute("data-scroll-handler");
+  }
 }
+
+const clientModule: ClientModule = {
+  onRouteDidUpdate() {
+    // Clear markers since React may have replaced elements
+    clearHandlerMarkers();
+    // Wait for React to finish rendering
+    requestAnimationFrame(attachScrollHandlers);
+  },
+};
+
+export default clientModule;

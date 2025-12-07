@@ -420,6 +420,33 @@ describe("Path Normalization Edge Cases", () => {
       // Should keep the newer timestamp
       expect(cache.pages["page-1"].lastEdited).toBe("2024-01-02T00:00:00.000Z");
     });
+
+    it("should normalize old-format paths during migration", () => {
+      const cache = createEmptyCache("hash");
+
+      // Simulate an old cache with non-normalized paths (legacy format)
+      cache.pages["page-1"] = {
+        lastEdited: "2024-01-01T00:00:00.000Z",
+        outputPaths: ["docs/intro.md"], // Old format: relative path without leading slash
+        processedAt: "2024-01-01T00:00:00.000Z",
+      };
+
+      // Update with same file (different format)
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["/docs/intro.md"], // New format: with leading slash
+        false
+      );
+
+      // Should deduplicate: old "docs/intro.md" and new "/docs/intro.md"
+      // both normalize to the same absolute path
+      expect(cache.pages["page-1"].outputPaths).toHaveLength(1);
+      expect(cache.pages["page-1"].outputPaths[0]).toBe(
+        path.join(PROJECT_ROOT, "docs/intro.md")
+      );
+    });
   });
 
   describe("Path comparison scenarios", () => {

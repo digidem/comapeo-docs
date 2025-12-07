@@ -339,11 +339,15 @@ export function updatePageInCache(
   const existing = cache.pages[pageId];
   const mergedOutputs = new Set<string>();
 
-  // Existing paths are already normalized from previous runs
+  // Normalize existing paths to ensure consistent comparison
+  // (handles migration from older caches that stored non-normalized paths)
   if (existing?.outputPaths?.length) {
     for (const p of existing.outputPaths) {
       if (p) {
-        mergedOutputs.add(p);
+        const normalized = normalizePath(p);
+        if (normalized) {
+          mergedOutputs.add(normalized);
+        }
       }
     }
   }

@@ -231,6 +231,162 @@ describe("Incremental Sync Integration", () => {
     });
   });
 
+  describe("Path normalization integration", () => {
+    it("should handle cache with mixed path formats during filtering", () => {
+      // Simulate a cache with paths in different formats (migration scenario)
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "test-hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/page-1.md"], // Old format: relative without leading slash
+            processedAt: "2024-01-01T00:00:00.000Z",
+          },
+          "page-2": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["/docs/page-2.md"], // Old format: with leading slash
+            processedAt: "2024-01-01T00:00:00.000Z",
+          },
+          "page-3": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/page-3.md")], // New format: absolute
+            processedAt: "2024-01-01T00:00:00.000Z",
+          },
+        },
+      };
+
+      // Mock that all output files exist
+      vi.spyOn(fs, "existsSync").mockReturnValue(true);
+
+      const pages = [
+        { id: "page-1", last_edited_time: "2024-01-01T00:00:00.000Z" },
+        { id: "page-2", last_edited_time: "2024-01-01T00:00:00.000Z" },
+        { id: "page-3", last_edited_time: "2024-01-01T00:00:00.000Z" },
+      ];
+
+      // All paths should resolve correctly regardless of format
+      const changedPages = filterChangedPages(pages, cache);
+
+      // No pages should be marked as changed (all unchanged, all outputs exist)
+      expect(changedPages).toHaveLength(0);
+
+      vi.restoreAllMocks();
+    });
+
+    it("should detect missing outputs regardless of path format", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "test-hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01T00:00:00.000Z",
+            outputPaths: ["docs/page-1.md"], // Old format
+            processedAt: "2024-01-01T00:00:00.000Z",
+          },
+        },
+      };
+
+      // Mock that the file does NOT exist
+      vi.spyOn(fs, "existsSync").mockReturnValue(false);
+
+      const pages = [
+        { id: "page-1", last_edited_time: "2024-01-01T00:00:00.000Z" },
+      ];
+
+      // Page should be marked as changed because output is missing
+      const changedPages = filterChangedPages(pages, cache);
+      expect(changedPages).toHaveLength(1);
+      expect(changedPages[0].id).toBe("page-1");
+
+      vi.restoreAllMocks();
+    });
+
+    it("should normalize paths when updating cache after processing", () => {
+      const cache = createEmptyCache("test-hash");
+
+      // Simulate processing with different path formats
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["docs/intro.md"], // No leading slash
+        false
+      );
+
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["/docs/intro.md"], // With leading slash
+        false
+      );
+
+      // Should be deduplicated to single normalized path
+      expect(cache.pages["page-1"].outputPaths).toHaveLength(1);
+      expect(cache.pages["page-1"].outputPaths[0]).toBe(
+        path.join(PROJECT_ROOT, "docs/intro.md")
+      );
+    });
+
+    it("should maintain consistency across multiple updates with different formats", () => {
+      const cache = createEmptyCache("test-hash");
+
+      // First update: English version
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["/docs/getting-started.md"],
+        false
+      );
+
+      // Second update: Portuguese version with different format
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        ["i18n/pt/docusaurus-plugin-content-docs/current/getting-started.md"],
+        false
+      );
+
+      // Third update: Spanish version with absolute path
+      updatePageInCache(
+        cache,
+        "page-1",
+        "2024-01-01T00:00:00.000Z",
+        [
+          path.join(
+            PROJECT_ROOT,
+            "i18n/es/docusaurus-plugin-content-docs/current/getting-started.md"
+          ),
+        ],
+        false
+      );
+
+      // All three paths should be stored, all normalized to absolute
+      expect(cache.pages["page-1"].outputPaths).toHaveLength(3);
+
+      const expectedPaths = [
+        path.join(PROJECT_ROOT, "docs/getting-started.md"),
+        path.join(
+          PROJECT_ROOT,
+          "i18n/pt/docusaurus-plugin-content-docs/current/getting-started.md"
+        ),
+        path.join(
+          PROJECT_ROOT,
+          "i18n/es/docusaurus-plugin-content-docs/current/getting-started.md"
+        ),
+      ];
+
+      for (const expectedPath of expectedPaths) {
+        expect(cache.pages["page-1"].outputPaths).toContain(expectedPath);
+      }
+    });
+  });
+
   describe("Script hash stability", () => {
     it("should produce consistent hash for same files", async () => {
       const hash1 = await computeScriptHash();

@@ -59,6 +59,7 @@ import {
   removePageFromCache,
   getCacheStats,
   hasMissingOutputs,
+  PROJECT_ROOT,
   type PageMetadataCache,
 } from "./pageMetadataCache";
 
@@ -750,9 +751,10 @@ export async function generateBlocks(
             if (cachedPage && cachedPage.outputPaths) {
               for (const outputPath of cachedPage.outputPaths) {
                 // Handle both absolute and relative paths from cache
+                // Use PROJECT_ROOT for consistency with pageMetadataCache normalization
                 const absPath = path.isAbsolute(outputPath)
                   ? outputPath
-                  : path.join(process.cwd(), outputPath);
+                  : path.join(PROJECT_ROOT, outputPath);
 
                 if (fs.existsSync(absPath)) {
                   const content = fs.readFileSync(absPath, "utf-8");

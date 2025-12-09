@@ -44,7 +44,10 @@ export function normalizePath(filePath: string): string {
   // (project-relative path where /docs doesn't exist at system root)
   if (path.isAbsolute(filePath)) {
     const parentDir = path.dirname(resolvedPath);
-    if (fs.existsSync(parentDir)) {
+    // Don't trust root directory as indicator - /a would have parent "/"
+    // which always exists but /a is likely meant to be project-relative
+    const isRootParent = path.parse(parentDir).root === parentDir;
+    if (!isRootParent && fs.existsSync(parentDir)) {
       return resolvedPath;
     }
   }

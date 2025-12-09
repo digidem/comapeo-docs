@@ -572,5 +572,31 @@ describe("Path Normalization Edge Cases", () => {
       // Behavior varies by platform, just ensure no error
       expect(result).toBeDefined();
     });
+
+    it("should treat root-level paths as project-relative even though / exists", () => {
+      // The root directory "/" always exists, but paths like /a or /x
+      // are almost certainly meant to be project-relative, not system paths
+      // Mock that "/" exists (it always does) but we should not trust it
+      existsSyncMock.mockImplementation((p: string) => {
+        return p === "/";
+      });
+
+      const rootLevelPath = "/a";
+      const result = normalizePath(rootLevelPath);
+      // Should be treated as project-relative, not as system path
+      expect(result).toBe(path.join(PROJECT_ROOT, "a"));
+    });
+
+    it("should handle nested paths where only root exists", () => {
+      // /foo/bar/baz.txt - parent /foo/bar doesn't exist, only / does
+      existsSyncMock.mockImplementation((p: string) => {
+        return p === "/";
+      });
+
+      const nestedPath = "/foo/bar/baz.txt";
+      const result = normalizePath(nestedPath);
+      // Should be treated as project-relative
+      expect(result).toBe(path.join(PROJECT_ROOT, "foo/bar/baz.txt"));
+    });
   });
 });

@@ -60,6 +60,7 @@ import {
   getCacheStats,
   hasMissingOutputs,
   PROJECT_ROOT,
+  normalizePath,
   type PageMetadataCache,
 } from "./pageMetadataCache";
 
@@ -735,12 +736,14 @@ export async function generateBlocks(
 
           // Check if this page needs processing (incremental sync)
           const cachedPage = metadataCache.pages[page.id];
+          // Normalize filePath for consistent comparison with cached paths
+          const normalizedFilePath = normalizePath(filePath);
           const needsProcessing =
             syncMode.fullRebuild ||
             !cachedPage ||
             hasMissingOutputs(metadataCache, page.id) ||
             // If path changed (e.g. moved/renamed), we must re-process even if timestamp is same
-            !cachedPage.outputPaths?.includes(filePath) ||
+            !cachedPage.outputPaths?.includes(normalizedFilePath) ||
             new Date(page.last_edited_time).getTime() >
               new Date(cachedPage.lastEdited).getTime();
 

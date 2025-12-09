@@ -61,7 +61,7 @@ export const PAGE_METADATA_CACHE_PATH = path.join(
 export interface PageMetadata {
   /** Notion's last_edited_time for the page */
   lastEdited: string;
-  /** Path to the generated output file(s), relative to project root */
+  /** Path to the generated output file(s), stored as absolute paths for consistency */
   outputPaths: string[];
   /** ISO timestamp when we processed this page */
   processedAt: string;

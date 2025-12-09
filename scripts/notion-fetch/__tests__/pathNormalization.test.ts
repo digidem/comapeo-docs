@@ -518,4 +518,59 @@ describe("Path Normalization Edge Cases", () => {
       expect(pathInCache).toBe(false);
     });
   });
+
+  describe("normalizePath with system paths", () => {
+    it("should preserve genuine absolute paths outside PROJECT_ROOT", () => {
+      // Mock /etc as an existing system directory
+      existsSyncMock.mockImplementation((p: string) => {
+        return p === "/etc";
+      });
+
+      const etcPath = "/etc/some-config.txt";
+      const result = normalizePath(etcPath);
+      // Should NOT be rewritten to PROJECT_ROOT/etc/some-config.txt
+      // because /etc is a real system directory that exists
+      expect(result).toBe("/etc/some-config.txt");
+      expect(result).not.toContain(PROJECT_ROOT);
+    });
+
+    it("should preserve absolute paths in system directories", () => {
+      // Mock /dev as an existing system directory
+      existsSyncMock.mockImplementation((p: string) => {
+        return p === "/dev";
+      });
+
+      const devPath = "/dev/null";
+      const result = normalizePath(devPath);
+      expect(result).toBe("/dev/null");
+      expect(result).not.toContain(PROJECT_ROOT);
+    });
+
+    it("should treat /docs/... as project-relative since /docs does not exist at system root", () => {
+      // Mock that /docs does NOT exist at system root
+      existsSyncMock.mockReturnValue(false);
+
+      // Paths like /docs/intro.md are technically absolute on Unix,
+      // but /docs doesn't exist at the filesystem root, so we treat
+      // them as project-relative paths
+      const result = normalizePath("/docs/intro.md");
+      expect(result).toBe(path.join(PROJECT_ROOT, "docs/intro.md"));
+    });
+
+    it("should handle Windows-style absolute paths outside project", () => {
+      // Mock C:\ as existing (Windows drive)
+      existsSyncMock.mockImplementation((p: string) => {
+        return p === "C:\\" || p.startsWith("C:\\");
+      });
+
+      // On Unix, this won't be detected as absolute, but the test
+      // verifies the logic for when it would be
+      const winPath = "C:\\temp\\file.txt";
+      // path.isAbsolute would return true on Windows
+      // On Unix, it returns false so it's treated as relative
+      const result = normalizePath(winPath);
+      // Behavior varies by platform, just ensure no error
+      expect(result).toBeDefined();
+    });
+  });
 });

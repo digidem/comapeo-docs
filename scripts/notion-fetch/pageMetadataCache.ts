@@ -15,8 +15,12 @@ export const PROJECT_ROOT = path.resolve(__dirname, "../..");
  * Handles both absolute and relative paths, resolving relative paths
  * against PROJECT_ROOT.
  *
- * Important: Paths like "/docs/intro.md" are treated as project-relative
- * (not filesystem absolute) unless they start with PROJECT_ROOT.
+ * Path handling rules:
+ * 1. Paths that resolve to within PROJECT_ROOT are returned normalized
+ * 2. Genuine system paths (e.g., /tmp/foo where /tmp exists) are returned as-is
+ * 3. Paths that look absolute but aren't real system paths (e.g., /docs/intro.md
+ *    where /docs doesn't exist) are treated as project-relative
+ * 4. Relative paths are resolved against PROJECT_ROOT
  *
  * @param filePath - The path to normalize (can be absolute or relative)
  * @returns Absolute, normalized path
@@ -26,15 +30,27 @@ export function normalizePath(filePath: string): string {
     return "";
   }
 
-  // Check if this is a truly absolute path (starts with PROJECT_ROOT)
-  // Paths like "/docs/intro.md" on Unix look absolute but are actually
-  // project-relative paths that should be resolved against PROJECT_ROOT
+  // Resolve the path to get an absolute, normalized form
   const resolvedPath = path.resolve(filePath);
+
+  // If the resolved path is within PROJECT_ROOT, return it
   if (resolvedPath.startsWith(PROJECT_ROOT)) {
     return resolvedPath;
   }
 
-  // For all other paths (including /docs/... on Unix), treat as project-relative
+  // If this is an absolute path, check if it's a genuine system path
+  // by verifying the parent directory exists on the filesystem.
+  // This distinguishes /tmp/foo (real system path) from /docs/intro.md
+  // (project-relative path where /docs doesn't exist at system root)
+  if (path.isAbsolute(filePath)) {
+    const parentDir = path.dirname(resolvedPath);
+    if (fs.existsSync(parentDir)) {
+      return resolvedPath;
+    }
+  }
+
+  // For relative paths, or absolute paths whose parent doesn't exist
+  // (indicating they're meant to be project-relative), resolve against PROJECT_ROOT
   // Strip leading slash if present (common in stored paths like "/docs/...")
   const cleanPath = filePath.replace(/^\//, "");
   return path.resolve(PROJECT_ROOT, cleanPath);

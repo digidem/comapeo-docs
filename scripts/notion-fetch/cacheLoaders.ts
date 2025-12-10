@@ -14,6 +14,8 @@ import { buildCacheKey } from "./cacheStrategies";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { n2m } from "../notionClient";
 
+import { isUrlExpiringSoon } from "./imageReplacer";
+
 /**
  * Logs progress for data fetching operations
  * Throttles output to reduce noise: logs at index 0, last item, and every 10th item
@@ -54,8 +56,34 @@ export interface CacheLoaderConfig<T> {
   fetchFn: (pageId: string) => Promise<T>;
   /** Normalizes fetched data to expected type */
   normalizeResult: (result: any) => T;
+  /** Optional validator for fetched data. Returns true if valid. */
+  validateResult?: (result: T) => boolean;
   /** Prefix for progress log messages */
   logPrefix: string;
+}
+
+/**
+ * Helper to check if data contains expiring S3 URLs
+ */
+function containsExpiringUrls(data: any): boolean {
+  try {
+    const json = JSON.stringify(data);
+    // Rough regex to find URLs in JSON strings
+    // Handles https:// and escaped https:\/\/
+    const urlRegex = /"(https?:(?:\/|\\\/)(?:\/|\\\/)[^"]+)"/g;
+    let match;
+    while ((match = urlRegex.exec(json)) !== null) {
+      // Unescape forward slashes just in case
+      const url = match[1].replace(/\\\//g, "/");
+      if (isUrlExpiringSoon(url)) {
+        return true;
+      }
+    }
+  } catch (e) {
+    // If stringify fails (circular etc), assume safe
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -64,6 +92,7 @@ export interface CacheLoaderConfig<T> {
  * 2. Prefetch cache lookup
  * 3. In-flight request deduplication
  * 4. Cache hit/miss tracking
+ * 5. Validation and retry for fresh content
  *
  * @returns Object with fetched/cached data and source indicator
  */
@@ -103,10 +132,50 @@ export async function loadWithCache<T>(
     config.fetchCount.value += 1;
     logProgress(pageIndex, totalCount, config.logPrefix, title);
     inFlight = (async () => {
-      const result = await config.fetchFn(pageId);
-      const normalized = config.normalizeResult(result);
-      config.prefetchCache.set(cacheKey, normalized);
-      return normalized;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3; // Try up to 3 times
+      let lastError;
+
+      while (attempts < MAX_ATTEMPTS) {
+        attempts++;
+        try {
+          const result = await config.fetchFn(pageId);
+          const normalized = config.normalizeResult(result);
+
+          if (config.validateResult) {
+            const isValid = config.validateResult(normalized);
+            if (!isValid) {
+              // If invalid (expiring URLs), retry
+              if (attempts < MAX_ATTEMPTS) {
+                const delay = attempts * 1000; // Linear backoff: 1s, 2s
+                console.warn(
+                  chalk.yellow(
+                    `    ⚠️  Content validation failed for "${title}" (attempt ${attempts}/${MAX_ATTEMPTS}), retrying in ${delay}ms...`
+                  )
+                );
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                continue;
+              } else {
+                console.warn(
+                  chalk.yellow(
+                    `    ⚠️  Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts. Using result anyway.`
+                  )
+                );
+              }
+            }
+          }
+
+          config.prefetchCache.set(cacheKey, normalized);
+          return normalized;
+        } catch (error) {
+          lastError = error;
+          // Only retry network errors if needed, but here we focus on validation logic loop
+          // If fetchFn fails, we might want to retry too, but let's stick to validation logic for now unless fetchFn is flaky
+          throw error;
+        }
+      }
+      // Should not reach here if we throw on error or return on success
+      return config.normalizeResult([]); // fallback
     })()
       .catch((error) => {
         config.prefetchCache.delete(cacheKey);
@@ -146,6 +215,7 @@ export async function loadBlocksForPage(
     fetchCount: blockFetchCount,
     fetchFn: fetchNotionBlocks,
     normalizeResult: (result) => (Array.isArray(result) ? result : []),
+    validateResult: (blocks) => !containsExpiringUrls(blocks),
     logPrefix: "Fetching blocks",
   });
 }
@@ -172,7 +242,8 @@ export async function loadMarkdownForPage(
     fetchCount: markdownFetchCount,
     fetchFn: (pageId) => n2m.pageToMarkdown(pageId),
     normalizeResult: (result) =>
-      Array.isArray(result) ? result : (result ?? []),
+      Array.isArray(result) ? result : result ?? [],
+    validateResult: (markdown) => !containsExpiringUrls(markdown),
     logPrefix: "Converting markdown",
   });
 }

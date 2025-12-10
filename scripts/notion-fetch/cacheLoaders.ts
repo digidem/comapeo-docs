@@ -66,7 +66,10 @@ export interface CacheLoaderConfig<T> {
  * Helper to check if data contains expiring S3 URLs using recursive traversal
  * Avoids JSON.stringify overhead and regex DoS risks
  */
-export function containsExpiringUrls(data: any, visited = new WeakSet()): boolean {
+export function containsExpiringUrls(
+  data: any,
+  visited = new WeakSet()
+): boolean {
   if (data === null || data === undefined) {
     return false;
   }
@@ -86,6 +89,26 @@ export function containsExpiringUrls(data: any, visited = new WeakSet()): boolea
     return false;
   }
   visited.add(data);
+
+  // Traverse Maps
+  if (data instanceof Map) {
+    for (const value of data.values()) {
+      if (containsExpiringUrls(value, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Traverse Sets
+  if (data instanceof Set) {
+    for (const value of data.values()) {
+      if (containsExpiringUrls(value, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   // Traverse arrays
   if (Array.isArray(data)) {
@@ -157,20 +180,26 @@ export async function loadWithCache<T>(
     inFlight = (async () => {
       let attempts = 0;
       const MAX_ATTEMPTS = 3;
+      let lastNormalized: T | null = null;
 
       while (attempts < MAX_ATTEMPTS) {
         attempts++;
         try {
           const result = await config.fetchFn(pageId);
           const normalized = config.normalizeResult(result);
+          lastNormalized = normalized;
 
           if (config.validateResult) {
             const isValid = config.validateResult(normalized);
             if (!isValid) {
               if (attempts === MAX_ATTEMPTS) {
-                const msg = `Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts.`;
-                console.error(chalk.red(`    ❌ ${msg}`));
-                throw new Error(msg);
+                console.warn(
+                  chalk.yellow(
+                    `    ⚠️  Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts; using latest result.`
+                  )
+                );
+                config.prefetchCache.set(cacheKey, normalized);
+                return normalized;
               }
 
               const delay = attempts * 1000; // Linear backoff: 1s, 2s
@@ -199,7 +228,10 @@ export async function loadWithCache<T>(
           // However, we want to respect the 'continue' for validation failures.
 
           // If strict validation error thrown above:
-          if (error instanceof Error && error.message.includes("Content validation failed")) {
+          if (
+            error instanceof Error &&
+            error.message.includes("Content validation failed")
+          ) {
             throw error;
           }
 
@@ -277,7 +309,7 @@ export async function loadMarkdownForPage(
     fetchCount: markdownFetchCount,
     fetchFn: (pageId) => n2m.pageToMarkdown(pageId),
     normalizeResult: (result) =>
-      Array.isArray(result) ? result : result ?? [],
+      Array.isArray(result) ? result : (result ?? []),
     validateResult: (markdown) => !containsExpiringUrls(markdown),
     logPrefix: "Converting markdown",
   });

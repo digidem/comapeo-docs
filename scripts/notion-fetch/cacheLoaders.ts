@@ -121,11 +121,9 @@ export function containsExpiringUrls(
   }
 
   // Traverse object values
-  for (const key in data) {
-    if (Object.prototype.hasOwnProperty.call(data, key)) {
-      if (containsExpiringUrls(data[key], visited)) {
-        return true;
-      }
+  for (const value of Object.values(data)) {
+    if (containsExpiringUrls(value, visited)) {
+      return true;
     }
   }
 

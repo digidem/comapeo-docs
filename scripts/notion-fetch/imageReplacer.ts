@@ -815,6 +815,12 @@ export function isUrlExpiringSoon(
     // If we assume all signed URLs expire in 1 hour (common default), we might guess,
     // but better to be conservative and rely on explicit params.
   } catch (e) {
+    // Log malformed URLs for debugging
+    if (process.env.DEBUG_S3_IMAGES === "true") {
+      console.warn(
+        chalk.yellow(`⚠️  Failed to parse URL expiration: ${e instanceof Error ? e.message : String(e)} (URL: ${url})`)
+      );
+    }
     // If URL parsing fails, logic safely falls through to return false
     // (assume valid or effectively infinite if we can't parse expiration)
   }

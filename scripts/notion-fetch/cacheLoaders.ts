@@ -63,26 +63,49 @@ export interface CacheLoaderConfig<T> {
 }
 
 /**
- * Helper to check if data contains expiring S3 URLs
+ * Helper to check if data contains expiring S3 URLs using recursive traversal
+ * Avoids JSON.stringify overhead and regex DoS risks
  */
-function containsExpiringUrls(data: any): boolean {
-  try {
-    const json = JSON.stringify(data);
-    // Rough regex to find URLs in JSON strings
-    // Handles https:// and escaped https:\/\/
-    const urlRegex = /"(https?:(?:\/|\\\/)(?:\/|\\\/)[^"]+)"/g;
-    let match;
-    while ((match = urlRegex.exec(json)) !== null) {
-      // Unescape forward slashes just in case
-      const url = match[1].replace(/\\\//g, "/");
-      if (isUrlExpiringSoon(url)) {
+export function containsExpiringUrls(data: any, visited = new WeakSet()): boolean {
+  if (data === null || data === undefined) {
+    return false;
+  }
+
+  // Check strings directly
+  if (typeof data === "string") {
+    return isUrlExpiringSoon(data);
+  }
+
+  // Skip non-objects
+  if (typeof data !== "object") {
+    return false;
+  }
+
+  // Handle circular references
+  if (visited.has(data)) {
+    return false;
+  }
+  visited.add(data);
+
+  // Traverse arrays
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (containsExpiringUrls(item, visited)) {
         return true;
       }
     }
-  } catch (e) {
-    // If stringify fails (circular etc), assume safe
     return false;
   }
+
+  // Traverse object values
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      if (containsExpiringUrls(data[key], visited)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -133,8 +156,7 @@ export async function loadWithCache<T>(
     logProgress(pageIndex, totalCount, config.logPrefix, title);
     inFlight = (async () => {
       let attempts = 0;
-      const MAX_ATTEMPTS = 3; // Try up to 3 times
-      let lastError;
+      const MAX_ATTEMPTS = 3;
 
       while (attempts < MAX_ATTEMPTS) {
         attempts++;
@@ -145,37 +167,50 @@ export async function loadWithCache<T>(
           if (config.validateResult) {
             const isValid = config.validateResult(normalized);
             if (!isValid) {
-              // If invalid (expiring URLs), retry
-              if (attempts < MAX_ATTEMPTS) {
-                const delay = attempts * 1000; // Linear backoff: 1s, 2s
-                console.warn(
-                  chalk.yellow(
-                    `    ⚠️  Content validation failed for "${title}" (attempt ${attempts}/${MAX_ATTEMPTS}), retrying in ${delay}ms...`
-                  )
-                );
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                continue;
-              } else {
-                console.warn(
-                  chalk.yellow(
-                    `    ⚠️  Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts. Using result anyway.`
-                  )
-                );
+              if (attempts === MAX_ATTEMPTS) {
+                const msg = `Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts.`;
+                console.error(chalk.red(`    ❌ ${msg}`));
+                throw new Error(msg);
               }
+
+              const delay = attempts * 1000; // Linear backoff: 1s, 2s
+              console.warn(
+                chalk.yellow(
+                  `    ⚠️  Content validation failed for "${title}" (attempt ${attempts}/${MAX_ATTEMPTS}), retrying in ${delay}ms...`
+                )
+              );
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
             }
           }
 
+          // Validation passed
           config.prefetchCache.set(cacheKey, normalized);
           return normalized;
         } catch (error) {
-          lastError = error;
-          // Only retry network errors if needed, but here we focus on validation logic loop
-          // If fetchFn fails, we might want to retry too, but let's stick to validation logic for now unless fetchFn is flaky
+          // If it was our validation error, just propagate it if we are out of retries
+          // But if it was a fetch error, we might want to retry that too?
+          // The current logic places the retry loop AROUND the fetch+validate.
+          // So if fetch throws, we also want to separate network retry from validation retry?
+          // Standard fetchFn likely has its own retries (notionClient.ts usually does).
+          // Assuming fetchFn throws on permanent failure.
+          // We will re-throw fetch errors immediately unless we want to use this loop for fetch retries too.
+          // The previous code re-threw unexpected errors.
+          // However, we want to respect the 'continue' for validation failures.
+
+          // If strict validation error thrown above:
+          if (error instanceof Error && error.message.includes("Content validation failed")) {
+            throw error;
+          }
+
+          // If fetch error, we let it bubble up (assuming fetchFn manages its own resiliency usually,
+          // OR if we want to use this loop for generic retries, we could 'continue' here too.
+          // But instructions were specific about validation retry.
           throw error;
         }
       }
-      // Should not reach here if we throw on error or return on success
-      return config.normalizeResult([]); // fallback
+
+      throw new Error("Unexpected end of retry loop");
     })()
       .catch((error) => {
         config.prefetchCache.delete(cacheKey);

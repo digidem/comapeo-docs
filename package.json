@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
+    "prepare": "lefthook install",
     "dev": "docusaurus start",
     "dev:es": "docusaurus start --locale es",
     "dev:pt": "docusaurus start --locale pt",

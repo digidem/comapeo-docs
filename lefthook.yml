@@ -19,14 +19,16 @@
 #
 pre-commit:
   parallel: true
-  jobs:
-    - run: npx eslint {staged_files}
+  commands:
+    eslint:
       glob: "*.{js,ts,jsx,tsx}"
-
-    - name: notion-fetch-tests
-      run: npx vitest --run scripts/notion-fetch/__tests__/
+      run: bunx eslint --cache --cache-location ./node_modules/.cache/eslint --max-warnings=0 --fix {staged_files}
       stage_fixed: true
+
+    notion-fetch-tests:
       glob: "scripts/notion-fetch/**/__tests__/**/*.{ts,js}"
+      run: bunx vitest --run scripts/notion-fetch/__tests__/
+      stage_fixed: true
 
     # - name: rubocop
     #   glob: "*.rb"

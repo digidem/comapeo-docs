@@ -59,6 +59,8 @@ import {
   removePageFromCache,
   getCacheStats,
   hasMissingOutputs,
+  PROJECT_ROOT,
+  normalizePath,
   type PageMetadataCache,
 } from "./pageMetadataCache";
 
@@ -734,12 +736,14 @@ export async function generateBlocks(
 
           // Check if this page needs processing (incremental sync)
           const cachedPage = metadataCache.pages[page.id];
+          // Normalize filePath for consistent comparison with cached paths
+          const normalizedFilePath = normalizePath(filePath);
           const needsProcessing =
             syncMode.fullRebuild ||
             !cachedPage ||
             hasMissingOutputs(metadataCache, page.id) ||
             // If path changed (e.g. moved/renamed), we must re-process even if timestamp is same
-            !cachedPage.outputPaths?.includes(filePath) ||
+            !cachedPage.outputPaths?.includes(normalizedFilePath) ||
             new Date(page.last_edited_time).getTime() >
               new Date(cachedPage.lastEdited).getTime();
 
@@ -750,9 +754,10 @@ export async function generateBlocks(
             if (cachedPage && cachedPage.outputPaths) {
               for (const outputPath of cachedPage.outputPaths) {
                 // Handle both absolute and relative paths from cache
+                // Use PROJECT_ROOT for consistency with pageMetadataCache normalization
                 const absPath = path.isAbsolute(outputPath)
                   ? outputPath
-                  : path.join(process.cwd(), outputPath);
+                  : path.join(PROJECT_ROOT, outputPath);
 
                 if (fs.existsSync(absPath)) {
                   const content = fs.readFileSync(absPath, "utf-8");

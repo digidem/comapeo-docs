@@ -4,7 +4,60 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
+
+/**
+ * Project root directory, exported for consistent path resolution across modules.
+ */
+export const PROJECT_ROOT = path.resolve(__dirname, "../..");
+
+/**
+ * Normalize a file path to an absolute path for consistent comparison.
+ * Handles both absolute and relative paths, resolving relative paths
+ * against PROJECT_ROOT.
+ *
+ * Path handling rules:
+ * 1. Paths that resolve to within PROJECT_ROOT are returned normalized
+ * 2. Genuine system paths (e.g., /tmp/foo where /tmp exists) are returned as-is
+ * 3. Paths that look absolute but aren't real system paths (e.g., /docs/intro.md
+ *    where /docs doesn't exist) are treated as project-relative
+ * 4. Relative paths are resolved against PROJECT_ROOT
+ *
+ * @param filePath - The path to normalize (can be absolute or relative)
+ * @returns Absolute, normalized path
+ */
+export function normalizePath(filePath: string): string {
+  if (!filePath) {
+    return "";
+  }
+
+  // Resolve the path to get an absolute, normalized form
+  const resolvedPath = path.resolve(filePath);
+
+  // If the resolved path is within PROJECT_ROOT, return it
+  if (resolvedPath.startsWith(PROJECT_ROOT)) {
+    return resolvedPath;
+  }
+
+  // If this is an absolute path, check if it's a genuine system path
+  // by verifying the parent directory exists on the filesystem.
+  // This distinguishes /tmp/foo (real system path) from /docs/intro.md
+  // (project-relative path where /docs doesn't exist at system root)
+  if (path.isAbsolute(filePath)) {
+    const parentDir = path.dirname(resolvedPath);
+    // Don't trust root directory as indicator - /a would have parent "/"
+    // which always exists but /a is likely meant to be project-relative
+    const isRootParent = path.parse(parentDir).root === parentDir;
+    if (!isRootParent && fs.existsSync(parentDir)) {
+      return resolvedPath;
+    }
+  }
+
+  // For relative paths, or absolute paths whose parent doesn't exist
+  // (indicating they're meant to be project-relative), resolve against PROJECT_ROOT
+  // Strip leading slash if present (common in stored paths like "/docs/...")
+  const cleanPath = filePath.replace(/^\//, "");
+  return path.resolve(PROJECT_ROOT, cleanPath);
+}
 
 /**
  * Current cache schema version.
@@ -27,7 +80,7 @@ export const PAGE_METADATA_CACHE_PATH = path.join(
 export interface PageMetadata {
   /** Notion's last_edited_time for the page */
   lastEdited: string;
-  /** Path to the generated output file(s), relative to project root */
+  /** Path to the generated output file(s), stored as absolute paths for consistency */
   outputPaths: string[];
   /** ISO timestamp when we processed this page */
   processedAt: string;
@@ -247,6 +300,12 @@ export function findDeletedPages(
  * Determine whether any cached output files for a page are missing on disk.
  * Missing outputs should trigger regeneration even if the Notion timestamp
  * hasn't changed (e.g., manual deletion or previous failed write).
+ *
+ * Uses normalizePath for consistent path resolution across different
+ * execution environments (CI vs local, different working directories).
+ *
+ * NOTE: Returns true for empty outputPaths arrays as this indicates
+ * the page was cached but no outputs were successfully written.
  */
 export function hasMissingOutputs(
   cache: PageMetadataCache | null,
@@ -261,15 +320,18 @@ export function hasMissingOutputs(
     return false;
   }
 
+  // Empty outputPaths means no outputs were written - treat as missing
+  if (cached.outputPaths.length === 0) {
+    return true;
+  }
+
   return cached.outputPaths.some((outputPath) => {
     if (!outputPath) {
       return true;
     }
 
-    const absolutePath = path.isAbsolute(outputPath)
-      ? outputPath
-      : path.join(PROJECT_ROOT, outputPath.replace(/^\//, ""));
-
+    // Use normalizePath for consistent resolution
+    const absolutePath = normalizePath(outputPath);
     return !fs.existsSync(absolutePath);
   });
 }
@@ -277,6 +339,9 @@ export function hasMissingOutputs(
 /**
  * Update cache with a processed page's metadata.
  * This should be called after successfully processing each page.
+ *
+ * Paths are normalized before storage to ensure consistent comparison
+ * across different execution environments (CI vs local).
  *
  * @param cache - Cache to update (mutated in place)
  * @param pageId - Notion page ID
@@ -293,17 +358,26 @@ export function updatePageInCache(
   const existing = cache.pages[pageId];
   const mergedOutputs = new Set<string>();
 
+  // Normalize existing paths to ensure consistent comparison
+  // (handles migration from older caches that stored non-normalized paths)
   if (existing?.outputPaths?.length) {
     for (const p of existing.outputPaths) {
       if (p) {
-        mergedOutputs.add(p);
+        const normalized = normalizePath(p);
+        if (normalized) {
+          mergedOutputs.add(normalized);
+        }
       }
     }
   }
 
+  // Normalize new paths for consistent storage and comparison
   for (const p of outputPaths) {
     if (p) {
-      mergedOutputs.add(p);
+      const normalized = normalizePath(p);
+      if (normalized) {
+        mergedOutputs.add(normalized);
+      }
     }
   }
 

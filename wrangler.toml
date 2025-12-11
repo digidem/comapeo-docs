@@ -1,8 +1,2 @@
 name = "comapeo-docs"
-compatibility_date = "2024-01-01"
-
-[env.production]
-name = "comapeo-docs-production"
-
-[env.staging]
-name = "comapeo-docs-staging"
+compatibility_date = "2025-12-09"

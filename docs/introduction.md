@@ -58,7 +58,7 @@ The pages have been divided into common stages of using CoMapeo. Each stage may 
 **Observations & Tracks**
 
 
-[**Gathering Observations & Tracks**](/docs/category/gathering-observations-and-tracks)  provides overviews and walkthroughs of all features related to gathering GIS information and add details and media files that can be collected with CoMapeo.
+[**Gathering Observations & Tracks**](/docs/category/gathering-observations--tracks)  provides overviews and walkthroughs of all features related to gathering GIS information and add details and media files that can be collected with CoMapeo.
 
 
 [**Reviewing Observations**](/docs/category/reviewing-observations) explains in detail ways to review and edit Observations and Tracks.
@@ -71,7 +71,7 @@ The pages have been divided into common stages of using CoMapeo. Each stage may 
 [**Encryption & Security**](/docs/encryption-and-security)  addresses common data security concerns people have when considering use of new application.
 
 
-[**Managing Data Privacy & Security**](/docs/category/managing-data-privacy-and-security) details the features available in CoMapeo to control data privacy and app access for security considerations.
+[**Managing Data Privacy & Security**](/docs/category/managing-data-privacy--security) details the features available in CoMapeo to control data privacy and app access for security considerations.
 
 
 ---

@@ -2,7 +2,7 @@
 id: doc-device-setup-and-maintenance-for-comapeo
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 3
+sidebar_position: 2
 pagination_label: Nueva Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/device-setup-and-maintenance-for-comapeo.md
 keywords:

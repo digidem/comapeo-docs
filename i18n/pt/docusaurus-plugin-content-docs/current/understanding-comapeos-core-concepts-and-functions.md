@@ -2,7 +2,7 @@
 id: doc-understanding-comapeos-core-concepts-and-functions
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 2
+sidebar_position: 1
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/understanding-comapeos-core-concepts-and-functions.md
 keywords:

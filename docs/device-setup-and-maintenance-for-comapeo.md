@@ -2,7 +2,7 @@
 id: doc-device-setup-and-maintenance-for-comapeo
 title: Device Setup & Maintenance for CoMapeo
 sidebar_label: Device Setup & Maintenance for CoMapeo
-sidebar_position: 3
+sidebar_position: 2
 pagination_label: Device Setup & Maintenance for CoMapeo
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/device-setup-and-maintenance-for-comapeo.md
 keywords:
@@ -72,17 +72,21 @@ CoMapeo isn’t a large app, and the observation data (GPS coordinates and notes
 - Make sure you have a strong PIN, pattern, or fingerprint to open the screen - to keep CoMapeo data safe if you lose your phone, or it falls into the wrong hands.
 
 - You can also secure access to CoMapeo by setting an app passcode: see **Working with an App Passcode**
+:::
+---
 
 
-✅ **Keep your operating system updated**
+:::note ✅ Keep your operating system updated
 _**Step 1:**_ Go to Settings
 
 _**Step 2:**_ Tap on Software Update
 
 ![Screenshot_20250929_180912_Settings.jpg](/images/devicesetupandmainte_4.jpg)
+:::
+---
 
 
-✅ **Keep your android apps updated**
+:::note ✅ Keep your android apps updated
 _**Step 1:**_ Open Google Play Store
 
 _**Step 2**_**:** Open main menu (Google profile picture)
@@ -149,7 +153,7 @@ Android Setting → App Management → CoMapeo
 ## Related Content
 
 
-Go to 🔗 [**Installing CoMapeo &** ](/docs/installing-comapeo--onboarding/)[**Onbo**](/docs/installing-comapeo-and-onboarding/)[**arding**](/docs/installing-comapeo--onboarding/) 
+Go to 🔗 [**Installing CoMapeo & Onbo**](/docs/installing-comapeo-and-onboarding/)[**arding**](/docs/installing-comapeo--onboarding/) 
 
 
 ### Having Problems?

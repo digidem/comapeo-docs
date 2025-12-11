@@ -2,7 +2,7 @@
 id: doc-initial-use-and-comapeo-settings
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 5
+sidebar_position: 3
 pagination_label: Nova Página
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/initial-use-and-comapeo-settings.md
 keywords:

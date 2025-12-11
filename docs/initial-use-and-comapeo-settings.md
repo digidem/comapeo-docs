@@ -2,7 +2,7 @@
 id: doc-initial-use-and-comapeo-settings
 title: Initial Use & CoMapeo Settings
 sidebar_label: Initial Use & CoMapeo Settings
-sidebar_position: 5
+sidebar_position: 3
 pagination_label: Initial Use & CoMapeo Settings
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/initial-use-and-comapeo-settings.md
 keywords:

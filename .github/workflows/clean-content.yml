@@ -2,16 +2,16 @@ name: Clean All Generated Content
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: 'Type "yes" to confirm deletion of generated content'
-        required: true
-        default: "no"
-        type: choice
-        options:
-          - "no"
-          - "yes"
-
+    # inputs:
+    #   confirm:
+    #     description: 'Type "yes" to confirm deletion of generated content'
+    #     required: true
+    #     default: "no"
+    #     type: choice
+    #     options:
+    #       - "no"
+    #       - "yes"
+    #
 # Prevent concurrent content updates to avoid conflicts
 concurrency:
   group: "content-branch-updates"
@@ -35,15 +35,15 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Validate confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
-            echo "❌ Confirmation not provided. Operation cancelled."
-            echo "To proceed, set the 'confirm' input to 'yes'"
-            exit 1
-          fi
-          echo "✅ Confirmation received. Proceeding with cleanup..."
-
+      # - name: Validate confirmation
+      #   run: |
+      #     if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
+      #       echo "❌ Confirmation not provided. Operation cancelled."
+      #       echo "To proceed, set the 'confirm' input to 'yes'"
+      #       exit 1
+      #     fi
+      #     echo "✅ Confirmation received. Proceeding with cleanup..."
+      #
       - name: Clean generated content
         run: bun run clean:generated --confirm=yes
 

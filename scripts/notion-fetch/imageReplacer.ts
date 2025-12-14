@@ -560,10 +560,10 @@ export async function processAndReplaceImages(
   const progressTracker =
     validImages.length > 0
       ? new ProgressTracker({
-        total: validImages.length,
-        operation: "images",
-        spinnerTimeoutMs: 150000, // 2.5 minutes
-      })
+          total: validImages.length,
+          operation: "images",
+          spinnerTimeoutMs: 150000, // 2.5 minutes
+        })
       : undefined;
 
   const batchResults = await processBatch(
@@ -818,7 +818,9 @@ export function isUrlExpiringSoon(
     // Log malformed URLs for debugging
     if (process.env.DEBUG_S3_IMAGES === "true") {
       console.warn(
-        chalk.yellow(`⚠️  Failed to parse URL expiration: ${e instanceof Error ? e.message : String(e)} (URL: ${url})`)
+        chalk.yellow(
+          `⚠️  Failed to parse URL expiration: ${e instanceof Error ? e.message : String(e)} (URL: ${url})`
+        )
       );
     }
     // If URL parsing fails, logic safely falls through to return false

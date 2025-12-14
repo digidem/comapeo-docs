@@ -14,6 +14,8 @@ import { buildCacheKey } from "./cacheStrategies";
 import { fetchNotionBlocks } from "../fetchNotionData";
 import { n2m } from "../notionClient";
 
+import { isUrlExpiringSoon } from "./imageReplacer";
+
 /**
  * Logs progress for data fetching operations
  * Throttles output to reduce noise: logs at index 0, last item, and every 10th item
@@ -54,8 +56,78 @@ export interface CacheLoaderConfig<T> {
   fetchFn: (pageId: string) => Promise<T>;
   /** Normalizes fetched data to expected type */
   normalizeResult: (result: any) => T;
+  /** Optional validator for fetched data. Returns true if valid. */
+  validateResult?: (result: T) => boolean;
   /** Prefix for progress log messages */
   logPrefix: string;
+}
+
+/**
+ * Helper to check if data contains expiring S3 URLs using recursive traversal
+ * Avoids JSON.stringify overhead and regex DoS risks
+ */
+export function containsExpiringUrls(
+  data: any,
+  visited = new WeakSet()
+): boolean {
+  if (data === null || data === undefined) {
+    return false;
+  }
+
+  // Check strings directly
+  if (typeof data === "string") {
+    return isUrlExpiringSoon(data);
+  }
+
+  // Skip non-objects
+  if (typeof data !== "object") {
+    return false;
+  }
+
+  // Handle circular references
+  if (visited.has(data)) {
+    return false;
+  }
+  visited.add(data);
+
+  // Traverse Maps
+  if (data instanceof Map) {
+    for (const value of data.values()) {
+      if (containsExpiringUrls(value, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Traverse Sets
+  if (data instanceof Set) {
+    for (const value of data.values()) {
+      if (containsExpiringUrls(value, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Traverse arrays
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (containsExpiringUrls(item, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Traverse object values
+  for (const value of Object.values(data)) {
+    if (containsExpiringUrls(value, visited)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -64,6 +136,7 @@ export interface CacheLoaderConfig<T> {
  * 2. Prefetch cache lookup
  * 3. In-flight request deduplication
  * 4. Cache hit/miss tracking
+ * 5. Validation and retry for fresh content
  *
  * @returns Object with fetched/cached data and source indicator
  */
@@ -103,10 +176,71 @@ export async function loadWithCache<T>(
     config.fetchCount.value += 1;
     logProgress(pageIndex, totalCount, config.logPrefix, title);
     inFlight = (async () => {
-      const result = await config.fetchFn(pageId);
-      const normalized = config.normalizeResult(result);
-      config.prefetchCache.set(cacheKey, normalized);
-      return normalized;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3;
+      let lastNormalized: T | null = null;
+
+      while (attempts < MAX_ATTEMPTS) {
+        attempts++;
+        try {
+          const result = await config.fetchFn(pageId);
+          const normalized = config.normalizeResult(result);
+          lastNormalized = normalized;
+
+          if (config.validateResult) {
+            const isValid = config.validateResult(normalized);
+            if (!isValid) {
+              if (attempts === MAX_ATTEMPTS) {
+                console.warn(
+                  chalk.yellow(
+                    `    ⚠️  Content validation failed for "${title}" after ${MAX_ATTEMPTS} attempts; using latest result.`
+                  )
+                );
+                config.prefetchCache.set(cacheKey, normalized);
+                return normalized;
+              }
+
+              const delay = attempts * 1000; // Linear backoff: 1s, 2s
+              console.warn(
+                chalk.yellow(
+                  `    ⚠️  Content validation failed for "${title}" (attempt ${attempts}/${MAX_ATTEMPTS}), retrying in ${delay}ms...`
+                )
+              );
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+
+          // Validation passed
+          config.prefetchCache.set(cacheKey, normalized);
+          return normalized;
+        } catch (error) {
+          // If it was our validation error, just propagate it if we are out of retries
+          // But if it was a fetch error, we might want to retry that too?
+          // The current logic places the retry loop AROUND the fetch+validate.
+          // So if fetch throws, we also want to separate network retry from validation retry?
+          // Standard fetchFn likely has its own retries (notionClient.ts usually does).
+          // Assuming fetchFn throws on permanent failure.
+          // We will re-throw fetch errors immediately unless we want to use this loop for fetch retries too.
+          // The previous code re-threw unexpected errors.
+          // However, we want to respect the 'continue' for validation failures.
+
+          // If strict validation error thrown above:
+          if (
+            error instanceof Error &&
+            error.message.includes("Content validation failed")
+          ) {
+            throw error;
+          }
+
+          // If fetch error, we let it bubble up (assuming fetchFn manages its own resiliency usually,
+          // OR if we want to use this loop for generic retries, we could 'continue' here too.
+          // But instructions were specific about validation retry.
+          throw error;
+        }
+      }
+
+      throw new Error("Unexpected end of retry loop");
     })()
       .catch((error) => {
         config.prefetchCache.delete(cacheKey);
@@ -146,6 +280,7 @@ export async function loadBlocksForPage(
     fetchCount: blockFetchCount,
     fetchFn: fetchNotionBlocks,
     normalizeResult: (result) => (Array.isArray(result) ? result : []),
+    validateResult: (blocks) => !containsExpiringUrls(blocks),
     logPrefix: "Fetching blocks",
   });
 }
@@ -173,6 +308,7 @@ export async function loadMarkdownForPage(
     fetchFn: (pageId) => n2m.pageToMarkdown(pageId),
     normalizeResult: (result) =>
       Array.isArray(result) ? result : (result ?? []),
+    validateResult: (markdown) => !containsExpiringUrls(markdown),
     logPrefix: "Converting markdown",
   });
 }

@@ -750,6 +750,86 @@ function isExpiringS3Url(url: string): boolean {
   );
 }
 
+/**
+ * Checks if an S3 URL is close to expiring (within threshold seconds).
+ * Returns true if:
+ * 1. It is an expiring S3 URL
+ * 2. It has expiration params (X-Amz-Expires + X-Amz-Date, or Expires)
+ * 3. Time until expiration is less than thresholdSeconds
+ *
+ * @param url - The URL to check
+ * @param thresholdSeconds - Threshold in seconds (default: 300 = 5 minutes)
+ * @returns boolean
+ */
+export function isUrlExpiringSoon(
+  url: string,
+  thresholdSeconds: number = 300
+): boolean {
+  if (!isExpiringS3Url(url)) {
+    return false;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    const params = urlObj.searchParams;
+    const now = Date.now();
+    const thresholdMs = thresholdSeconds * 1000;
+
+    // Method 1: X-Amz-Expires + X-Amz-Date
+    // X-Amz-Date format: YYYYMMDDTHHMMSSZ (ISO-8601 basic format)
+    const amzDate = params.get("X-Amz-Date");
+    const amzExpires = params.get("X-Amz-Expires");
+
+    if (amzDate && amzExpires) {
+      // Parse YYYYMMDDTHHMMSSZ manually to ensure cross-platform consistency
+      // and avoid issues with Date.parse on non-standard formats
+      const year = parseInt(amzDate.substring(0, 4));
+      const month = parseInt(amzDate.substring(4, 6)) - 1; // 0-indexed
+      const day = parseInt(amzDate.substring(6, 8));
+      const hour = parseInt(amzDate.substring(9, 11));
+      const minute = parseInt(amzDate.substring(11, 13));
+      const second = parseInt(amzDate.substring(13, 15));
+
+      const signatureTime = new Date(
+        Date.UTC(year, month, day, hour, minute, second)
+      ).getTime();
+      const expirationSeconds = parseInt(amzExpires);
+      const expirationTime = signatureTime + expirationSeconds * 1000;
+      const timeLeft = expirationTime - now;
+
+      return timeLeft < thresholdMs;
+    }
+
+    // Method 2: Expires (Unix timestamp)
+    const expires = params.get("Expires");
+    if (expires) {
+      const expirationTime = parseInt(expires) * 1000;
+      const timeLeft = expirationTime - now;
+      return timeLeft < thresholdMs;
+    }
+
+    // Method 3: Signature param is present but we can't determine expiration
+    // If it has Signature/Date but we failed to parse above, it might be expiring.
+    // However, without explicit expiration info, we can't be sure it's *soon*.
+    // Notion URLs usually follow Method 1 or 2.
+    // If we assume all signed URLs expire in 1 hour (common default), we might guess,
+    // but better to be conservative and rely on explicit params.
+  } catch (e) {
+    // Log malformed URLs for debugging
+    if (process.env.DEBUG_S3_IMAGES === "true") {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Failed to parse URL expiration: ${e instanceof Error ? e.message : String(e)} (URL: ${url})`
+        )
+      );
+    }
+    // If URL parsing fails, logic safely falls through to return false
+    // (assume valid or effectively infinite if we can't parse expiration)
+  }
+
+  return false;
+}
+
 export function getImageDiagnostics(content: string): ImageDiagnostics {
   const source = content || "";
   const markdownMatches = extractImageMatches(source);

@@ -90,6 +90,8 @@ export default [
       ...importPlugin.configs.recommended.rules,
       ...promisePlugin.configs.recommended.rules,
       ...securityPlugin.configs.recommended.rules,
+      // Test utilities intentionally use dynamic file paths
+      "security/detect-non-literal-fs-filename": "off",
     },
   },
 ];

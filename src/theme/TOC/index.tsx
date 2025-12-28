@@ -9,6 +9,7 @@ type Props = WrapperProps<typeof TOCType>;
 export default function TOCWrapper(props: Props): React.JSX.Element {
   return (
     <div className="toc-wrapper">
+      {/* eslint-disable-next-line @docusaurus/prefer-docusaurus-heading */}
       <h2 className="toc-heading">
         {translate({
           id: "theme.TOC.title",

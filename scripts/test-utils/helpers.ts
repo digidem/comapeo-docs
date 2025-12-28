@@ -54,7 +54,7 @@ export const createTempDir = async (): Promise<string> => {
  */
 export const cleanupTempDir = async (dirPath: string): Promise<void> => {
   try {
-    await fs.rmdir(dirPath, { recursive: true });
+    await fs.rm(dirPath, { recursive: true, force: true });
   } catch (error) {
     // Ignore errors if directory doesn't exist
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {

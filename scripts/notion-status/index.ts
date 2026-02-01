@@ -108,7 +108,7 @@ export async function updateNotionPageStatus(
 const WORKFLOWS = {
   translation: {
     from: "Ready for translation",
-    to: "Reviewing translations",
+    to: "Auto translation generated",
     setPublishedDate: false,
   },
   draft: {

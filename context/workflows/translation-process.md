@@ -34,16 +34,24 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 3. **Translate Navigation**: Update navbar/footer strings from `docusaurus.config.ts`
 4. **Generate Markdown**: Save translated content to locale directories
 
-### 3. Translation Review
-**Status**: Translation pages created with draft status
+### 3. Auto Translation Complete
+**Status**: Pages set to "Auto translation generated"
 
 **Process**:
-1. Human review of automated translations
+1. Automated workflow updates Notion status from "Ready for translation"
+2. Translation pages ready for human review
+3. Run via `bun run notionStatus:translation` or GitHub Action
+
+### 4. Translation Review
+**Status**: Human review of auto-translated content
+
+**Process**:
+1. Review automated translations for accuracy
 2. Cultural adaptation and localization
 3. Technical term consistency
 4. Regional considerations
 
-### 4. Publication
+### 5. Publication
 **Status**: "Ready to publish" in translation pages
 
 **Process**:

@@ -2,7 +2,7 @@
 id: doc-initial-use-and-comapeo-settings
 title: Initial Use & CoMapeo Settings
 sidebar_label: Initial Use & CoMapeo Settings
-sidebar_position: 8
+sidebar_position: 2
 pagination_label: Initial Use & CoMapeo Settings
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/initial-use-and-comapeo-settings.md
 keywords:
@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /initial-use-and-comapeo-settings
 last_update:
-  date: 12/17/2025
+  date: 1/29/2026
   author: Awana Digital
 ---
 
@@ -21,7 +21,10 @@ last_update:
 ![Initial_Use.jpg](/images/initialuseandcomapeo_0.jpg)
 
 
-CoMapeo will start in the Map view after selecting <img src="/comapeo-docs/images/emojis/coordinator_77ddbc4137798bed_10177602.png" alt="app-icon-comapeo-coordinator" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Map On Your Own. 
+The primary view CoMapeo is the <img src="/comapeo-docs/images/emojis/map_c3a90bf1bbc7f33b_10177719.png" alt="app-icon-map" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Map view with access to mapping features and the main menu. This is serves as the home screen when restarting CoMapeo onboarding is complete. 
+
+
+The map controls include <img src="/comapeo-docs/images/emojis/photo_2026-01-2_27e12ea7ab4f1426_50474399.jpg" alt="app-icon-comapeo-map-recenter" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />recenter, <img src="/comapeo-docs/images/emojis/photo_2026-01-2_de3946578345ea1b_50474437.jpg" alt="app-icon-comapeo-map-pan" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> slide-to-pan, and pinch-to-zoom with a dynamic scale. Real time GPS sensor information can be viewed in <img src="/comapeo-docs/images/emojis/gps_9dba27a9d6b52176_10263318.png" alt="app-icon-gps20" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> GPS Details.
 
 
 ### Features to Explore first
@@ -43,9 +46,6 @@ CoMapeo will start in the Map view after selecting <img src="/comapeo-docs/image
 
 
 ### Features and Resources to Explore Next
-
-
-✔️ Go to 🔗 [**Creating a New Observation**](/docs/creating-a-new-observation) 
 
 
 ✔️ Go to 🔗 [**Creating a New Observation**](/docs/creating-a-new-observation) 

@@ -457,7 +457,7 @@
         "message": "Nueva Página"
     },
     "Uninstalling CoMapeo": {
-        "message": "Nueva Página"
+        "message": "Desinstalar CoMapeo"
     },
     "Mapping On Your Own & Next Steps": {
         "message": "Nueva Página"
@@ -727,6 +727,9 @@
         "message": "Recopilación de observaciones"
     },
     "Nueva Página": {
+        "message": "Nueva Página"
+    },
+    "Planning and Preparing for a Project": {
         "message": "Nueva Página"
     }
 }

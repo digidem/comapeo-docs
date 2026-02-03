@@ -1,17 +1,17 @@
 ---
-id: doc-initial-use-and-comapeo-settings
+id: doc-understanding-projects
 title: Nova Página
 sidebar_label: Nova Página
-sidebar_position: 2
+sidebar_position: 6
 pagination_label: Nova Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/initial-use-and-comapeo-settings.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/understanding-projects.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /initial-use-and-comapeo-settings
+slug: /understanding-projects
 last_update:
-  date: 9/22/2025
+  date: 10/9/2025
   author: Awana Digital
 ---
 

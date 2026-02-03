@@ -1,15 +1,15 @@
 ---
-id: doc-initial-use-and-comapeo-settings
+id: doc-creating-a-new-project
 title: Nueva Página
 sidebar_label: Nueva Página
-sidebar_position: 2
+sidebar_position: 7
 pagination_label: Nueva Página
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/initial-use-and-comapeo-settings.md
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/creating-a-new-project.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /initial-use-and-comapeo-settings
+slug: /creating-a-new-project
 last_update:
   date: 9/22/2025
   author: Awana Digital

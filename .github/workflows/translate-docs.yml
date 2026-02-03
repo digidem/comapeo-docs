@@ -35,7 +35,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
-      - name: Update Notion Status → Reviewing Translations
+      - name: Update Notion Status → Auto Translation Generated
         run: bun run notionStatus:translation
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}

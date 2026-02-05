@@ -148,6 +148,77 @@ export function __resetPrefetchCaches(): void {
   markdownPrefetchCache.clear();
 }
 
+function extractSidebarPositionFromFrontmatter(content: string): number | null {
+  if (!content) {
+    return null;
+  }
+
+  const normalized = content.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return null;
+  }
+
+  const endMarkerIndex = normalized.indexOf("\n---", 4);
+  if (endMarkerIndex === -1) {
+    return null;
+  }
+
+  const frontmatter = normalized.slice(4, endMarkerIndex);
+  const lines = frontmatter.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("sidebar_position:")) {
+      continue;
+    }
+
+    let value = trimmed.slice("sidebar_position:".length).trim();
+    const commentIndex = value.indexOf("#");
+    if (commentIndex !== -1) {
+      value = value.slice(0, commentIndex).trim();
+    }
+    value = value.replace(/^["']|["']$/g, "");
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function findExistingSidebarPosition(
+  pageId: string,
+  filePath: string,
+  metadataCache: PageMetadataCache
+): number | null {
+  const candidatePaths = new Set<string>();
+  if (filePath) {
+    candidatePaths.add(filePath);
+  }
+
+  const cachedPage = metadataCache.pages?.[pageId];
+  if (cachedPage?.outputPaths?.length) {
+    for (const outputPath of cachedPage.outputPaths) {
+      if (outputPath) {
+        candidatePaths.add(outputPath);
+      }
+    }
+  }
+
+  for (const candidate of candidatePaths) {
+    const resolvedPath = normalizePath(candidate);
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      continue;
+    }
+    const content = fs.readFileSync(resolvedPath, "utf-8");
+    const position = extractSidebarPositionFromFrontmatter(content);
+    if (position !== null) {
+      return position;
+    }
+  }
+
+  return null;
+}
+
 // setTranslationString moved to translationManager.ts
 
 /**
@@ -705,9 +776,12 @@ export async function generateBlocks(
             );
           }
 
-          let sidebarPosition = i + 1;
-          if (props?.["Order"]?.number) {
-            sidebarPosition = props["Order"].number;
+          const orderValue = props?.["Order"]?.number;
+          let sidebarPosition = Number.isFinite(orderValue)
+            ? orderValue
+            : findExistingSidebarPosition(page.id, filePath, metadataCache);
+          if (sidebarPosition === null) {
+            sidebarPosition = i + 1;
           }
 
           const customProps: Record<string, unknown> = {};

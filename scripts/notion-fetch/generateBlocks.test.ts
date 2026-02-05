@@ -24,6 +24,7 @@ import {
 } from "../test-utils";
 import { NOTION_PROPERTIES } from "../constants";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
 // Mock sharp to avoid installation issues
@@ -312,11 +313,7 @@ describe("generateBlocks", () => {
   describe("Translation string updates", () => {
     it("should update translation strings only for non-EN locales", async () => {
       const { generateBlocks } = await import("./generateBlocks");
-      const mockReadFileSync = fs.readFileSync as Mock;
       const mockWriteFileSync = fs.writeFileSync as Mock;
-
-      // Mock existing translation file
-      mockReadFileSync.mockReturnValue("{}");
 
       const pageFamily = createMockPageFamily("Test Page", "Page");
       const progressCallback = vi.fn();
@@ -523,6 +520,35 @@ describe("generateBlocks", () => {
 
       expect(categoryCall).toBeDefined();
     });
+
+    it("should use Order for _category_.json position when available", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const togglePage = createMockTogglePage({
+        title: "Ordered Section",
+        order: 7,
+      });
+
+      const pages = [togglePage];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await generateBlocks(pages, progressCallback);
+
+      const categoryCall = mockWriteFileSync.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" && call[0].includes("_category_.json")
+      );
+
+      expect(categoryCall).toBeDefined();
+      if (categoryCall) {
+        const categoryContent = JSON.parse(categoryCall[1] as string);
+        expect(categoryContent.position).toBe(7);
+      }
+    });
   });
 
   describe("Heading sections", () => {
@@ -602,6 +628,49 @@ describe("generateBlocks", () => {
 
       // Should remove duplicate title heading
       expect(content).not.toMatch(/---\n\n# Test Article/);
+    });
+
+    it("should reuse existing sidebar_position when Order is missing (filtered run)", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const page = createMockNotionPage({
+        title: "Partial Sync Page",
+        elementType: "Page",
+      });
+      delete page.properties.Order;
+
+      const generateBlocksPath = fileURLToPath(
+        new URL("./generateBlocks.ts", import.meta.url)
+      );
+      const generateBlocksDir = path.dirname(generateBlocksPath);
+      const docsPath = path.join(generateBlocksDir, "../../docs");
+      const filePath = path.join(docsPath, "partial-sync-page.md");
+
+      fs.writeFileSync(
+        filePath,
+        `---\nsidebar_position: "12" # keep stable\n---\n\n# Existing Content\n`,
+        "utf-8"
+      );
+
+      const pages = [page];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# Partial Sync Page\n\nContent here.",
+      });
+
+      await generateBlocks(pages, progressCallback);
+
+      const markdownCalls = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === filePath
+      );
+
+      expect(markdownCalls.length).toBeGreaterThan(0);
+
+      const content = markdownCalls[markdownCalls.length - 1][1] as string;
+      expect(content).toContain("sidebar_position: 12");
     });
   });
 

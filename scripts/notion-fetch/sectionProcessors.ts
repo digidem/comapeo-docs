@@ -72,9 +72,11 @@ export function processToggleSection(
 
   // Only create _category_.json for English (default locale)
   if (lang === "en") {
+    const orderValue = page?.properties?.["Order"]?.number;
+    const position = Number.isFinite(orderValue) ? orderValue : i + 1;
     const categoryContent: CategoryConfig = {
       label: sectionName,
-      position: i + 1,
+      position,
       collapsible: true,
       collapsed: true,
       link: {

@@ -126,6 +126,7 @@ export async function sortAndExpandNotionData(
     subId: string;
     parentTitle: string;
   }> = [];
+  const seenRelations = new Set<string>();
 
   for (const item of data) {
     const relations = item?.properties?.["Sub-item"]?.relation ?? [];
@@ -135,6 +136,11 @@ export async function sortAndExpandNotionData(
       "Unknown";
 
     for (const rel of relations) {
+      const key = `${String(item.id)}:${String(rel.id)}`;
+      if (seenRelations.has(key)) {
+        continue;
+      }
+      seenRelations.add(key);
       allRelations.push({
         parentId: item.id as string,
         subId: rel.id,
@@ -253,10 +259,60 @@ export async function sortAndExpandNotionData(
     `✅ Fetched ${subpages.length}/${allRelations.length} sub-pages (${successRate}%) in ${fetchDuration}s`
   );
 
-  // Add all fetched sub-pages to data array
+  const subpageById = new Map<string, any>();
   for (const subpage of subpages) {
-    data.push(subpage);
+    if (subpage?.id) {
+      subpageById.set(subpage.id, subpage);
+    }
   }
+
+  const subpagesByParent = new Map<string, any[]>();
+  for (const relation of allRelations) {
+    const subpage = subpageById.get(relation.subId);
+    if (!subpage) {
+      continue;
+    }
+    const list = subpagesByParent.get(relation.parentId) ?? [];
+    list.push(subpage);
+    subpagesByParent.set(relation.parentId, list);
+  }
+
+  const expanded: Array<Record<string, unknown>> = [];
+  for (const parent of data) {
+    expanded.push(parent);
+    const list = subpagesByParent.get(parent.id as string);
+    if (!list || list.length === 0) {
+      continue;
+    }
+
+    const sortedSubpages = list
+      .map((subpage, index) => {
+        const orderValue = subpage?.properties?.["Order"]?.number;
+        return {
+          subpage,
+          index,
+          orderValue,
+          hasOrder: Number.isFinite(orderValue),
+        };
+      })
+      .sort((a, b) => {
+        if (a.hasOrder && b.hasOrder) {
+          return a.orderValue - b.orderValue;
+        }
+        if (a.hasOrder) {
+          return -1;
+        }
+        if (b.hasOrder) {
+          return 1;
+        }
+        return a.index - b.index;
+      })
+      .map((entry) => entry.subpage);
+
+    expanded.push(...sortedSubpages);
+  }
+
+  data = expanded;
 
   data.forEach((item, index) => {
     // Use optional chaining in case url is missing

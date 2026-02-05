@@ -718,6 +718,55 @@ describe("fetchNotionData", () => {
       consoleWarnSpy.mockRestore();
     });
 
+    it("should insert sub-pages after parent and sort by Order when present", async () => {
+      const data = [
+        {
+          id: "parent",
+          url: "url",
+          properties: {
+            Order: { number: 1 },
+            Title: { title: [{ plain_text: "Parent" }] },
+            "Sub-item": { relation: [{ id: "sub1" }, { id: "sub2" }] },
+          },
+        },
+      ];
+
+      vi.mocked(enhancedNotion.pagesRetrieve)
+        .mockResolvedValueOnce({ id: "sub1", properties: {} })
+        .mockResolvedValueOnce({
+          id: "sub2",
+          properties: { Order: { number: 2 } },
+        });
+
+      const result = await sortAndExpandNotionData(data);
+
+      expect(result.map((r) => r.id)).toEqual(["parent", "sub2", "sub1"]);
+    });
+
+    it("should dedupe duplicate Sub-item relations", async () => {
+      const data = [
+        {
+          id: "parent",
+          url: "url",
+          properties: {
+            Title: { title: [{ plain_text: "Parent" }] },
+            "Sub-item": {
+              relation: [{ id: "sub1" }, { id: "sub1" }, { id: "sub2" }],
+            },
+          },
+        },
+      ];
+
+      vi.mocked(enhancedNotion.pagesRetrieve).mockImplementation(
+        async ({ page_id }) => ({ id: page_id, properties: {} })
+      );
+
+      const result = await sortAndExpandNotionData(data);
+
+      expect(result.map((r) => r.id)).toEqual(["parent", "sub1", "sub2"]);
+      expect(vi.mocked(enhancedNotion.pagesRetrieve)).toHaveBeenCalledTimes(2);
+    });
+
     it("should log progress every 10 items", async () => {
       const relations = Array.from({ length: 15 }, (_, i) => ({
         id: `sub${i}`,

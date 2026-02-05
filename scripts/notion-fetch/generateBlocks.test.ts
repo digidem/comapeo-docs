@@ -672,6 +672,70 @@ describe("generateBlocks", () => {
       const content = markdownCalls[markdownCalls.length - 1][1] as string;
       expect(content).toContain("sidebar_position: 12");
     });
+
+    it("should preserve sidebar_position from existingCache during full rebuild when filePath differs", async () => {
+      // This test covers the scenario where:
+      // 1. syncMode.fullRebuild is true (metadataCache is recreated empty)
+      // 2. existingCache contains previous output paths
+      // 3. The computed filePath differs from existing output path (e.g., filtered run with missing toggles/headings)
+      const { findExistingSidebarPosition } = await import("./generateBlocks");
+
+      const pageId = "test-page-id";
+      const computedFilePath = "/docs/computed-path.md"; // Different from existing path
+
+      // Create an empty metadataCache (simulating full rebuild)
+      const emptyMetadataCache: any = {
+        pages: {},
+        scriptHash: "new-hash",
+        lastSync: new Date().toISOString(),
+      };
+
+      // Create existingCache with previous output paths
+      // Note: normalizePath will resolve "/docs/existing-path.md" to PROJECT_ROOT/docs/existing-path.md
+      const existingCache: any = {
+        pages: {
+          [pageId]: {
+            outputPaths: ["/docs/existing-path.md"],
+            lastEdited: "2024-01-01T00:00:00.000Z",
+          },
+        },
+        scriptHash: "old-hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+      };
+
+      // The mock fs needs to have the file at the normalized path
+      // normalizePath("/docs/existing-path.md") resolves to PROJECT_ROOT/docs/existing-path.md
+      // which is typically /path/to/project/docs/existing-path.md
+      // For the mock to work, we need to write to the exact path that will be checked
+      const projectRootPath = path.resolve(
+        fileURLToPath(new URL(".", import.meta.url)),
+        "../../docs/existing-path.md"
+      );
+
+      fs.writeFileSync(
+        projectRootPath,
+        `---\nsidebar_position: "42" # preserved position\n---\n\n# Existing Content\n`,
+        "utf-8"
+      );
+
+      // Call findExistingSidebarPosition with empty metadataCache but populated existingCache
+      const result = findExistingSidebarPosition(
+        pageId,
+        computedFilePath,
+        emptyMetadataCache,
+        existingCache,
+        true
+      );
+
+      // Should find the sidebar_position from existingCache's outputPaths
+      expect(result).toBe(42);
+
+      // Clean up
+      const mockFs = fs as any;
+      if (mockFs.__reset) {
+        mockFs.__reset();
+      }
+    });
   });
 
   describe("Error handling", () => {

@@ -185,23 +185,43 @@ function extractSidebarPositionFromFrontmatter(content: string): number | null {
   return null;
 }
 
-function findExistingSidebarPosition(
+export function findExistingSidebarPosition(
   pageId: string,
   filePath: string,
-  metadataCache: PageMetadataCache
+  metadataCache: PageMetadataCache,
+  existingCache?: PageMetadataCache,
+  preferExistingCache = false
 ): number | null {
-  const candidatePaths = new Set<string>();
-  if (filePath) {
-    candidatePaths.add(filePath);
-  }
+  const candidatePaths: string[] = [];
+  const addCandidate = (candidate?: string) => {
+    if (!candidate || candidatePaths.includes(candidate)) {
+      return;
+    }
+    candidatePaths.push(candidate);
+  };
+  const addCandidates = (candidates?: string[]) => {
+    if (!candidates?.length) {
+      return;
+    }
+    for (const candidate of candidates) {
+      addCandidate(candidate);
+    }
+  };
 
   const cachedPage = metadataCache.pages?.[pageId];
-  if (cachedPage?.outputPaths?.length) {
-    for (const outputPath of cachedPage.outputPaths) {
-      if (outputPath) {
-        candidatePaths.add(outputPath);
-      }
-    }
+  const existingCachedPage = existingCache?.pages?.[pageId];
+  const existingOutputPaths = existingCachedPage?.outputPaths;
+  const cachedOutputPaths = cachedPage?.outputPaths;
+
+  if (preferExistingCache) {
+    addCandidates(existingOutputPaths);
+  }
+
+  addCandidates(cachedOutputPaths);
+  addCandidate(filePath);
+
+  if (!preferExistingCache) {
+    addCandidates(existingOutputPaths);
   }
 
   for (const candidate of candidatePaths) {
@@ -779,7 +799,13 @@ export async function generateBlocks(
           const orderValue = props?.["Order"]?.number;
           let sidebarPosition = Number.isFinite(orderValue)
             ? orderValue
-            : findExistingSidebarPosition(page.id, filePath, metadataCache);
+            : findExistingSidebarPosition(
+                page.id,
+                filePath,
+                metadataCache,
+                existingCache,
+                true
+              );
           if (sidebarPosition === null) {
             sidebarPosition = i + 1;
           }

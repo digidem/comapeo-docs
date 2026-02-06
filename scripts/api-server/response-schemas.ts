@@ -97,46 +97,6 @@ export interface ApiResponse<T = unknown> {
 }
 
 /**
- * Job status in standardized format
- */
-export interface JobStatus {
-  /** Job identifier */
-  id: string;
-  /** Job type */
-  type: string;
-  /** Current job status */
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
-  /** Creation timestamp (ISO 8601) */
-  createdAt: string;
-  /** Start timestamp (ISO 8601) */
-  startedAt: string | null;
-  /** Completion timestamp (ISO 8601) */
-  completedAt: string | null;
-  /** Progress information */
-  progress: {
-    current: number;
-    total: number;
-    message: string;
-  };
-  /** Job result (null if not completed) */
-  result: {
-    success: boolean;
-    data?: unknown;
-    error?: string;
-  } | null;
-}
-
-/**
- * List response with pagination
- */
-export interface ListResponse<T> {
-  /** Array of items */
-  items: T[];
-  /** Total count (may be greater than items.length) */
-  count: number;
-}
-
-/**
  * Create a standardized error response
  */
 export function createErrorResponse(

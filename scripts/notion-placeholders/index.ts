@@ -10,6 +10,7 @@ import { ContentGenerator, ContentGenerationOptions } from "./contentGenerator";
 import { NotionUpdater, UpdateOptions } from "./notionUpdater";
 import { RateLimiter } from "./utils/rateLimiter";
 import { BackupManager } from "./utils/backupManager";
+import { ConfigError, logError, logWarning } from "../shared/errors";
 
 // Load environment variables
 dotenv.config({ override: true });
@@ -149,15 +150,23 @@ async function main() {
 
   // Validate environment
   if (!process.env.NOTION_API_KEY) {
-    console.error(
-      chalk.red("Error: NOTION_API_KEY not found in environment variables")
+    logError(
+      new ConfigError("NOTION_API_KEY not found in environment variables", [
+        "Add NOTION_API_KEY to your .env file",
+        "Refer to project documentation for setup",
+      ]),
+      "main"
     );
     process.exit(1);
   }
 
   if (!process.env.DATABASE_ID) {
-    console.error(
-      chalk.red("Error: DATABASE_ID not found in environment variables")
+    logError(
+      new ConfigError("DATABASE_ID not found in environment variables", [
+        "Add DATABASE_ID to your .env file",
+        "Refer to project documentation for setup",
+      ]),
+      "main"
     );
     process.exit(1);
   }
@@ -199,10 +208,10 @@ async function main() {
         filter = undefined;
       }
     } catch (error) {
-      console.warn(
-        chalk.yellow(
-          "⚠️  Could not create status filter, fetching all pages..."
-        )
+      logWarning(
+        "Could not create status filter, fetching all pages instead. " +
+          "Check NOTION_PROPERTIES.STATUS constant.",
+        "main"
       );
       filter = undefined;
     }
@@ -216,8 +225,9 @@ async function main() {
     } catch (error) {
       // If filtering fails, try without any filter
       if (filter) {
-        console.warn(
-          chalk.yellow("⚠️  Status filter failed, trying without filter...")
+        logWarning(
+          "Status filter failed, trying without filter. Check filter syntax.",
+          "main"
         );
         try {
           pages = await fetchNotionData(undefined);
@@ -228,10 +238,18 @@ async function main() {
           );
         } catch (fallbackError) {
           spinner.fail(chalk.red("❌ Failed to fetch pages from Notion"));
+          logError(
+            fallbackError,
+            "Failed to fetch pages even without filter. Check API access."
+          );
           throw fallbackError;
         }
       } else {
         spinner.fail(chalk.red("❌ Failed to fetch pages from Notion"));
+        logError(
+          error,
+          "Failed to fetch pages. Check API access and credentials."
+        );
         throw error;
       }
     }
@@ -420,7 +438,10 @@ async function main() {
           );
         }
       } catch (backupError) {
-        console.warn(chalk.yellow("⚠️  Could not clean up backups"));
+        logWarning(
+          "Could not clean up old backups. Check backup directory permissions.",
+          "main"
+        );
       }
     }
 
@@ -437,7 +458,7 @@ async function main() {
           )
         );
       } catch (statsError) {
-        console.warn(chalk.yellow("⚠️  Could not get backup stats"));
+        logWarning("Could not get backup stats. This is non-critical.", "main");
       }
     }
 
@@ -466,7 +487,10 @@ async function main() {
     if (spinner) {
       spinner.fail(chalk.red("❌ Failed to generate placeholders"));
     }
-    console.error(chalk.red("Critical Error:"), error);
+    logError(
+      error,
+      "Critical error during placeholder generation. Check logs above for details."
+    );
 
     // Don't exit in test environment
     if (process.env.NODE_ENV !== "test") {

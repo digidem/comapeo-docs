@@ -9,15 +9,50 @@ import {
   type JobType,
   type JobStatus,
 } from "./job-tracker";
+import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
+const DATA_DIR = join(process.cwd(), ".jobs-data");
+const JOBS_FILE = join(DATA_DIR, "jobs.json");
+const LOGS_FILE = join(DATA_DIR, "jobs.log");
+
+/**
+ * Clean up test data directory
+ */
+function cleanupTestData(): void {
+  if (existsSync(DATA_DIR)) {
+    try {
+      // Use rmSync with recursive option if available (Node.js v14.14+)
+      rmSync(DATA_DIR, { recursive: true, force: true });
+    } catch {
+      // Fallback to manual removal
+      if (existsSync(LOGS_FILE)) {
+        unlinkSync(LOGS_FILE);
+      }
+      if (existsSync(JOBS_FILE)) {
+        unlinkSync(JOBS_FILE);
+      }
+      try {
+        rmdirSync(DATA_DIR);
+      } catch {
+        // Ignore error if directory still has files
+      }
+    }
+  }
+}
+
+// Run tests sequentially to avoid file system race conditions
 describe("JobTracker", () => {
   beforeEach(() => {
     // Reset the job tracker before each test
     destroyJobTracker();
+    // Clean up persisted data after destroying tracker to avoid loading stale data
+    cleanupTestData();
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   describe("createJob", () => {
@@ -223,39 +258,27 @@ describe("JobTracker", () => {
   });
 
   describe("cleanupOldJobs", () => {
-    it("should clean up old completed jobs", () => {
+    it("should persist jobs across tracker instances", () => {
       const tracker = getJobTracker();
       const jobId1 = tracker.createJob("notion:fetch");
       const jobId2 = tracker.createJob("notion:fetch-all");
 
-      // Mark jobs as completed with old timestamps
-      tracker.updateJobStatus(jobId1, "completed");
-      tracker.updateJobStatus(jobId2, "completed");
+      // Mark jobs as completed
+      tracker.updateJobStatus(jobId1, "completed", { success: true });
+      tracker.updateJobStatus(jobId2, "completed", { success: true });
 
-      const job1 = tracker.getJob(jobId1);
-      const job2 = tracker.getJob(jobId2);
-
-      // Manually set completedAt to be older than 24 hours
-      if (job1 && job1.completedAt) {
-        job1.completedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
-      }
-      if (job2 && job2.completedAt) {
-        job2.completedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
-      }
-
-      // Trigger cleanup by calling the private method through the public interface
-      // Since cleanupOldJobs is private and called by setInterval, we need to wait
-      // or create a new tracker instance
+      // Destroy and create a new tracker instance
       destroyJobTracker();
       const newTracker = getJobTracker();
 
-      // Create a new job
-      const jobId3 = newTracker.createJob("notion:translate");
+      // Jobs should be persisted and available in the new tracker
+      const loadedJob1 = newTracker.getJob(jobId1);
+      const loadedJob2 = newTracker.getJob(jobId2);
 
-      // Old jobs from the previous tracker instance should be gone
-      expect(newTracker.getJob(jobId1)).toBeUndefined();
-      expect(newTracker.getJob(jobId2)).toBeUndefined();
-      expect(newTracker.getJob(jobId3)).toBeDefined();
+      expect(loadedJob1).toBeDefined();
+      expect(loadedJob2).toBeDefined();
+      expect(loadedJob1?.status).toBe("completed");
+      expect(loadedJob2?.status).toBe("completed");
     });
   });
 });

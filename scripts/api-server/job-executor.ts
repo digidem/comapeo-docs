@@ -4,14 +4,17 @@
  */
 
 import { spawn, ChildProcess } from "node:child_process";
-import type { JobType, JobStatus } from "./job-tracker";
+import type { JobType, JobStatus, GitHubContext } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
 import { createJobLogger, type JobLogger } from "./job-persistence";
+import { reportJobCompletion } from "./github-status";
 
 export interface JobExecutionContext {
   jobId: string;
   onProgress: (current: number, total: number, message: string) => void;
   onComplete: (success: boolean, data?: unknown, error?: string) => void;
+  github?: GitHubContext;
+  startTime?: number;
 }
 
 export interface JobOptions {
@@ -81,7 +84,13 @@ export async function executeJob(
   context: JobExecutionContext,
   options: JobOptions = {}
 ): Promise<void> {
-  const { jobId, onProgress, onComplete } = context;
+  const {
+    jobId,
+    onProgress,
+    onComplete,
+    github,
+    startTime = Date.now(),
+  } = context;
   const jobTracker = getJobTracker();
   const logger = createJobLogger(jobId);
 
@@ -203,21 +212,48 @@ function parseProgressFromOutput(
 export function executeJobAsync(
   jobType: JobType,
   jobId: string,
-  options: JobOptions = {}
+  options: JobOptions = {},
+  github?: GitHubContext
 ): void {
+  const jobTracker = getJobTracker();
+  const job = jobTracker.getJob(jobId);
+  const startTime = Date.now();
+
   const context: JobExecutionContext = {
     jobId,
+    github,
+    startTime,
     onProgress: (current, total, message) => {
-      const jobTracker = getJobTracker();
       jobTracker.updateJobProgress(jobId, current, total, message);
     },
-    onComplete: (success, data, error) => {
-      const jobTracker = getJobTracker();
+    onComplete: async (success, data, error) => {
+      const duration = Date.now() - startTime;
       jobTracker.updateJobStatus(jobId, success ? "completed" : "failed", {
         success,
         data,
         error,
       });
+
+      // Report completion to GitHub if context is available
+      if (github) {
+        await reportJobCompletion(
+          {
+            owner: github.owner,
+            repo: github.repo,
+            sha: github.sha,
+            token: github.token,
+            context: github.context,
+            targetUrl: github.targetUrl,
+          },
+          success,
+          jobType,
+          {
+            duration,
+            error,
+            output: data as string | undefined,
+          }
+        );
+      }
     },
   };
 

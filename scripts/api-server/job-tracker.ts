@@ -1,7 +1,14 @@
 /**
  * Job tracking system for Notion API server
- * Manages job state in memory with optional persistence
+ * Manages job state in memory with file-based persistence
  */
+
+import {
+  saveJob,
+  loadJob,
+  loadAllJobs,
+  deleteJob as deletePersistedJob,
+} from "./job-persistence";
 
 export type JobType =
   | "notion:fetch"
@@ -39,6 +46,9 @@ class JobTracker {
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
+    // Load persisted jobs on initialization
+    this.loadPersistedJobs();
+
     // Clean up old jobs every hour
     this.cleanupInterval = setInterval(
       () => {
@@ -46,6 +56,30 @@ class JobTracker {
       },
       60 * 60 * 1000
     );
+  }
+
+  /**
+   * Load jobs from persistent storage into memory
+   */
+  private loadPersistedJobs(): void {
+    const persistedJobs = loadAllJobs();
+    for (const persistedJob of persistedJobs) {
+      const job: Job = {
+        id: persistedJob.id,
+        type: persistedJob.type as JobType,
+        status: persistedJob.status as JobStatus,
+        createdAt: new Date(persistedJob.createdAt),
+        startedAt: persistedJob.startedAt
+          ? new Date(persistedJob.startedAt)
+          : undefined,
+        completedAt: persistedJob.completedAt
+          ? new Date(persistedJob.completedAt)
+          : undefined,
+        progress: persistedJob.progress,
+        result: persistedJob.result,
+      };
+      this.jobs.set(job.id, job);
+    }
   }
 
   /**
@@ -61,6 +95,7 @@ class JobTracker {
     };
 
     this.jobs.set(id, job);
+    this.persistJob(job);
     return id;
   }
 
@@ -92,6 +127,8 @@ class JobTracker {
         job.result = result;
       }
     }
+
+    this.persistJob(job);
   }
 
   /**
@@ -113,6 +150,8 @@ class JobTracker {
       total,
       message,
     };
+
+    this.persistJob(job);
   }
 
   /**
@@ -142,7 +181,28 @@ class JobTracker {
    * Delete a job
    */
   deleteJob(id: string): boolean {
-    return this.jobs.delete(id);
+    const deleted = this.jobs.delete(id);
+    if (deleted) {
+      deletePersistedJob(id);
+    }
+    return deleted;
+  }
+
+  /**
+   * Persist a job to storage
+   */
+  private persistJob(job: Job): void {
+    const persistedJob = {
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      createdAt: job.createdAt.toISOString(),
+      startedAt: job.startedAt?.toISOString(),
+      completedAt: job.completedAt?.toISOString(),
+      progress: job.progress,
+      result: job.result,
+    };
+    saveJob(persistedJob);
   }
 
   /**

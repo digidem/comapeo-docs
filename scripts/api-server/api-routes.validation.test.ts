@@ -7,15 +7,48 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getJobTracker, destroyJobTracker, type JobType } from "./job-tracker";
+import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+
+const DATA_DIR = join(process.cwd(), ".jobs-data");
+const JOBS_FILE = join(DATA_DIR, "jobs.json");
+const LOGS_FILE = join(DATA_DIR, "jobs.log");
+
+/**
+ * Clean up test data directory
+ */
+function cleanupTestData(): void {
+  if (existsSync(DATA_DIR)) {
+    try {
+      // Use rmSync with recursive option if available (Node.js v14.14+)
+      rmSync(DATA_DIR, { recursive: true, force: true });
+    } catch {
+      // Fallback to manual removal
+      if (existsSync(LOGS_FILE)) {
+        unlinkSync(LOGS_FILE);
+      }
+      if (existsSync(JOBS_FILE)) {
+        unlinkSync(JOBS_FILE);
+      }
+      try {
+        rmdirSync(DATA_DIR);
+      } catch {
+        // Ignore error if directory still has files
+      }
+    }
+  }
+}
 
 describe("API Routes - Validation", () => {
   beforeEach(() => {
     destroyJobTracker();
+    cleanupTestData();
     getJobTracker();
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   describe("Job Types Validation", () => {

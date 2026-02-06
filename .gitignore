@@ -90,3 +90,6 @@ NEXT_STEPS.md
 
 # Runtime metrics files
 retry-metrics.json
+
+# Job persistence data
+.jobs-data/

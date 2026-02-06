@@ -6,6 +6,7 @@
 import { spawn, ChildProcess } from "node:child_process";
 import type { JobType, JobStatus } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
+import { createJobLogger, type JobLogger } from "./job-persistence";
 
 export interface JobExecutionContext {
   jobId: string;
@@ -82,6 +83,7 @@ export async function executeJob(
 ): Promise<void> {
   const { jobId, onProgress, onComplete } = context;
   const jobTracker = getJobTracker();
+  const logger = createJobLogger(jobId);
 
   // Update job status to running
   jobTracker.updateJobStatus(jobId, "running");
@@ -90,11 +92,9 @@ export async function executeJob(
   const jobConfig = JOB_COMMANDS[jobType];
   if (!jobConfig) {
     const availableTypes = Object.keys(JOB_COMMANDS).join(", ");
-    onComplete(
-      false,
-      undefined,
-      `Unknown job type: ${jobType}. Available types: ${availableTypes}`
-    );
+    const errorMsg = `Unknown job type: ${jobType}. Available types: ${availableTypes}`;
+    logger.error("Unknown job type", { jobType, availableTypes });
+    onComplete(false, undefined, errorMsg);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,
       error: `Unknown job type: ${jobType}`,
@@ -105,9 +105,7 @@ export async function executeJob(
   // Build command arguments
   const args = [...jobConfig.args, ...(jobConfig.buildArgs?.(options) || [])];
 
-  console.log(
-    `[Job ${jobId}] Executing: ${jobConfig.script} ${args.join(" ")}`
-  );
+  logger.info("Executing job", { script: jobConfig.script, args });
 
   let process: ChildProcess | null = null;
   let stdout = "";
@@ -123,7 +121,7 @@ export async function executeJob(
     process.stdout?.on("data", (data: Buffer) => {
       const text = data.toString();
       stdout += text;
-      console.log(`[Job ${jobId}] ${text}`);
+      logger.debug("stdout", { output: text.trim() });
 
       // Parse progress from output (for jobs that output progress)
       parseProgressFromOutput(text, onProgress);
@@ -132,20 +130,25 @@ export async function executeJob(
     process.stderr?.on("data", (data: Buffer) => {
       const text = data.toString();
       stderr += text;
-      console.error(`[Job ${jobId}] ERROR: ${text}`);
+      logger.warn("stderr", { output: text.trim() });
     });
 
     // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
       process?.on("close", (code) => {
         if (code === 0) {
+          logger.info("Job completed successfully", { exitCode: code });
           resolve();
         } else {
+          logger.error("Job failed with non-zero exit code", {
+            exitCode: code,
+          });
           reject(new Error(`Process exited with code ${code}`));
         }
       });
 
       process?.on("error", (err) => {
+        logger.error("Job process error", { error: err.message });
         reject(err);
       });
     });
@@ -160,7 +163,7 @@ export async function executeJob(
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorOutput = stderr || errorMessage;
 
-    console.error(`[Job ${jobId}] Failed: ${errorOutput}`);
+    logger.error("Job failed", { error: errorOutput });
     onComplete(false, undefined, errorOutput);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,

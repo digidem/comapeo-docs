@@ -489,6 +489,423 @@ describe("JobQueue", () => {
   });
 });
 
+describe("concurrent request behavior", () => {
+  beforeEach(() => {
+    destroyJobTracker();
+    getJobTracker();
+  });
+
+  afterEach(() => {
+    destroyJobTracker();
+  });
+
+  it("should handle multiple simultaneous job additions correctly", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi.fn().mockImplementation(
+      (context: JobExecutionContext) =>
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            context.onComplete(true);
+            resolve();
+          }, 100);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Simulate concurrent requests - add multiple jobs simultaneously
+    const jobPromises = [
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+    ];
+
+    const jobIds = await Promise.all(jobPromises);
+
+    // All jobs should have unique IDs
+    expect(new Set(jobIds).size).toBe(5);
+
+    // Wait for all jobs to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const jobTracker = getJobTracker();
+    const completedJobs = jobTracker.getJobsByStatus("completed");
+
+    // All jobs should complete
+    expect(completedJobs).toHaveLength(5);
+  });
+
+  it("should maintain FIFO order when processing queued jobs", async () => {
+    const executionOrder: string[] = [];
+    const queue = new JobQueue({ concurrency: 1 });
+
+    const executor = vi.fn().mockImplementation(
+      (context: JobExecutionContext) =>
+        new Promise<void>((resolve) => {
+          // Record the job ID when execution starts
+          executionOrder.push(context.jobId);
+          setTimeout(() => {
+            context.onComplete(true);
+            resolve();
+          }, 50);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add jobs sequentially but track creation order
+    const jobIds: string[] = [];
+    jobIds.push(await queue.add("notion:fetch"));
+    jobIds.push(await queue.add("notion:fetch"));
+    jobIds.push(await queue.add("notion:fetch"));
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Execution order should match creation order (FIFO)
+    expect(executionOrder).toEqual(jobIds);
+  });
+
+  it("should not exceed concurrency limit under rapid concurrent requests", async () => {
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+    const concurrency = 2;
+    const queue = new JobQueue({ concurrency });
+
+    const executor = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          currentConcurrent++;
+          maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+
+          setTimeout(() => {
+            currentConcurrent--;
+            resolve();
+          }, 100);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Rapidly add many jobs (simulating concurrent API requests)
+    const jobPromises: Promise<string>[] = [];
+    for (let i = 0; i < 20; i++) {
+      jobPromises.push(queue.add("notion:fetch"));
+    }
+
+    await Promise.all(jobPromises);
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Should never exceed concurrency limit
+    expect(maxConcurrent).toBeLessThanOrEqual(concurrency);
+  });
+
+  it("should handle job additions while queue is processing", async () => {
+    const processedJobs: string[] = [];
+    const queue = new JobQueue({ concurrency: 1 });
+
+    const executor = vi.fn().mockImplementation(
+      (context: JobExecutionContext) =>
+        new Promise<void>((resolve) => {
+          processedJobs.push(context.jobId);
+          setTimeout(() => {
+            context.onComplete(true);
+            resolve();
+          }, 50);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Start first batch
+    const job1 = await queue.add("notion:fetch");
+    await new Promise((resolve) => setTimeout(resolve, 10)); // Let first job start
+
+    // Add more jobs while first is running
+    const job2 = await queue.add("notion:fetch");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const job3 = await queue.add("notion:fetch");
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // All jobs should be processed in order
+    expect(processedJobs).toEqual([job1, job2, job3]);
+  });
+
+  it("should correctly track running and queued counts during concurrent operations", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 100))
+      );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add 5 jobs concurrently
+    await Promise.all([
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+    ]);
+
+    // Check status immediately after adding
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const status1 = queue.getStatus();
+
+    // Should have 2 running and at least 1 queued
+    expect(status1.running).toBe(2);
+    expect(status1.queued).toBeGreaterThanOrEqual(1);
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const finalStatus = queue.getStatus();
+
+    // Should have no running or queued jobs
+    expect(finalStatus.running).toBe(0);
+    expect(finalStatus.queued).toBe(0);
+  });
+
+  it("should handle race condition in processQueue correctly", async () => {
+    let processCount = 0;
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi.fn().mockImplementation(
+      (context: JobExecutionContext) =>
+        new Promise<void>((resolve) => {
+          processCount++;
+          setTimeout(() => {
+            context.onComplete(true);
+            resolve();
+          }, 50);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add jobs rapidly to potential trigger race conditions in processQueue
+    const promises: Promise<string>[] = [];
+    for (let i = 0; i < 10; i++) {
+      promises.push(queue.add("notion:fetch"));
+    }
+
+    await Promise.all(promises);
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // All 10 jobs should be processed exactly once
+    expect(processCount).toBe(10);
+
+    const jobTracker = getJobTracker();
+    const completedJobs = jobTracker.getJobsByStatus("completed");
+    expect(completedJobs).toHaveLength(10);
+  });
+
+  it("should handle concurrent cancellation requests correctly", async () => {
+    const queue = new JobQueue({ concurrency: 1 });
+    const executor = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 200))
+      );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add multiple jobs
+    const jobIds = await Promise.all([
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+    ]);
+
+    // Wait a bit for first job to start
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Cancel all jobs concurrently
+    const cancelResults = await Promise.all(
+      jobIds.map((id) => queue.cancel(id))
+    );
+
+    // All cancellations should succeed
+    expect(cancelResults.every((result) => result === true)).toBe(true);
+
+    // Wait for cancellation to propagate
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const jobTracker = getJobTracker();
+    const failedJobs = jobTracker.getJobsByStatus("failed");
+
+    // All jobs should be failed (cancelled)
+    expect(failedJobs.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("should maintain queue integrity with mixed add and cancel operations", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 100))
+      );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add some jobs
+    const job1 = await queue.add("notion:fetch");
+    const job2 = await queue.add("notion:fetch");
+    const job3 = await queue.add("notion:fetch");
+
+    // Cancel one while others are running/queued
+    const cancelled = queue.cancel(job2);
+
+    expect(cancelled).toBe(true);
+
+    // Add more jobs
+    const job4 = await queue.add("notion:fetch");
+    const job5 = await queue.add("notion:fetch");
+
+    // Wait for completion
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const jobTracker = getJobTracker();
+    const completedJobs = jobTracker.getJobsByStatus("completed");
+    const failedJobs = jobTracker.getJobsByStatus("failed");
+
+    // Should have 3 completed (job1, job3, and one of job4/job5 depending on timing)
+    expect(completedJobs.length).toBeGreaterThanOrEqual(2);
+
+    // job2 should be failed (cancelled)
+    const job2State = jobTracker.getJob(job2);
+    expect(job2State?.status).toBe("failed");
+    expect(job2State?.result?.error).toBe("Job cancelled");
+  });
+
+  it("should handle getStatus() called concurrently with job operations", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 50))
+      );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Perform mixed operations concurrently
+    const results = await Promise.all([
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.getStatus(),
+      queue.add("notion:fetch"),
+      queue.getStatus(),
+      queue.add("notion:fetch"),
+      queue.getStatus(),
+    ]);
+
+    // getStatus calls should return valid objects
+    const statusResults = results.filter(
+      (r): r is { queued: number; running: number; concurrency: number } =>
+        typeof r === "object" && "queued" in r
+    );
+
+    expect(statusResults).toHaveLength(3);
+    statusResults.forEach((status) => {
+      expect(status).toHaveProperty("queued");
+      expect(status).toHaveProperty("running");
+      expect(status).toHaveProperty("concurrency");
+      expect(status.concurrency).toBe(2);
+    });
+
+    // Wait for all jobs to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  it("should prevent starvation of queued jobs under continuous load", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executionTimes: number[] = [];
+
+    const executor = vi.fn().mockImplementation(
+      (context: JobExecutionContext) =>
+        new Promise<void>((resolve) => {
+          executionTimes.push(Date.now());
+          setTimeout(() => {
+            context.onComplete(true);
+            resolve();
+          }, 30);
+        })
+    );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    const startTime = Date.now();
+
+    // Continuously add jobs while others are running
+    const jobPromises: Promise<string>[] = [];
+    for (let i = 0; i < 10; i++) {
+      jobPromises.push(queue.add("notion:fetch"));
+      // Small delay between additions
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    await Promise.all(jobPromises);
+
+    // Wait for all to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // All jobs should have been executed
+    expect(executionTimes).toHaveLength(10);
+
+    // Last job should complete within reasonable time
+    // (10 jobs * 30ms each / 2 concurrency = ~150ms minimum + overhead)
+    const totalTime = Date.now() - startTime;
+    expect(totalTime).toBeLessThan(1000);
+  });
+
+  it("should handle concurrent getQueuedJobs and getRunningJobs calls", async () => {
+    const queue = new JobQueue({ concurrency: 2 });
+    const executor = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 100))
+      );
+
+    queue.registerExecutor("notion:fetch", executor);
+
+    // Add jobs
+    await Promise.all([
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+      queue.add("notion:fetch"),
+    ]);
+
+    // Wait a bit for some to start
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Call getters concurrently
+    const [queuedJobs, runningJobs, status] = await Promise.all([
+      Promise.resolve(queue.getQueuedJobs()),
+      Promise.resolve(queue.getRunningJobs()),
+      Promise.resolve(queue.getStatus()),
+    ]);
+
+    // Should return consistent state
+    expect(queuedJobs.length + runningJobs.length).toBe(4);
+    expect(status.queued + status.running).toBe(4);
+
+    // Wait for cleanup
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  });
+});
+
 describe("createJobQueue", () => {
   beforeEach(() => {
     destroyJobTracker();

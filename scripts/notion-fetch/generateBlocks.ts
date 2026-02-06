@@ -148,6 +148,97 @@ export function __resetPrefetchCaches(): void {
   markdownPrefetchCache.clear();
 }
 
+function extractSidebarPositionFromFrontmatter(content: string): number | null {
+  if (!content) {
+    return null;
+  }
+
+  const normalized = content.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return null;
+  }
+
+  const endMarkerIndex = normalized.indexOf("\n---", 4);
+  if (endMarkerIndex === -1) {
+    return null;
+  }
+
+  const frontmatter = normalized.slice(4, endMarkerIndex);
+  const lines = frontmatter.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("sidebar_position:")) {
+      continue;
+    }
+
+    let value = trimmed.slice("sidebar_position:".length).trim();
+    const commentIndex = value.indexOf("#");
+    if (commentIndex !== -1) {
+      value = value.slice(0, commentIndex).trim();
+    }
+    value = value.replace(/^["']|["']$/g, "");
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+export function findExistingSidebarPosition(
+  pageId: string,
+  filePath: string,
+  metadataCache: PageMetadataCache,
+  existingCache?: PageMetadataCache,
+  preferExistingCache = false
+): number | null {
+  const candidatePaths: string[] = [];
+  const addCandidate = (candidate?: string) => {
+    if (!candidate || candidatePaths.includes(candidate)) {
+      return;
+    }
+    candidatePaths.push(candidate);
+  };
+  const addCandidates = (candidates?: string[]) => {
+    if (!candidates?.length) {
+      return;
+    }
+    for (const candidate of candidates) {
+      addCandidate(candidate);
+    }
+  };
+
+  const cachedPage = metadataCache.pages?.[pageId];
+  const existingCachedPage = existingCache?.pages?.[pageId];
+  const existingOutputPaths = existingCachedPage?.outputPaths;
+  const cachedOutputPaths = cachedPage?.outputPaths;
+
+  if (preferExistingCache) {
+    addCandidates(existingOutputPaths);
+  }
+
+  addCandidates(cachedOutputPaths);
+  addCandidate(filePath);
+
+  if (!preferExistingCache) {
+    addCandidates(existingOutputPaths);
+  }
+
+  for (const candidate of candidatePaths) {
+    const resolvedPath = normalizePath(candidate);
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      continue;
+    }
+    const content = fs.readFileSync(resolvedPath, "utf-8");
+    const position = extractSidebarPositionFromFrontmatter(content);
+    if (position !== null) {
+      return position;
+    }
+  }
+
+  return null;
+}
+
 // setTranslationString moved to translationManager.ts
 
 /**
@@ -705,9 +796,19 @@ export async function generateBlocks(
             );
           }
 
-          let sidebarPosition = i + 1;
-          if (props?.["Order"]?.number) {
-            sidebarPosition = props["Order"].number;
+          const orderValue = props?.["Order"]?.number;
+          let sidebarPosition = Number.isFinite(orderValue) ? orderValue : null;
+          if (sidebarPosition === null && !enableDeletion) {
+            sidebarPosition = findExistingSidebarPosition(
+              page.id,
+              filePath,
+              metadataCache,
+              existingCache,
+              syncMode.fullRebuild
+            );
+          }
+          if (sidebarPosition === null) {
+            sidebarPosition = i + 1;
           }
 
           const customProps: Record<string, unknown> = {};

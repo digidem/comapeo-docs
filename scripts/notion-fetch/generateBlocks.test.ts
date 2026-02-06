@@ -673,6 +673,49 @@ describe("generateBlocks", () => {
       expect(content).toContain("sidebar_position: 12");
     });
 
+    it("should not reuse existing sidebar_position on full sync when Order is missing", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const page = createMockNotionPage({
+        title: "Full Sync Page",
+        elementType: "Page",
+      });
+      delete page.properties.Order;
+
+      const generateBlocksPath = fileURLToPath(
+        new URL("./generateBlocks.ts", import.meta.url)
+      );
+      const generateBlocksDir = path.dirname(generateBlocksPath);
+      const docsPath = path.join(generateBlocksDir, "../../docs");
+      const filePath = path.join(docsPath, "full-sync-page.md");
+
+      fs.writeFileSync(
+        filePath,
+        `---\nsidebar_position: "12" # should be ignored\n---\n\n# Existing Content\n`,
+        "utf-8"
+      );
+
+      const pages = [page];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# Full Sync Page\n\nContent here.",
+      });
+
+      await generateBlocks(pages, progressCallback, { enableDeletion: true });
+
+      const markdownCalls = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === filePath
+      );
+
+      expect(markdownCalls.length).toBeGreaterThan(0);
+
+      const content = markdownCalls[markdownCalls.length - 1][1] as string;
+      expect(content).toContain("sidebar_position: 1");
+    });
+
     it("should preserve sidebar_position from existingCache during full rebuild when filePath differs", async () => {
       // This test covers the scenario where:
       // 1. syncMode.fullRebuild is true (metadataCache is recreated empty)

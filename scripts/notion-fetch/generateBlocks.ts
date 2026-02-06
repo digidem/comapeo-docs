@@ -797,15 +797,16 @@ export async function generateBlocks(
           }
 
           const orderValue = props?.["Order"]?.number;
-          let sidebarPosition = Number.isFinite(orderValue)
-            ? orderValue
-            : findExistingSidebarPosition(
-                page.id,
-                filePath,
-                metadataCache,
-                existingCache,
-                true
-              );
+          let sidebarPosition = Number.isFinite(orderValue) ? orderValue : null;
+          if (sidebarPosition === null && !enableDeletion) {
+            sidebarPosition = findExistingSidebarPosition(
+              page.id,
+              filePath,
+              metadataCache,
+              existingCache,
+              syncMode.fullRebuild
+            );
+          }
           if (sidebarPosition === null) {
             sidebarPosition = i + 1;
           }

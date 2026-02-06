@@ -43,9 +43,10 @@ const mockFetch = vi.fn();
 
 describe("API Server - Unit Tests", () => {
   beforeEach(() => {
-    // Reset job tracker
-    destroyJobTracker();
+    // Clean up persisted data first, before destroying tracker
     cleanupTestData();
+    // Then reset job tracker (which will start fresh since data is cleaned)
+    destroyJobTracker();
     getJobTracker();
 
     // Reset mocks
@@ -278,12 +279,16 @@ describe("API Server - Unit Tests", () => {
 // Integration tests for the complete job lifecycle
 describe("Job Lifecycle Integration", () => {
   beforeEach(() => {
+    // Clean up persisted data first, before destroying tracker
+    cleanupTestData();
+    // Then reset job tracker (which will start fresh since data is cleaned)
     destroyJobTracker();
     getJobTracker();
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   it("should complete full job lifecycle", () => {
@@ -371,5 +376,116 @@ describe("Job Lifecycle Integration", () => {
 
     expect(completedJobs).toHaveLength(2);
     expect(failedJobs).toHaveLength(1);
+  });
+
+  it("should handle job cancellation for pending jobs", () => {
+    const tracker = getJobTracker();
+
+    // Create job
+    const jobId = tracker.createJob("notion:fetch");
+    expect(tracker.getJob(jobId)?.status).toBe("pending");
+
+    // Cancel job
+    tracker.updateJobStatus(jobId, "failed", {
+      success: false,
+      error: "Job cancelled by user",
+    });
+
+    const job = tracker.getJob(jobId);
+    expect(job?.status).toBe("failed");
+    expect(job?.result?.error).toBe("Job cancelled by user");
+  });
+
+  it("should handle job cancellation for running jobs", () => {
+    const tracker = getJobTracker();
+
+    // Create and start job
+    const jobId = tracker.createJob("notion:fetch-all");
+    tracker.updateJobStatus(jobId, "running");
+    expect(tracker.getJob(jobId)?.status).toBe("running");
+
+    // Cancel job
+    tracker.updateJobStatus(jobId, "failed", {
+      success: false,
+      error: "Job cancelled by user",
+    });
+
+    const job = tracker.getJob(jobId);
+    expect(job?.status).toBe("failed");
+    expect(job?.result?.error).toBe("Job cancelled by user");
+  });
+
+  it("should handle job filtering by status", () => {
+    const tracker = getJobTracker();
+
+    // Create multiple jobs with different statuses
+    const job1 = tracker.createJob("notion:fetch");
+    const job2 = tracker.createJob("notion:fetch-all");
+    const job3 = tracker.createJob("notion:translate");
+
+    tracker.updateJobStatus(job1, "running");
+    tracker.updateJobStatus(job2, "completed");
+
+    // Filter by status
+    let jobs = tracker.getAllJobs();
+    jobs = jobs.filter((job) => job.status === "running");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job1);
+
+    jobs = tracker.getAllJobs();
+    jobs = jobs.filter((job) => job.status === "completed");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job2);
+
+    jobs = tracker.getAllJobs();
+    jobs = jobs.filter((job) => job.status === "pending");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job3);
+  });
+
+  it("should handle job filtering by type", () => {
+    const tracker = getJobTracker();
+
+    // Create multiple jobs with different types
+    const job1 = tracker.createJob("notion:fetch");
+    const job2 = tracker.createJob("notion:fetch-all");
+    const job3 = tracker.createJob("notion:fetch");
+
+    // Filter by type
+    let jobs = tracker.getAllJobs();
+    jobs = jobs.filter((job) => job.type === "notion:fetch");
+    expect(jobs).toHaveLength(2);
+
+    jobs = tracker.getAllJobs();
+    jobs = jobs.filter((job) => job.type === "notion:fetch-all");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job2);
+  });
+
+  it("should handle combined status and type filtering", () => {
+    const tracker = getJobTracker();
+
+    // Create multiple jobs
+    const job1 = tracker.createJob("notion:fetch");
+    const job2 = tracker.createJob("notion:fetch");
+    const job3 = tracker.createJob("notion:fetch-all");
+
+    tracker.updateJobStatus(job1, "running");
+    tracker.updateJobStatus(job2, "completed");
+
+    // Filter by status AND type
+    let jobs = tracker.getAllJobs();
+    jobs = jobs.filter(
+      (job) => job.status === "running" && job.type === "notion:fetch"
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job1);
+
+    jobs = tracker.getAllJobs();
+    jobs = jobs.filter(
+      (job) => job.status === "completed" && job.type === "notion:fetch"
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(job2);
   });
 });

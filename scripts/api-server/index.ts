@@ -28,6 +28,19 @@ import {
   type AuthResult,
 } from "./auth";
 import { getAudit, AuditLogger } from "./audit";
+import {
+  ErrorCode,
+  type ErrorResponse,
+  type ApiResponse,
+  type ListResponse,
+  type PaginationMeta,
+  createErrorResponse,
+  createApiResponse,
+  createPaginationMeta,
+  generateRequestId,
+  getErrorCodeForStatus,
+  getValidationErrorForField,
+} from "./response-schemas";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
@@ -115,26 +128,88 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-// Error response helper with proper error types
+// Standardized success response with API envelope
+function successResponse<T>(
+  data: T,
+  requestId: string,
+  status = 200,
+  pagination?: PaginationMeta
+): Response {
+  const response: ApiResponse<T> = createApiResponse(
+    data,
+    requestId,
+    pagination
+  );
+  return jsonResponse(response, status);
+}
+
+// Standardized error response with error code
+function standardErrorResponse(
+  code: ErrorCode,
+  message: string,
+  status: number,
+  requestId: string,
+  details?: Record<string, unknown>,
+  suggestions?: string[]
+): Response {
+  const error: ErrorResponse = createErrorResponse(
+    code,
+    message,
+    status,
+    requestId,
+    details,
+    suggestions
+  );
+  return jsonResponse(error, status);
+}
+
+// Legacy error response helper for backward compatibility (will be deprecated)
 function errorResponse(
   message: string,
   status = 400,
   details?: unknown,
   suggestions?: string[]
 ): Response {
-  const body: Record<string, unknown> = { error: message };
-  if (details !== undefined) {
-    body.details = details;
-  }
-  if (suggestions && suggestions.length > 0) {
-    body.suggestions = suggestions;
-  }
-  return jsonResponse(body, status);
+  const requestId = generateRequestId();
+  return standardErrorResponse(
+    getErrorCodeForStatus(status),
+    message,
+    status,
+    requestId,
+    details as Record<string, unknown>,
+    suggestions
+  );
 }
 
-// Validation error response
-function validationError(message: string, details?: unknown): Response {
-  return errorResponse(message, 400, details);
+// Validation error response with standardized error code
+function validationError(
+  message: string,
+  requestId: string,
+  details?: Record<string, unknown>
+): Response {
+  return standardErrorResponse(
+    ErrorCode.VALIDATION_ERROR,
+    message,
+    400,
+    requestId,
+    details
+  );
+}
+
+// Field-specific validation error
+function fieldValidationError(
+  field: string,
+  requestId: string,
+  additionalContext?: Record<string, unknown>
+): Response {
+  const { code, message } = getValidationErrorForField(field);
+  return standardErrorResponse(
+    code,
+    message,
+    400,
+    requestId,
+    additionalContext
+  );
 }
 
 // Parse and validate JSON body with proper error handling
@@ -185,7 +260,8 @@ function isPublicEndpoint(path: string): boolean {
 async function routeRequest(
   req: Request,
   path: string,
-  url: URL
+  url: URL,
+  requestId: string
 ): Promise<Response> {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -194,15 +270,18 @@ async function routeRequest(
 
   // Health check
   if (path === "/health" && req.method === "GET") {
-    return jsonResponse({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      auth: {
-        enabled: getAuth().isAuthenticationEnabled(),
-        keysConfigured: getAuth().listKeys().length,
+    return successResponse(
+      {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        auth: {
+          enabled: getAuth().isAuthenticationEnabled(),
+          keysConfigured: getAuth().listKeys().length,
+        },
       },
-    });
+      requestId
+    );
   }
 
   // API documentation (OpenAPI-style spec)
@@ -229,6 +308,130 @@ async function routeRequest(
           },
         },
         schemas: {
+          // Standard response envelopes
+          ApiResponse: {
+            type: "object",
+            required: ["data", "requestId", "timestamp"],
+            properties: {
+              data: {
+                type: "object",
+                description: "Response data (varies by endpoint)",
+              },
+              requestId: {
+                type: "string",
+                description: "Unique request identifier for tracing",
+                pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
+              },
+              timestamp: {
+                type: "string",
+                format: "date-time",
+                description: "ISO 8601 timestamp of response",
+              },
+              pagination: {
+                $ref: "#/components/schemas/PaginationMeta",
+              },
+            },
+          },
+          ErrorResponse: {
+            type: "object",
+            required: ["code", "message", "status", "requestId", "timestamp"],
+            properties: {
+              code: {
+                type: "string",
+                description: "Machine-readable error code",
+                enum: [
+                  "VALIDATION_ERROR",
+                  "INVALID_INPUT",
+                  "MISSING_REQUIRED_FIELD",
+                  "INVALID_FORMAT",
+                  "INVALID_ENUM_VALUE",
+                  "UNAUTHORIZED",
+                  "FORBIDDEN",
+                  "INVALID_API_KEY",
+                  "API_KEY_INACTIVE",
+                  "NOT_FOUND",
+                  "RESOURCE_NOT_FOUND",
+                  "ENDPOINT_NOT_FOUND",
+                  "CONFLICT",
+                  "INVALID_STATE_TRANSITION",
+                  "RESOURCE_LOCKED",
+                  "RATE_LIMIT_EXCEEDED",
+                  "INTERNAL_ERROR",
+                  "SERVICE_UNAVAILABLE",
+                  "JOB_EXECUTION_FAILED",
+                ],
+              },
+              message: {
+                type: "string",
+                description: "Human-readable error message",
+              },
+              status: {
+                type: "integer",
+                description: "HTTP status code",
+              },
+              requestId: {
+                type: "string",
+                description: "Unique request identifier for tracing",
+              },
+              timestamp: {
+                type: "string",
+                format: "date-time",
+                description: "ISO 8601 timestamp of error",
+              },
+              details: {
+                type: "object",
+                description: "Additional error context",
+              },
+              suggestions: {
+                type: "array",
+                items: {
+                  type: "string",
+                },
+                description: "Suggestions for resolving the error",
+              },
+            },
+          },
+          PaginationMeta: {
+            type: "object",
+            required: [
+              "page",
+              "perPage",
+              "total",
+              "totalPages",
+              "hasNext",
+              "hasPrevious",
+            ],
+            properties: {
+              page: {
+                type: "integer",
+                minimum: 1,
+                description: "Current page number (1-indexed)",
+              },
+              perPage: {
+                type: "integer",
+                minimum: 1,
+                description: "Number of items per page",
+              },
+              total: {
+                type: "integer",
+                minimum: 0,
+                description: "Total number of items",
+              },
+              totalPages: {
+                type: "integer",
+                minimum: 1,
+                description: "Total number of pages",
+              },
+              hasNext: {
+                type: "boolean",
+                description: "Whether there is a next page",
+              },
+              hasPrevious: {
+                type: "boolean",
+                description: "Whether there is a previous page",
+              },
+            },
+          },
           HealthResponse: {
             type: "object",
             properties: {
@@ -278,8 +481,9 @@ async function routeRequest(
           },
           JobsListResponse: {
             type: "object",
+            required: ["items", "count"],
             properties: {
-              jobs: {
+              items: {
                 type: "array",
                 items: {
                   $ref: "#/components/schemas/Job",
@@ -418,23 +622,16 @@ async function routeRequest(
               },
             },
           },
-          ErrorResponse: {
-            type: "object",
-            properties: {
-              error: {
-                type: "string",
-              },
-              details: {
-                type: "object",
-              },
-              suggestions: {
-                type: "array",
-                items: {
-                  type: "string",
-                },
-              },
-            },
+        },
+      },
+      headers: {
+        "X-Request-ID": {
+          description: "Unique request identifier for tracing",
+          schema: {
+            type: "string",
+            pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
           },
+          required: false,
         },
       },
       security: [
@@ -703,38 +900,41 @@ async function routeRequest(
 
   // List available job types
   if (path === "/jobs/types" && req.method === "GET") {
-    return jsonResponse({
-      types: [
-        {
-          id: "notion:fetch",
-          description: "Fetch pages from Notion",
-        },
-        {
-          id: "notion:fetch-all",
-          description: "Fetch all pages from Notion",
-        },
-        {
-          id: "notion:translate",
-          description: "Translate content",
-        },
-        {
-          id: "notion:status-translation",
-          description: "Update status for translation workflow",
-        },
-        {
-          id: "notion:status-draft",
-          description: "Update status for draft publish workflow",
-        },
-        {
-          id: "notion:status-publish",
-          description: "Update status for publish workflow",
-        },
-        {
-          id: "notion:status-publish-production",
-          description: "Update status for production publish workflow",
-        },
-      ],
-    });
+    return successResponse(
+      {
+        types: [
+          {
+            id: "notion:fetch",
+            description: "Fetch pages from Notion",
+          },
+          {
+            id: "notion:fetch-all",
+            description: "Fetch all pages from Notion",
+          },
+          {
+            id: "notion:translate",
+            description: "Translate content",
+          },
+          {
+            id: "notion:status-translation",
+            description: "Update status for translation workflow",
+          },
+          {
+            id: "notion:status-draft",
+            description: "Update status for draft publish workflow",
+          },
+          {
+            id: "notion:status-publish",
+            description: "Update status for publish workflow",
+          },
+          {
+            id: "notion:status-publish-production",
+            description: "Update status for production publish workflow",
+          },
+        ],
+      },
+      requestId
+    );
   }
 
   // List all jobs with optional filtering
@@ -746,14 +946,18 @@ async function routeRequest(
     // Validate status filter if provided
     if (statusFilter && !isValidJobStatus(statusFilter)) {
       return validationError(
-        `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`
+        `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`,
+        requestId,
+        { filter: statusFilter, validValues: VALID_JOB_STATUSES }
       );
     }
 
     // Validate type filter if provided
     if (typeFilter && !isValidJobType(typeFilter)) {
       return validationError(
-        `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
+        `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
+        requestId,
+        { filter: typeFilter, validValues: VALID_JOB_TYPES }
       );
     }
 
@@ -769,19 +973,22 @@ async function routeRequest(
       jobs = jobs.filter((job) => job.type === typeFilter);
     }
 
-    return jsonResponse({
-      jobs: jobs.map((job) => ({
-        id: job.id,
-        type: job.type,
-        status: job.status,
-        createdAt: job.createdAt.toISOString(),
-        startedAt: job.startedAt?.toISOString(),
-        completedAt: job.completedAt?.toISOString(),
-        progress: job.progress,
-        result: job.result,
-      })),
-      count: jobs.length,
-    });
+    return successResponse(
+      {
+        items: jobs.map((job) => ({
+          id: job.id,
+          type: job.type,
+          status: job.status,
+          createdAt: job.createdAt.toISOString(),
+          startedAt: job.startedAt?.toISOString(),
+          completedAt: job.completedAt?.toISOString(),
+          progress: job.progress,
+          result: job.result,
+        })),
+        count: jobs.length,
+      },
+      requestId
+    );
   }
 
   // Get job status by ID or cancel job
@@ -792,7 +999,12 @@ async function routeRequest(
     // Validate job ID format
     if (!isValidJobId(jobId)) {
       return validationError(
-        "Invalid job ID format. Job ID must be non-empty and cannot contain path traversal characters (.., /, \\)"
+        "Invalid job ID format. Job ID must be non-empty and cannot contain path traversal characters (.., /, \\)",
+        requestId,
+        {
+          jobId,
+          reason: "Invalid format or contains path traversal characters",
+        }
       );
     }
 
@@ -803,19 +1015,28 @@ async function routeRequest(
       const job = tracker.getJob(jobId);
 
       if (!job) {
-        return errorResponse("Job not found", 404);
+        return standardErrorResponse(
+          ErrorCode.NOT_FOUND,
+          "Job not found",
+          404,
+          requestId,
+          { jobId }
+        );
       }
 
-      return jsonResponse({
-        id: job.id,
-        type: job.type,
-        status: job.status,
-        createdAt: job.createdAt.toISOString(),
-        startedAt: job.startedAt?.toISOString(),
-        completedAt: job.completedAt?.toISOString(),
-        progress: job.progress,
-        result: job.result,
-      });
+      return successResponse(
+        {
+          id: job.id,
+          type: job.type,
+          status: job.status,
+          createdAt: job.createdAt.toISOString(),
+          startedAt: job.startedAt?.toISOString(),
+          completedAt: job.completedAt?.toISOString(),
+          progress: job.progress,
+          result: job.result,
+        },
+        requestId
+      );
     }
 
     // DELETE: Cancel job
@@ -823,14 +1044,23 @@ async function routeRequest(
       const job = tracker.getJob(jobId);
 
       if (!job) {
-        return errorResponse("Job not found", 404);
+        return standardErrorResponse(
+          ErrorCode.NOT_FOUND,
+          "Job not found",
+          404,
+          requestId,
+          { jobId }
+        );
       }
 
       // Only allow canceling pending or running jobs
       if (job.status !== "pending" && job.status !== "running") {
-        return errorResponse(
+        return standardErrorResponse(
+          ErrorCode.INVALID_STATE_TRANSITION,
           `Cannot cancel job with status: ${job.status}. Only pending or running jobs can be cancelled.`,
-          409
+          409,
+          requestId,
+          { jobId, currentStatus: job.status }
         );
       }
 
@@ -840,11 +1070,14 @@ async function routeRequest(
         error: "Job cancelled by user",
       });
 
-      return jsonResponse({
-        id: jobId,
-        status: "cancelled",
-        message: "Job cancelled successfully",
-      });
+      return successResponse(
+        {
+          id: jobId,
+          status: "cancelled",
+          message: "Job cancelled successfully",
+        },
+        requestId
+      );
     }
   }
 
@@ -856,34 +1089,42 @@ async function routeRequest(
       body = await parseJsonBody<{ type: string; options?: unknown }>(req);
     } catch (error) {
       if (error instanceof ValidationError) {
-        return validationError(error.message, error.statusCode);
+        return validationError(error.message, requestId);
       }
-      return errorResponse("Failed to parse request body", 500);
+      return standardErrorResponse(
+        ErrorCode.INTERNAL_ERROR,
+        "Failed to parse request body",
+        500,
+        requestId
+      );
     }
 
     // Validate request body structure
     if (!body || typeof body !== "object") {
-      return validationError("Request body must be a valid JSON object");
-    }
-
-    if (!body.type || typeof body.type !== "string") {
       return validationError(
-        "Missing or invalid 'type' field in request body. Expected a string."
+        "Request body must be a valid JSON object",
+        requestId
       );
     }
 
+    if (!body.type || typeof body.type !== "string") {
+      return fieldValidationError("type", requestId);
+    }
+
     if (!isValidJobType(body.type)) {
-      return validationError(
-        `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
+      return standardErrorResponse(
+        ErrorCode.INVALID_ENUM_VALUE,
+        `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
+        400,
+        requestId,
+        { providedType: body.type, validTypes: VALID_JOB_TYPES }
       );
     }
 
     // Validate options if provided
     if (body.options !== undefined) {
       if (typeof body.options !== "object" || body.options === null) {
-        return validationError(
-          "Invalid 'options' field in request body. Expected an object."
-        );
+        return fieldValidationError("options", requestId);
       }
       // Check for known option keys and their types
       const options = body.options as Record<string, unknown>;
@@ -897,8 +1138,12 @@ async function routeRequest(
 
       for (const key of Object.keys(options)) {
         if (!knownOptions.includes(key)) {
-          return validationError(
-            `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`
+          return standardErrorResponse(
+            ErrorCode.INVALID_INPUT,
+            `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`,
+            400,
+            requestId,
+            { option: key, validOptions: knownOptions }
           );
         }
       }
@@ -908,29 +1153,25 @@ async function routeRequest(
         options.maxPages !== undefined &&
         typeof options.maxPages !== "number"
       ) {
-        return validationError("Invalid 'maxPages' option. Expected a number.");
+        return fieldValidationError("maxPages", requestId);
       }
       if (
         options.statusFilter !== undefined &&
         typeof options.statusFilter !== "string"
       ) {
-        return validationError(
-          "Invalid 'statusFilter' option. Expected a string."
-        );
+        return fieldValidationError("statusFilter", requestId);
       }
       if (options.force !== undefined && typeof options.force !== "boolean") {
-        return validationError("Invalid 'force' option. Expected a boolean.");
+        return fieldValidationError("force", requestId);
       }
       if (options.dryRun !== undefined && typeof options.dryRun !== "boolean") {
-        return validationError("Invalid 'dryRun' option. Expected a boolean.");
+        return fieldValidationError("dryRun", requestId);
       }
       if (
         options.includeRemoved !== undefined &&
         typeof options.includeRemoved !== "boolean"
       ) {
-        return validationError(
-          "Invalid 'includeRemoved' option. Expected a boolean."
-        );
+        return fieldValidationError("includeRemoved", requestId);
       }
     }
 
@@ -944,7 +1185,7 @@ async function routeRequest(
       (body.options as Record<string, unknown>) || {}
     );
 
-    return jsonResponse(
+    return successResponse(
       {
         jobId,
         type: body.type,
@@ -955,15 +1196,18 @@ async function routeRequest(
           status: `/jobs/${jobId}`,
         },
       },
+      requestId,
       201
     );
   }
 
   // 404 for unknown routes
-  return jsonResponse(
+  return standardErrorResponse(
+    ErrorCode.ENDPOINT_NOT_FOUND,
+    "The requested endpoint does not exist",
+    404,
+    requestId,
     {
-      error: "Not found",
-      message: "The requested endpoint does not exist",
       availableEndpoints: [
         { method: "GET", path: "/health", description: "Health check" },
         {
@@ -989,8 +1233,7 @@ async function routeRequest(
           description: "Cancel a pending or running job",
         },
       ],
-    },
-    404
+    }
   );
 }
 
@@ -1001,6 +1244,11 @@ async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const audit = getAudit();
+  const requestId = generateRequestId();
+
+  // Add request ID to response headers for tracing
+  const headers = new Headers();
+  headers.set("X-Request-ID", requestId);
 
   // Check if endpoint is public
   const isPublic = isPublicEndpoint(path);
@@ -1025,20 +1273,48 @@ async function handleRequest(req: Request): Promise<Response> {
   // Check authentication for protected endpoints
   if (!isPublic && !authResult.success) {
     audit.logAuthFailure(req, authResult as { success: false; error?: string });
-    return createAuthErrorResponse(authResult.error || "Authentication failed");
+    const errorResponse = standardErrorResponse(
+      ErrorCode.UNAUTHORIZED,
+      authResult.error || "Authentication failed",
+      401,
+      requestId
+    );
+    // Add request ID header to error response
+    const errorBody = await errorResponse.json();
+    headers.set("Content-Type", "application/json");
+    headers.set("X-Request-ID", requestId);
+    return new Response(JSON.stringify(errorBody), {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": requestId,
+      },
+    });
   }
 
   // Handle the request
   try {
-    const response = await routeRequest(req, path, url);
+    const response = await routeRequest(req, path, url, requestId);
     const responseTime = Date.now() - startTime;
     audit.logSuccess(entry, response.status, responseTime);
-    return response;
+    // Add request ID header to response
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set("X-Request-ID", requestId);
+    return new Response(response.body, {
+      status: response.status,
+      headers: newHeaders,
+    });
   } catch (error) {
     const responseTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     audit.logFailure(entry, 500, errorMessage);
-    return errorResponse("Internal server error", 500, errorMessage);
+    return standardErrorResponse(
+      ErrorCode.INTERNAL_ERROR,
+      "Internal server error",
+      500,
+      requestId,
+      { error: errorMessage }
+    );
   }
 }
 

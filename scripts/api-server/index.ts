@@ -15,18 +15,58 @@ import { executeJobAsync } from "./job-executor";
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
 
+// Configuration constants
+const MAX_REQUEST_SIZE = 1_000_000; // 1MB max request size
+const MAX_JOB_ID_LENGTH = 100;
+
+// Valid job types and statuses for validation
+const VALID_JOB_TYPES: readonly JobType[] = [
+  "notion:fetch",
+  "notion:fetch-all",
+  "notion:translate",
+  "notion:status-translation",
+  "notion:status-draft",
+  "notion:status-publish",
+  "notion:status-publish-production",
+] as const;
+
+const VALID_JOB_STATUSES: readonly JobStatus[] = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+] as const;
+
+// Validation errors
+class ValidationError extends Error {
+  constructor(
+    message: string,
+    public statusCode = 400
+  ) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
 // Request validation
 function isValidJobType(type: string): type is JobType {
-  const validTypes: JobType[] = [
-    "notion:fetch",
-    "notion:fetch-all",
-    "notion:translate",
-    "notion:status-translation",
-    "notion:status-draft",
-    "notion:status-publish",
-    "notion:status-publish-production",
-  ];
-  return validTypes.includes(type as JobType);
+  return VALID_JOB_TYPES.includes(type as JobType);
+}
+
+function isValidJobStatus(status: string): status is JobStatus {
+  return VALID_JOB_STATUSES.includes(status as JobStatus);
+}
+
+function isValidJobId(jobId: string): boolean {
+  // Basic validation: non-empty, reasonable length, no path traversal
+  if (!jobId || jobId.length > MAX_JOB_ID_LENGTH) {
+    return false;
+  }
+  // Prevent path traversal attacks
+  if (jobId.includes("..") || jobId.includes("/") || jobId.includes("\\")) {
+    return false;
+  }
+  return true;
 }
 
 // CORS headers
@@ -47,17 +87,53 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-// Error response helper
-function errorResponse(message: string, status = 400): Response {
-  return jsonResponse({ error: message }, status);
+// Error response helper with proper error types
+function errorResponse(
+  message: string,
+  status = 400,
+  details?: unknown
+): Response {
+  const body: Record<string, unknown> = { error: message };
+  if (details !== undefined) {
+    body.details = details;
+  }
+  return jsonResponse(body, status);
 }
 
-// Parse JSON body helper
-async function parseJsonBody<T>(req: Request): Promise<T | null> {
+// Validation error response
+function validationError(message: string, details?: unknown): Response {
+  return errorResponse(message, 400, details);
+}
+
+// Parse and validate JSON body with proper error handling
+async function parseJsonBody<T>(req: Request): Promise<T> {
+  // Check Content-Type header
+  const contentType = req.headers.get("content-type");
+  if (!contentType || !contentType.includes("application/json")) {
+    throw new ValidationError(
+      "Invalid Content-Type. Expected 'application/json'"
+    );
+  }
+
+  // Check request size
+  const contentLength = req.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_SIZE) {
+    throw new ValidationError(
+      `Request body too large. Maximum size is ${MAX_REQUEST_SIZE} bytes`
+    );
+  }
+
   try {
-    return await req.json();
-  } catch {
-    return null;
+    const body = await req.json();
+    if (body === null || typeof body !== "object") {
+      throw new ValidationError("Request body must be a valid JSON object");
+    }
+    return body as T;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw new ValidationError("Invalid JSON in request body");
   }
 }
 
@@ -126,6 +202,20 @@ const server = serve({
       const statusFilter = url.searchParams.get("status");
       const typeFilter = url.searchParams.get("type");
 
+      // Validate status filter if provided
+      if (statusFilter && !isValidJobStatus(statusFilter)) {
+        return validationError(
+          `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`
+        );
+      }
+
+      // Validate type filter if provided
+      if (typeFilter && !isValidJobType(typeFilter)) {
+        return validationError(
+          `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
+        );
+      }
+
       let jobs = tracker.getAllJobs();
 
       // Filter by status if specified
@@ -157,6 +247,14 @@ const server = serve({
     const jobStatusMatch = path.match(/^\/jobs\/([^/]+)$/);
     if (jobStatusMatch) {
       const jobId = jobStatusMatch[1];
+
+      // Validate job ID format
+      if (!isValidJobId(jobId)) {
+        return validationError(
+          "Invalid job ID format. Job ID must be non-empty and cannot contain path traversal characters (.., /, \\)"
+        );
+      }
+
       const tracker = getJobTracker();
 
       // GET: Get job status
@@ -211,18 +309,95 @@ const server = serve({
 
     // Create/trigger a new job
     if (path === "/jobs" && req.method === "POST") {
-      const body = await parseJsonBody<{ type: string; options?: unknown }>(
-        req
-      );
+      let body: { type: string; options?: unknown };
 
-      if (!body || typeof body.type !== "string") {
-        return errorResponse("Missing or invalid 'type' field in request body");
+      try {
+        body = await parseJsonBody<{ type: string; options?: unknown }>(req);
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          return validationError(error.message, error.statusCode);
+        }
+        return errorResponse("Failed to parse request body", 500);
+      }
+
+      // Validate request body structure
+      if (!body || typeof body !== "object") {
+        return validationError("Request body must be a valid JSON object");
+      }
+
+      if (!body.type || typeof body.type !== "string") {
+        return validationError(
+          "Missing or invalid 'type' field in request body. Expected a string."
+        );
       }
 
       if (!isValidJobType(body.type)) {
-        return errorResponse(
-          `Invalid job type: ${body.type}. Valid types: notion:fetch, notion:fetch-all, notion:translate, notion:status-translation, notion:status-draft, notion:status-publish, notion:status-publish-production`
+        return validationError(
+          `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
         );
+      }
+
+      // Validate options if provided
+      if (body.options !== undefined) {
+        if (typeof body.options !== "object" || body.options === null) {
+          return validationError(
+            "Invalid 'options' field in request body. Expected an object."
+          );
+        }
+        // Check for known option keys and their types
+        const options = body.options as Record<string, unknown>;
+        const knownOptions = [
+          "maxPages",
+          "statusFilter",
+          "force",
+          "dryRun",
+          "includeRemoved",
+        ];
+
+        for (const key of Object.keys(options)) {
+          if (!knownOptions.includes(key)) {
+            return validationError(
+              `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`
+            );
+          }
+        }
+
+        // Type validation for known options
+        if (
+          options.maxPages !== undefined &&
+          typeof options.maxPages !== "number"
+        ) {
+          return validationError(
+            "Invalid 'maxPages' option. Expected a number."
+          );
+        }
+        if (
+          options.statusFilter !== undefined &&
+          typeof options.statusFilter !== "string"
+        ) {
+          return validationError(
+            "Invalid 'statusFilter' option. Expected a string."
+          );
+        }
+        if (options.force !== undefined && typeof options.force !== "boolean") {
+          return validationError("Invalid 'force' option. Expected a boolean.");
+        }
+        if (
+          options.dryRun !== undefined &&
+          typeof options.dryRun !== "boolean"
+        ) {
+          return validationError(
+            "Invalid 'dryRun' option. Expected a boolean."
+          );
+        }
+        if (
+          options.includeRemoved !== undefined &&
+          typeof options.includeRemoved !== "boolean"
+        ) {
+          return validationError(
+            "Invalid 'includeRemoved' option. Expected a boolean."
+          );
+        }
       }
 
       const tracker = getJobTracker();

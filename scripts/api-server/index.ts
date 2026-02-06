@@ -5,6 +5,11 @@
  * - Trigger Notion-related jobs
  * - Query job status
  * - List all jobs
+ *
+ * Features:
+ * - API key authentication for protected endpoints
+ * - Comprehensive request audit logging
+ * - Input validation and error handling
  */
 
 // eslint-disable-next-line import/no-unresolved
@@ -16,6 +21,13 @@ import {
   formatErrorResponse,
   createValidationError,
 } from "../shared/errors";
+import {
+  requireAuth,
+  createAuthErrorResponse,
+  getAuth,
+  type AuthResult,
+} from "./auth";
+import { getAudit, AuditLogger } from "./audit";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
@@ -89,7 +101,7 @@ function isValidJobId(jobId: string): boolean {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 // JSON response helper
@@ -157,343 +169,441 @@ async function parseJsonBody<T>(req: Request): Promise<T> {
   }
 }
 
-// Routes
+// Public endpoints that don't require authentication
+const PUBLIC_ENDPOINTS = ["/health", "/jobs/types"];
+
+/**
+ * Check if a path is a public endpoint
+ */
+function isPublicEndpoint(path: string): boolean {
+  return PUBLIC_ENDPOINTS.some((endpoint) => path === endpoint);
+}
+
+/**
+ * Route the request to the appropriate handler
+ */
+async function routeRequest(
+  req: Request,
+  path: string,
+  url: URL
+): Promise<Response> {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // Health check
+  if (path === "/health" && req.method === "GET") {
+    return jsonResponse({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      auth: {
+        enabled: getAuth().isAuthenticationEnabled(),
+        keysConfigured: getAuth().listKeys().length,
+      },
+    });
+  }
+
+  // List available job types
+  if (path === "/jobs/types" && req.method === "GET") {
+    return jsonResponse({
+      types: [
+        {
+          id: "notion:fetch",
+          description: "Fetch pages from Notion",
+        },
+        {
+          id: "notion:fetch-all",
+          description: "Fetch all pages from Notion",
+        },
+        {
+          id: "notion:translate",
+          description: "Translate content",
+        },
+        {
+          id: "notion:status-translation",
+          description: "Update status for translation workflow",
+        },
+        {
+          id: "notion:status-draft",
+          description: "Update status for draft publish workflow",
+        },
+        {
+          id: "notion:status-publish",
+          description: "Update status for publish workflow",
+        },
+        {
+          id: "notion:status-publish-production",
+          description: "Update status for production publish workflow",
+        },
+      ],
+    });
+  }
+
+  // List all jobs with optional filtering
+  if (path === "/jobs" && req.method === "GET") {
+    const tracker = getJobTracker();
+    const statusFilter = url.searchParams.get("status");
+    const typeFilter = url.searchParams.get("type");
+
+    // Validate status filter if provided
+    if (statusFilter && !isValidJobStatus(statusFilter)) {
+      return validationError(
+        `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`
+      );
+    }
+
+    // Validate type filter if provided
+    if (typeFilter && !isValidJobType(typeFilter)) {
+      return validationError(
+        `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
+      );
+    }
+
+    let jobs = tracker.getAllJobs();
+
+    // Filter by status if specified
+    if (statusFilter) {
+      jobs = jobs.filter((job) => job.status === statusFilter);
+    }
+
+    // Filter by type if specified
+    if (typeFilter) {
+      jobs = jobs.filter((job) => job.type === typeFilter);
+    }
+
+    return jsonResponse({
+      jobs: jobs.map((job) => ({
+        id: job.id,
+        type: job.type,
+        status: job.status,
+        createdAt: job.createdAt.toISOString(),
+        startedAt: job.startedAt?.toISOString(),
+        completedAt: job.completedAt?.toISOString(),
+        progress: job.progress,
+        result: job.result,
+      })),
+      count: jobs.length,
+    });
+  }
+
+  // Get job status by ID or cancel job
+  const jobStatusMatch = path.match(/^\/jobs\/([^/]+)$/);
+  if (jobStatusMatch) {
+    const jobId = jobStatusMatch[1];
+
+    // Validate job ID format
+    if (!isValidJobId(jobId)) {
+      return validationError(
+        "Invalid job ID format. Job ID must be non-empty and cannot contain path traversal characters (.., /, \\)"
+      );
+    }
+
+    const tracker = getJobTracker();
+
+    // GET: Get job status
+    if (req.method === "GET") {
+      const job = tracker.getJob(jobId);
+
+      if (!job) {
+        return errorResponse("Job not found", 404);
+      }
+
+      return jsonResponse({
+        id: job.id,
+        type: job.type,
+        status: job.status,
+        createdAt: job.createdAt.toISOString(),
+        startedAt: job.startedAt?.toISOString(),
+        completedAt: job.completedAt?.toISOString(),
+        progress: job.progress,
+        result: job.result,
+      });
+    }
+
+    // DELETE: Cancel job
+    if (req.method === "DELETE") {
+      const job = tracker.getJob(jobId);
+
+      if (!job) {
+        return errorResponse("Job not found", 404);
+      }
+
+      // Only allow canceling pending or running jobs
+      if (job.status !== "pending" && job.status !== "running") {
+        return errorResponse(
+          `Cannot cancel job with status: ${job.status}. Only pending or running jobs can be cancelled.`,
+          409
+        );
+      }
+
+      // Mark job as failed with cancellation reason
+      tracker.updateJobStatus(jobId, "failed", {
+        success: false,
+        error: "Job cancelled by user",
+      });
+
+      return jsonResponse({
+        id: jobId,
+        status: "cancelled",
+        message: "Job cancelled successfully",
+      });
+    }
+  }
+
+  // Create/trigger a new job
+  if (path === "/jobs" && req.method === "POST") {
+    let body: { type: string; options?: unknown };
+
+    try {
+      body = await parseJsonBody<{ type: string; options?: unknown }>(req);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return validationError(error.message, error.statusCode);
+      }
+      return errorResponse("Failed to parse request body", 500);
+    }
+
+    // Validate request body structure
+    if (!body || typeof body !== "object") {
+      return validationError("Request body must be a valid JSON object");
+    }
+
+    if (!body.type || typeof body.type !== "string") {
+      return validationError(
+        "Missing or invalid 'type' field in request body. Expected a string."
+      );
+    }
+
+    if (!isValidJobType(body.type)) {
+      return validationError(
+        `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
+      );
+    }
+
+    // Validate options if provided
+    if (body.options !== undefined) {
+      if (typeof body.options !== "object" || body.options === null) {
+        return validationError(
+          "Invalid 'options' field in request body. Expected an object."
+        );
+      }
+      // Check for known option keys and their types
+      const options = body.options as Record<string, unknown>;
+      const knownOptions = [
+        "maxPages",
+        "statusFilter",
+        "force",
+        "dryRun",
+        "includeRemoved",
+      ];
+
+      for (const key of Object.keys(options)) {
+        if (!knownOptions.includes(key)) {
+          return validationError(
+            `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`
+          );
+        }
+      }
+
+      // Type validation for known options
+      if (
+        options.maxPages !== undefined &&
+        typeof options.maxPages !== "number"
+      ) {
+        return validationError("Invalid 'maxPages' option. Expected a number.");
+      }
+      if (
+        options.statusFilter !== undefined &&
+        typeof options.statusFilter !== "string"
+      ) {
+        return validationError(
+          "Invalid 'statusFilter' option. Expected a string."
+        );
+      }
+      if (options.force !== undefined && typeof options.force !== "boolean") {
+        return validationError("Invalid 'force' option. Expected a boolean.");
+      }
+      if (options.dryRun !== undefined && typeof options.dryRun !== "boolean") {
+        return validationError("Invalid 'dryRun' option. Expected a boolean.");
+      }
+      if (
+        options.includeRemoved !== undefined &&
+        typeof options.includeRemoved !== "boolean"
+      ) {
+        return validationError(
+          "Invalid 'includeRemoved' option. Expected a boolean."
+        );
+      }
+    }
+
+    const tracker = getJobTracker();
+    const jobId = tracker.createJob(body.type);
+
+    // Execute job asynchronously
+    executeJobAsync(
+      body.type,
+      jobId,
+      (body.options as Record<string, unknown>) || {}
+    );
+
+    return jsonResponse(
+      {
+        jobId,
+        type: body.type,
+        status: "pending",
+        message: "Job created successfully",
+        _links: {
+          self: `/jobs/${jobId}`,
+          status: `/jobs/${jobId}`,
+        },
+      },
+      201
+    );
+  }
+
+  // 404 for unknown routes
+  return jsonResponse(
+    {
+      error: "Not found",
+      message: "The requested endpoint does not exist",
+      availableEndpoints: [
+        { method: "GET", path: "/health", description: "Health check" },
+        {
+          method: "GET",
+          path: "/jobs/types",
+          description: "List available job types",
+        },
+        {
+          method: "GET",
+          path: "/jobs",
+          description: "List all jobs (optional ?status= and ?type= filters)",
+        },
+        { method: "POST", path: "/jobs", description: "Create a new job" },
+        { method: "GET", path: "/jobs/:id", description: "Get job status" },
+        {
+          method: "DELETE",
+          path: "/jobs/:id",
+          description: "Cancel a pending or running job",
+        },
+      ],
+    },
+    404
+  );
+}
+
+/**
+ * Handle request with authentication and audit logging
+ */
+async function handleRequest(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const path = url.pathname;
+  const audit = getAudit();
+
+  // Check if endpoint is public
+  const isPublic = isPublicEndpoint(path);
+
+  // Authenticate request (only for protected endpoints)
+  const authHeader = req.headers.get("authorization");
+  const authResult: AuthResult = isPublic
+    ? {
+        success: true,
+        meta: {
+          name: "public",
+          active: true,
+          createdAt: new Date(),
+        },
+      }
+    : requireAuth(authHeader);
+
+  // Create audit entry
+  const entry = audit.createEntry(req, authResult);
+  const startTime = Date.now();
+
+  // Check authentication for protected endpoints
+  if (!isPublic && !authResult.success) {
+    audit.logAuthFailure(req, authResult as { success: false; error?: string });
+    return createAuthErrorResponse(authResult.error || "Authentication failed");
+  }
+
+  // Handle the request
+  try {
+    const response = await routeRequest(req, path, url);
+    const responseTime = Date.now() - startTime;
+    audit.logSuccess(entry, response.status, responseTime);
+    return response;
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    audit.logFailure(entry, 500, errorMessage);
+    return errorResponse("Internal server error", 500, errorMessage);
+  }
+}
+
+// Start server
 const server = serve({
   port: PORT,
   hostname: HOST,
-  async fetch(req) {
-    const url = new URL(req.url);
-    const path = url.pathname;
-
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    // Health check
-    if (path === "/health" && req.method === "GET") {
-      return jsonResponse({
-        status: "ok",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-      });
-    }
-
-    // List available job types
-    if (path === "/jobs/types" && req.method === "GET") {
-      return jsonResponse({
-        types: [
-          {
-            id: "notion:fetch",
-            description: "Fetch pages from Notion",
-          },
-          {
-            id: "notion:fetch-all",
-            description: "Fetch all pages from Notion",
-          },
-          {
-            id: "notion:translate",
-            description: "Translate content",
-          },
-          {
-            id: "notion:status-translation",
-            description: "Update status for translation workflow",
-          },
-          {
-            id: "notion:status-draft",
-            description: "Update status for draft publish workflow",
-          },
-          {
-            id: "notion:status-publish",
-            description: "Update status for publish workflow",
-          },
-          {
-            id: "notion:status-publish-production",
-            description: "Update status for production publish workflow",
-          },
-        ],
-      });
-    }
-
-    // List all jobs with optional filtering
-    if (path === "/jobs" && req.method === "GET") {
-      const tracker = getJobTracker();
-      const url = new URL(req.url);
-      const statusFilter = url.searchParams.get("status");
-      const typeFilter = url.searchParams.get("type");
-
-      // Validate status filter if provided
-      if (statusFilter && !isValidJobStatus(statusFilter)) {
-        return validationError(
-          `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`
-        );
-      }
-
-      // Validate type filter if provided
-      if (typeFilter && !isValidJobType(typeFilter)) {
-        return validationError(
-          `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
-        );
-      }
-
-      let jobs = tracker.getAllJobs();
-
-      // Filter by status if specified
-      if (statusFilter) {
-        jobs = jobs.filter((job) => job.status === statusFilter);
-      }
-
-      // Filter by type if specified
-      if (typeFilter) {
-        jobs = jobs.filter((job) => job.type === typeFilter);
-      }
-
-      return jsonResponse({
-        jobs: jobs.map((job) => ({
-          id: job.id,
-          type: job.type,
-          status: job.status,
-          createdAt: job.createdAt.toISOString(),
-          startedAt: job.startedAt?.toISOString(),
-          completedAt: job.completedAt?.toISOString(),
-          progress: job.progress,
-          result: job.result,
-        })),
-        count: jobs.length,
-      });
-    }
-
-    // Get job status by ID or cancel job
-    const jobStatusMatch = path.match(/^\/jobs\/([^/]+)$/);
-    if (jobStatusMatch) {
-      const jobId = jobStatusMatch[1];
-
-      // Validate job ID format
-      if (!isValidJobId(jobId)) {
-        return validationError(
-          "Invalid job ID format. Job ID must be non-empty and cannot contain path traversal characters (.., /, \\)"
-        );
-      }
-
-      const tracker = getJobTracker();
-
-      // GET: Get job status
-      if (req.method === "GET") {
-        const job = tracker.getJob(jobId);
-
-        if (!job) {
-          return errorResponse("Job not found", 404);
-        }
-
-        return jsonResponse({
-          id: job.id,
-          type: job.type,
-          status: job.status,
-          createdAt: job.createdAt.toISOString(),
-          startedAt: job.startedAt?.toISOString(),
-          completedAt: job.completedAt?.toISOString(),
-          progress: job.progress,
-          result: job.result,
-        });
-      }
-
-      // DELETE: Cancel job
-      if (req.method === "DELETE") {
-        const job = tracker.getJob(jobId);
-
-        if (!job) {
-          return errorResponse("Job not found", 404);
-        }
-
-        // Only allow canceling pending or running jobs
-        if (job.status !== "pending" && job.status !== "running") {
-          return errorResponse(
-            `Cannot cancel job with status: ${job.status}. Only pending or running jobs can be cancelled.`,
-            409
-          );
-        }
-
-        // Mark job as failed with cancellation reason
-        tracker.updateJobStatus(jobId, "failed", {
-          success: false,
-          error: "Job cancelled by user",
-        });
-
-        return jsonResponse({
-          id: jobId,
-          status: "cancelled",
-          message: "Job cancelled successfully",
-        });
-      }
-    }
-
-    // Create/trigger a new job
-    if (path === "/jobs" && req.method === "POST") {
-      let body: { type: string; options?: unknown };
-
-      try {
-        body = await parseJsonBody<{ type: string; options?: unknown }>(req);
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          return validationError(error.message, error.statusCode);
-        }
-        return errorResponse("Failed to parse request body", 500);
-      }
-
-      // Validate request body structure
-      if (!body || typeof body !== "object") {
-        return validationError("Request body must be a valid JSON object");
-      }
-
-      if (!body.type || typeof body.type !== "string") {
-        return validationError(
-          "Missing or invalid 'type' field in request body. Expected a string."
-        );
-      }
-
-      if (!isValidJobType(body.type)) {
-        return validationError(
-          `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`
-        );
-      }
-
-      // Validate options if provided
-      if (body.options !== undefined) {
-        if (typeof body.options !== "object" || body.options === null) {
-          return validationError(
-            "Invalid 'options' field in request body. Expected an object."
-          );
-        }
-        // Check for known option keys and their types
-        const options = body.options as Record<string, unknown>;
-        const knownOptions = [
-          "maxPages",
-          "statusFilter",
-          "force",
-          "dryRun",
-          "includeRemoved",
-        ];
-
-        for (const key of Object.keys(options)) {
-          if (!knownOptions.includes(key)) {
-            return validationError(
-              `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`
-            );
-          }
-        }
-
-        // Type validation for known options
-        if (
-          options.maxPages !== undefined &&
-          typeof options.maxPages !== "number"
-        ) {
-          return validationError(
-            "Invalid 'maxPages' option. Expected a number."
-          );
-        }
-        if (
-          options.statusFilter !== undefined &&
-          typeof options.statusFilter !== "string"
-        ) {
-          return validationError(
-            "Invalid 'statusFilter' option. Expected a string."
-          );
-        }
-        if (options.force !== undefined && typeof options.force !== "boolean") {
-          return validationError("Invalid 'force' option. Expected a boolean.");
-        }
-        if (
-          options.dryRun !== undefined &&
-          typeof options.dryRun !== "boolean"
-        ) {
-          return validationError(
-            "Invalid 'dryRun' option. Expected a boolean."
-          );
-        }
-        if (
-          options.includeRemoved !== undefined &&
-          typeof options.includeRemoved !== "boolean"
-        ) {
-          return validationError(
-            "Invalid 'includeRemoved' option. Expected a boolean."
-          );
-        }
-      }
-
-      const tracker = getJobTracker();
-      const jobId = tracker.createJob(body.type);
-
-      // Execute job asynchronously
-      executeJobAsync(
-        body.type,
-        jobId,
-        (body.options as Record<string, unknown>) || {}
-      );
-
-      return jsonResponse(
-        {
-          jobId,
-          type: body.type,
-          status: "pending",
-          message: "Job created successfully",
-          _links: {
-            self: `/jobs/${jobId}`,
-            status: `/jobs/${jobId}`,
-          },
-        },
-        201
-      );
-    }
-
-    // 404 for unknown routes
-    return jsonResponse(
-      {
-        error: "Not found",
-        message: "The requested endpoint does not exist",
-        availableEndpoints: [
-          { method: "GET", path: "/health", description: "Health check" },
-          {
-            method: "GET",
-            path: "/jobs/types",
-            description: "List available job types",
-          },
-          {
-            method: "GET",
-            path: "/jobs",
-            description: "List all jobs (optional ?status= and ?type= filters)",
-          },
-          { method: "POST", path: "/jobs", description: "Create a new job" },
-          { method: "GET", path: "/jobs/:id", description: "Get job status" },
-          {
-            method: "DELETE",
-            path: "/jobs/:id",
-            description: "Cancel a pending or running job",
-          },
-        ],
-      },
-      404
-    );
-  },
+  fetch: handleRequest,
 });
 
+// Log startup information
+const authEnabled = getAuth().isAuthenticationEnabled();
 console.log(`🚀 Notion Jobs API Server running on http://${HOST}:${PORT}`);
-console.log("\nAvailable endpoints:");
-console.log("  GET    /health              - Health check");
-console.log("  GET    /jobs/types          - List available job types");
 console.log(
-  "  GET    /jobs                - List all jobs (?status=, ?type= filters)"
+  `\nAuthentication: ${authEnabled ? "enabled" : "disabled (no API keys configured)"}`
 );
-console.log("  POST   /jobs                - Create a new job");
-console.log("  GET    /jobs/:id            - Get job status");
-console.log("  DELETE /jobs/:id            - Cancel a job");
+console.log(`Audit logging: enabled (logs: ${getAudit().getLogPath()})`);
+console.log("\nAvailable endpoints:");
+console.log("  GET    /health              - Health check (public)");
+console.log(
+  "  GET    /jobs/types          - List available job types (public)"
+);
+console.log(
+  "  GET    /jobs                - List all jobs (?status=, ?type= filters) [requires auth]"
+);
+console.log("  POST   /jobs                - Create a new job [requires auth]");
+console.log("  GET    /jobs/:id            - Get job status [requires auth]");
+console.log("  DELETE /jobs/:id            - Cancel a job [requires auth]");
+
+if (authEnabled) {
+  console.log("\n🔐 Authentication is enabled.");
+  console.log("   Use: Authorization: Bearer <api-key>");
+  console.log(
+    `   Configured keys: ${getAuth()
+      .listKeys()
+      .map((k) => k.name)
+      .join(", ")}`
+  );
+} else {
+  console.log(
+    "\n⚠️  Authentication is disabled. Set API_KEY_* environment variables to enable."
+  );
+}
+
 console.log("\nExample: Create a fetch-all job");
-console.log("  curl -X POST http://localhost:3001/jobs \\");
+const authExample = authEnabled
+  ? '-H "Authorization: Bearer <api-key>" \\'
+  : "";
+console.log(`  curl -X POST http://${HOST}:${PORT}/jobs \\`);
+if (authExample) {
+  console.log(`    ${authExample}`);
+}
 console.log("    -H 'Content-Type: application/json' \\");
 console.log('    -d \'{"type": "notion:fetch-all"}\'');
+
 console.log("\nExample: Cancel a job");
-console.log("  curl -X DELETE http://localhost:3001/jobs/{jobId}");
+console.log(`  curl -X DELETE http://${HOST}:${PORT}/jobs/{jobId} \\`);
+if (authExample) {
+  console.log(`    ${authExample}`);
+}
+
 console.log("\nExample: Filter jobs by status");
-console.log("  curl http://localhost:3001/jobs?status=running");
+console.log(`  curl http://${HOST}:${PORT}/jobs?status=running \\`);
+if (authExample) {
+  console.log(`    -H "${authExample.replace(" \\", "")}"`);
+}
 
 // Handle graceful shutdown
 process.on("SIGINT", () => {

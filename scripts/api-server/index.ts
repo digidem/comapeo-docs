@@ -32,7 +32,6 @@ import {
   ErrorCode,
   type ErrorResponse,
   type ApiResponse,
-  type ListResponse,
   type PaginationMeta,
   createErrorResponse,
   createApiResponse,

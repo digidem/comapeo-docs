@@ -93,3 +93,6 @@ retry-metrics.json
 
 # Claude Code command history
 .claude/command-history.log
+
+# Job persistence data
+.jobs-data/

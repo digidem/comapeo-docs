@@ -6,18 +6,51 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { JobQueue, createJobQueue, type QueuedJob } from "./job-queue";
 import { getJobTracker, destroyJobTracker, type JobType } from "./job-tracker";
 import type { JobExecutionContext, JobOptions } from "./job-executor";
+import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+
+const DATA_DIR = join(process.cwd(), ".jobs-data");
+const JOBS_FILE = join(DATA_DIR, "jobs.json");
+const LOGS_FILE = join(DATA_DIR, "jobs.log");
+
+/**
+ * Clean up test data directory
+ */
+function cleanupTestData(): void {
+  if (existsSync(DATA_DIR)) {
+    try {
+      // Use rmSync with recursive option if available (Node.js v14.14+)
+      rmSync(DATA_DIR, { recursive: true, force: true });
+    } catch {
+      // Fallback to manual removal
+      if (existsSync(LOGS_FILE)) {
+        unlinkSync(LOGS_FILE);
+      }
+      if (existsSync(JOBS_FILE)) {
+        unlinkSync(JOBS_FILE);
+      }
+      try {
+        rmdirSync(DATA_DIR);
+      } catch {
+        // Ignore error if directory still has files
+      }
+    }
+  }
+}
 
 describe("JobQueue", () => {
   let queue: JobQueue;
 
   beforeEach(() => {
     destroyJobTracker();
+    cleanupTestData();
     getJobTracker();
     queue = new JobQueue({ concurrency: 2 });
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   describe("constructor", () => {
@@ -492,11 +525,13 @@ describe("JobQueue", () => {
 describe("concurrent request behavior", () => {
   beforeEach(() => {
     destroyJobTracker();
+    cleanupTestData();
     getJobTracker();
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   it("should handle multiple simultaneous job additions correctly", async () => {
@@ -909,11 +944,13 @@ describe("concurrent request behavior", () => {
 describe("createJobQueue", () => {
   beforeEach(() => {
     destroyJobTracker();
+    cleanupTestData();
     getJobTracker();
   });
 
   afterEach(() => {
     destroyJobTracker();
+    cleanupTestData();
   });
 
   it("should create a queue with executors for all job types", () => {

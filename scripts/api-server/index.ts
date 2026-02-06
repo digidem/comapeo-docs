@@ -11,6 +11,11 @@
 import { serve } from "bun";
 import { getJobTracker, type JobType, type JobStatus } from "./job-tracker";
 import { executeJobAsync } from "./job-executor";
+import {
+  ValidationError as BaseValidationError,
+  formatErrorResponse,
+  createValidationError,
+} from "../shared/errors";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
@@ -37,13 +42,24 @@ const VALID_JOB_STATUSES: readonly JobStatus[] = [
   "failed",
 ] as const;
 
-// Validation errors
-class ValidationError extends Error {
+// Validation errors - extend the base ValidationError for compatibility
+class ValidationError extends BaseValidationError {
   constructor(
     message: string,
-    public statusCode = 400
+    statusCode = 400,
+    suggestions?: string[],
+    context?: Record<string, unknown>
   ) {
-    super(message);
+    super(
+      message,
+      statusCode,
+      suggestions ?? [
+        "Check the request format",
+        "Verify all required fields are present",
+        "Refer to API documentation",
+      ],
+      context
+    );
     this.name = "ValidationError";
   }
 }
@@ -91,11 +107,15 @@ function jsonResponse(data: unknown, status = 200): Response {
 function errorResponse(
   message: string,
   status = 400,
-  details?: unknown
+  details?: unknown,
+  suggestions?: string[]
 ): Response {
   const body: Record<string, unknown> = { error: message };
   if (details !== undefined) {
     body.details = details;
+  }
+  if (suggestions && suggestions.length > 0) {
+    body.suggestions = suggestions;
   }
   return jsonResponse(body, status);
 }

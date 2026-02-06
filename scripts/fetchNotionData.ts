@@ -4,6 +4,7 @@ import {
   PartialBlockObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints";
 import { perfTelemetry } from "./perfTelemetry";
+import { logWarning, logError } from "./shared/errors";
 
 // Type guard to check if a block is a complete BlockObjectResponse
 function isFullBlock(
@@ -22,8 +23,10 @@ export async function fetchNotionData(filter) {
   const seenIds = new Set<string>();
   while (hasMore) {
     if (++safetyCounter > MAX_PAGES) {
-      console.warn(
-        "Pagination safety limit exceeded; returning partial results."
+      logWarning(
+        "Pagination safety limit exceeded; returning partial results. " +
+          "This may indicate an issue with the Notion API or the data source.",
+        "fetchNotionData"
       );
       break;
     }
@@ -68,7 +71,11 @@ export async function fetchNotionData(filter) {
         prevCount === 0);
     if (anomaly) {
       // One retry attempt to recover from transient anomaly
-      console.warn("Notion API pagination anomaly detected; retrying once...");
+      logWarning(
+        "Notion API pagination anomaly detected (duplicate ID, missing cursor, " +
+          "or empty page). Retrying once to recover...",
+        "fetchNotionData"
+      );
       const retryResp = await enhancedNotion.dataSourcesQuery({
         data_source_id: dataSourceId,
         filter,
@@ -90,8 +97,10 @@ export async function fetchNotionData(filter) {
         startCursor = retryCursor;
         continue;
       }
-      console.warn(
-        "Anomaly persisted after retry; stopping early with partial results."
+      logWarning(
+        "Pagination anomaly persisted after retry. Stopping early with partial results. " +
+          "Check Notion API status and data source configuration.",
+        "fetchNotionData"
       );
       break;
     }
@@ -244,9 +253,10 @@ export async function sortAndExpandNotionData(
       );
     }
   } catch (batchError) {
-    console.error(
-      `❌ [ERROR] Batched fetch failed at ${processedCount}/${allRelations.length}:`,
-      batchError
+    logError(
+      batchError,
+      `Batched fetch failed at ${processedCount}/${allRelations.length}. ` +
+        `This may be due to network issues, API rate limits, or invalid page IDs.`
     );
     throw batchError;
   }
@@ -333,7 +343,10 @@ export async function fetchNotionPage() {
     console.log("Fetched page content:", response);
     return response;
   } catch (error) {
-    console.error("Error fetching Notion page:", error);
+    logError(
+      error,
+      "Failed to fetch Notion page blocks. Check DATABASE_ID and API access."
+    );
     throw error;
   }
 }
@@ -349,8 +362,10 @@ export async function fetchNotionBlocks(blockId) {
     // Handle pagination to fetch all child blocks
     while (hasMore) {
       if (++safetyCounter > MAX_PAGES) {
-        console.warn(
-          `Block pagination safety limit exceeded for block ${blockId}; returning partial results.`
+        logWarning(
+          `Block pagination safety limit exceeded for block ${blockId}. ` +
+            "Returning partial results. This may indicate deeply nested content.",
+          "fetchNotionBlocks"
         );
         break;
       }
@@ -383,7 +398,10 @@ export async function fetchNotionBlocks(blockId) {
 
     return allBlocks;
   } catch (error) {
-    console.error("Error fetching Notion blocks:", error);
+    logError(
+      error,
+      `Failed to fetch Notion blocks for block ID: ${blockId}. Check API access and block ID.`
+    );
     throw error;
   }
 }

@@ -28,7 +28,7 @@
     "message": "Nueva Página"
   },
   "Uninstalling CoMapeo": {
-    "message": "Nueva Página"
+    "message": "Desinstalar CoMapeo"
   },
   "Customizing CoMapeo": {
     "message": "Nueva Palanca"
@@ -159,7 +159,43 @@
   "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
     "message": "Nueva Página"
   },
+  "Elementos de contenido de prueba": {
+    "message": "Elementos de contenido de prueba"
+  },
   "Testing links": {
     "message": "Nueva Página"
+  },
+  "Understanding CoMapeo's Core Concepts and Functions": {
+    "message": "Nueva Página"
+  },
+  "Installing CoMapeo and Onboarding": {
+    "message": "Nueva Página"
+  },
+  "Planning and Preparing for a Project": {
+    "message": "Nueva Página"
+  },
+  "Observations and Tracks": {
+    "message": "Nuevo título de sección"
+  },
+  "Gathering Observations and Tracks": {
+    "message": "Recopilación de observaciones"
+  },
+  "Data Privacy and Security": {
+    "message": "Nuevo título de sección"
+  },
+  "Managing Data Privacy and Security": {
+    "message": "Gestión de datos y privacidad"
+  },
+  "Moving Observations and Tracks Outside of CoMapeo": {
+    "message": "Compartir observaciones fuera de CoMapeo"
+  },
+  "Developer Tools": {
+    "message": "Herramientas de desarrollador"
+  },
+  "API Reference": {
+    "message": "Referencia de API"
+  },
+  "CLI Reference": {
+    "message": "Referencia de CLI"
   }
 }

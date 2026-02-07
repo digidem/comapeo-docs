@@ -298,3 +298,233 @@ export function configureAudit(config: Partial<AuditConfig>): void {
   // @ts-expect-error - Intentionally replacing the singleton instance
   AuditLogger.instance = new AuditLogger(config);
 }
+
+/**
+ * Validation result for audit entries
+ */
+export interface ValidationResult {
+  /** Whether validation passed */
+  valid: boolean;
+  /** Validation errors if any */
+  errors: string[];
+}
+
+/**
+ * Validate an audit entry structure
+ *
+ * Ensures all required fields are present and correctly typed.
+ * This is used for runtime validation to catch data integrity issues.
+ */
+export function validateAuditEntry(entry: unknown): ValidationResult {
+  const errors: string[] = [];
+
+  // Must be an object
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return {
+      valid: false,
+      errors: ["Audit entry must be an object"],
+    };
+  }
+
+  const e = entry as Record<string, unknown>;
+
+  // Validate id
+  if (typeof e.id !== "string" || !e.id.match(/^audit_[a-z0-9_]+$/)) {
+    errors.push(`Invalid id: expected format 'audit_*', got '${String(e.id)}'`);
+  }
+
+  // Validate timestamp
+  if (typeof e.timestamp !== "string") {
+    errors.push(
+      `Invalid timestamp: expected string, got ${typeof e.timestamp}`
+    );
+  } else {
+    // Check if it's a valid ISO date
+    const date = new Date(e.timestamp);
+    if (isNaN(date.getTime())) {
+      errors.push(`Invalid timestamp: not a valid ISO date string`);
+    }
+  }
+
+  // Validate method
+  if (typeof e.method !== "string" || e.method.length === 0) {
+    errors.push(`Invalid method: expected non-empty string`);
+  }
+
+  // Validate path
+  if (typeof e.path !== "string" || e.path.length === 0) {
+    errors.push(`Invalid path: expected non-empty string`);
+  }
+
+  // Validate clientIp
+  if (typeof e.clientIp !== "string") {
+    errors.push(`Invalid clientIp: expected string, got ${typeof e.clientIp}`);
+  }
+
+  // Validate query (optional)
+  if (e.query !== undefined && typeof e.query !== "string") {
+    errors.push(
+      `Invalid query: expected string or undefined, got ${typeof e.query}`
+    );
+  }
+
+  // Validate userAgent (optional)
+  if (e.userAgent !== undefined && typeof e.userAgent !== "string") {
+    errors.push(
+      `Invalid userAgent: expected string or undefined, got ${typeof e.userAgent}`
+    );
+  }
+
+  // Validate auth object
+  if (!e.auth || typeof e.auth !== "object" || Array.isArray(e.auth)) {
+    errors.push(`Invalid auth: expected object`);
+  } else {
+    const auth = e.auth as Record<string, unknown>;
+    if (typeof auth.success !== "boolean") {
+      errors.push(
+        `Invalid auth.success: expected boolean, got ${typeof auth.success}`
+      );
+    }
+    // If auth failed, error should be present
+    if (auth.success === false) {
+      if (typeof auth.error !== "string" || auth.error.length === 0) {
+        errors.push(
+          `Invalid auth.error: expected non-empty string when auth.success is false`
+        );
+      }
+    }
+    // If auth succeeded, keyName should be present
+    if (auth.success === true) {
+      if (typeof auth.keyName !== "string" || auth.keyName.length === 0) {
+        errors.push(
+          `Invalid auth.keyName: expected non-empty string when auth.success is true`
+        );
+      }
+    }
+  }
+
+  // Validate requestId (optional)
+  if (e.requestId !== undefined && typeof e.requestId !== "string") {
+    errors.push(
+      `Invalid requestId: expected string or undefined, got ${typeof e.requestId}`
+    );
+  }
+
+  // Validate jobId (optional)
+  if (e.jobId !== undefined && typeof e.jobId !== "string") {
+    errors.push(
+      `Invalid jobId: expected string or undefined, got ${typeof e.jobId}`
+    );
+  }
+
+  // Validate statusCode (optional)
+  if (e.statusCode !== undefined) {
+    if (
+      typeof e.statusCode !== "number" ||
+      e.statusCode < 100 ||
+      e.statusCode > 599
+    ) {
+      errors.push(
+        `Invalid statusCode: expected number between 100-599, got ${String(e.statusCode)}`
+      );
+    }
+  }
+
+  // Validate responseTime (optional)
+  if (e.responseTime !== undefined) {
+    if (typeof e.responseTime !== "number" || e.responseTime < 0) {
+      errors.push(
+        `Invalid responseTime: expected non-negative number, got ${String(e.responseTime)}`
+      );
+    }
+  }
+
+  // Validate errorMessage (optional)
+  if (e.errorMessage !== undefined && typeof e.errorMessage !== "string") {
+    errors.push(
+      `Invalid errorMessage: expected string or undefined, got ${typeof e.errorMessage}`
+    );
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Validate auth result structure
+ *
+ * Ensures auth results are correctly structured.
+ */
+export function validateAuthResult(authResult: unknown): ValidationResult {
+  const errors: string[] = [];
+
+  // Must be an object
+  if (
+    !authResult ||
+    typeof authResult !== "object" ||
+    Array.isArray(authResult)
+  ) {
+    return {
+      valid: false,
+      errors: ["Auth result must be an object"],
+    };
+  }
+
+  const a = authResult as Record<string, unknown>;
+
+  // Validate success
+  if (typeof a.success !== "boolean") {
+    errors.push(`Invalid success: expected boolean, got ${typeof a.success}`);
+  }
+
+  // If auth succeeded, meta should be present and error should be absent
+  if (a.success === true) {
+    if (!a.meta || typeof a.meta !== "object" || Array.isArray(a.meta)) {
+      errors.push(`Invalid meta: expected object when success is true`);
+    } else {
+      const meta = a.meta as Record<string, unknown>;
+      if (typeof meta.name !== "string" || meta.name.length === 0) {
+        errors.push(`Invalid meta.name: expected non-empty string`);
+      }
+      if (typeof meta.active !== "boolean") {
+        errors.push(`Invalid meta.active: expected boolean`);
+      }
+      // createdAt can be either a Date object or an ISO string
+      const createdAtValid =
+        (meta.createdAt instanceof Date && !isNaN(meta.createdAt.getTime())) ||
+        (typeof meta.createdAt === "string" &&
+          !isNaN(new Date(meta.createdAt).getTime()));
+      if (!createdAtValid) {
+        errors.push(
+          `Invalid meta.createdAt: expected valid Date or ISO date string`
+        );
+      }
+    }
+    if (a.error !== undefined) {
+      errors.push(
+        `Unexpected error field: should not be present when success is true`
+      );
+    }
+  }
+
+  // If auth failed, error should be present and meta should be absent
+  if (a.success === false) {
+    if (typeof a.error !== "string" || a.error.length === 0) {
+      errors.push(
+        `Invalid error: expected non-empty string when success is false`
+      );
+    }
+    if (a.meta !== undefined) {
+      errors.push(
+        `Unexpected meta field: should not be present when success is false`
+      );
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}

@@ -1,0 +1,117 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-error.log*
+bun.lockb
+
+# Build outputs
+build
+.dist
+*.tsbuildinfo
+
+# Generated content from Notion (synced from content branch)
+docs/
+i18n/
+static/images/
+
+# Generated files
+.docusaurus
+.cache-loader
+static/robots.txt
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.marscode
+
+# Testing
+coverage
+test-results*.json
+test-results*.html
+*.test.ts
+*.test.tsx
+*.spec.ts
+vitest.config.ts
+__tests__/
+
+# Documentation
+README.md
+CONTRIBUTING.md
+CHANGELOG.md
+docs/
+context/
+NOTION_FETCH_ARCHITECTURE.md
+
+# Development files
+.eslintrc*
+.prettierrc*
+.prettierignore
+lefthook.yml
+.prettierignore
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp
+*-preview-*.md
+.cache/
+screenshots/
+
+# Notion exports and emoji files
+notion_*.json
+static/images/emojis/*.png
+static/images/emojis/*.jpg
+static/images/emojis/*.jpeg
+static/images/emojis/*.gif
+static/images/emojis/*.svg
+static/images/emojis/*.webp
+!static/images/emojis/.emoji-cache.json
+
+# Worktrees and development directories
+worktrees/
+.dev-docs/
+
+# Runtime metrics
+retry-metrics.json
+image-cache.json
+image-failures.json
+
+# Job persistence data
+.jobs-data/
+
+# Audit data
+.audit-data/
+
+# Development planning
+TASK.md
+NEXT_STEPS.md
+PRD.md
+
+# Assets not needed for API
+assets/
+favicon.*
+
+# Misc
+.DS_Store
+*.log

@@ -1,5 +1,9 @@
 # Docker Compose configuration for Comapeo Docs API Service
 # Usage: docker compose up [-d] [--build]
+#
+# Environment variables can be set in .env file or via command line:
+#   API_PORT=3001 docker compose up
+#   docker compose --env-file .env.production up
 
 services:
   api:
@@ -7,8 +11,16 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-    image: comapeo-docs-api:latest
-    container_name: comapeo-api-server
+      # Build arguments for configurability
+      args:
+        BUN_VERSION: ${BUN_VERSION:-1}
+        NODE_ENV: ${NODE_ENV:-production}
+        HEALTHCHECK_INTERVAL: ${HEALTHCHECK_INTERVAL:-30s}
+        HEALTHCHECK_TIMEOUT: ${HEALTHCHECK_TIMEOUT:-10s}
+        HEALTHCHECK_START_PERIOD: ${HEALTHCHECK_START_PERIOD:-5s}
+        HEALTHCHECK_RETRIES: ${HEALTHCHECK_RETRIES:-3}
+    image: ${DOCKER_IMAGE_NAME:-comapeo-docs-api}:${DOCKER_IMAGE_TAG:-latest}
+    container_name: ${DOCKER_CONTAINER_NAME:-comapeo-api-server}
 
     # Port mapping: host:container
     ports:
@@ -44,22 +56,22 @@ services:
     # Volume mounts for persistent data
     volumes:
       # Mount job persistence directory
-      - job-data:/tmp
+      - ${DOCKER_VOLUME_NAME:-comapeo-job-data}:/tmp
 
-    # Resource limits
+    # Resource limits (configurable via environment)
     deploy:
       resources:
         limits:
-          cpus: "1"
-          memory: 512M
+          cpus: "${DOCKER_CPU_LIMIT:-1}"
+          memory: "${DOCKER_MEMORY_LIMIT:-512M}"
         reservations:
-          cpus: "0.25"
-          memory: 128M
+          cpus: "${DOCKER_CPU_RESERVATION:-0.25}"
+          memory: "${DOCKER_MEMORY_RESERVATION:-128M}"
 
-    # Restart policy
-    restart: unless-stopped
+    # Restart policy (configurable)
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
 
-    # Health check
+    # Health check (configurable intervals)
     healthcheck:
       test:
         [
@@ -69,28 +81,40 @@ services:
           "-e",
           "fetch('http://localhost:3001/health').then(r => r.ok ? 0 : 1)",
         ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+      start_period: ${HEALTHCHECK_START_PERIOD:-5s}
 
-    # Logging configuration
+    # Logging configuration (configurable)
     logging:
-      driver: "json-file"
+      driver: "${DOCKER_LOG_DRIVER:-json-file}"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+        max-file: "${DOCKER_LOG_MAX_FILE:-3}"
 
-    # Network
+    # Network (configurable)
     networks:
-      - comapeo-network
+      - ${DOCKER_NETWORK:-comapeo-network}
 
-# Named volumes for persistent data
+    # Labels for metadata and organization
+    labels:
+      - "com.comapeo.description=Comapeo Docs API Server"
+      - "com.comapeo.version=${DOCKER_IMAGE_TAG:-latest}"
+      - "com.comapeo.managed-by=docker-compose"
+
+# Named volumes for persistent data (configurable names)
 volumes:
-  job-data:
-    driver: local
+  comapeo-job-data:
+    driver: ${DOCKER_VOLUME_DRIVER:-local}
+    name: ${DOCKER_VOLUME_NAME:-comapeo-job-data}
+    labels:
+      - "com.comapeo.description=Job persistence data volume"
 
-# Networks
+# Networks (configurable)
 networks:
   comapeo-network:
-    driver: bridge
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    name: ${DOCKER_NETWORK_NAME:-comapeo-network}
+    labels:
+      - "com.comapeo.description=Comapeo API network"

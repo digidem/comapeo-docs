@@ -3,7 +3,7 @@
  * Reports job status to GitHub commits via the Status API
  */
 
-interface GitHubStatusOptions {
+export interface GitHubStatusOptions {
   owner: string;
   repo: string;
   sha: string;
@@ -27,9 +27,15 @@ interface GitHubStatusResponse {
   updated_at: string;
 }
 
-interface GitHubStatusError {
+export interface GitHubStatusErrorData {
   message: string;
   documentation_url?: string;
+}
+
+interface RetryOptions {
+  maxRetries?: number;
+  initialDelay?: number;
+  maxDelay?: number;
 }
 
 /**
@@ -38,12 +44,14 @@ interface GitHubStatusError {
  * @param options - GitHub status options
  * @param state - Status state (pending, success, failure, error)
  * @param description - Human-readable description
+ * @param retryOptions - Optional retry configuration
  * @returns Promise with the status response
  */
 export async function reportGitHubStatus(
   options: GitHubStatusOptions,
   state: GitHubStatusState,
-  description: string
+  description: string,
+  retryOptions?: RetryOptions
 ): Promise<GitHubStatusResponse> {
   const {
     owner,
@@ -63,29 +71,83 @@ export async function reportGitHubStatus(
     target_url: targetUrl,
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      Accept: "application/vnd.github+json",
-    },
-    body: JSON.stringify(body),
-  });
+  const maxRetries = retryOptions?.maxRetries ?? 3;
+  const initialDelay = retryOptions?.initialDelay ?? 1000;
+  const maxDelay = retryOptions?.maxDelay ?? 10000;
 
-  if (!response.ok) {
-    const error: GitHubStatusError = await response.json().catch(() => ({
-      message: response.statusText,
-    }));
-    throw new GitHubStatusError(
-      `GitHub API error: ${error.message}`,
-      response.status,
-      error
-    );
+  let lastError: GitHubStatusError | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (response.ok) {
+        return response.json() as Promise<GitHubStatusResponse>;
+      }
+
+      const errorData: GitHubStatusErrorData = await response
+        .json()
+        .catch(() => ({ message: response.statusText }));
+      const error = new GitHubStatusError(
+        `GitHub API error: ${errorData.message}`,
+        response.status,
+        errorData
+      );
+
+      lastError = error;
+
+      // Don't retry client errors (4xx) except rate limit (403) and too many requests (429)
+      if (
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 403 &&
+        response.status !== 429
+      ) {
+        throw error;
+      }
+
+      // Don't retry if this is the last attempt
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff
+      const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    } catch (err) {
+      // Re-throw non-API errors immediately (e.g., network errors before fetch)
+      if (!(err instanceof GitHubStatusError)) {
+        throw err;
+      }
+      lastError = err;
+
+      // Don't retry non-retryable errors (client errors except 403, 429)
+      if (!err.isRetryable()) {
+        throw err;
+      }
+
+      // Don't retry if this is the last attempt
+      if (attempt === maxRetries) {
+        throw err;
+      }
+
+      // Calculate delay with exponential backoff
+      const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
 
-  return response.json() as Promise<GitHubStatusResponse>;
+  // Should never reach here, but TypeScript needs it
+  throw lastError;
 }
 
 /**
@@ -95,7 +157,7 @@ export class GitHubStatusError extends Error {
   constructor(
     message: string,
     public readonly statusCode: number,
-    public readonly githubError?: GitHubStatusError
+    public readonly githubError?: GitHubStatusErrorData
   ) {
     super(message);
     this.name = "GitHubStatusError";
@@ -147,13 +209,18 @@ export async function reportJobCompletion(
   }
 
   try {
-    return await reportGitHubStatus(options, state, description);
+    return await reportGitHubStatus(
+      options,
+      state,
+      description,
+      { maxRetries: 3, initialDelay: 1000, maxDelay: 10000 } // Retry config
+    );
   } catch (error) {
     // Log error but don't fail the job if GitHub status fails
     if (error instanceof GitHubStatusError) {
       console.error(
-        `[GitHub Status] Failed to report status: ${error.message}`,
-        error.githubError
+        `[GitHub Status] Failed to report status after retries: ${error.message}`,
+        { statusCode: error.statusCode, githubError: error.githubError }
       );
     } else {
       console.error(

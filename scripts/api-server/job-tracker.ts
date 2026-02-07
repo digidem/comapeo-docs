@@ -49,6 +49,7 @@ export interface Job {
     output?: string;
   };
   github?: GitHubContext;
+  githubStatusReported?: boolean;
 }
 
 class JobTracker {
@@ -88,6 +89,7 @@ class JobTracker {
         progress: persistedJob.progress,
         result: persistedJob.result,
         github: persistedJob.github as GitHubContext | undefined,
+        githubStatusReported: persistedJob.githubStatusReported,
       };
       this.jobs.set(job.id, job);
     }
@@ -140,6 +142,38 @@ class JobTracker {
       }
     }
 
+    this.persistJob(job);
+  }
+
+  /**
+   * Mark GitHub status as reported for a job
+   */
+  markGitHubStatusReported(id: string): void {
+    const job = this.jobs.get(id);
+    if (!job) {
+      return;
+    }
+    job.githubStatusReported = true;
+    this.persistJob(job);
+  }
+
+  /**
+   * Check if GitHub status has been reported for a job
+   */
+  isGitHubStatusReported(id: string): boolean {
+    const job = this.jobs.get(id);
+    return job?.githubStatusReported === true;
+  }
+
+  /**
+   * Clear the GitHub status reported flag (allows retry after failure)
+   */
+  clearGitHubStatusReported(id: string): void {
+    const job = this.jobs.get(id);
+    if (!job) {
+      return;
+    }
+    job.githubStatusReported = false;
     this.persistJob(job);
   }
 
@@ -214,6 +248,7 @@ class JobTracker {
       progress: job.progress,
       result: job.result,
       github: job.github,
+      githubStatusReported: job.githubStatusReported,
     };
     saveJob(persistedJob);
   }

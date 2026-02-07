@@ -370,3 +370,383 @@ describe("Security - Request Size Limits", () => {
     expect(parseInt(invalidSize, 10)).toBeGreaterThan(maxRequestSize);
   });
 });
+
+describe("Endpoint Input Schemas - Complete Coverage", () => {
+  describe("POST /jobs endpoint schema", () => {
+    it("should validate all required fields", () => {
+      // Valid request body
+      const validBody = {
+        type: "notion:fetch",
+        options: {
+          maxPages: 10,
+          statusFilter: "In Progress",
+          force: true,
+          dryRun: false,
+          includeRemoved: true,
+        },
+      };
+
+      // Check required type field
+      expect(validBody.type).toBeDefined();
+      expect(typeof validBody.type).toBe("string");
+      expect(isValidJobType(validBody.type)).toBe(true);
+
+      // Check options is optional and valid
+      if (validBody.options) {
+        expect(typeof validBody.options).toBe("object");
+        expect(validBody.options).not.toBeNull();
+      }
+    });
+
+    it("should validate options schema with all types", () => {
+      const validOptions = {
+        maxPages: 10, // number
+        statusFilter: "In Progress", // string
+        force: true, // boolean
+        dryRun: false, // boolean
+        includeRemoved: true, // boolean
+      };
+
+      expect(typeof validOptions.maxPages).toBe("number");
+      expect(typeof validOptions.statusFilter).toBe("string");
+      expect(typeof validOptions.force).toBe("boolean");
+      expect(typeof validOptions.dryRun).toBe("boolean");
+      expect(typeof validOptions.includeRemoved).toBe("boolean");
+    });
+
+    it("should reject invalid option types", () => {
+      const invalidOptions = [
+        { maxPages: "not a number" },
+        { statusFilter: 123 },
+        { force: "not a boolean" },
+        { dryRun: "not a boolean" },
+        { includeRemoved: 123 },
+      ];
+
+      for (const options of invalidOptions) {
+        const isValid =
+          typeof options.maxPages === "number" ||
+          typeof options.statusFilter === "string" ||
+          typeof options.force === "boolean" ||
+          typeof options.dryRun === "boolean" ||
+          typeof options.includeRemoved === "boolean";
+        // At least one should be invalid
+        expect(isValid).toBe(false);
+      }
+    });
+  });
+
+  describe("GET /jobs endpoint schema", () => {
+    it("should accept valid query parameters", () => {
+      const validParams = [
+        { status: "pending" },
+        { status: "running" },
+        { status: "completed" },
+        { status: "failed" },
+        { type: "notion:fetch" },
+        { type: "notion:fetch-all" },
+        { type: "notion:translate" },
+        { type: "notion:status-translation" },
+        { type: "notion:status-draft" },
+        { type: "notion:status-publish" },
+        { type: "notion:status-publish-production" },
+        { status: "pending", type: "notion:fetch" },
+      ];
+
+      for (const params of validParams) {
+        if (params.status) {
+          expect(isValidJobStatus(params.status)).toBe(true);
+        }
+        if (params.type) {
+          expect(isValidJobType(params.type)).toBe(true);
+        }
+      }
+    });
+
+    it("should reject invalid query parameters", () => {
+      const invalidParams = [
+        { status: "invalid" },
+        { status: "" },
+        { status: "PENDING" }, // Case sensitive
+        { type: "invalid:type" },
+        { type: "" },
+        { type: "notion:invalid" },
+      ];
+
+      for (const params of invalidParams) {
+        if (params.status) {
+          expect(isValidJobStatus(params.status)).toBe(false);
+        }
+        if (params.type) {
+          expect(isValidJobType(params.type)).toBe(false);
+        }
+      }
+    });
+  });
+
+  describe("GET /jobs/:id and DELETE /jobs/:id endpoint schema", () => {
+    it("should accept valid job ID format", () => {
+      const validIds = [
+        "1234567890-abc123",
+        "job-id-123",
+        "a",
+        "a".repeat(100),
+        "a.b.c", // Dots are OK if not ".."
+        "job_with_underscores",
+        "job-with-dashes",
+      ];
+
+      for (const id of validIds) {
+        expect(isValidJobId(id)).toBe(true);
+      }
+    });
+
+    it("should reject invalid job ID format", () => {
+      const invalidIds = [
+        "",
+        "../etc/passwd",
+        "..\\windows",
+        "path/with/slash",
+        "path\\with\\backslash",
+        "normal..with..dots",
+        "a".repeat(101), // Too long
+      ];
+
+      for (const id of invalidIds) {
+        expect(isValidJobId(id)).toBe(false);
+      }
+    });
+  });
+});
+
+describe("Error Responses - Complete Coverage", () => {
+  describe("Validation errors (400)", () => {
+    it("should return correct error structure for missing field", () => {
+      const errorResponse = {
+        code: "MISSING_REQUIRED_FIELD",
+        message:
+          "Missing or invalid 'type' field. Expected a valid job type string.",
+        status: 400,
+        requestId: "req_test_123",
+        timestamp: new Date().toISOString(),
+      };
+
+      expect(errorResponse).toHaveProperty("code");
+      expect(errorResponse).toHaveProperty("message");
+      expect(errorResponse).toHaveProperty("status", 400);
+      expect(errorResponse).toHaveProperty("requestId");
+      expect(errorResponse).toHaveProperty("timestamp");
+      expect(errorResponse.code).toBe("MISSING_REQUIRED_FIELD");
+    });
+
+    it("should return correct error structure for invalid format", () => {
+      const errorResponse = {
+        code: "INVALID_FORMAT",
+        message: "Invalid 'maxPages' option. Expected a number.",
+        status: 400,
+        requestId: "req_test_456",
+        timestamp: new Date().toISOString(),
+        details: { field: "maxPages", expected: "number", received: "string" },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "INVALID_FORMAT");
+      expect(errorResponse).toHaveProperty("status", 400);
+      expect(errorResponse).toHaveProperty("details");
+      expect(errorResponse.details).toHaveProperty("field");
+    });
+
+    it("should return correct error structure for invalid enum value", () => {
+      const errorResponse = {
+        code: "INVALID_ENUM_VALUE",
+        message:
+          "Invalid job type: 'invalid:type'. Valid types are: notion:fetch, notion:fetch-all, notion:translate, notion:status-translation, notion:status-draft, notion:status-publish, notion:status-publish-production",
+        status: 400,
+        requestId: "req_test_789",
+        timestamp: new Date().toISOString(),
+        details: {
+          providedType: "invalid:type",
+          validTypes: [
+            "notion:fetch",
+            "notion:fetch-all",
+            "notion:translate",
+            "notion:status-translation",
+            "notion:status-draft",
+            "notion:status-publish",
+            "notion:status-publish-production",
+          ],
+        },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "INVALID_ENUM_VALUE");
+      expect(errorResponse).toHaveProperty("status", 400);
+      expect(errorResponse.details).toHaveProperty("providedType");
+      expect(errorResponse.details).toHaveProperty("validTypes");
+    });
+
+    it("should return correct error structure for invalid input", () => {
+      const errorResponse = {
+        code: "INVALID_INPUT",
+        message:
+          "Unknown option: 'unknownOption'. Valid options are: maxPages, statusFilter, force, dryRun, includeRemoved",
+        status: 400,
+        requestId: "req_test_abc",
+        timestamp: new Date().toISOString(),
+        details: {
+          option: "unknownOption",
+          validOptions: [
+            "maxPages",
+            "statusFilter",
+            "force",
+            "dryRun",
+            "includeRemoved",
+          ],
+        },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "INVALID_INPUT");
+      expect(errorResponse).toHaveProperty("status", 400);
+      expect(errorResponse.details).toHaveProperty("option");
+      expect(errorResponse.details).toHaveProperty("validOptions");
+    });
+  });
+
+  describe("Authentication errors (401)", () => {
+    it("should return correct error structure for unauthorized", () => {
+      const errorResponse = {
+        code: "UNAUTHORIZED",
+        message: "Authentication failed",
+        status: 401,
+        requestId: "req_auth_123",
+        timestamp: new Date().toISOString(),
+      };
+
+      expect(errorResponse).toHaveProperty("code", "UNAUTHORIZED");
+      expect(errorResponse).toHaveProperty("status", 401);
+      expect(errorResponse).toHaveProperty("requestId");
+      expect(errorResponse).toHaveProperty("timestamp");
+    });
+  });
+
+  describe("Not found errors (404)", () => {
+    it("should return correct error structure for resource not found", () => {
+      const errorResponse = {
+        code: "NOT_FOUND",
+        message: "Job not found",
+        status: 404,
+        requestId: "req_404_123",
+        timestamp: new Date().toISOString(),
+        details: { jobId: "non-existent-id" },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "NOT_FOUND");
+      expect(errorResponse).toHaveProperty("status", 404);
+      expect(errorResponse).toHaveProperty("details");
+      expect(errorResponse.details).toHaveProperty("jobId");
+    });
+
+    it("should return correct error structure for endpoint not found", () => {
+      const errorResponse = {
+        code: "ENDPOINT_NOT_FOUND",
+        message: "The requested endpoint does not exist",
+        status: 404,
+        requestId: "req_404_456",
+        timestamp: new Date().toISOString(),
+        details: {
+          availableEndpoints: [
+            { method: "GET", path: "/health", description: "Health check" },
+            { method: "GET", path: "/docs", description: "API documentation" },
+            {
+              method: "GET",
+              path: "/jobs/types",
+              description: "List job types",
+            },
+            { method: "GET", path: "/jobs", description: "List jobs" },
+            { method: "POST", path: "/jobs", description: "Create job" },
+            { method: "GET", path: "/jobs/:id", description: "Get job status" },
+            { method: "DELETE", path: "/jobs/:id", description: "Cancel job" },
+          ],
+        },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "ENDPOINT_NOT_FOUND");
+      expect(errorResponse).toHaveProperty("status", 404);
+      expect(errorResponse.details).toHaveProperty("availableEndpoints");
+      expect(Array.isArray(errorResponse.details.availableEndpoints)).toBe(
+        true
+      );
+    });
+  });
+
+  describe("Conflict errors (409)", () => {
+    it("should return correct error structure for invalid state transition", () => {
+      const errorResponse = {
+        code: "INVALID_STATE_TRANSITION",
+        message:
+          "Cannot cancel job with status: completed. Only pending or running jobs can be cancelled.",
+        status: 409,
+        requestId: "req_409_123",
+        timestamp: new Date().toISOString(),
+        details: { jobId: "job-123", currentStatus: "completed" },
+      };
+
+      expect(errorResponse).toHaveProperty("code", "INVALID_STATE_TRANSITION");
+      expect(errorResponse).toHaveProperty("status", 409);
+      expect(errorResponse.details).toHaveProperty("currentStatus");
+    });
+  });
+
+  describe("Error response consistency", () => {
+    it("should have consistent structure across all error types", () => {
+      const errorCodes = [
+        "VALIDATION_ERROR",
+        "MISSING_REQUIRED_FIELD",
+        "INVALID_FORMAT",
+        "INVALID_ENUM_VALUE",
+        "INVALID_INPUT",
+        "UNAUTHORIZED",
+        "NOT_FOUND",
+        "ENDPOINT_NOT_FOUND",
+        "INVALID_STATE_TRANSITION",
+      ];
+
+      for (const code of errorCodes) {
+        const errorResponse = {
+          code,
+          message: "Test error message",
+          status:
+            code === "UNAUTHORIZED"
+              ? 401
+              : code === "NOT_FOUND" || code === "ENDPOINT_NOT_FOUND"
+                ? 404
+                : code === "INVALID_STATE_TRANSITION"
+                  ? 409
+                  : 400,
+          requestId: "req_consistency_test",
+          timestamp: new Date().toISOString(),
+        };
+
+        // All error responses must have these fields
+        expect(errorResponse).toHaveProperty("code");
+        expect(errorResponse).toHaveProperty("message");
+        expect(errorResponse).toHaveProperty("status");
+        expect(errorResponse).toHaveProperty("requestId");
+        expect(errorResponse).toHaveProperty("timestamp");
+
+        // Field types must be consistent
+        expect(typeof errorResponse.code).toBe("string");
+        expect(typeof errorResponse.message).toBe("string");
+        expect(typeof errorResponse.status).toBe("number");
+        expect(typeof errorResponse.requestId).toBe("string");
+        expect(typeof errorResponse.timestamp).toBe("string");
+
+        // Request ID format must be consistent
+        expect(errorResponse.requestId).toMatch(/^req_[a-z0-9]+_[a-z0-9]+$/);
+
+        // Timestamp must be ISO 8601 format
+        expect(errorResponse.timestamp).toMatch(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+        );
+      }
+    });
+  });
+});

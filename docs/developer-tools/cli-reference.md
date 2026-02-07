@@ -84,8 +84,9 @@ bun run notion:fetch-one <page-id>
 **Examples:**
 
 ```bash
-# Fetch specific page
-bun run notion:fetch-one "abc123-def456-ghi789"
+# Fetch specific page by name (fuzzy matching)
+bun run notion:fetch-one "understanding how exchange works"
+bun run notion:fetch-one "exchange"
 ```
 
 #### Fetch All Pages

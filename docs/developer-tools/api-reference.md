@@ -392,7 +392,7 @@ Currently, there are no rate limits imposed on the API. However, please use reas
 
 The API supports CORS for cross-origin requests. The following headers are included:
 
-```
+```http
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Authorization

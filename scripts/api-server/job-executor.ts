@@ -234,9 +234,10 @@ export function executeJobAsync(
         error,
       });
 
-      // Report completion to GitHub if context is available
-      if (github) {
-        await reportJobCompletion(
+      // Report completion to GitHub if context is available and not already reported
+      // Use double-checked locking pattern for idempotency
+      if (github && !jobTracker.isGitHubStatusReported(jobId)) {
+        const result = await reportJobCompletion(
           {
             owner: github.owner,
             repo: github.repo,
@@ -253,6 +254,11 @@ export function executeJobAsync(
             output: data as string | undefined,
           }
         );
+
+        // Mark as reported only if the API call succeeded
+        if (result !== null) {
+          jobTracker.markGitHubStatusReported(jobId);
+        }
       }
     },
   };

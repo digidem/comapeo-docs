@@ -20,6 +20,15 @@ export interface JobLogEntry {
   data?: unknown;
 }
 
+export interface GitHubContext {
+  owner: string;
+  repo: string;
+  sha: string;
+  token: string;
+  context?: string;
+  targetUrl?: string;
+}
+
 export interface PersistedJob {
   id: string;
   type: string;
@@ -38,6 +47,8 @@ export interface PersistedJob {
     error?: string;
     output?: string;
   };
+  github?: GitHubContext;
+  githubStatusReported?: boolean;
 }
 
 export interface JobStorage {

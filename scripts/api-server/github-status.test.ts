@@ -19,6 +19,7 @@ global.fetch = mockFetch as unknown as typeof fetch;
 describe("github-status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
     // Clear environment variables
     delete process.env.GITHUB_TOKEN;
     delete process.env.GITHUB_REPOSITORY;
@@ -139,7 +140,7 @@ describe("github-status", () => {
     });
 
     it("should throw GitHubStatusError on API error", async () => {
-      mockFetch.mockResolvedValueOnce({
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 401,
         json: async () => ({ message: "Bad credentials" }),
@@ -151,7 +152,7 @@ describe("github-status", () => {
     });
 
     it("should handle malformed API error response", async () => {
-      mockFetch.mockResolvedValueOnce({
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
         json: async () => {
@@ -162,6 +163,151 @@ describe("github-status", () => {
       await expect(
         reportGitHubStatus(validOptions, "success", "Test")
       ).rejects.toThrow(GitHubStatusError);
+    });
+
+    it("should retry on rate limit errors (403)", async () => {
+      // First call fails with rate limit, second succeeds
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          json: async () => ({ message: "API rate limit exceeded" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 1, state: "success" }),
+        });
+
+      vi.useFakeTimers();
+
+      const reportPromise = reportGitHubStatus(validOptions, "success", "Test");
+
+      // Fast forward past the initial delay
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.runAllTimersAsync();
+
+      const result = await reportPromise;
+
+      expect(result).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
+    });
+
+    it("should retry on server errors (5xx)", async () => {
+      // First call fails with 502, second succeeds
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 502,
+          json: async () => ({ message: "Bad gateway" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 1, state: "success" }),
+        });
+
+      vi.useFakeTimers();
+
+      const reportPromise = reportGitHubStatus(validOptions, "success", "Test");
+
+      // Fast forward past the initial delay
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.runAllTimersAsync();
+
+      const result = await reportPromise;
+
+      expect(result).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
+    });
+
+    it("should not retry on client errors (4xx except 403, 429)", async () => {
+      // Reset mock completely before this test
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ message: "Not found" }),
+      });
+
+      await expect(
+        reportGitHubStatus(validOptions, "success", "Test")
+      ).rejects.toThrow(GitHubStatusError);
+
+      // Should only be called once (no retry)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should respect custom retry options", async () => {
+      // Fail twice then succeed
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          json: async () => ({ message: "Service unavailable" }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          json: async () => ({ message: "Service unavailable" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 1, state: "success" }),
+        });
+
+      vi.useFakeTimers();
+
+      const reportPromise = reportGitHubStatus(
+        validOptions,
+        "success",
+        "Test",
+        { maxRetries: 2, initialDelay: 500, maxDelay: 5000 }
+      );
+
+      // Fast forward through retries
+      await vi.advanceTimersByTimeAsync(500); // First retry
+      await vi.advanceTimersByTimeAsync(1000); // Second retry (exponential backoff)
+      await vi.runAllTimersAsync();
+
+      const result = await reportPromise;
+
+      expect(result).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      vi.useRealTimers();
+    });
+
+    it("should throw after max retries exceeded", async () => {
+      // Always fail
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ message: "Service unavailable" }),
+      });
+
+      vi.useFakeTimers();
+
+      const reportPromise = reportGitHubStatus(
+        validOptions,
+        "success",
+        "Test",
+        { maxRetries: 1, initialDelay: 100 }
+      );
+
+      // Fast forward past all retries
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.runAllTimersAsync();
+
+      await expect(reportPromise).rejects.toThrow(GitHubStatusError);
+
+      // Should be called initial + 1 retry = 2 times
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
     });
   });
 

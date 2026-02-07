@@ -5,8 +5,8 @@ Ralphy will execute each unchecked review task sequentially using your chosen AI
 
 ## Project Setup
 
-- [ ] Validate PR scope against repository constraints and confirm acceptance criteria
-- [ ] Review changed files list and map each file to a requirement in the implementation PRD
+- [x] Validate PR scope against repository constraints and confirm acceptance criteria
+- [x] Review changed files list and map each file to a requirement in the implementation PRD
 - [ ] Verify generated-content policy compliance for `docs/`, `static/`, and `i18n/` updates
 
 ## Core Features

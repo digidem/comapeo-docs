@@ -326,15 +326,21 @@ describe("API Routes - Validation", () => {
     it("should include correct CORS headers", () => {
       const corsHeaders = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
       };
 
       expect(corsHeaders["Access-Control-Allow-Origin"]).toBe("*");
       expect(corsHeaders["Access-Control-Allow-Methods"]).toContain("GET");
       expect(corsHeaders["Access-Control-Allow-Methods"]).toContain("POST");
+      expect(corsHeaders["Access-Control-Allow-Methods"]).toContain("DELETE");
       expect(corsHeaders["Access-Control-Allow-Methods"]).toContain("OPTIONS");
-      expect(corsHeaders["Access-Control-Allow-Headers"]).toBe("Content-Type");
+      expect(corsHeaders["Access-Control-Allow-Headers"]).toContain(
+        "Content-Type"
+      );
+      expect(corsHeaders["Access-Control-Allow-Headers"]).toContain(
+        "Authorization"
+      );
     });
   });
 
@@ -362,16 +368,22 @@ describe("API Routes - Endpoint Coverage", () => {
     { method: "GET", path: "/health", description: "Health check" },
     {
       method: "GET",
+      path: "/docs",
+      description: "API documentation (OpenAPI spec)",
+    },
+    {
+      method: "GET",
       path: "/jobs/types",
       description: "List available job types",
     },
     { method: "GET", path: "/jobs", description: "List all jobs" },
     { method: "POST", path: "/jobs", description: "Create a new job" },
     { method: "GET", path: "/jobs/:id", description: "Get job status" },
+    { method: "DELETE", path: "/jobs/:id", description: "Cancel a job" },
   ];
 
   it("should have all required endpoints defined", () => {
-    expect(requiredEndpoints).toHaveLength(5);
+    expect(requiredEndpoints).toHaveLength(7);
 
     // Verify each endpoint has the required properties
     for (const endpoint of requiredEndpoints) {
@@ -382,12 +394,16 @@ describe("API Routes - Endpoint Coverage", () => {
     }
   });
 
-  it("should support GET and POST methods", () => {
+  it("should support GET, POST, and DELETE methods", () => {
     const getEndpoints = requiredEndpoints.filter((e) => e.method === "GET");
     const postEndpoints = requiredEndpoints.filter((e) => e.method === "POST");
+    const deleteEndpoints = requiredEndpoints.filter(
+      (e) => e.method === "DELETE"
+    );
 
-    expect(getEndpoints.length).toBeGreaterThanOrEqual(3);
+    expect(getEndpoints.length).toBeGreaterThanOrEqual(4);
     expect(postEndpoints.length).toBeGreaterThanOrEqual(1);
+    expect(deleteEndpoints.length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -402,6 +418,11 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
 
   const actualEndpoints = [
     { method: "GET", path: "/health", purpose: "Health monitoring" },
+    {
+      method: "GET",
+      path: "/docs",
+      purpose: "API documentation (OpenAPI spec)",
+    },
     { method: "GET", path: "/jobs/types", purpose: "Job type discovery" },
     { method: "GET", path: "/jobs", purpose: "List all jobs with filtering" },
     { method: "POST", path: "/jobs", purpose: "Create new job" },
@@ -409,14 +430,14 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
     { method: "DELETE", path: "/jobs/:id", purpose: "Cancel job" },
   ];
 
-  it("should have exactly 6 endpoints (minimality check)", () => {
+  it("should have exactly 7 endpoints (minimality check)", () => {
     // Each endpoint must serve a unique purpose
-    expect(actualEndpoints).toHaveLength(6);
+    expect(actualEndpoints).toHaveLength(7);
 
     // Verify unique endpoint identifiers (method + path)
     const endpointIds = actualEndpoints.map((e) => `${e.method}:${e.path}`);
     const uniqueIds = new Set(endpointIds);
-    expect(uniqueIds.size).toBe(6); // All endpoints are unique
+    expect(uniqueIds.size).toBe(7); // All endpoints are unique
 
     // Note: /jobs/:id appears twice (GET and DELETE) which is correct REST design
   });
@@ -511,6 +532,9 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
   it("should include discovery endpoints for API usability", () => {
     // /health for service availability
     expect(actualEndpoints.some((e) => e.path === "/health")).toBe(true);
+
+    // /docs for API documentation
+    expect(actualEndpoints.some((e) => e.path === "/docs")).toBe(true);
 
     // /jobs/types for available job types
     expect(actualEndpoints.some((e) => e.path === "/jobs/types")).toBe(true);

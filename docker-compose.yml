@@ -1,0 +1,96 @@
+# Docker Compose configuration for Comapeo Docs API Service
+# Usage: docker compose up [-d] [--build]
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: comapeo-docs-api:latest
+    container_name: comapeo-api-server
+
+    # Port mapping: host:container
+    ports:
+      - "${API_PORT:-3001}:3001"
+
+    # Environment variables
+    environment:
+      # API Configuration
+      NODE_ENV: ${NODE_ENV:-production}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-3001}
+
+      # Notion Configuration (required for job operations)
+      NOTION_API_KEY: ${NOTION_API_KEY}
+      DATABASE_ID: ${DATABASE_ID}
+      DATA_SOURCE_ID: ${DATA_SOURCE_ID}
+
+      # OpenAI Configuration (required for translation jobs)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+
+      # Documentation Configuration
+      DEFAULT_DOCS_PAGE: ${DEFAULT_DOCS_PAGE:-introduction}
+
+      # Image Processing Configuration
+      ENABLE_RETRY_IMAGE_PROCESSING: ${ENABLE_RETRY_IMAGE_PROCESSING:-true}
+      MAX_IMAGE_RETRIES: ${MAX_IMAGE_RETRIES:-3}
+
+      # API Authentication (optional - server runs without auth if not set)
+      # Format: API_KEY_<name>=value
+      # Example: API_KEY_DEPLOYMENT=your-secret-key-min-16-chars
+
+    # Volume mounts for persistent data
+    volumes:
+      # Mount job persistence directory
+      - job-data:/tmp
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "--silent",
+          "-e",
+          "fetch('http://localhost:3001/health').then(r => r.ok ? 0 : 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Network
+    networks:
+      - comapeo-network
+
+# Named volumes for persistent data
+volumes:
+  job-data:
+    driver: local
+
+# Networks
+networks:
+  comapeo-network:
+    driver: bridge

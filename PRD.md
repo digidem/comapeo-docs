@@ -27,27 +27,27 @@ Ralphy will execute each unchecked task sequentially using your chosen AI engine
 
 - [x] Define API endpoints for Notion operations and job lifecycle
 - [x] Review: confirm endpoint list is minimal and sufficient
-- [ ] Add input validation and error handling for all endpoints
-- [ ] Review: ensure errors are consistent and actionable
-- [ ] Implement API key authentication and request auditing
-- [ ] Review: confirm auth coverage and audit log contents
-- [ ] Add GitHub status reporting callbacks for job completion
-- [ ] Review: verify GitHub status updates are correct and idempotent
+- [x] Add input validation and error handling for all endpoints
+- [x] Review: ensure errors are consistent and actionable
+- [x] Implement API key authentication and request auditing
+- [x] Review: confirm auth coverage and audit log contents
+- [x] Add GitHub status reporting callbacks for job completion
+- [x] Review: verify GitHub status updates are correct and idempotent
 
 ## UI/UX
 
-- [ ] Provide CLI examples and curl snippets for API usage
-- [ ] Review: validate examples are correct and minimal
-- [ ] Add API documentation endpoints or static docs page
-- [ ] Review: confirm docs cover auth, endpoints, and job states
-- [ ] Ensure responses are consistent and designed for automation
-- [ ] Review: verify response schemas are stable and KISS
+- [x] Provide CLI examples and curl snippets for API usage
+- [x] Review: validate examples are correct and minimal
+- [x] Add API documentation endpoints or static docs page
+- [x] Review: confirm docs cover auth, endpoints, and job states
+- [x] Ensure responses are consistent and designed for automation
+- [x] Review: verify response schemas are stable and KISS
 
 ## Testing & Quality
 
-- [ ] Add unit tests for module extraction and core job logic
-- [ ] Review: confirm test coverage for key paths
-- [ ] Add integration tests for API endpoints and job queue
+- [x] Add unit tests for module extraction and core job logic
+- [x] Review: confirm test coverage for key paths
+- [x] Add integration tests for API endpoints and job queue
 - [ ] Review: validate integration test scenarios
 - [ ] Add tests for auth and audit logging
 - [ ] Review: confirm auth failures and audit entries are validated

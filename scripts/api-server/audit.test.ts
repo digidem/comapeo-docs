@@ -5,9 +5,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { AuditLogger, getAudit, configureAudit, withAudit } from "./audit";
+import {
+  AuditLogger,
+  getAudit,
+  configureAudit,
+  withAudit,
+  validateAuditEntry,
+  validateAuthResult,
+  type ValidationResult,
+} from "./audit";
 import { existsSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { requireAuth, getAuth as getAuthModule } from "./auth";
 
 describe("AuditLogger", () => {
   const logDir = join(process.cwd(), ".test-audit-data");
@@ -660,6 +669,439 @@ describe("AuditLogger", () => {
       expect(entry1.path).toBe("/health");
       expect(entry2.path).toBe("/jobs");
       expect(entry3.path).toBe("/jobs/types");
+    });
+  });
+
+  describe("validateAuditEntry", () => {
+    it("should validate a correct audit entry with successful auth", () => {
+      const validEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        query: undefined,
+        clientIp: "127.0.0.1",
+        userAgent: "test-agent",
+        auth: {
+          success: true,
+          keyName: "test-key",
+          error: undefined,
+        },
+        requestId: "req_xyz",
+        statusCode: 200,
+        responseTime: 45,
+      };
+
+      const result = validateAuditEntry(validEntry);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should validate a correct audit entry with failed auth", () => {
+      const validEntry = {
+        id: "audit_abc123_ghi",
+        timestamp: new Date().toISOString(),
+        method: "POST",
+        path: "/jobs",
+        clientIp: "192.168.1.1",
+        userAgent: undefined,
+        auth: {
+          success: false,
+          error: "Invalid API key",
+        },
+        statusCode: 401,
+        errorMessage: "Authentication failed",
+      };
+
+      const result = validateAuditEntry(validEntry);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should reject entry with invalid id format", () => {
+      const invalidEntry = {
+        id: "not-an-audit-id",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true, keyName: "test" },
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid id: expected format 'audit_*'")
+      );
+    });
+
+    it("should reject entry with invalid timestamp", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: "not-a-date",
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true, keyName: "test" },
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid timestamp: not a valid ISO date string"
+        )
+      );
+    });
+
+    it("should reject entry with failed auth but no error message", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: false },
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid auth.error: expected non-empty string")
+      );
+    });
+
+    it("should reject entry with successful auth but no keyName", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true },
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid auth.keyName: expected non-empty string"
+        )
+      );
+    });
+
+    it("should reject entry with invalid statusCode", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true, keyName: "test" },
+        statusCode: 999,
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid statusCode: expected number between 100-599"
+        )
+      );
+    });
+
+    it("should reject entry with negative responseTime", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true, keyName: "test" },
+        responseTime: -10,
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid responseTime: expected non-negative number"
+        )
+      );
+    });
+
+    it("should reject non-object entry", () => {
+      const result = validateAuditEntry(null);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual("Audit entry must be an object");
+    });
+
+    it("should reject entry with invalid query type", () => {
+      const invalidEntry = {
+        id: "audit_abc123_def",
+        timestamp: new Date().toISOString(),
+        method: "GET",
+        path: "/health",
+        clientIp: "127.0.0.1",
+        auth: { success: true, keyName: "test" },
+        query: 123, // Should be string or undefined
+      };
+
+      const result = validateAuditEntry(invalidEntry);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid query: expected string or undefined")
+      );
+    });
+
+    it("should validate entry created from actual request", () => {
+      const req = new Request("http://localhost:3001/jobs?type=fetch", {
+        method: "GET",
+        headers: {
+          "user-agent": "test-client/1.0",
+          "x-forwarded-for": "10.0.0.1",
+        },
+      });
+
+      const authResult = {
+        success: true,
+        meta: { name: "test-key", active: true, createdAt: new Date() },
+      };
+
+      const entry = audit.createEntry(req, authResult);
+      const result = validateAuditEntry(entry);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should validate entry created from failed auth request", () => {
+      const req = new Request("http://localhost:3001/jobs", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer invalid-key",
+        },
+      });
+
+      const authResult = {
+        success: false as const,
+        error: "Invalid API key",
+      };
+
+      const entry = audit.createEntry(req, authResult);
+      const result = validateAuditEntry(entry);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe("validateAuthResult", () => {
+    it("should validate a successful auth result", () => {
+      const validAuthResult = {
+        success: true,
+        meta: {
+          name: "test-key",
+          description: "Test API key",
+          active: true,
+          createdAt: new Date().toISOString(),
+        },
+      };
+
+      const result = validateAuthResult(validAuthResult);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should validate a failed auth result", () => {
+      const validAuthResult = {
+        success: false,
+        error: "Missing Authorization header",
+      };
+
+      const result = validateAuthResult(validAuthResult);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should reject failed auth with empty error message", () => {
+      const invalidAuthResult = {
+        success: false,
+        error: "",
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid error: expected non-empty string")
+      );
+    });
+
+    it("should reject failed auth with missing error field", () => {
+      const invalidAuthResult = {
+        success: false,
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid error: expected non-empty string")
+      );
+    });
+
+    it("should reject successful auth with missing meta", () => {
+      const invalidAuthResult = {
+        success: true,
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid meta: expected object when success is true"
+        )
+      );
+    });
+
+    it("should reject successful auth with invalid meta.name", () => {
+      const invalidAuthResult = {
+        success: true,
+        meta: {
+          name: "",
+          active: true,
+          createdAt: new Date().toISOString(),
+        },
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid meta.name: expected non-empty string")
+      );
+    });
+
+    it("should reject successful auth with invalid meta.active", () => {
+      const invalidAuthResult = {
+        success: true,
+        meta: {
+          name: "test",
+          active: "true" as unknown as boolean,
+          createdAt: new Date().toISOString(),
+        },
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining("Invalid meta.active: expected boolean")
+      );
+    });
+
+    it("should reject successful auth with invalid meta.createdAt", () => {
+      const invalidAuthResult = {
+        success: true,
+        meta: {
+          name: "test",
+          active: true,
+          createdAt: "not-a-date",
+        },
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Invalid meta.createdAt: expected valid Date or ISO date string"
+        )
+      );
+    });
+
+    it("should reject successful auth that has error field", () => {
+      const invalidAuthResult = {
+        success: true,
+        error: "Should not have error when successful",
+        meta: {
+          name: "test",
+          active: true,
+          createdAt: new Date().toISOString(),
+        },
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Unexpected error field: should not be present when success is true"
+        )
+      );
+    });
+
+    it("should reject failed auth that has meta field", () => {
+      const invalidAuthResult = {
+        success: false,
+        error: "Invalid credentials",
+        meta: {
+          name: "test",
+          active: true,
+          createdAt: new Date().toISOString(),
+        },
+      };
+
+      const result = validateAuthResult(invalidAuthResult);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.stringContaining(
+          "Unexpected meta field: should not be present when success is false"
+        )
+      );
+    });
+
+    it("should reject non-object auth result", () => {
+      const result = validateAuthResult(null);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual("Auth result must be an object");
+    });
+
+    it("should validate actual auth result from requireAuth", () => {
+      // Setup test key
+      const auth = getAuthModule();
+      auth.clearKeys();
+      auth.addKey("test", "valid-key-123456789012", {
+        name: "test",
+        active: true,
+        createdAt: new Date(),
+      });
+
+      const authResult = requireAuth("Bearer valid-key-123456789012");
+      const validationResult = validateAuthResult(authResult);
+
+      expect(validationResult.valid).toBe(true);
+      expect(validationResult.errors).toHaveLength(0);
+
+      // Clean up
+      auth.clearKeys();
+    });
+
+    it("should validate actual failed auth result from requireAuth", () => {
+      // Setup test key
+      const auth = getAuthModule();
+      auth.clearKeys();
+      auth.addKey("test", "valid-key-123456789012", {
+        name: "test",
+        active: true,
+        createdAt: new Date(),
+      });
+
+      const authResult = requireAuth("Bearer invalid-key");
+      const validationResult = validateAuthResult(authResult);
+
+      expect(validationResult.valid).toBe(true);
+      expect(validationResult.errors).toHaveLength(0);
+      expect(authResult.success).toBe(false);
+      expect(authResult.error).toBeDefined();
+
+      // Clean up
+      auth.clearKeys();
     });
   });
 });

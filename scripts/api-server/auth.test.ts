@@ -5,7 +5,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { ApiKeyAuth, createAuthErrorResponse, getAuth } from "./auth";
+import {
+  ApiKeyAuth,
+  createAuthErrorResponse,
+  getAuth,
+  requireAuth,
+} from "./auth";
 
 describe("ApiKeyAuth", () => {
   let auth: ApiKeyAuth;
@@ -216,6 +221,86 @@ describe("ApiKeyAuth", () => {
       const instance2 = getAuth();
 
       expect(instance1).toBe(instance2);
+    });
+  });
+
+  describe("requireAuth middleware", () => {
+    it("should authenticate valid API keys", () => {
+      // Use getAuth to get/set the singleton
+      const auth = getAuth();
+      auth.clearKeys();
+      const testKey = "requireauth-test-key-1234";
+      auth.addKey("test", testKey, {
+        name: "test",
+        active: true,
+      });
+
+      const result = requireAuth(`Bearer ${testKey}`);
+      expect(result.success).toBe(true);
+      expect(result.meta?.name).toBe("test");
+
+      // Clean up
+      auth.clearKeys();
+    });
+
+    it("should reject invalid API keys", () => {
+      const auth = getAuth();
+      auth.clearKeys();
+      auth.addKey("test", "valid-key-123456789012", {
+        name: "test",
+        active: true,
+      });
+
+      const result = requireAuth("Bearer invalid-key");
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Invalid API key");
+
+      // Clean up
+      auth.clearKeys();
+    });
+
+    it("should handle missing Authorization header", () => {
+      const auth = getAuth();
+      auth.clearKeys();
+      auth.addKey("test", "valid-key-123456789012", {
+        name: "test",
+        active: true,
+      });
+
+      const result = requireAuth(null);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Missing Authorization header");
+
+      // Clean up
+      auth.clearKeys();
+    });
+
+    it("should allow requests when no keys are configured", () => {
+      const auth = getAuth();
+      auth.clearKeys();
+      // No keys added, authentication is disabled
+
+      const result = requireAuth(null);
+      expect(result.success).toBe(true);
+      expect(result.meta?.name).toBe("default");
+    });
+
+    it("should use singleton instance", () => {
+      const auth = getAuth();
+      auth.clearKeys();
+      const testKey = "singleton-test-key-123456";
+      auth.addKey("singleton", testKey, {
+        name: "singleton",
+        active: true,
+      });
+
+      // requireAuth should use the same singleton instance
+      const result = requireAuth(`Bearer ${testKey}`);
+      expect(result.success).toBe(true);
+      expect(result.meta?.name).toBe("singleton");
+
+      // Clean up
+      auth.clearKeys();
     });
   });
 });

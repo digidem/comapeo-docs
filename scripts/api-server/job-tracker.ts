@@ -21,6 +21,15 @@ export type JobType =
 
 export type JobStatus = "pending" | "running" | "completed" | "failed";
 
+export interface GitHubContext {
+  owner: string;
+  repo: string;
+  sha: string;
+  token: string;
+  context?: string;
+  targetUrl?: string;
+}
+
 export interface Job {
   id: string;
   type: JobType;
@@ -39,6 +48,7 @@ export interface Job {
     error?: string;
     output?: string;
   };
+  github?: GitHubContext;
 }
 
 class JobTracker {
@@ -77,6 +87,7 @@ class JobTracker {
           : undefined,
         progress: persistedJob.progress,
         result: persistedJob.result,
+        github: persistedJob.github as GitHubContext | undefined,
       };
       this.jobs.set(job.id, job);
     }
@@ -85,13 +96,14 @@ class JobTracker {
   /**
    * Create a new job
    */
-  createJob(type: JobType): string {
+  createJob(type: JobType, github?: GitHubContext): string {
     const id = this.generateJobId();
     const job: Job = {
       id,
       type,
       status: "pending",
       createdAt: new Date(),
+      github,
     };
 
     this.jobs.set(id, job);
@@ -201,6 +213,7 @@ class JobTracker {
       completedAt: job.completedAt?.toISOString(),
       progress: job.progress,
       result: job.result,
+      github: job.github,
     };
     saveJob(persistedJob);
   }

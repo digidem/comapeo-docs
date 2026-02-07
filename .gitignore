@@ -93,3 +93,7 @@ retry-metrics.json
 
 # Job persistence data
 .jobs-data/
+
+# Local agent artifacts
+.claude/command-history.log
+.audit-data/

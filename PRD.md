@@ -48,15 +48,15 @@ Ralphy will execute each unchecked task sequentially using your chosen AI engine
 - [x] Add unit tests for module extraction and core job logic
 - [x] Review: confirm test coverage for key paths
 - [x] Add integration tests for API endpoints and job queue
-- [ ] Review: validate integration test scenarios
-- [ ] Add tests for auth and audit logging
-- [ ] Review: confirm auth failures and audit entries are validated
+- [x] Review: validate integration test scenarios
+- [x] Add tests for auth and audit logging
+- [x] Review: confirm auth failures and audit entries are validated
 
 ## Deployment
 
-- [ ] Add Dockerfile and docker-compose for API service deployment
-- [ ] Review: ensure containers are minimal and configurable
-- [ ] Add GitHub Action workflow to call the API instead of running scripts
+- [x] Add Dockerfile and docker-compose for API service deployment
+- [x] Review: ensure containers are minimal and configurable
+- [x] Add GitHub Action workflow to call the API instead of running scripts
 - [ ] Review: verify action uses API keys securely and reports status
 - [ ] Document VPS deployment steps and environment variables
 - [ ] Review: confirm runbook is complete and KISS

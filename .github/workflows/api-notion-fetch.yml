@@ -1,0 +1,319 @@
+name: Notion Fetch via API
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_type:
+        description: "Job type to run"
+        required: true
+        default: "notion:fetch-all"
+        type: choice
+        options:
+          - notion:fetch-all
+          - notion:fetch
+          - notion:translate
+          - notion:status-translation
+          - notion:status-draft
+          - notion:status-publish
+          - notion:status-publish-production
+      max_pages:
+        description: "Maximum pages to fetch (for notion:fetch-all)"
+        required: false
+        default: "5"
+        type: string
+      force:
+        description: "Force refetch even if content exists"
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [notion-fetch-request]
+  schedule:
+    # Run daily at 2 AM UTC (adjust as needed)
+    - cron: "0 2 * * *"
+
+concurrency:
+  group: notion-api-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch-via-api:
+    name: Fetch Notion Content via API
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    environment:
+      name: production
+      url: ${{ steps.create-job.outputs.api_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure API endpoint
+        id: config
+        run: |
+          # Set API endpoint from secrets or default
+          if [ -n "${{ secrets.API_ENDPOINT }}" ]; then
+            echo "endpoint=${{ secrets.API_ENDPOINT }}" >> $GITHUB_OUTPUT
+            echo "api_url=${{ secrets.API_ENDPOINT }}" >> $GITHUB_OUTPUT
+            echo "mode=production" >> $GITHUB_OUTPUT
+          else
+            # For testing: start API server locally
+            echo "endpoint=http://localhost:3001" >> $GITHUB_OUTPUT
+            echo "api_url=http://localhost:3001" >> $GITHUB_OUTPUT
+            echo "mode=local" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Bun (local mode only)
+        if: steps.config.outputs.mode == 'local'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (local mode only)
+        if: steps.config.outputs.mode == 'local'
+        run: bun install
+
+      - name: Rebuild Sharp (local mode only)
+        if: steps.config.outputs.mode == 'local'
+        run: |
+          echo "🔧 Rebuilding Sharp native bindings for Linux x64..."
+          bun add sharp --force
+
+      - name: Start API server (local mode only)
+        if: steps.config.outputs.mode == 'local'
+        run: |
+          # Set environment variables
+          export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
+          export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
+          export DATABASE_ID="${{ secrets.DATABASE_ID }}"
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+          export NODE_ENV=test
+          export API_PORT=3001
+          export API_HOST=localhost
+
+          # Set API key for authentication
+          export API_KEY_GITHUB_ACTIONS="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
+
+          # Start server in background
+          bun run api:server &
+          SERVER_PID=$!
+
+          # Save PID for cleanup
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+          # Wait for server to be ready
+          echo "⏳ Waiting for API server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ API server is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ API server failed to start"
+              exit 1 || exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Create job via API
+        id: create-job
+        run: |
+          set -e
+
+          ENDPOINT="${{ steps.config.outputs.endpoint }}"
+          JOB_TYPE="${{ github.event.inputs.job_type || 'notion:fetch-all' }}"
+          MAX_PAGES="${{ github.event.inputs.max_pages || '5' }}"
+          FORCE="${{ github.event.inputs.force || 'false' }}"
+
+          # Build API request
+          API_KEY="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
+
+          # Build request body
+          BODY=$(cat <<EOF
+          {
+            "type": "$JOB_TYPE",
+            "options": {
+              "maxPages": $MAX_PAGES,
+              "force": $FORCE
+            }
+          }
+          EOF
+          )
+
+          echo "📤 Creating job: $JOB_TYPE"
+          echo "📊 Options: maxPages=$MAX_PAGES, force=$FORCE"
+
+          # Make API request
+          RESPONSE=$(curl -s -X POST "$ENDPOINT/jobs" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $API_KEY" \
+            -d "$BODY")
+
+          # Parse response
+          JOB_ID=$(echo "$RESPONSE" | jq -r '.data.jobId // empty')
+
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+            echo "❌ Failed to create job"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "✅ Job created: $JOB_ID"
+          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+          echo "job_url=$ENDPOINT/jobs/$JOB_ID" >> $GITHUB_OUTPUT
+
+          # Set initial GitHub status as pending
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -f state="pending" \
+            -f context="Notion API Job ($JOB_TYPE)" \
+            -f description="Job $JOB_ID is running" \
+            -f target_url="$ENDPOINT/jobs/$JOB_ID" || true
+
+      - name: Poll job status
+        id: poll-status
+        run: |
+          set -e
+
+          ENDPOINT="${{ steps.config.outputs.endpoint }}"
+          JOB_ID="${{ steps.create-job.outputs.job_id }}"
+          API_KEY="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
+          JOB_TYPE="${{ github.event.inputs.job_type || 'notion:fetch-all' }}"
+
+          echo "⏳ Polling job status..."
+          MAX_WAIT=3600  # 60 minutes in seconds
+          ELAPSED=0
+          POLL_INTERVAL=10  # Check every 10 seconds
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            # Get job status
+            RESPONSE=$(curl -s -X GET "$ENDPOINT/jobs/$JOB_ID" \
+              -H "Authorization: Bearer $API_KEY")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.data.status // empty')
+
+            echo "📊 Status: $STATUS (elapsed: ${ELAPSED}s)"
+
+            case "$STATUS" in
+              "completed")
+                echo "✅ Job completed successfully"
+                echo "job_status=completed" >> $GITHUB_OUTPUT
+
+                # Update GitHub status to success
+                gh api \
+                  --method POST \
+                  -H "Accept: application/vnd.github+json" \
+                  /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+                  -f state="success" \
+                  -f context="Notion API Job ($JOB_TYPE)" \
+                  -f description="Job $JOB_ID completed successfully" \
+                  -f target_url="$ENDPOINT/jobs/$JOB_ID" || true
+
+                exit 0
+                ;;
+              "failed")
+                echo "❌ Job failed"
+                echo "job_status=failed" >> $GITHUB_OUTPUT
+
+                # Get error details
+                ERROR=$(echo "$RESPONSE" | jq -r '.data.result.error // "Unknown error"')
+                echo "Error: $ERROR"
+
+                # Update GitHub status to failure
+                gh api \
+                  --method POST \
+                  -H "Accept: application/vnd.github+json" \
+                  /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+                  -f state="failure" \
+                  -f context="Notion API Job ($JOB_TYPE)" \
+                  -f description="Job $JOB_ID failed: $ERROR" \
+                  -f target_url="$ENDPOINT/jobs/$JOB_ID" || true
+
+                exit 1
+                ;;
+              "running"|"pending")
+                # Continue polling
+                ;;
+              *)
+                echo "⚠️ Unknown status: $STATUS"
+                ;;
+            esac
+
+            sleep $POLL_INTERVAL
+            ELAPSED=$((ELAPSED + POLL_INTERVAL))
+          done
+
+          echo "⏱️ Job timed out after $MAX_WAIT seconds"
+          echo "job_status=timeout" >> $GITHUB_OUTPUT
+
+          # Update GitHub status to error (timeout)
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -f state="error" \
+            -f context="Notion API Job ($JOB_TYPE)" \
+            -f description="Job $JOB_ID timed out" \
+            -f target_url="$ENDPOINT/jobs/$JOB_ID" || true
+
+          exit 1
+
+      - name: Stop API server (local mode only)
+        if: always() && steps.config.outputs.mode == 'local'
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            echo "🛑 Stopping API server (PID: $SERVER_PID)"
+            kill $SERVER_PID 2>/dev/null || true
+          fi
+
+      - name: Job summary
+        id: summary
+        if: always()
+        run: |
+          JOB_ID="${{ steps.create-job.outputs.job_id }}"
+          JOB_STATUS="${{ steps.poll-status.outputs.job_status }}"
+          JOB_TYPE="${{ github.event.inputs.job_type || 'notion:fetch-all' }}"
+          MAX_PAGES="${{ github.event.inputs.max_pages || '5' }}"
+
+          echo "## 📋 Notion API Job Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Job ID:** \`${JOB_ID}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Job Type:** $JOB_TYPE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** $JOB_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Max Pages:** $MAX_PAGES" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Endpoint:** ${{ steps.config.outputs.endpoint }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$JOB_STATUS" = "completed" ]; then
+            echo "✅ Job completed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "$JOB_STATUS" = "failed" ]; then
+            echo "❌ Job failed - check logs for details" >> $GITHUB_STEP_SUMMARY
+          elif [ "$JOB_STATUS" = "timeout" ]; then
+            echo "⏱️ Job timed out - may need investigation" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Notion API Job*: ${{ steps.poll-status.outputs.job_status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Notion API Job*: ${{ steps.poll-status.outputs.job_status }}\nJob: ${{ steps.create-job.outputs.job_id }}\nType: ${{ github.event.inputs.job_type || 'notion:fetch-all' }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Workflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>"

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { AuditLogger, getAudit, configureAudit } from "./audit";
+import { AuditLogger, getAudit, configureAudit, withAudit } from "./audit";
 import { existsSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -366,6 +366,300 @@ describe("AuditLogger", () => {
       const entry = audit.createEntry(req, authResult);
 
       expect(entry.id).toMatch(/^audit_[a-z0-9_]+$/);
+    });
+  });
+
+  describe("withAudit wrapper", () => {
+    beforeEach(() => {
+      // Clear singleton and clean up logs before each test
+      AuditLogger["instance"] = undefined;
+      // Configure with test settings
+      configureAudit({
+        logDir,
+        logFile: "test-audit.log",
+        logBodies: false,
+        logHeaders: false,
+      });
+      // Ensure clean log file
+      getAudit().clearLogs();
+    });
+
+    it("should log successful requests", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      );
+
+      const req = new Request("http://localhost:3001/health", {
+        method: "GET",
+      });
+
+      const authResult = {
+        success: true,
+        meta: { name: "test", active: true, createdAt: new Date() },
+      };
+
+      const response = await wrappedHandler(req, authResult);
+      expect(response.status).toBe(200);
+
+      // Verify audit log was written
+      const logPath = getAudit().getLogPath();
+      expect(existsSync(logPath)).toBe(true);
+
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.method).toBe("GET");
+      expect(logEntry.path).toBe("/health");
+      expect(logEntry.statusCode).toBe(200);
+      expect(logEntry.responseTime).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should log failed requests", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          throw new Error("Handler error");
+        }
+      );
+
+      const req = new Request("http://localhost:3001/jobs", {
+        method: "POST",
+      });
+
+      const authResult = {
+        success: true,
+        meta: { name: "test", active: true, createdAt: new Date() },
+      };
+
+      await expect(wrappedHandler(req, authResult)).rejects.toThrow(
+        "Handler error"
+      );
+
+      // Verify audit log was written with failure info
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.statusCode).toBe(500);
+      expect(logEntry.errorMessage).toBe("Handler error");
+    });
+
+    it("should track response time", async () => {
+      let handlerDelay = 0;
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          // Simulate some processing time
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          handlerDelay = 50;
+          return new Response(JSON.stringify({ processed: true }), {
+            status: 200,
+          });
+        }
+      );
+
+      const req = new Request("http://localhost:3001/health", {
+        method: "GET",
+      });
+
+      const authResult = {
+        success: true,
+        meta: { name: "public", active: true, createdAt: new Date() },
+      };
+
+      const startTime = Date.now();
+      await wrappedHandler(req, authResult);
+      const endTime = Date.now();
+
+      // Verify audit log contains response time
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.responseTime).toBeGreaterThanOrEqual(handlerDelay);
+      expect(logEntry.responseTime).toBeLessThanOrEqual(
+        endTime - startTime + 10 // Add small buffer for timing variations
+      );
+    });
+
+    it("should create audit entry with correct auth info", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          return new Response(JSON.stringify({ authenticated: true }), {
+            status: 200,
+          });
+        }
+      );
+
+      const req = new Request("http://localhost:3001/jobs", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "10.0.0.1",
+          "user-agent": "test-client/1.0",
+        },
+      });
+
+      const authResult = {
+        success: true,
+        meta: {
+          name: "api-key-1",
+          active: true,
+          createdAt: new Date(),
+        },
+      };
+
+      await wrappedHandler(req, authResult);
+
+      // Verify audit entry has correct auth info
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.auth.success).toBe(true);
+      expect(logEntry.auth.keyName).toBe("api-key-1");
+      expect(logEntry.clientIp).toBe("10.0.0.1");
+      expect(logEntry.userAgent).toBe("test-client/1.0");
+    });
+
+    it("should handle failed authentication in audit entry", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: { success: boolean; error?: string }
+        ) => {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+          });
+        }
+      );
+
+      const req = new Request("http://localhost:3001/jobs", {
+        method: "GET",
+      });
+
+      const authResult = {
+        success: false,
+        error: "Invalid API key",
+      };
+
+      await wrappedHandler(req, authResult);
+
+      // Verify audit entry has auth failure info
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.auth.success).toBe(false);
+      expect(logEntry.auth.error).toBe("Invalid API key");
+      expect(logEntry.auth.keyName).toBeUndefined();
+    });
+
+    it("should capture query parameters in audit entry", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
+        }
+      );
+
+      const req = new Request(
+        "http://localhost:3001/jobs?status=running&type=notion:fetch",
+        { method: "GET" }
+      );
+
+      const authResult = {
+        success: true,
+        meta: { name: "public", active: true, createdAt: new Date() },
+      };
+
+      await wrappedHandler(req, authResult);
+
+      // Verify query params are captured
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const logEntry = JSON.parse(logContents.trim());
+
+      expect(logEntry.query).toBe("?status=running&type=notion:fetch");
+    });
+
+    it("should append multiple entries for multiple requests", async () => {
+      const wrappedHandler = withAudit(
+        async (
+          req: Request,
+          authResult: {
+            success: boolean;
+            meta?: { name: string; active: boolean; createdAt: Date };
+          }
+        ) => {
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+      );
+
+      const authResult = {
+        success: true,
+        meta: { name: "public", active: true, createdAt: new Date() },
+      };
+
+      // Make multiple requests
+      await wrappedHandler(
+        new Request("http://localhost:3001/health", { method: "GET" }),
+        authResult
+      );
+      await wrappedHandler(
+        new Request("http://localhost:3001/jobs", { method: "GET" }),
+        authResult
+      );
+      await wrappedHandler(
+        new Request("http://localhost:3001/jobs/types", { method: "GET" }),
+        authResult
+      );
+
+      // Verify multiple log entries
+      const logPath = getAudit().getLogPath();
+      const logContents = readFileSync(logPath, "utf-8");
+      const lines = logContents.trim().split("\n");
+
+      expect(lines).toHaveLength(3);
+
+      const entry1 = JSON.parse(lines[0]);
+      const entry2 = JSON.parse(lines[1]);
+      const entry3 = JSON.parse(lines[2]);
+
+      expect(entry1.path).toBe("/health");
+      expect(entry2.path).toBe("/jobs");
+      expect(entry3.path).toBe("/jobs/types");
     });
   });
 });

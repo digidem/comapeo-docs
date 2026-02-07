@@ -35,7 +35,10 @@ const GENERATED_DIRECTORIES = [
   {
     path: "docs",
     description: "Generated documentation files",
-    allowedPatterns: [/\.gitkeep$/],
+    allowedPatterns: [
+      /\.gitkeep$/,
+      /^docs\/developer-tools\/.*/, // Hand-crafted developer documentation
+    ],
   },
   {
     path: "i18n",

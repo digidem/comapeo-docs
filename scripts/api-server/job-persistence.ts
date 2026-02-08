@@ -60,45 +60,113 @@ const JOBS_FILE = join(DATA_DIR, "jobs.json");
 const LOGS_FILE = join(DATA_DIR, "jobs.log");
 
 /**
- * Ensure data directory exists
+ * Ensure data directory exists with retry logic for race conditions
  */
 function ensureDataDir(): void {
-  if (!existsSync(DATA_DIR)) {
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (existsSync(DATA_DIR)) {
+      return;
+    }
     try {
       mkdirSync(DATA_DIR, { recursive: true });
+      return;
     } catch (error) {
-      // Ignore error if directory was created by another process
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw error;
+      const err = error as NodeJS.ErrnoException;
+      // Ignore EEXIST (created by another process) or retry on ENOENT (race condition)
+      if (err.code === "EEXIST") {
+        return;
       }
+      if (err.code === "ENOENT" && attempt < maxRetries - 1) {
+        // Brief delay before retry
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
+        }
+        continue;
+      }
+      throw error;
     }
   }
 }
 
 /**
- * Load jobs from file
+ * Load jobs from file with retry logic for concurrent access
  */
 function loadJobs(): JobStorage {
-  ensureDataDir();
+  const maxRetries = 5;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      ensureDataDir();
 
-  if (!existsSync(JOBS_FILE)) {
-    return { jobs: [] };
-  }
+      if (!existsSync(JOBS_FILE)) {
+        return { jobs: [] };
+      }
 
-  try {
-    const data = readFileSync(JOBS_FILE, "utf-8");
-    return JSON.parse(data) as JobStorage;
-  } catch {
-    return { jobs: [] };
+      const data = readFileSync(JOBS_FILE, "utf-8");
+      return JSON.parse(data) as JobStorage;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // Retry on ENOENT (race condition), EBUSY (file locked), or parse errors
+      if (
+        (err.code === "ENOENT" ||
+          err.code === "EBUSY" ||
+          err.code === "EACCES" ||
+          err instanceof SyntaxError) &&
+        attempt < maxRetries - 1
+      ) {
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
+        }
+        continue;
+      }
+      // On final attempt or unrecoverable error, return empty storage
+      if (err instanceof SyntaxError) {
+        // File corrupted, return empty
+        return { jobs: [] };
+      }
+      if (err.code === "ENOENT") {
+        // File doesn't exist yet
+        return { jobs: [] };
+      }
+      throw error;
+    }
   }
+  return { jobs: [] };
 }
 
 /**
- * Save jobs to file
+ * Save jobs to file with retry logic for concurrent access
  */
 function saveJobs(storage: JobStorage): void {
-  ensureDataDir();
-  writeFileSync(JOBS_FILE, JSON.stringify(storage, null, 2), "utf-8");
+  const maxRetries = 5;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      ensureDataDir();
+      writeFileSync(JOBS_FILE, JSON.stringify(storage, null, 2), "utf-8");
+      return;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // Retry on ENOENT (directory disappeared) or EBUSY (file locked)
+      if (
+        (err.code === "ENOENT" ||
+          err.code === "EBUSY" ||
+          err.code === "EACCES") &&
+        attempt < maxRetries - 1
+      ) {
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
+        }
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 /**
@@ -151,12 +219,36 @@ export function deleteJob(id: string): boolean {
 }
 
 /**
- * Append a log entry to the log file
+ * Append a log entry to the log file with retry logic for concurrent access
  */
 export function appendLog(entry: JobLogEntry): void {
-  ensureDataDir();
+  const maxRetries = 5;
   const logLine = JSON.stringify(entry) + "\n";
-  appendFileSync(LOGS_FILE, logLine, "utf-8");
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      ensureDataDir();
+      appendFileSync(LOGS_FILE, logLine, "utf-8");
+      return;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // Retry on ENOENT (directory disappeared) or EBUSY (file locked)
+      if (
+        (err.code === "ENOENT" ||
+          err.code === "EBUSY" ||
+          err.code === "EACCES") &&
+        attempt < maxRetries - 1
+      ) {
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
+        }
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 /**
@@ -221,64 +313,105 @@ export function createJobLogger(jobId: string): JobLogger {
 }
 
 /**
- * Get logs for a specific job
+ * Get logs for a specific job with retry logic for concurrent access
  */
 export function getJobLogs(jobId: string): JobLogEntry[] {
-  ensureDataDir();
+  const maxRetries = 5;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      ensureDataDir();
 
-  if (!existsSync(LOGS_FILE)) {
-    return [];
-  }
+      if (!existsSync(LOGS_FILE)) {
+        return [];
+      }
 
-  try {
-    const logContent = readFileSync(LOGS_FILE, "utf-8");
-    const lines = logContent.trim().split("\n");
+      const logContent = readFileSync(LOGS_FILE, "utf-8");
+      const lines = logContent.trim().split("\n");
 
-    return lines
-      .map((line) => {
-        try {
-          return JSON.parse(line) as JobLogEntry;
-        } catch {
-          return null;
+      return lines
+        .map((line) => {
+          try {
+            return JSON.parse(line) as JobLogEntry;
+          } catch {
+            return null;
+          }
+        })
+        .filter(
+          (entry): entry is JobLogEntry =>
+            entry !== null && entry.jobId === jobId
+        );
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // Retry on ENOENT, EBUSY, or EACCES
+      if (
+        (err.code === "ENOENT" ||
+          err.code === "EBUSY" ||
+          err.code === "EACCES") &&
+        attempt < maxRetries - 1
+      ) {
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
         }
-      })
-      .filter(
-        (entry): entry is JobLogEntry => entry !== null && entry.jobId === jobId
-      );
-  } catch {
-    return [];
+        continue;
+      }
+      // On final attempt or unrecoverable error, return empty array
+      return [];
+    }
   }
+  return [];
 }
 
 /**
- * Get recent logs (all jobs)
+ * Get recent logs (all jobs) with retry logic for concurrent access
  */
 export function getRecentLogs(limit = 100): JobLogEntry[] {
-  ensureDataDir();
+  const maxRetries = 5;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      ensureDataDir();
 
-  if (!existsSync(LOGS_FILE)) {
-    return [];
-  }
+      if (!existsSync(LOGS_FILE)) {
+        return [];
+      }
 
-  try {
-    const logContent = readFileSync(LOGS_FILE, "utf-8");
-    const lines = logContent.trim().split("\n");
+      const logContent = readFileSync(LOGS_FILE, "utf-8");
+      const lines = logContent.trim().split("\n");
 
-    const entries: JobLogEntry[] = lines
-      .map((line) => {
-        try {
-          return JSON.parse(line) as JobLogEntry;
-        } catch {
-          return null;
+      const entries: JobLogEntry[] = lines
+        .map((line) => {
+          try {
+            return JSON.parse(line) as JobLogEntry;
+          } catch {
+            return null;
+          }
+        })
+        .filter((entry): entry is JobLogEntry => entry !== null);
+
+      // Return last `limit` entries
+      return entries.slice(-limit);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      // Retry on ENOENT, EBUSY, or EACCES
+      if (
+        (err.code === "ENOENT" ||
+          err.code === "EBUSY" ||
+          err.code === "EACCES") &&
+        attempt < maxRetries - 1
+      ) {
+        const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
+        const start = Date.now();
+        while (Date.now() - start < delay) {
+          // Busy wait for very short delays
         }
-      })
-      .filter((entry): entry is JobLogEntry => entry !== null);
-
-    // Return last `limit` entries
-    return entries.slice(-limit);
-  } catch {
-    return [];
+        continue;
+      }
+      // On final attempt or unrecoverable error, return empty array
+      return [];
+    }
   }
+  return [];
 }
 
 /**

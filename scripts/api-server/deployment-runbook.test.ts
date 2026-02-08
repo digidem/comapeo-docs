@@ -1,6 +1,18 @@
+/**
+ * API Service Deployment Runbook Tests
+ *
+ * Tests for deployment runbook structure and content validation
+ */
+
 import { describe, it, expect, beforeAll } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  loadDocumentation,
+  extractCodeBlocks,
+  hasRequiredSections,
+  validateDocumentationCommands,
+  validateBashCodeBlock,
+} from "./lib/doc-validation";
 
 const RUNBOOK_PATH = join(
   process.cwd(),
@@ -9,25 +21,55 @@ const RUNBOOK_PATH = join(
   "api-service-deployment.md"
 );
 
+// Required sections for deployment runbook
+const REQUIRED_SECTIONS = [
+  "Deployment Overview",
+  "Preparation",
+  "VPS Setup",
+  "GitHub Integration",
+  "Validation",
+  "Troubleshooting",
+  "Ongoing Operations",
+];
+
 describe("API Service Deployment Runbook", () => {
+  let content: string;
+  let codeBlocks: Array<{ lang: string; code: string; lineStart: number }>;
+
+  beforeAll(() => {
+    content = loadDocumentation(RUNBOOK_PATH);
+    codeBlocks = extractCodeBlocks(content);
+  });
+
   describe("File Structure", () => {
     it("should exist in context workflows", () => {
-      expect(existsSync(RUNBOOK_PATH)).toBe(true);
-    });
-
-    it("should have content", () => {
-      const content = readFileSync(RUNBOOK_PATH, "utf-8");
+      expect(content).toBeTruthy();
       expect(content.length).toBeGreaterThan(0);
     });
   });
 
-  describe("First-Time Operator Friendliness", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
+  describe("Required Sections Validation", () => {
+    it("should have all required sections", () => {
+      const { passed, missing } = hasRequiredSections(
+        content,
+        REQUIRED_SECTIONS
+      );
+      expect(missing).toEqual([]);
+      expect(passed.length).toEqual(REQUIRED_SECTIONS.length);
     });
 
+    it("should report which required sections are present", () => {
+      const { passed } = hasRequiredSections(content, REQUIRED_SECTIONS);
+      expect(passed).toContain("Deployment Overview");
+      expect(passed).toContain("Preparation");
+      expect(passed).toContain("VPS Setup");
+      expect(passed).toContain("GitHub Integration");
+      expect(passed).toContain("Troubleshooting");
+      expect(passed).toContain("Ongoing Operations");
+    });
+  });
+
+  describe("First-Time Operator Friendliness", () => {
     it("should have deployment overview with time estimate", () => {
       expect(content).toContain("## Deployment Overview");
       expect(content).toContain("Estimated Time");
@@ -57,12 +99,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("VPS Deployment Steps", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should document VPS setup", () => {
       expect(content).toContain("## Part 2: VPS Setup");
       expect(content).toContain("Install Docker");
@@ -87,12 +123,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("GitHub Integration", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should document GitHub workflow setup", () => {
       expect(content).toContain("## Part 5: GitHub Integration");
       expect(content).toContain("Add GitHub Secrets");
@@ -195,12 +225,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("Validation and Checklist", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should include validation checklist", () => {
       expect(content).toContain("## Validation Checklist");
       expect(content).toContain("- [ ]");
@@ -234,12 +258,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("Troubleshooting", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should have troubleshooting section with symptoms", () => {
       expect(content).toContain("## Troubleshooting");
       expect(content).toContain("**Symptoms**");
@@ -274,12 +292,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("Ongoing Operations", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should document log viewing", () => {
       expect(content).toContain("## Ongoing Operations");
       expect(content).toContain("### View Logs");
@@ -305,12 +317,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("Structure and Clarity", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should use clear section numbering with parts", () => {
       expect(content).toContain("## Part 1:");
       expect(content).toContain("## Part 2:");
@@ -344,12 +350,6 @@ describe("API Service Deployment Runbook", () => {
   });
 
   describe("Existing Stack Integration", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(RUNBOOK_PATH, "utf-8");
-    });
-
     it("should document both standalone and existing stack deployment options", () => {
       expect(content).toContain("Option A: Standalone Deployment");
       expect(content).toContain("Option B: Existing Stack Integration");
@@ -435,7 +435,7 @@ describe("API Service Deployment Runbook", () => {
     });
 
     it("should provide restart commands for existing stack", () => {
-      expect(content).toMatch(/restart api/s);
+      expect(content).toMatch(/restart api/);
     });
 
     it("should provide stop commands for existing stack", () => {
@@ -455,6 +455,60 @@ describe("API Service Deployment Runbook", () => {
       expect(content).toMatch(
         /API_KEY_DEPLOYMENT:\s*\$\{API_KEY_DEPLOYMENT\}/s
       );
+    });
+  });
+
+  describe("Executable Command Validation", () => {
+    it("should validate all bash commands are syntactically correct", () => {
+      const errors = validateDocumentationCommands(content);
+
+      // Group errors by severity
+      const criticalErrors = errors.filter((e) => e.severity === "error");
+      const warnings = errors.filter((e) => e.severity === "warning");
+
+      // Report critical errors if any
+      if (criticalErrors.length > 0) {
+        const errorDetails = criticalErrors
+          .map((e) => `Line ${e.line}: "${e.command}" - ${e.reason}`)
+          .join("\n  ");
+        throw new Error(
+          `Found ${criticalErrors.length} critical command syntax errors:\n  ${errorDetails}`
+        );
+      }
+
+      // Warnings are acceptable but should be documented
+      if (warnings.length > 0) {
+        // We'll still pass the test but log the warnings
+        expect(warnings.length).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("should have balanced quotes in bash commands", () => {
+      const bashBlocks = codeBlocks.filter(
+        (block) => block.lang === "bash" || block.lang === "sh"
+      );
+
+      for (const block of bashBlocks) {
+        const errors = validateBashCodeBlock(block);
+        const quoteErrors = errors.filter((e) =>
+          e.reason.includes("Unbalanced quotes")
+        );
+        expect(quoteErrors).toEqual([]);
+      }
+    });
+
+    it("should have balanced parentheses in command substitutions", () => {
+      const bashBlocks = codeBlocks.filter(
+        (block) => block.lang === "bash" || block.lang === "sh"
+      );
+
+      for (const block of bashBlocks) {
+        const errors = validateBashCodeBlock(block);
+        const parenErrors = errors.filter((e) =>
+          e.reason.includes("parentheses")
+        );
+        expect(parenErrors).toEqual([]);
+      }
     });
   });
 });

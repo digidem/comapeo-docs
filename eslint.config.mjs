@@ -9,8 +9,8 @@ import securityPlugin from "eslint-plugin-security";
 import prettierPlugin from "eslint-plugin-prettier";
 import prettierConfig from "eslint-config-prettier";
 
-/** @type {import('eslint').Linter.Config[]} */
-export default [
+/** @type {import('eslint').Linter.FlatConfig[]} */
+const eslintConfig = [
   // Global configurations for all files
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
@@ -95,3 +95,5 @@ export default [
     },
   },
 ];
+
+export default eslintConfig;

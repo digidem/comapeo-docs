@@ -1,0 +1,13 @@
+
+[0;34m=== API Docker Integration Tests ===[0m
+[0;34m[INFO][0m Test configuration:
+[0;34m[INFO][0m   - API URL: http://localhost:3001
+[0;34m[INFO][0m   - Container: comapeo-api-server-test
+[0;34m[INFO][0m   - Log file: ./test-results/api-test-20260208-094200.log
+[0;34m[INFO][0m   - No cleanup: false
+
+[0;34m=== Building and Starting Docker Container ===[0m
+[0;34m[INFO][0m Building Docker image...
+[0;31m[FAIL][0m Failed to build Docker image
+[0;34m[INFO][0m Cleaning up Docker container...
+[0;34m[INFO][0m Cleanup complete

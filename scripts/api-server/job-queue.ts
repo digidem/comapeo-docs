@@ -303,6 +303,7 @@ export function createJobQueue(options: JobQueueOptions): JobQueue {
   const jobTypes: JobType[] = [
     "notion:fetch",
     "notion:fetch-all",
+    "notion:count-pages",
     "notion:translate",
     "notion:status-translation",
     "notion:status-draft",

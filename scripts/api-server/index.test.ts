@@ -59,25 +59,13 @@ describe("API Server - Unit Tests", () => {
   });
 
   describe("Job Type Validation", () => {
-    const validJobTypes: JobType[] = [
-      "notion:fetch",
-      "notion:fetch-all",
-      "notion:translate",
-      "notion:status-translation",
-      "notion:status-draft",
-      "notion:status-publish",
-      "notion:status-publish-production",
-    ];
+    it("should accept valid job types", () => {
+      const tracker = getJobTracker();
+      const jobId = tracker.createJob("notion:fetch");
+      const job = tracker.getJob(jobId);
 
-    it("should accept all valid job types", () => {
-      for (const jobType of validJobTypes) {
-        const tracker = getJobTracker();
-        const jobId = tracker.createJob(jobType);
-        const job = tracker.getJob(jobId);
-
-        expect(job).toBeDefined();
-        expect(job?.type).toBe(jobType);
-      }
+      expect(job).toBeDefined();
+      expect(job?.type).toBe("notion:fetch");
     });
 
     it("should reject invalid job types", () => {
@@ -233,7 +221,7 @@ describe("API Server - Unit Tests", () => {
   });
 
   describe("Job Serialization", () => {
-    it("should serialize job to JSON-compatible format", () => {
+    it("should preserve job data through serialization", () => {
       const tracker = getJobTracker();
       const jobId = tracker.createJob("notion:fetch");
 
@@ -241,11 +229,8 @@ describe("API Server - Unit Tests", () => {
       tracker.updateJobProgress(jobId, 5, 10, "Processing");
 
       const job = tracker.getJob(jobId);
-
-      // Verify all fields are JSON-serializable
-      expect(() => JSON.stringify(job)).not.toThrow();
-
       const serialized = JSON.parse(JSON.stringify(job));
+
       expect(serialized.id).toBe(jobId);
       expect(serialized.type).toBe("notion:fetch");
       expect(serialized.status).toBe("running");

@@ -140,3 +140,12 @@ docker-compose*
 .DS_Store
 Thumbs.db
 *.log
+
+# ============================================
+# Test Directories under scripts/ (explicit)
+# ============================================
+scripts/test-docker/
+scripts/test-scaffold/
+scripts/test-utils/
+scripts/**/__tests__/
+scripts/**/*.test.ts

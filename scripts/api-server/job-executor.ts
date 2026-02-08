@@ -38,7 +38,7 @@ const JOB_COMMANDS: Record<
 > = {
   "notion:fetch": {
     script: "bun",
-    args: ["scripts/notion-fetch"],
+    args: ["scripts/notion-fetch/index.ts"],
   },
   "notion:fetch-all": {
     script: "bun",

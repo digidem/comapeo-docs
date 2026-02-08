@@ -84,15 +84,15 @@ assert_http_code() {
   local actual="$2"
   local test_name="$3"
 
-  ((TESTS_TOTAL++))
+  TESTS_TOTAL=$((TESTS_TOTAL + 1))
 
   if [ "$actual" = "$expected" ]; then
     log_success "$test_name (HTTP $actual)"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
     return 0
   else
     log_error "$test_name (expected: $expected, got: $actual)"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
     return 1
   fi
 }
@@ -102,15 +102,15 @@ assert_json_has_key() {
   local key="$2"
   local test_name="$3"
 
-  ((TESTS_TOTAL++))
+  TESTS_TOTAL=$((TESTS_TOTAL + 1))
 
   if echo "$json" | jq -e ".${key}" >/dev/null 2>&1; then
     log_success "$test_name (has key: $key)"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
     return 0
   else
     log_error "$test_name (missing key: $key)"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
     return 1
   fi
 }
@@ -121,18 +121,18 @@ assert_json_value() {
   local expected="$3"
   local test_name="$4"
 
-  ((TESTS_TOTAL++))
+  TESTS_TOTAL=$((TESTS_TOTAL + 1))
 
   local actual
   actual=$(echo "$json" | jq -r ".${key}")
 
   if [ "$actual" = "$expected" ]; then
     log_success "$test_name ($key = $expected)"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
     return 0
   else
     log_error "$test_name (expected: $expected, got: $actual)"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
     return 1
   fi
 }
@@ -221,17 +221,13 @@ JOB_ID=""
 
 # Test 1: Health check (public)
 log_section "Test 1: Health Check (Public)"
-log_info "Fetching /health endpoint..."
 response=$(http_get "/health")
-log_info "Response received"
 http_code=$(echo "$response" | tail -n1)
-log_info "HTTP code: $http_code"
 body=$(echo "$response" | head -n -1)
-log_info "Body captured"
 
 assert_http_code "200" "$http_code" "Health check returns 200"
 if [ "$http_code" = "200" ]; then
-  echo "$body" | jq '.' >"$TEST_RESULTS_DIR/health.json"
+  echo "$body" | jq '.' > "$TEST_RESULTS_DIR/health.json"
   assert_json_has_key "$body" "data.status" "Health response has status"
   assert_json_value "$body" "data.status" "ok" "Server status is ok"
   assert_json_has_key "$body" "data.auth" "Health response has auth info"

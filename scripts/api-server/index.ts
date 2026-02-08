@@ -1063,11 +1063,8 @@ async function routeRequest(
         );
       }
 
-      // Mark job as failed with cancellation reason
-      tracker.updateJobStatus(jobId, "failed", {
-        success: false,
-        error: "Job cancelled by user",
-      });
+      // Cancel the job and kill any running process
+      tracker.cancelJob(jobId);
 
       return successResponse(
         {

@@ -54,6 +54,7 @@ export interface Job {
 
 class JobTracker {
   private jobs: Map<string, Job> = new Map();
+  private processes: Map<string, { kill: () => void }> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
@@ -129,6 +130,15 @@ class JobTracker {
       return;
     }
 
+    // Prevent a completed/failed result from overwriting a cancelled job
+    if (
+      job.status === "failed" &&
+      job.result?.error === "Job cancelled by user" &&
+      (status === "completed" || status === "failed")
+    ) {
+      return;
+    }
+
     job.status = status;
 
     if (status === "running" && !job.startedAt) {
@@ -201,6 +211,53 @@ class JobTracker {
   }
 
   /**
+   * Register a child process handle for a running job so it can be killed on cancellation
+   */
+  registerProcess(id: string, proc: { kill: () => void }): void {
+    this.processes.set(id, proc);
+  }
+
+  /**
+   * Unregister a child process handle (called when the process exits)
+   */
+  unregisterProcess(id: string): void {
+    this.processes.delete(id);
+  }
+
+  /**
+   * Cancel a running job: kill the process and mark as failed
+   * Returns true if the job was cancelled, false if it could not be cancelled
+   */
+  cancelJob(id: string): boolean {
+    const job = this.jobs.get(id);
+    if (!job) {
+      return false;
+    }
+
+    if (job.status !== "pending" && job.status !== "running") {
+      return false;
+    }
+
+    // Kill the spawned process if one is registered
+    const proc = this.processes.get(id);
+    if (proc) {
+      proc.kill();
+      this.processes.delete(id);
+    }
+
+    // Mark as failed with cancellation reason
+    job.status = "failed";
+    job.completedAt = new Date();
+    job.result = {
+      success: false,
+      error: "Job cancelled by user",
+    };
+    this.persistJob(job);
+
+    return true;
+  }
+
+  /**
    * Get all jobs
    */
   getAllJobs(): Job[] {
@@ -266,6 +323,7 @@ class JobTracker {
         job.completedAt < twentyFourHoursAgo
       ) {
         this.jobs.delete(id);
+        deletePersistedJob(id);
       }
     }
   }

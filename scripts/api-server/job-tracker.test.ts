@@ -9,50 +9,23 @@ import {
   type JobType,
   type JobStatus,
 } from "./job-tracker";
-import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-
-const DATA_DIR = join(process.cwd(), ".jobs-data");
-const JOBS_FILE = join(DATA_DIR, "jobs.json");
-const LOGS_FILE = join(DATA_DIR, "jobs.log");
-
-/**
- * Clean up test data directory
- */
-function cleanupTestData(): void {
-  if (existsSync(DATA_DIR)) {
-    try {
-      // Use rmSync with recursive option if available (Node.js v14.14+)
-      rmSync(DATA_DIR, { recursive: true, force: true });
-    } catch {
-      // Fallback to manual removal
-      if (existsSync(LOGS_FILE)) {
-        unlinkSync(LOGS_FILE);
-      }
-      if (existsSync(JOBS_FILE)) {
-        unlinkSync(JOBS_FILE);
-      }
-      try {
-        rmdirSync(DATA_DIR);
-      } catch {
-        // Ignore error if directory still has files
-      }
-    }
-  }
-}
+import { setupTestEnvironment } from "./test-helpers";
 
 // Run tests sequentially to avoid file system race conditions
 describe("JobTracker", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
-    // Reset the job tracker before each test
+    // Set up isolated test environment
+    testEnv = setupTestEnvironment();
+    // Reset the job tracker after setting up environment
     destroyJobTracker();
-    // Clean up persisted data after destroying tracker to avoid loading stale data
-    cleanupTestData();
   });
 
   afterEach(() => {
     destroyJobTracker();
-    cleanupTestData();
+    // Clean up test environment
+    testEnv.cleanup();
   });
 
   describe("createJob", () => {

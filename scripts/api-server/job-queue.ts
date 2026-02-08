@@ -37,6 +37,7 @@ export class JobQueue {
   private running: Map<string, QueuedJob> = new Map();
   private concurrency: number;
   private executors: Map<JobType, JobExecutor> = new Map();
+  private pendingJobs: Set<Promise<void>> = new Set();
 
   constructor(options: JobQueueOptions) {
     this.concurrency = options.concurrency;
@@ -195,7 +196,7 @@ export class JobQueue {
     };
 
     // Execute the job with abort signal
-    void executor(context, queuedJob.abortController.signal)
+    const jobPromise = executor(context, queuedJob.abortController.signal)
       .then(() => {
         // If not cancelled or failed already, mark as completed
         if (queuedJob.status === "running") {
@@ -212,8 +213,12 @@ export class JobQueue {
         }
       })
       .finally(() => {
+        this.pendingJobs.delete(jobPromise);
         this.processQueue();
       });
+
+    // Track the promise for teardown
+    this.pendingJobs.add(jobPromise);
   }
 
   /**
@@ -239,6 +244,31 @@ export class JobQueue {
       data,
       error,
     });
+  }
+
+  /**
+   * Wait for all pending jobs to complete and clean up
+   * Call this before destroying the queue to ensure proper cleanup
+   */
+  async awaitTeardown(): Promise<void> {
+    // Wait for all pending jobs to complete
+    const promises = Array.from(this.pendingJobs);
+    await Promise.allSettled(promises);
+
+    // Clear the pending jobs set
+    this.pendingJobs.clear();
+
+    // Cancel any remaining queued jobs
+    for (const job of this.queue) {
+      job.abortController.abort();
+    }
+    this.queue = [];
+
+    // Cancel any remaining running jobs
+    for (const job of this.running.values()) {
+      job.abortController.abort();
+    }
+    this.running.clear();
   }
 }
 

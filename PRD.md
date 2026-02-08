@@ -31,23 +31,23 @@ Ralphy will execute each unchecked review task sequentially using your chosen AI
 
 ## Testing & Quality
 
-- [ ] Enumerate API implementation files and confirm direct or indirect test coverage for each
-- [ ] Review API server test suite for relevance and remove or flag low-signal assertions
-- [ ] Investigate flaky tests in `scripts/api-server` by reproducing failures with repeated runs (`bun run test:api-server` and focused reruns), capturing fail frequency, and recording exact failing test names plus stack traces
-- [ ] Identify root cause of `.jobs-data/jobs.json` failures in `scripts/api-server/job-persistence.test.ts` and potential cross-test interference from queue lifecycle tests that write persistence concurrently
-- [ ] Implement deterministic isolation for persistence paths in tests (per-test temp directories and cleanup), eliminate shared global file-state coupling, and ensure async queue operations are fully awaited before teardown
-- [ ] Add regression tests that prove stability of persistence and queue interactions under repeated execution, including at least one looped stress case for `deleteJob` and queue completion events
-- [ ] Execute focused test commands and document pass/fail evidence with command outputs
-- [ ] Validate deployment documentation tests assert required sections and executable commands
-- [ ] Verify no critical path in API implementation remains untested
+- [x] Enumerate API implementation files and confirm direct or indirect test coverage for each
+- [x] Review API server test suite for relevance and remove or flag low-signal assertions
+- [x] Investigate flaky tests in `scripts/api-server` by reproducing failures with repeated runs (`bun run test:api-server` and focused reruns), capturing fail frequency, and recording exact failing test names plus stack traces
+- [x] Identify root cause of `.jobs-data/jobs.json` failures in `scripts/api-server/job-persistence.test.ts` and potential cross-test interference from queue lifecycle tests that write persistence concurrently
+- [x] Implement deterministic isolation for persistence paths in tests (per-test temp directories and cleanup), eliminate shared global file-state coupling, and ensure async queue operations are fully awaited before teardown
+- [x] Add regression tests that prove stability of persistence and queue interactions under repeated execution, including at least one looped stress case for `deleteJob` and queue completion events
+- [x] Execute focused test commands and document pass/fail evidence with command outputs
+- [x] Validate deployment documentation tests assert required sections and executable commands
+- [x] Verify no critical path in API implementation remains untested
 
 ## Deployment
 
-- [ ] Validate Dockerfile and docker-compose production settings and security defaults
-- [ ] Execute smoke validation plan for container health and basic job lifecycle operations
-- [ ] Verify GitHub Actions workflow can run API jobs with secure secret handling
-- [ ] Confirm deployment documentation covers VPS setup, docker-compose integration, and GitHub setup
-- [ ] Approve production checklist completeness and operational readiness notes
+- [x] Validate Dockerfile and docker-compose production settings and security defaults
+- [x] Execute smoke validation plan for container health and basic job lifecycle operations
+- [x] Verify GitHub Actions workflow can run API jobs with secure secret handling
+- [x] Confirm deployment documentation covers VPS setup, docker-compose integration, and GitHub setup
+- [x] Approve production checklist completeness and operational readiness notes
 
 ---
 

@@ -15,54 +15,20 @@ import {
   type PersistedJob,
   type JobLogEntry,
 } from "./job-persistence";
-import {
-  existsSync,
-  unlinkSync,
-  rmdirSync,
-  rmSync,
-  readFileSync,
-} from "node:fs";
-import { join } from "node:path";
-
-const DATA_DIR = join(process.cwd(), ".jobs-data");
-const JOBS_FILE = join(DATA_DIR, "jobs.json");
-const LOGS_FILE = join(DATA_DIR, "jobs.log");
-
-/**
- * Clean up test data directory
- */
-function cleanupTestData(): void {
-  if (existsSync(DATA_DIR)) {
-    try {
-      // Use rmSync with recursive option if available (Node.js v14.14+)
-      rmSync(DATA_DIR, { recursive: true, force: true });
-    } catch {
-      // Fallback to manual removal
-      if (existsSync(LOGS_FILE)) {
-        unlinkSync(LOGS_FILE);
-      }
-      if (existsSync(JOBS_FILE)) {
-        unlinkSync(JOBS_FILE);
-      }
-      try {
-        rmdirSync(DATA_DIR);
-      } catch {
-        // Ignore error if directory still has files
-      }
-    }
-  }
-}
+import { setupTestEnvironment } from "./test-helpers";
 
 // Run tests sequentially to avoid file system race conditions
 describe("job-persistence", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
-    // Clean up before each test to ensure isolation
-    cleanupTestData();
+    // Set up isolated test environment
+    testEnv = setupTestEnvironment();
   });
 
   afterEach(() => {
-    // Clean up after each test
-    cleanupTestData();
+    // Clean up test environment
+    testEnv.cleanup();
   });
 
   describe("saveJob and loadJob", () => {

@@ -440,46 +440,85 @@ Navigate to your repository on GitHub and add these secrets:
 2. Click **New repository secret**
 3. Add the following secrets:
 
-#### Required Secrets
+#### Core Secrets (Required for Most Workflows)
 
-| Secret Name              | Value                                              |
-| ------------------------ | -------------------------------------------------- |
-| `API_ENDPOINT`           | `https://your-domain.com` (or omit for local mode) |
-| `API_KEY_GITHUB_ACTIONS` | Value from Step 1.2                                |
-| `NOTION_API_KEY`         | Your Notion API key                                |
-| `DATABASE_ID`            | Your database ID                                   |
-| `DATA_SOURCE_ID`         | Your data source ID                                |
-| `OPENAI_API_KEY`         | Your OpenAI API key                                |
+| Secret Name      | Value               | Used By Workflows            |
+| ---------------- | ------------------- | ---------------------------- |
+| `NOTION_API_KEY` | Your Notion API key | All Notion-related workflows |
+| `DATABASE_ID`    | Your database ID    | All Notion-related workflows |
+| `DATA_SOURCE_ID` | Your data source ID | All Notion-related workflows |
 
-#### Optional Secrets for Cloudflare Pages
+#### API Service Secrets (Required for API-based Workflows)
 
-| Secret Name             | Value                      |
-| ----------------------- | -------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | Your Cloudflare API token  |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
+| Secret Name              | Value                                              | Used By Workflows    |
+| ------------------------ | -------------------------------------------------- | -------------------- |
+| `API_ENDPOINT`           | `https://your-domain.com` (or omit for local mode) | Notion Fetch via API |
+| `API_KEY_GITHUB_ACTIONS` | Value from Step 1.2                                | Notion Fetch via API |
 
-#### Optional Secrets for Notifications
+**Note:** The `API_ENDPOINT` secret should point to your deployed API service URL (e.g., `https://api.example.com`). If omitted, the workflow will run in "local mode" and start the API server locally for testing.
 
-| Secret Name         | Value                  |
-| ------------------- | ---------------------- |
-| `SLACK_WEBHOOK_URL` | Your Slack webhook URL |
+#### Translation Secrets (Required for Translation Workflows)
 
-#### Optional Configuration Secrets
+| Secret Name      | Value               | Used By Workflows       |
+| ---------------- | ------------------- | ----------------------- |
+| `OPENAI_API_KEY` | Your OpenAI API key | Translate, Notion Fetch |
+| `OPENAI_MODEL`   | OpenAI model name   | Translate (optional)    |
 
-| Secret Name         | Value                         | Default        |
-| ------------------- | ----------------------------- | -------------- |
-| `DEFAULT_DOCS_PAGE` | Default documentation page    | `introduction` |
-| `OPENAI_MODEL`      | OpenAI model for translations | `gpt-4o-mini`  |
+**Default for `OPENAI_MODEL`:** `gpt-4o-mini`
 
-**Note**: Without `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, PR preview deployments and production deployments to Cloudflare Pages will not work.
+#### Cloudflare Pages Secrets (Required for Deployments)
+
+| Secret Name             | Value                      | Used By Workflows                    |
+| ----------------------- | -------------------------- | ------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`  | Your Cloudflare API token  | Deploy PR Preview, Deploy Production |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID | Deploy PR Preview, Deploy Production |
+
+**Note:** Without `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, PR preview deployments and production deployments to Cloudflare Pages will not work.
+
+#### Notification Secrets (Optional)
+
+| Secret Name         | Value                  | Used By Workflows                                 |
+| ------------------- | ---------------------- | ------------------------------------------------- |
+| `SLACK_WEBHOOK_URL` | Your Slack webhook URL | All workflows (sends notifications on completion) |
+
+**Note:** If omitted, workflows will skip Slack notifications (non-critical).
+
+#### Configuration Secrets (Optional)
+
+| Secret Name         | Value                         | Used By Workflows | Default        |
+| ------------------- | ----------------------------- | ----------------- | -------------- |
+| `DEFAULT_DOCS_PAGE` | Default documentation page    | API workflows     | `introduction` |
+| `OPENAI_MODEL`      | OpenAI model for translations | Translate         | `gpt-4o-mini`  |
+
+### Quick Reference: Secret Requirements by Workflow
+
+| Workflow               | Required Secrets                                                                              | Optional Secrets                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Notion Fetch via API   | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | `API_ENDPOINT`, `SLACK_WEBHOOK_URL`                                  |
+| Sync Notion Docs       | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `SLACK_WEBHOOK_URL`                                                  |
+| Translate Notion Docs  | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                           | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
+| Deploy PR Preview      | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
+| Deploy to Production   | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
+| Deploy to GitHub Pages | None (uses GitHub Pages infrastructure)                                                       | `SLACK_WEBHOOK_URL`                                                  |
 
 ### Step 5.2: Available GitHub Workflows
 
-This repository includes several GitHub Actions workflows for different purposes:
+This repository includes several GitHub Actions workflows for different purposes. Workflows have different trigger types:
+
+- **Manual (workflow_dispatch)**: Run manually from Actions tab with custom inputs
+- **Automatic (push/pull_request)**: Triggered by Git events
+- **Scheduled (cron)**: Runs on a schedule (e.g., daily at 2 AM UTC)
+- **Repository Dispatch**: Triggered via GitHub API or other workflows
 
 #### 1. Notion Fetch via API (`.github/workflows/api-notion-fetch.yml`)
 
-Fetches content from Notion via the API service.
+Fetches content from Notion via the deployed API service. This workflow requires the API service to be deployed and accessible.
+
+**Triggers:**
+
+- Manual: Run from Actions tab
+- Scheduled: Daily at 2 AM UTC (automatically)
+- Repository Dispatch: Via GitHub API event `notion-fetch-request`
 
 **Job Types:**
 
@@ -499,9 +538,24 @@ Fetches content from Notion via the API service.
 4. Choose a branch, select `job_type`, and optionally set `max_pages` (for `notion:fetch-all`)
 5. Click **Run workflow**
 
+**Required Secrets:**
+
+- `API_ENDPOINT` (or omit to use local mode for testing)
+- `API_KEY_GITHUB_ACTIONS`
+- `NOTION_API_KEY`
+- `DATABASE_ID`
+- `DATA_SOURCE_ID`
+- `OPENAI_API_KEY`
+
+**Optional Secrets:**
+
+- `SLACK_WEBHOOK_URL` - For Slack notifications
+
 #### 2. Sync Notion Docs (`.github/workflows/sync-docs.yml`)
 
-Syncs Notion content to the `content` branch.
+Syncs Notion content to the `content` branch for use in deployments.
+
+**Triggers:** Manual only
 
 **How to Run:**
 
@@ -511,9 +565,21 @@ Syncs Notion content to the `content` branch.
 4. Choose a branch
 5. Click **Run workflow**
 
+**Required Secrets:**
+
+- `NOTION_API_KEY`
+- `DATABASE_ID`
+- `DATA_SOURCE_ID`
+
+**Optional Secrets:**
+
+- `SLACK_WEBHOOK_URL` - For Slack notifications
+
 #### 3. Translate Notion Docs (`.github/workflows/translate-docs.yml`)
 
 Translates content to multiple languages and updates Notion status.
+
+**Triggers:** Manual only
 
 **How to Run:**
 
@@ -523,22 +589,66 @@ Translates content to multiple languages and updates Notion status.
 4. Choose a branch
 5. Click **Run workflow**
 
+**Required Secrets:**
+
+- `NOTION_API_KEY`
+- `DATABASE_ID`
+- `DATA_SOURCE_ID`
+- `OPENAI_API_KEY`
+
+**Optional Secrets:**
+
+- `OPENAI_MODEL` - Model for translations (default: `gpt-4o-mini`)
+- `SLACK_WEBHOOK_URL` - For Slack notifications
+
 #### 4. Deploy PR Preview (`.github/workflows/deploy-pr-preview.yml`)
 
 Automatically deploys PR previews to Cloudflare Pages when PRs are opened or updated.
 
-**Triggers:** Automatically runs on PR events (no manual invocation needed)
+**Triggers:** Automatic on PR events (opened, synchronized, reopened, labeled, unlabeled)
+
+**Note:** Only works for PRs from the main repository (not forks) due to secret access requirements.
 
 **PR Labels for Content Generation:**
 
-- `fetch-all-pages` - Fetch all pages from Notion
-- `fetch-10-pages` - Fetch 10 pages from Notion
-- `fetch-5-pages` - Fetch 5 pages from Notion
-- (no label) - Uses content branch or defaults to 5 pages
+Add labels to control how many Notion pages to fetch:
+
+- `fetch-all-pages` - Fetch all pages from Notion (~8min)
+- `fetch-10-pages` - Fetch 10 pages from Notion (~2min)
+- `fetch-5-pages` - Fetch 5 pages from Notion (~90s)
+- (no label) - Uses content branch or defaults to 5 pages if content branch is empty
+
+**Content Strategy:**
+
+- If Notion fetch scripts were modified → Always regenerates content
+- If labels are present → Forces regeneration regardless of script changes
+- If neither → Uses content from `content` branch (fast, ~30s)
+
+**Preview URL:** `https://pr-{number}.comapeo-docs.pages.dev`
+
+**Required Secrets:**
+
+- `NOTION_API_KEY`
+- `DATABASE_ID`
+- `DATA_SOURCE_ID`
+
+**Optional Secrets:**
+
+- `CLOUDFLARE_API_TOKEN` - Required for Cloudflare Pages deployment
+- `CLOUDFLARE_ACCOUNT_ID` - Required for Cloudflare Pages deployment
+- `SLACK_WEBHOOK_URL` - For Slack notifications
 
 #### 5. Deploy to Production (`.github/workflows/deploy-production.yml`)
 
 Deploys documentation to production on Cloudflare Pages.
+
+**Triggers:**
+
+- Manual: Run from Actions tab with environment selection
+- Automatic: On push to `main` branch (excluding docs-only changes)
+- Repository Dispatch: Via GitHub API event `deploy-production`
+
+**Environment:** Uses GitHub `production` environment (requires environment protection rules and approval)
 
 **How to Run:**
 
@@ -549,11 +659,30 @@ Deploys documentation to production on Cloudflare Pages.
 5. For test deployments, optionally specify a `branch_name`
 6. Click **Run workflow**
 
+**Required Secrets:**
+
+- `NOTION_API_KEY`
+- `DATABASE_ID`
+- `DATA_SOURCE_ID`
+
+**Optional Secrets:**
+
+- `CLOUDFLARE_API_TOKEN` - Required for Cloudflare Pages deployment
+- `CLOUDFLARE_ACCOUNT_ID` - Required for Cloudflare Pages deployment
+- `SLACK_WEBHOOK_URL` - For Slack notifications
+
+**Deployment URLs:**
+
+- Production: `https://docs.comapeo.app`
+- Test: `https://{branch_name}.comapeo-docs.pages.dev`
+
 #### 6. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
 
 Deploys documentation to GitHub Pages (staging environment).
 
-**Triggers:** Automatically runs on push to `main` branch
+**Triggers:** Automatic on push to `main` branch
+
+**Staging URL:** Available via GitHub Pages settings
 
 ### Step 5.3: Test GitHub Workflow
 

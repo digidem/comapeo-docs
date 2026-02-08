@@ -74,8 +74,12 @@ export interface ApiResult<T> {
  * Fetch operations - retrieve data from Notion
  */
 
-import { fetchAllNotionData } from "../notion-fetch-all/fetchAll";
+import {
+  fetchAllNotionData,
+  transformPage,
+} from "../notion-fetch-all/fetchAll";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
+import { enhancedNotion } from "../notionClient";
 
 /**
  * Fetch all pages from Notion database
@@ -158,35 +162,37 @@ export async function fetchPage(
     if (config.apiKey) process.env.NOTION_API_KEY = config.apiKey;
     if (config.databaseId) process.env.DATABASE_ID = config.databaseId;
 
-    // Use runFetchPipeline with specific filter for this page
-    const { data: pages } = await runFetchPipeline({
-      filter: {
-        property: "id",
-        rich_text: { equals: pageId },
-      },
-      shouldGenerate: false,
-      fetchSpinnerText: "Fetching page from Notion",
-      onProgress,
-    });
-
-    if (!pages || pages.length === 0) {
-      return {
-        success: false,
-        error: {
-          code: "PAGE_NOT_FOUND",
-          message: `Page with ID ${pageId} not found`,
-        },
-        metadata: {
-          executionTimeMs: Date.now() - startTime,
-          timestamp: new Date(),
-        },
-      };
+    // Use Notion pages.retrieve API directly instead of database query filter
+    // The database query filter on "id" with rich_text is invalid —
+    // the Notion query API only matches database properties.
+    let rawPage: Record<string, unknown>;
+    try {
+      rawPage = (await enhancedNotion.pagesRetrieve({
+        page_id: pageId,
+      })) as Record<string, unknown>;
+    } catch (retrieveError: unknown) {
+      const msg =
+        retrieveError instanceof Error
+          ? retrieveError.message
+          : String(retrieveError);
+      // Notion returns 404-like errors for invalid/missing page IDs
+      if (msg.includes("not found") || msg.includes("Could not find")) {
+        return {
+          success: false,
+          error: {
+            code: "PAGE_NOT_FOUND",
+            message: `Page with ID ${pageId} not found`,
+          },
+          metadata: {
+            executionTimeMs: Date.now() - startTime,
+            timestamp: new Date(),
+          },
+        };
+      }
+      throw retrieveError;
     }
 
-    // Import transformPage function from fetchAll
-    const { transformPage } = await import("../notion-fetch-all/fetchAll");
-
-    const page = transformPage(pages[0] as any);
+    const page = transformPage(rawPage as any);
 
     return {
       success: true,

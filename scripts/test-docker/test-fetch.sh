@@ -29,6 +29,13 @@ DRY_RUN=false
 NO_CLEANUP=false
 INCLUDE_REMOVED=false
 
+# Count validation variables (populated by get_expected_page_count)
+EXPECTED_TOTAL=""
+EXPECTED_PARENTS=""
+EXPECTED_SUBPAGES=""
+EXPECTED_BY_STATUS=""
+COUNT_VALIDATION_AVAILABLE=false
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -61,6 +68,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --dry-run          Run in dry-run mode (no actual changes)"
       echo "  --no-cleanup       Leave container running after test"
       echo "  --include-removed  Include pages with 'Remove' status"
+      echo ""
+      echo "The test validates that the number of generated markdown files"
+      echo "matches the expected count from Notion (queried before fetching)."
       echo ""
       echo "Note: By default, pages with 'Remove' status are excluded."
       echo "      Use --include-removed to fetch ALL pages regardless of status."
@@ -117,6 +127,161 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+# Get expected page count from Notion via count-pages job
+get_expected_page_count() {
+  echo -e "${BLUE}📊 Querying expected page count from Notion...${NC}"
+
+  # Build count job options - same filters as the fetch job
+  # but without maxPages (we want the total available)
+  local COUNT_OPTIONS="{}"
+  if [ "$INCLUDE_REMOVED" = true ]; then
+    COUNT_OPTIONS=$(echo "$COUNT_OPTIONS" | jq '. + {"includeRemoved": true}')
+  fi
+
+  # Create count-pages job
+  local COUNT_RESPONSE
+  COUNT_RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"notion:count-pages\",\"options\":$COUNT_OPTIONS}")
+
+  local COUNT_JOB_ID
+  COUNT_JOB_ID=$(echo "$COUNT_RESPONSE" | jq -r '.data.jobId')
+
+  if [ "$COUNT_JOB_ID" = "null" ] || [ -z "$COUNT_JOB_ID" ]; then
+    echo -e "${YELLOW}⚠️  Failed to create count job. Skipping count validation.${NC}"
+    echo "$COUNT_RESPONSE" | jq '.' 2>/dev/null || echo "$COUNT_RESPONSE"
+    return 1
+  fi
+
+  echo "  Count job created: $COUNT_JOB_ID"
+
+  # Poll for completion (count should be fast, 120s timeout)
+  local COUNT_ELAPSED=0
+  local COUNT_TIMEOUT=120
+  while [ $COUNT_ELAPSED -lt $COUNT_TIMEOUT ]; do
+    local COUNT_STATUS
+    COUNT_STATUS=$(curl -s "$API_BASE_URL/jobs/$COUNT_JOB_ID")
+    local COUNT_STATE
+    COUNT_STATE=$(echo "$COUNT_STATUS" | jq -r '.data.status')
+
+    [ "$COUNT_STATE" != "pending" ] && [ "$COUNT_STATE" != "running" ] && break
+
+    sleep 2
+    COUNT_ELAPSED=$((COUNT_ELAPSED + 2))
+    echo "  [count] $COUNT_STATE... (${COUNT_ELAPSED}s/${COUNT_TIMEOUT}s)"
+  done
+
+  # Extract result
+  local COUNT_RESULT
+  COUNT_RESULT=$(curl -s "$API_BASE_URL/jobs/$COUNT_JOB_ID")
+  local COUNT_STATE
+  COUNT_STATE=$(echo "$COUNT_RESULT" | jq -r '.data.status')
+
+  if [ "$COUNT_STATE" != "completed" ]; then
+    echo -e "${YELLOW}⚠️  Count job did not complete (status: $COUNT_STATE). Skipping validation.${NC}"
+    return 1
+  fi
+
+  # The job output contains the JSON from our count script
+  # Extract it from the job result's output field (last JSON line)
+  local JOB_OUTPUT
+  JOB_OUTPUT=$(echo "$COUNT_RESULT" | jq -r '.data.result.output // empty')
+
+  if [ -z "$JOB_OUTPUT" ]; then
+    echo -e "${YELLOW}⚠️  Count job produced no output. Skipping validation.${NC}"
+    return 1
+  fi
+
+  # Parse the last JSON line from the output (our script's stdout)
+  local COUNT_JSON
+  COUNT_JSON=$(echo "$JOB_OUTPUT" | grep -E '^\{' | tail -1)
+
+  if [ -z "$COUNT_JSON" ]; then
+    echo -e "${YELLOW}⚠️  Could not parse count result from job output. Skipping validation.${NC}"
+    echo "  Raw output (last 5 lines):"
+    echo "$JOB_OUTPUT" | tail -5 | sed 's/^/    /'
+    return 1
+  fi
+
+  EXPECTED_TOTAL=$(echo "$COUNT_JSON" | jq -r '.total')
+  EXPECTED_PARENTS=$(echo "$COUNT_JSON" | jq -r '.parents')
+  EXPECTED_SUBPAGES=$(echo "$COUNT_JSON" | jq -r '.subPages')
+  EXPECTED_BY_STATUS=$(echo "$COUNT_JSON" | jq -r '.byStatus')
+
+  echo -e "${GREEN}📊 Expected page count:${NC}"
+  echo "  Total (parents + sub-pages, after filtering): $EXPECTED_TOTAL"
+  echo "  Parents: $EXPECTED_PARENTS"
+  echo "  Sub-pages: $EXPECTED_SUBPAGES"
+  echo "  By status:"
+  echo "$EXPECTED_BY_STATUS" | jq -r 'to_entries[] | "    \(.key): \(.value)"'
+
+  return 0
+}
+
+# Validate fetched page count against expected count
+# NOTE: The count-pages script returns unique page count (not multiplied by languages).
+# The fetch pipeline generates files in docs/ (en), i18n/pt/, i18n/es/.
+# We compare against docs/ (English) count since that represents unique pages.
+validate_page_count() {
+  local EXPECTED="$1"
+
+  # Count actual English markdown files generated (docs/ only)
+  # The pipeline also generates i18n/pt/ and i18n/es/ but those are translations
+  # of the same unique pages, so we compare against English count only.
+  local ACTUAL=0
+  if [ -d "docs" ]; then
+    ACTUAL=$(find docs -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  fi
+
+  echo ""
+  echo -e "${BLUE}═══════════════════════════════════════${NC}"
+  echo -e "${BLUE}  PAGE COUNT VALIDATION${NC}"
+  echo -e "${BLUE}═══════════════════════════════════════${NC}"
+  echo "  Expected pages: $EXPECTED"
+  echo "  Actual markdown files: $ACTUAL"
+
+  # For --max-pages N, expected count is min(N, total_available)
+  if [ "$FETCH_ALL" = false ] && [ -n "$EXPECTED_TOTAL" ]; then
+    local EFFECTIVE_EXPECTED
+    if [ "$MAX_PAGES" -lt "$EXPECTED" ] 2>/dev/null; then
+      EFFECTIVE_EXPECTED="$MAX_PAGES"
+      echo "  (--max-pages $MAX_PAGES limits expected to $EFFECTIVE_EXPECTED)"
+    else
+      EFFECTIVE_EXPECTED="$EXPECTED"
+    fi
+    EXPECTED="$EFFECTIVE_EXPECTED"
+    echo "  Adjusted expected: $EXPECTED"
+  fi
+
+  if [ "$ACTUAL" -eq "$EXPECTED" ]; then
+    echo -e "${GREEN}  ✅ PASS: Page counts match!${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════${NC}"
+    return 0
+  else
+    local DIFF=$((EXPECTED - ACTUAL))
+    echo -e "${YELLOW}  ❌ FAIL: Page count mismatch (off by $DIFF)${NC}"
+    echo ""
+    echo "  Diagnostics:"
+    echo "    - Expected total from Notion: $EXPECTED_TOTAL"
+    echo "    - Parent pages: $EXPECTED_PARENTS"
+    echo "    - Sub-pages: $EXPECTED_SUBPAGES"
+    echo "    - Fetch mode: $([ "$FETCH_ALL" = true ] && echo '--all' || echo "--max-pages $MAX_PAGES")"
+    echo "    - Include removed: $INCLUDE_REMOVED"
+    if [ "$ACTUAL" -lt "$EXPECTED" ]; then
+      echo ""
+      echo "  Possible causes:"
+      echo "    - Notion API pagination may have stalled (check for anomaly warnings in logs)"
+      echo "    - Sub-page fetch may have timed out (check for 'Skipping sub-page' warnings)"
+      echo "    - Status filtering may be more aggressive than expected"
+      echo ""
+      echo "  To debug, re-run with --no-cleanup and check container logs:"
+      echo "    docker logs comapeo-fetch-test 2>&1 | grep -E '(DEBUG|anomaly|Skipping|Status Summary)'"
+    fi
+    echo -e "${BLUE}═══════════════════════════════════════${NC}"
+    return 1
+  fi
+}
+
 echo -e "${BLUE}=== Notion Fetch API Test ===${NC}"
 echo "Configuration:"
 echo "  Job type: $JOB_TYPE"
@@ -160,6 +325,13 @@ echo "$HEALTH" | jq '.data.status, .data.auth'
 # List job types
 echo -e "${BLUE}✅ Available job types:${NC}"
 curl -s "$API_BASE_URL/jobs/types" | jq '.data.types[].id'
+
+# Get expected page count (before fetch)
+if get_expected_page_count; then
+  COUNT_VALIDATION_AVAILABLE=true
+else
+  echo -e "${YELLOW}⚠️  Count validation will be skipped${NC}"
+fi
 
 # Create job
 echo -e "${BLUE}📝 Creating job ($JOB_TYPE):${NC}"
@@ -231,3 +403,21 @@ fi
 
 echo ""
 echo "Files are saved to your host machine via Docker volume mounts."
+
+# Validate page count
+VALIDATION_EXIT_CODE=0
+if [ "$COUNT_VALIDATION_AVAILABLE" = true ]; then
+  if ! validate_page_count "$EXPECTED_TOTAL"; then
+    VALIDATION_EXIT_CODE=1
+  fi
+else
+  echo -e "${YELLOW}⚠️  Skipping page count validation (count job was unavailable)${NC}"
+fi
+
+# Exit with validation result
+if [ "$VALIDATION_EXIT_CODE" -ne 0 ]; then
+  echo -e "${YELLOW}❌ Test FAILED: Page count validation failed${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ All checks passed!${NC}"

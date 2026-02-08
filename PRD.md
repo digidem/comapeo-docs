@@ -91,9 +91,9 @@ bun run typecheck --noEmit
 
 ### Review: Task 1
 
-- [ ] `buildStatusFilter` is exported from `fetchAll.ts`
-- [ ] TypeScript compiles without errors
-- [ ] No other files are affected (no existing imports of this function)
+- [x] `buildStatusFilter` is exported from `fetchAll.ts`
+- [x] TypeScript compiles without errors
+- [x] No other files are affected (no existing imports of this function)
 
 ---
 

@@ -223,6 +223,17 @@ describe("Docker Deployment Smoke Tests", () => {
       expect(dockerfileContent).toContain("USER bun");
     });
 
+    it("should create non-root user with specific UID/GID", () => {
+      // User should be created with explicit UID/GID for consistency
+      expect(dockerfileContent).toMatch(/--uid\s+1001/);
+      expect(dockerfileContent).toMatch(/--gid\s+1001/);
+    });
+
+    it("should set restrictive permissions on app directory", () => {
+      // chmod 750 means owner can write, group can read/execute, others have no access
+      expect(dockerfileContent).toMatch(/chmod\s+-R\s+750\s+\/app/);
+    });
+
     it("should use --chown for file permissions", () => {
       expect(dockerfileContent).toContain("--chown=bun:bun");
     });
@@ -237,6 +248,84 @@ describe("Docker Deployment Smoke Tests", () => {
 
     it("should support API authentication via environment", () => {
       expect(composeContent).toContain("API_KEY_");
+    });
+
+    it("should not run as root in docker-compose", () => {
+      // Dockerfile should switch to non-root user
+      expect(dockerfileContent).toMatch(/USER\s+bun/);
+      // This ensures container doesn't run as root by default
+    });
+
+    it("should copy only necessary files to minimize attack surface", () => {
+      // Should not copy entire directory blindly
+      const lines = dockerfileContent.split("\n");
+      const broadCopies = lines.filter(
+        (line) =>
+          line.includes("COPY") &&
+          line.includes("COPY . .") &&
+          !line.trim().startsWith("#")
+      );
+      expect(broadCopies.length).toBe(0);
+    });
+  });
+
+  describe("Production Security Hardening", () => {
+    let dockerfileContent: string;
+    let composeContent: string;
+
+    beforeAll(() => {
+      dockerfileContent = readFileSync(DOCKERFILE_PATH, "utf-8");
+      composeContent = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");
+    });
+
+    describe("Filesystem Security", () => {
+      it("should minimize copied files to essential runtime only", () => {
+        // Should copy specific directories, not everything
+        expect(dockerfileContent).toMatch(/COPY.*scripts\/api-server/);
+        // Should NOT copy dev tools, tests, docs
+        const lines = dockerfileContent.split("\n");
+        const copyLines = lines.filter((line) => line.includes("COPY"));
+        const hasTestCopies = copyLines.some(
+          (line) => line.includes("test") || line.includes("__tests__")
+        );
+        const hasDocsCopies = copyLines.some(
+          (line) => line.includes("docs/") || line.includes("context/")
+        );
+        expect(hasTestCopies).toBe(false);
+        expect(hasDocsCopies).toBe(false);
+      });
+
+      it("should set appropriate directory permissions before user switch", () => {
+        const lines = dockerfileContent.split("\n");
+        const userIndex = lines.findIndex((line) => line.includes("USER bun"));
+        const chmodIndex = lines.findIndex((line) =>
+          line.includes("chmod -R 750 /app")
+        );
+
+        expect(chmodIndex).toBeGreaterThanOrEqual(0);
+        expect(userIndex).toBeGreaterThan(chmodIndex);
+      });
+    });
+
+    describe("Runtime Security", () => {
+      it("should use frozen lockfile for reproducible builds", () => {
+        expect(dockerfileContent).toContain("--frozen-lockfile");
+      });
+
+      it("should not include development tools in final image", () => {
+        const lines = dockerfileContent.split("\n");
+        const prodInstallIndex = lines.findIndex(
+          (line) =>
+            line.includes("bun install") && line.includes("--production")
+        );
+        // Should have production-only install
+        expect(prodInstallIndex).toBeGreaterThanOrEqual(0);
+      });
+
+      it("should have health check configured for monitoring", () => {
+        expect(dockerfileContent).toContain("HEALTHCHECK");
+        expect(composeContent).toMatch(/healthcheck:/);
+      });
     });
   });
 

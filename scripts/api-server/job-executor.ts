@@ -54,6 +54,17 @@ const JOB_COMMANDS: Record<
       return args;
     },
   },
+  "notion:count-pages": {
+    script: "bun",
+    args: ["scripts/notion-count-pages"],
+    buildArgs: (options) => {
+      const args: string[] = [];
+      if (options.includeRemoved) args.push("--include-removed");
+      if (options.statusFilter)
+        args.push("--status-filter", options.statusFilter);
+      return args;
+    },
+  },
   "notion:translate": {
     script: "bun",
     args: ["scripts/notion-translate"],

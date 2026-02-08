@@ -55,6 +55,7 @@ describe("API Routes - Validation", () => {
     const validJobTypes: JobType[] = [
       "notion:fetch",
       "notion:fetch-all",
+      "notion:count-pages",
       "notion:translate",
       "notion:status-translation",
       "notion:status-draft",
@@ -62,8 +63,8 @@ describe("API Routes - Validation", () => {
       "notion:status-publish-production",
     ];
 
-    it("should support all 7 required job types", () => {
-      expect(validJobTypes).toHaveLength(7);
+    it("should support all 8 required job types", () => {
+      expect(validJobTypes).toHaveLength(8);
     });
 
     it("should accept all valid job types for job creation", () => {
@@ -83,6 +84,7 @@ describe("API Routes - Validation", () => {
       const expectedDescriptions: Record<JobType, string> = {
         "notion:fetch": "Fetch pages from Notion",
         "notion:fetch-all": "Fetch all pages from Notion",
+        "notion:count-pages": "Count pages from Notion",
         "notion:translate": "Translate content",
         "notion:status-translation": "Update status for translation workflow",
         "notion:status-draft": "Update status for draft publish workflow",
@@ -100,7 +102,7 @@ describe("API Routes - Validation", () => {
         })),
       };
 
-      expect(typesResponse.types).toHaveLength(7);
+      expect(typesResponse.types).toHaveLength(8);
       expect(typesResponse.types[0]).toHaveProperty("id");
       expect(typesResponse.types[0]).toHaveProperty("description");
     });

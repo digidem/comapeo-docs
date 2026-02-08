@@ -71,15 +71,31 @@ Check if the API server is running and get basic status information.
 
 ```json
 {
-  "status": "ok",
-  "timestamp": "2025-02-06T12:00:00.000Z",
-  "uptime": 1234.567,
-  "auth": {
-    "enabled": true,
-    "keysConfigured": 2
-  }
+  "data": {
+    "status": "ok",
+    "timestamp": "2025-02-06T12:00:00.000Z",
+    "uptime": 1234.567,
+    "auth": {
+      "enabled": true,
+      "keysConfigured": 2
+    }
+  },
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.status` | string | Server health status ("ok" if healthy) |
+| `data.timestamp` | string | ISO 8601 timestamp when health check was performed |
+| `data.uptime` | number | Server uptime in seconds |
+| `data.auth.enabled` | boolean | Whether authentication is enabled |
+| `data.auth.keysConfigured` | number | Number of API keys configured |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Example:**
 
@@ -99,38 +115,50 @@ Get a list of all available job types that can be created.
 
 ```json
 {
-  "types": [
-    {
-      "id": "notion:fetch",
-      "description": "Fetch pages from Notion"
-    },
-    {
-      "id": "notion:fetch-all",
-      "description": "Fetch all pages from Notion"
-    },
-    {
-      "id": "notion:translate",
-      "description": "Translate content"
-    },
-    {
-      "id": "notion:status-translation",
-      "description": "Update status for translation workflow"
-    },
-    {
-      "id": "notion:status-draft",
-      "description": "Update status for draft publish workflow"
-    },
-    {
-      "id": "notion:status-publish",
-      "description": "Update status for publish workflow"
-    },
-    {
-      "id": "notion:status-publish-production",
-      "description": "Update status for production publish workflow"
-    }
-  ]
+  "data": {
+    "types": [
+      {
+        "id": "notion:fetch",
+        "description": "Fetch pages from Notion"
+      },
+      {
+        "id": "notion:fetch-all",
+        "description": "Fetch all pages from Notion"
+      },
+      {
+        "id": "notion:translate",
+        "description": "Translate content"
+      },
+      {
+        "id": "notion:status-translation",
+        "description": "Update status for translation workflow"
+      },
+      {
+        "id": "notion:status-draft",
+        "description": "Update status for draft publish workflow"
+      },
+      {
+        "id": "notion:status-publish",
+        "description": "Update status for publish workflow"
+      },
+      {
+        "id": "notion:status-publish-production",
+        "description": "Update status for production publish workflow"
+      }
+    ]
+  },
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.types` | array | Array of available job types |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Example:**
 
@@ -157,28 +185,41 @@ Retrieve all jobs with optional filtering by status or type.
 
 ```json
 {
-  "jobs": [
-    {
-      "id": "job-abc123",
-      "type": "notion:fetch-all",
-      "status": "completed",
-      "createdAt": "2025-02-06T10:00:00.000Z",
-      "startedAt": "2025-02-06T10:00:01.000Z",
-      "completedAt": "2025-02-06T10:02:30.000Z",
-      "progress": {
-        "current": 50,
-        "total": 50,
-        "message": "Completed"
-      },
-      "result": {
-        "success": true,
-        "pagesProcessed": 50
+  "data": {
+    "items": [
+      {
+        "id": "job-abc123",
+        "type": "notion:fetch-all",
+        "status": "completed",
+        "createdAt": "2025-02-06T10:00:00.000Z",
+        "startedAt": "2025-02-06T10:00:01.000Z",
+        "completedAt": "2025-02-06T10:02:30.000Z",
+        "progress": {
+          "current": 50,
+          "total": 50,
+          "message": "Completed"
+        },
+        "result": {
+          "success": true,
+          "pagesProcessed": 50
+        }
       }
-    }
-  ],
-  "count": 1
+    ],
+    "count": 1
+  },
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T10:02:31.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.items` | array | Array of job objects |
+| `data.count` | number | Total number of jobs returned |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Examples:**
 
@@ -241,16 +282,33 @@ Create and trigger a new job.
 
 ```json
 {
-  "jobId": "job-def456",
-  "type": "notion:fetch-all",
-  "status": "pending",
-  "message": "Job created successfully",
-  "_links": {
-    "self": "/jobs/job-def456",
-    "status": "/jobs/job-def456"
-  }
+  "data": {
+    "jobId": "job-def456",
+    "type": "notion:fetch-all",
+    "status": "pending",
+    "message": "Job created successfully",
+    "_links": {
+      "self": "/jobs/job-def456",
+      "status": "/jobs/job-def456"
+    }
+  },
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.jobId` | string | Unique job identifier |
+| `data.type` | string | Job type that was created |
+| `data.status` | string | Initial job status (always "pending") |
+| `data.message` | string | Success message |
+| `data._links.self` | string | URL path to the job |
+| `data._links.status` | string | URL path to job status |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Examples:**
 
@@ -304,20 +362,42 @@ Retrieve detailed status of a specific job.
 
 ```json
 {
-  "id": "job-def456",
-  "type": "notion:fetch-all",
-  "status": "running",
-  "createdAt": "2025-02-06T12:00:00.000Z",
-  "startedAt": "2025-02-06T12:00:01.000Z",
-  "completedAt": null,
-  "progress": {
-    "current": 25,
-    "total": 50,
-    "message": "Processing page 25 of 50"
+  "data": {
+    "id": "job-def456",
+    "type": "notion:fetch-all",
+    "status": "running",
+    "createdAt": "2025-02-06T12:00:00.000Z",
+    "startedAt": "2025-02-06T12:00:01.000Z",
+    "completedAt": null,
+    "progress": {
+      "current": 25,
+      "total": 50,
+      "message": "Processing page 25 of 50"
+    },
+    "result": null
   },
-  "result": null
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.id` | string | Job identifier |
+| `data.type` | string | Job type |
+| `data.status` | string | Job status |
+| `data.createdAt` | string | ISO 8601 timestamp when job was created |
+| `data.startedAt` | string/null | ISO 8601 timestamp when job started (null if not started) |
+| `data.completedAt` | string/null | ISO 8601 timestamp when job completed (null if not completed) |
+| `data.progress` | object/null | Progress information (null if not available) |
+| `data.progress.current` | number | Current progress value |
+| `data.progress.total` | number | Total progress value |
+| `data.progress.message` | string | Progress message |
+| `data.result` | object/null | Job result data (null if not completed) |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Example:**
 
@@ -344,11 +424,25 @@ Cancel a pending or running job.
 
 ```json
 {
-  "id": "job-def456",
-  "status": "cancelled",
-  "message": "Job cancelled successfully"
+  "data": {
+    "id": "job-def456",
+    "status": "cancelled",
+    "message": "Job cancelled successfully"
+  },
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data.id` | string | Job identifier |
+| `data.status` | string | New job status ("cancelled") |
+| `data.message` | string | Success message |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of response |
 
 **Example:**
 
@@ -359,18 +453,56 @@ curl -X DELETE http://localhost:3001/jobs/job-def456 \
 
 ## Error Responses
 
-Errors follow this format:
+Errors follow this standardized format:
 
 ```json
 {
-  "error": "Error message",
-  "details": {},
+  "code": "VALIDATION_ERROR",
+  "message": "Error message describing what went wrong",
+  "status": 400,
+  "requestId": "req_abc123_def456",
+  "timestamp": "2025-02-06T12:00:00.000Z",
+  "details": {
+    "field": "type"
+  },
   "suggestions": [
-    "Suggestion 1",
-    "Suggestion 2"
+    "Check the request format",
+    "Verify all required fields are present",
+    "Refer to API documentation"
   ]
 }
 ```
+
+**Error Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | string | Machine-readable error code (see error codes below) |
+| `message` | string | Human-readable error message |
+| `status` | number | HTTP status code |
+| `requestId` | string | Unique request identifier for tracing |
+| `timestamp` | string | ISO 8601 timestamp of the error |
+| `details` | object | Additional error context (optional) |
+| `suggestions` | array | Suggestions for resolving the error (optional) |
+
+**Common Error Codes:**
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `VALIDATION_ERROR` | 400 | Request validation failed |
+| `INVALID_INPUT` | 400 | Invalid input provided |
+| `MISSING_REQUIRED_FIELD` | 400 | Required field is missing |
+| `INVALID_FORMAT` | 400 | Field format is invalid |
+| `INVALID_ENUM_VALUE` | 400 | Invalid enum value provided |
+| `UNAUTHORIZED` | 401 | Authentication failed or missing |
+| `INVALID_API_KEY` | 401 | API key is invalid |
+| `API_KEY_INACTIVE` | 401 | API key is inactive |
+| `NOT_FOUND` | 404 | Resource not found |
+| `ENDPOINT_NOT_FOUND` | 404 | Endpoint does not exist |
+| `CONFLICT` | 409 | Request conflicts with current state |
+| `INVALID_STATE_TRANSITION` | 409 | Invalid state transition attempted |
+| `INTERNAL_ERROR` | 500 | Internal server error |
+| `SERVICE_UNAVAILABLE` | 503 | Service is unavailable |
 
 ### Common HTTP Status Codes
 

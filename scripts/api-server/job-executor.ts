@@ -116,18 +116,23 @@ export async function executeJob(
 
   logger.info("Executing job", { script: jobConfig.script, args });
 
-  let process: ChildProcess | null = null;
+  let childProcess: ChildProcess | null = null;
   let stdout = "";
   let stderr = "";
 
   try {
-    process = spawn(jobConfig.script, args, {
+    childProcess = spawn(jobConfig.script, args, {
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    // Register the process so it can be killed on cancellation
+    jobTracker.registerProcess(jobId, {
+      kill: () => childProcess?.kill("SIGTERM"),
+    });
+
     // Collect stdout and stderr
-    process.stdout?.on("data", (data: Buffer) => {
+    childProcess.stdout?.on("data", (data: Buffer) => {
       const text = data.toString();
       stdout += text;
       logger.debug("stdout", { output: text.trim() });
@@ -136,7 +141,7 @@ export async function executeJob(
       parseProgressFromOutput(text, onProgress);
     });
 
-    process.stderr?.on("data", (data: Buffer) => {
+    childProcess.stderr?.on("data", (data: Buffer) => {
       const text = data.toString();
       stderr += text;
       logger.warn("stderr", { output: text.trim() });
@@ -144,7 +149,7 @@ export async function executeJob(
 
     // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
-      process?.on("close", (code) => {
+      childProcess?.on("close", (code) => {
         if (code === 0) {
           logger.info("Job completed successfully", { exitCode: code });
           resolve();
@@ -156,19 +161,21 @@ export async function executeJob(
         }
       });
 
-      process?.on("error", (err) => {
+      childProcess?.on("error", (err) => {
         logger.error("Job process error", { error: err.message });
         reject(err);
       });
     });
 
     // Job completed successfully
+    jobTracker.unregisterProcess(jobId);
     onComplete(true, { output: stdout });
     jobTracker.updateJobStatus(jobId, "completed", {
       success: true,
       output: stdout,
     });
   } catch (error) {
+    jobTracker.unregisterProcess(jobId);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorOutput = stderr || errorMessage;
 

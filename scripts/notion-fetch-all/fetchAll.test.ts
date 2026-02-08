@@ -11,6 +11,7 @@ import {
   groupPagesByElementType,
   buildPageHierarchy,
   filterPages,
+  buildStatusFilter,
   type PageWithStatus,
   type FetchAllOptions,
 } from "./fetchAll";
@@ -737,6 +738,64 @@ describe("fetchAll - Core Functions", () => {
       const filtered = filterPages(testPages, {});
 
       expect(filtered).toHaveLength(3);
+    });
+  });
+});
+
+describe("buildStatusFilter", () => {
+  it("should return undefined when includeRemoved is true", () => {
+    const filter = buildStatusFilter(true);
+    expect(filter).toBeUndefined();
+  });
+
+  it("should return a filter object when includeRemoved is false", () => {
+    const filter = buildStatusFilter(false);
+    expect(filter).toBeDefined();
+    expect(filter).toHaveProperty("or");
+    expect(filter.or).toBeInstanceOf(Array);
+    expect(filter.or).toHaveLength(2);
+  });
+
+  it("should create correct filter structure for excluding removed items", () => {
+    const filter = buildStatusFilter(false);
+
+    expect(filter).toEqual({
+      or: [
+        {
+          property: "Publish Status",
+          select: { is_empty: true },
+        },
+        {
+          property: "Publish Status",
+          select: { does_not_equal: "Remove" },
+        },
+      ],
+    });
+  });
+
+  it("should match Notion API filter query format", () => {
+    const filter = buildStatusFilter(false);
+
+    // Verify the structure matches Notion's compound filter format
+    expect(filter).toMatchObject({
+      or: expect.arrayContaining([
+        expect.objectContaining({
+          property: expect.any(String),
+          select: expect.any(Object),
+        }),
+      ]),
+    });
+
+    // Verify first condition checks for empty status
+    expect(filter.or[0]).toEqual({
+      property: "Publish Status",
+      select: { is_empty: true },
+    });
+
+    // Verify second condition excludes "Remove" status
+    expect(filter.or[1]).toEqual({
+      property: "Publish Status",
+      select: { does_not_equal: "Remove" },
     });
   });
 });

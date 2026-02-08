@@ -13,6 +13,7 @@ import {
 export type JobType =
   | "notion:fetch"
   | "notion:fetch-all"
+  | "notion:count-pages"
   | "notion:translate"
   | "notion:status-translation"
   | "notion:status-draft"

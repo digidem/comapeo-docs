@@ -156,7 +156,23 @@ sudo ufw status
 
 ## Part 3: Deployment
 
-### Step 3.1: Upload Files to VPS
+### Step 3.1: Choose Deployment Mode
+
+Choose one of two deployment modes:
+
+**Option A: Standalone Deployment** (Recommended for first-time users)
+
+- Creates a dedicated docker-compose stack for the API service
+- Simpler setup and management
+- Ideal for dedicated VPS or isolated service
+
+**Option B: Existing Stack Integration** (For production environments)
+
+- Adds API service to an existing docker-compose.yml
+- Shared networking and resources with other services
+- Ideal when deploying alongside other containers (e.g., web server, database)
+
+### Step 3.2A: Standalone Deployment
 
 From your **local machine**, upload the required files:
 
@@ -166,6 +182,158 @@ scp Dockerfile docker-compose.yml .env.production user@your-vps-ip:/opt/comapeo-
 ```
 
 **Verify**: SSH into your VPS and run `ls -la /opt/comapeo-api` - you should see all three files.
+
+Then proceed to **Step 3.3: Build and Start the Service**.
+
+### Step 3.2B: Existing Stack Integration
+
+If you already have a docker-compose stack running and want to add the API service to it:
+
+#### 3.2B.1: Copy Service Definition
+
+Copy the `api` service from the provided `docker-compose.yml` and add it to your existing `docker-compose.yml` file:
+
+```yaml
+# Add this service to your existing docker-compose.yml
+services:
+  # ... your existing services ...
+
+  api:
+    build:
+      context: ./path/to/comapeo-docs # Adjust path as needed
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        BUN_VERSION: "1"
+        NODE_ENV: "production"
+    image: comapeo-docs-api:latest
+    container_name: comapeo-api-server
+    ports:
+      - "3001:3001" # Or use "127.0.0.1:3001:3001" to restrict to localhost
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      NOTION_API_KEY: ${NOTION_API_KEY}
+      DATABASE_ID: ${DATABASE_ID}
+      DATA_SOURCE_ID: ${DATA_SOURCE_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4o-mini
+      DEFAULT_DOCS_PAGE: introduction
+      # Add your API authentication keys:
+      # API_KEY_GITHUB_ACTIONS: ${API_KEY_GITHUB_ACTIONS}
+      # API_KEY_DEPLOYMENT: ${API_KEY_DEPLOYMENT}
+    volumes:
+      - comapeo-job-data:/tmp
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "--silent",
+          "-e",
+          "fetch('http://localhost:3001/health').then(r => r.ok ? 0 : 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - your-existing-network # Use your existing network
+
+# Add this volume to your existing volumes section
+volumes:
+  # ... your existing volumes ...
+  comapeo-job-data:
+    driver: local
+
+# The service should use your existing network
+networks:
+  your-existing-network:
+    external: true # If using an external network
+    # OR remove 'external: true' and define the network here
+```
+
+#### 3.2B.2: Copy Dockerfile
+
+Copy the `Dockerfile` to a location accessible by your docker-compose build context:
+
+```bash
+# On your VPS, assuming your project is in /opt/my-project
+mkdir -p /opt/my-project/comapeo-api
+cp Dockerfile /opt/my-project/comapeo-api/
+```
+
+#### 3.2B.3: Configure Network Integration
+
+**Shared Networking**: The API service will be accessible to other services in your stack via its service name:
+
+```bash
+# Other containers can reach the API at:
+# http://api:3001/health
+# http://api:3001/docs/introduction
+```
+
+**External Access with Nginx**: If you have Nginx in your stack, add a location block:
+
+```nginx
+# In your Nginx configuration
+location /api/ {
+    proxy_pass http://api:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+#### 3.2B.4: Update Environment File
+
+Add the API service environment variables to your existing `.env` file:
+
+```bash
+# Add to your existing .env file
+cat >> .env << 'EOF'
+
+# Comapeo API Service
+NOTION_API_KEY=your_notion_api_key
+DATABASE_ID=your_database_id
+DATA_SOURCE_ID=your_data_source_id
+OPENAI_API_KEY=your_openai_api_key
+API_KEY_GITHUB_ACTIONS=your_github_actions_key
+API_KEY_DEPLOYMENT=your_deployment_key
+EOF
+```
+
+### Step 3.3: Build and Start the Service
+
+**For Standalone Deployment**:
+
+```bash
+# In /opt/comapeo-api on your VPS
+docker compose --env-file .env.production up -d --build
+```
+
+**For Existing Stack Integration**:
+
+```bash
+# In your existing project directory on your VPS
+docker compose --env-file .env up -d --build api
+```
+
+**Check container status**:
+
+```bash
+# Standalone
+docker compose --env-file .env.production ps
+
+# Existing stack
+docker compose --env-file .env ps api
+```
+
+**Expected Output**: The `api` service should show as "Up" with a healthy status.
 
 ### Step 3.2: Build and Start the Service
 
@@ -181,7 +349,7 @@ docker compose --env-file .env.production ps
 
 **Expected Output**: The `api` service should show as "Up" with a healthy status.
 
-### Step 3.3: Verify Deployment
+### Step 3.4: Verify Deployment
 
 ```bash
 # Test health endpoint
@@ -205,7 +373,11 @@ curl -fsS http://localhost:3001/health
 **If this fails**, check logs:
 
 ```bash
+# Standalone
 docker compose --env-file .env.production logs --tail=50 api
+
+# Existing stack
+docker compose --env-file .env logs --tail=50 api
 ```
 
 ## Part 4: Optional Enhancements
@@ -389,8 +561,11 @@ docker compose --env-file .env.production up -d
 ### View Logs
 
 ```bash
-# Follow logs in real-time
+# Standalone deployment
 docker compose --env-file .env.production logs -f api
+
+# Existing stack integration
+docker compose --env-file .env logs -f api
 
 # View last 100 lines
 docker compose --env-file .env.production logs --tail=100 api
@@ -399,7 +574,11 @@ docker compose --env-file .env.production logs --tail=100 api
 ### Restart Service
 
 ```bash
+# Standalone deployment
 docker compose --env-file .env.production restart
+
+# Existing stack integration
+docker compose --env-file .env restart api
 ```
 
 ### Update Service
@@ -409,7 +588,11 @@ docker compose --env-file .env.production restart
 git pull
 
 # Rebuild and restart
+# Standalone deployment
 docker compose --env-file .env.production up -d --build
+
+# Existing stack integration
+docker compose --env-file .env up -d --build api
 
 # Clean up old images
 docker image prune -f
@@ -418,7 +601,12 @@ docker image prune -f
 ### Stop Service
 
 ```bash
+# Standalone deployment
 docker compose --env-file .env.production down
+
+# Existing stack integration
+docker compose --env-file .env stop api
+docker compose --env-file .env rm -f api
 ```
 
 ### Backup Data

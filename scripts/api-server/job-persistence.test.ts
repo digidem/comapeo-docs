@@ -55,6 +55,11 @@ function cleanupTestData(): void {
 
 // Run tests sequentially to avoid file system race conditions
 describe("job-persistence", () => {
+  beforeEach(() => {
+    // Clean up before each test to ensure isolation
+    cleanupTestData();
+  });
+
   afterEach(() => {
     // Clean up after each test
     cleanupTestData();

@@ -16,6 +16,7 @@ export default defineConfig({
     environment: "node",
     globals: true,
     pool: "threads",
+    fileParallelism: false,
     // Setup files for global mocking
     setupFiles: ["./scripts/vitest.setup.ts"],
 

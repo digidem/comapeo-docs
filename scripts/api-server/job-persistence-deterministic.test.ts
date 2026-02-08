@@ -66,6 +66,10 @@ function createCorruptedLogFile(content: string): void {
 }
 
 describe("job-persistence - deterministic behavior", () => {
+  beforeEach(() => {
+    cleanupTestData();
+  });
+
   afterEach(() => {
     cleanupTestData();
   });
@@ -96,19 +100,19 @@ describe("job-persistence - deterministic behavior", () => {
     it("should maintain job order when saving multiple jobs", () => {
       const jobs: PersistedJob[] = [
         {
-          id: "job-1",
+          id: "deterministic-job-order-1",
           type: "notion:fetch",
           status: "pending",
           createdAt: "2024-01-01T00:00:00.000Z",
         },
         {
-          id: "job-2",
+          id: "deterministic-job-order-2",
           type: "notion:fetch",
           status: "running",
           createdAt: "2024-01-01T01:00:00.000Z",
         },
         {
-          id: "job-3",
+          id: "deterministic-job-order-3",
           type: "notion:fetch",
           status: "completed",
           createdAt: "2024-01-01T02:00:00.000Z",
@@ -225,35 +229,29 @@ describe("job-persistence - deterministic behavior", () => {
       const timestamps: string[] = [];
       const messages = ["First", "Second", "Third", "Fourth"];
 
-      // Log messages with slight delays
-      logger.info(messages[0]);
-      timestamps.push(new Date().toISOString());
-
-      // Small delay to ensure different timestamps
-      const startTime = Date.now();
-      while (Date.now() - startTime < 5) {
-        // Wait
-      }
-
-      logger.info(messages[1]);
-      timestamps.push(new Date().toISOString());
-
-      logger.info(messages[2]);
-      timestamps.push(new Date().toISOString());
-
-      logger.info(messages[3]);
-      timestamps.push(new Date().toISOString());
+      // Log messages with slight delays to ensure different timestamps
+      messages.forEach((msg, i) => {
+        logger.info(msg);
+        timestamps.push(new Date().toISOString());
+        // Small delay between logs to ensure different timestamps
+        if (i < messages.length - 1) {
+          const startTime = Date.now();
+          while (Date.now() - startTime < 2) {
+            // Wait
+          }
+        }
+      });
 
       consoleSpy.mockRestore();
 
       // Retrieve logs
       const logs = getJobLogs("chronology-test");
 
-      // Should have all 4 logs
-      expect(logs.length).toBeGreaterThanOrEqual(4);
+      // Should have exactly 4 logs (fresh test run)
+      expect(logs.length).toBe(4);
 
       // Messages should be in order
-      const logMessages = logs.slice(-4).map((l) => l.message);
+      const logMessages = logs.map((l) => l.message);
       expect(logMessages).toEqual(messages);
     });
 
@@ -357,6 +355,10 @@ describe("job-persistence - deterministic behavior", () => {
 });
 
 describe("job-persistence - recoverable behavior", () => {
+  beforeEach(() => {
+    cleanupTestData();
+  });
+
   afterEach(() => {
     cleanupTestData();
   });

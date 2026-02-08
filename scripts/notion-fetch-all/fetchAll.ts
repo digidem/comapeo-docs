@@ -126,7 +126,7 @@ export async function fetchAllNotionData(
   };
 }
 
-function buildStatusFilter(includeRemoved: boolean) {
+export function buildStatusFilter(includeRemoved: boolean) {
   if (includeRemoved) {
     return undefined;
   }

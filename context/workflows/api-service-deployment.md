@@ -440,6 +440,8 @@ Navigate to your repository on GitHub and add these secrets:
 2. Click **New repository secret**
 3. Add the following secrets:
 
+#### Required Secrets
+
 | Secret Name              | Value                                              |
 | ------------------------ | -------------------------------------------------- |
 | `API_ENDPOINT`           | `https://your-domain.com` (or omit for local mode) |
@@ -449,15 +451,137 @@ Navigate to your repository on GitHub and add these secrets:
 | `DATA_SOURCE_ID`         | Your data source ID                                |
 | `OPENAI_API_KEY`         | Your OpenAI API key                                |
 
-### Step 5.2: Test GitHub Workflow
+#### Optional Secrets for Cloudflare Pages
+
+| Secret Name             | Value                      |
+| ----------------------- | -------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Your Cloudflare API token  |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
+
+#### Optional Secrets for Notifications
+
+| Secret Name         | Value                  |
+| ------------------- | ---------------------- |
+| `SLACK_WEBHOOK_URL` | Your Slack webhook URL |
+
+#### Optional Configuration Secrets
+
+| Secret Name         | Value                         | Default        |
+| ------------------- | ----------------------------- | -------------- |
+| `DEFAULT_DOCS_PAGE` | Default documentation page    | `introduction` |
+| `OPENAI_MODEL`      | OpenAI model for translations | `gpt-4o-mini`  |
+
+**Note**: Without `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, PR preview deployments and production deployments to Cloudflare Pages will not work.
+
+### Step 5.2: Available GitHub Workflows
+
+This repository includes several GitHub Actions workflows for different purposes:
+
+#### 1. Notion Fetch via API (`.github/workflows/api-notion-fetch.yml`)
+
+Fetches content from Notion via the API service.
+
+**Job Types:**
+
+- `notion:fetch-all` - Fetch all pages from Notion
+- `notion:fetch` - Fetch single page from Notion
+- `notion:translate` - Translate content to multiple languages
+- `notion:status-translation` - Update Notion status to "Auto Translation Generated"
+- `notion:status-draft` - Update Notion status to "Draft published"
+- `notion:status-publish` - Update Notion status to "Published"
+- `notion:status-publish-production` - Update Notion status to "Published" (production)
+
+**How to Run:**
 
 1. Go to **Actions** tab in your repository
 2. Select **Notion Fetch via API** workflow
 3. Click **Run workflow**
-4. Choose a branch and `job_type`
+4. Choose a branch, select `job_type`, and optionally set `max_pages` (for `notion:fetch-all`)
 5. Click **Run workflow**
 
+#### 2. Sync Notion Docs (`.github/workflows/sync-docs.yml`)
+
+Syncs Notion content to the `content` branch.
+
+**How to Run:**
+
+1. Go to **Actions** tab in your repository
+2. Select **Sync Notion Docs** workflow
+3. Click **Run workflow**
+4. Choose a branch
+5. Click **Run workflow**
+
+#### 3. Translate Notion Docs (`.github/workflows/translate-docs.yml`)
+
+Translates content to multiple languages and updates Notion status.
+
+**How to Run:**
+
+1. Go to **Actions** tab in your repository
+2. Select **Translate Notion Docs** workflow
+3. Click **Run workflow**
+4. Choose a branch
+5. Click **Run workflow**
+
+#### 4. Deploy PR Preview (`.github/workflows/deploy-pr-preview.yml`)
+
+Automatically deploys PR previews to Cloudflare Pages when PRs are opened or updated.
+
+**Triggers:** Automatically runs on PR events (no manual invocation needed)
+
+**PR Labels for Content Generation:**
+
+- `fetch-all-pages` - Fetch all pages from Notion
+- `fetch-10-pages` - Fetch 10 pages from Notion
+- `fetch-5-pages` - Fetch 5 pages from Notion
+- (no label) - Uses content branch or defaults to 5 pages
+
+#### 5. Deploy to Production (`.github/workflows/deploy-production.yml`)
+
+Deploys documentation to production on Cloudflare Pages.
+
+**How to Run:**
+
+1. Go to **Actions** tab in your repository
+2. Select **Deploy to Production** workflow
+3. Click **Run workflow**
+4. Choose `environment` (production or test)
+5. For test deployments, optionally specify a `branch_name`
+6. Click **Run workflow**
+
+#### 6. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
+
+Deploys documentation to GitHub Pages (staging environment).
+
+**Triggers:** Automatically runs on push to `main` branch
+
+### Step 5.3: Test GitHub Workflow
+
+After adding secrets, test the API integration:
+
+1. Go to **Actions** tab in your repository
+2. Select **Notion Fetch via API** workflow
+3. Click **Run workflow**
+4. Choose a branch and select `notion:fetch-all` as the `job_type`
+5. Set `max_pages` to `5` for testing
+6. Click **Run workflow**
+
 **Verify**: The workflow should complete successfully and update GitHub status checks.
+
+### Step 5.4: Verify Workflow Secrets
+
+To verify that all required secrets are properly configured:
+
+1. Check the workflow logs for authentication errors
+2. Verify the API health endpoint responds correctly
+3. Confirm that Notion API calls succeed
+4. Check GitHub status checks on commits
+
+**Common Issues:**
+
+- Missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` will cause deployment failures
+- Missing `SLACK_WEBHOOK_URL` will cause notification failures (non-critical)
+- Incorrect `API_ENDPOINT` will prevent workflow communication with the API service
 
 ## Validation Checklist
 
@@ -469,6 +593,16 @@ After completing deployment, verify:
 - [ ] Firewall allows port 3001: `sudo ufw status`
 - [ ] (Optional) Nginx proxy works: `curl https://your-domain.com/health`
 - [ ] (Optional) GitHub workflow completes successfully
+- [ ] (Optional) All required GitHub secrets are configured:
+  - [ ] `API_ENDPOINT` (or omitted for local mode)
+  - [ ] `API_KEY_GITHUB_ACTIONS`
+  - [ ] `NOTION_API_KEY`
+  - [ ] `DATABASE_ID`
+  - [ ] `DATA_SOURCE_ID`
+  - [ ] `OPENAI_API_KEY`
+  - [ ] `CLOUDFLARE_API_TOKEN` (for Cloudflare Pages deployments)
+  - [ ] `CLOUDFLARE_ACCOUNT_ID` (for Cloudflare Pages deployments)
+  - [ ] `SLACK_WEBHOOK_URL` (for Slack notifications)
 
 ## Troubleshooting
 

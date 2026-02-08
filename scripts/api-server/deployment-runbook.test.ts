@@ -105,9 +105,92 @@ describe("API Service Deployment Runbook", () => {
       expect(content).toContain("OPENAI_API_KEY");
     });
 
+    it("should list optional Cloudflare Pages secrets", () => {
+      expect(content).toContain("CLOUDFLARE_API_TOKEN");
+      expect(content).toContain("CLOUDFLARE_ACCOUNT_ID");
+    });
+
+    it("should list optional notification secrets", () => {
+      expect(content).toContain("SLACK_WEBHOOK_URL");
+    });
+
+    it("should list optional configuration secrets with defaults", () => {
+      expect(content).toContain("DEFAULT_DOCS_PAGE");
+      expect(content).toContain("OPENAI_MODEL");
+      expect(content).toContain("Default");
+    });
+
+    it("should explain implications of missing Cloudflare secrets", () => {
+      expect(content).toMatch(/CLOUDFLARE.*deploy.*will not work/);
+    });
+
+    it("should document all available GitHub workflows", () => {
+      expect(content).toContain("## Step 5.2: Available GitHub Workflows");
+    });
+
+    it("should document Notion Fetch via API workflow with job types", () => {
+      expect(content).toContain("Notion Fetch via API");
+      expect(content).toContain("api-notion-fetch.yml");
+      expect(content).toContain("notion:fetch-all");
+      expect(content).toContain("notion:fetch");
+      expect(content).toContain("notion:translate");
+      expect(content).toContain("notion:status-translation");
+      expect(content).toContain("notion:status-draft");
+      expect(content).toContain("notion:status-publish");
+      expect(content).toContain("notion:status-publish-production");
+    });
+
+    it("should document Sync Notion Docs workflow", () => {
+      expect(content).toContain("Sync Notion Docs");
+      expect(content).toContain("sync-docs.yml");
+      expect(content).toContain("content branch");
+    });
+
+    it("should document Translate Notion Docs workflow", () => {
+      expect(content).toContain("Translate Notion Docs");
+      expect(content).toContain("translate-docs.yml");
+      expect(content).toContain("multiple languages");
+    });
+
+    it("should document Deploy PR Preview workflow with labels", () => {
+      expect(content).toContain("Deploy PR Preview");
+      expect(content).toContain("deploy-pr-preview.yml");
+      expect(content).toContain("PR Labels for Content Generation");
+      expect(content).toContain("fetch-all-pages");
+      expect(content).toContain("fetch-10-pages");
+      expect(content).toContain("fetch-5-pages");
+    });
+
+    it("should document Deploy to Production workflow", () => {
+      expect(content).toContain("Deploy to Production");
+      expect(content).toContain("deploy-production.yml");
+      expect(content).toContain("Cloudflare Pages");
+      expect(content).toMatch(/environment.*production.*test/);
+    });
+
+    it("should document Deploy to GitHub Pages workflow", () => {
+      expect(content).toContain("Deploy to GitHub Pages");
+      expect(content).toContain("deploy-staging.yml");
+      expect(content).toContain("GitHub Pages");
+    });
+
     it("should explain how to trigger the workflow", () => {
       expect(content).toContain("Test GitHub Workflow");
       expect(content).toContain("Run workflow");
+    });
+
+    it("should provide verification steps for workflow secrets", () => {
+      expect(content).toContain("## Step 5.4: Verify Workflow Secrets");
+      expect(content).toMatch(/authentication errors/);
+      expect(content).toMatch(/health endpoint/);
+      expect(content).toMatch(/GitHub status checks/);
+    });
+
+    it("should document common workflow issues", () => {
+      expect(content).toMatch(/\*\*Common Issues:\*\*/);
+      expect(content).toMatch(/CLOUDFLARE.*will cause deployment failures/);
+      expect(content).toMatch(/SLACK_WEBHOOK_URL.*notification failures/);
+      expect(content).toMatch(/API_ENDPOINT.*prevent workflow communication/);
     });
   });
 
@@ -134,6 +217,19 @@ describe("API Service Deployment Runbook", () => {
 
     it("should include firewall verification", () => {
       expect(content).toContain("sudo ufw status");
+    });
+
+    it("should include GitHub secrets verification in checklist", () => {
+      expect(content).toContain("All required GitHub secrets are configured");
+      expect(content).toContain("API_ENDPOINT");
+      expect(content).toContain("API_KEY_GITHUB_ACTIONS");
+      expect(content).toContain("NOTION_API_KEY");
+      expect(content).toContain("DATABASE_ID");
+      expect(content).toContain("DATA_SOURCE_ID");
+      expect(content).toContain("OPENAI_API_KEY");
+      expect(content).toContain("CLOUDFLARE_API_TOKEN");
+      expect(content).toContain("CLOUDFLARE_ACCOUNT_ID");
+      expect(content).toContain("SLACK_WEBHOOK_URL");
     });
   });
 

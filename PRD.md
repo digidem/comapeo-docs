@@ -26,8 +26,8 @@ Ralphy will execute each unchecked review task sequentially using your chosen AI
 
 - [x] Validate API usage documentation examples against current request and response shapes
 - [x] Verify deployment runbook is simple, ordered, and executable for first-time operators
-- [ ] Confirm docker-compose integration guidance includes adding service into an existing stack
-- [ ] Confirm GitHub integration guidance covers required secrets and workflow invocation
+- [x] Confirm docker-compose integration guidance includes adding service into an existing stack
+- [x] Confirm GitHub integration guidance covers required secrets and workflow invocation
 
 ## Testing & Quality
 

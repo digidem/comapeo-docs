@@ -7,13 +7,13 @@ Ralphy will execute each unchecked review task sequentially using your chosen AI
 
 - [x] Validate PR scope against repository constraints and confirm acceptance criteria
 - [x] Review changed files list and map each file to a requirement in the implementation PRD
-- [ ] Verify generated-content policy compliance for `docs/`, `static/`, and `i18n/` updates
+- [x] Verify generated-content policy compliance for `docs/`, `static/`, and `i18n/` updates
 
 ## Core Features
 
-- [ ] Review API server entrypoints and ensure routes match intended job operations
-- [ ] Validate job queue behavior for concurrency, cancellation, and status transitions
-- [ ] Confirm job persistence and log capture are deterministic and recoverable
+- [x] Review API server entrypoints and ensure routes match intended job operations
+- [x] Validate job queue behavior for concurrency, cancellation, and status transitions
+- [x] Confirm job persistence and log capture are deterministic and recoverable
 - [ ] Review GitHub status callback flow for idempotency and failure handling
 
 ## Database & API

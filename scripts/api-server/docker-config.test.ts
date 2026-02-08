@@ -1,7 +1,8 @@
 /**
  * Tests for Docker configuration files
- * Validates Dockerfile syntax, docker-compose configuration, and .dockerignore patterns
- * Tests both minimization (image size optimization) and configurability (environment variable overrides)
+ *
+ * Focuses on configurability aspects (build args, environment variables, overrides).
+ * Basic Docker/Dockerfile validation is covered in docker-smoke-tests.test.ts.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -21,31 +22,9 @@ describe("Docker Configuration Tests", () => {
       dockerfileContent = readFileSync(DOCKERFILE_PATH, "utf-8");
     });
 
-    it("should exist", () => {
-      expect(existsSync(DOCKERFILE_PATH)).toBe(true);
-    });
-
-    it("should use official Bun base image", () => {
-      expect(dockerfileContent).toMatch(/FROM\s+oven\/bun:/);
-    });
-
-    it("should set working directory to /app", () => {
-      expect(dockerfileContent).toContain("WORKDIR /app");
-    });
-
-    it("should expose port 3001 for API service", () => {
-      expect(dockerfileContent).toContain("EXPOSE 3001");
-    });
-
-    it("should include health check using /health endpoint", () => {
-      expect(dockerfileContent).toContain("HEALTHCHECK");
-      expect(dockerfileContent).toContain("/health");
-    });
-
-    it("should use non-root user for security", () => {
-      expect(dockerfileContent).toMatch(/adduser|addgroup/);
-      expect(dockerfileContent).toContain("USER bun");
-    });
+    // Note: Basic Dockerfile existence, base image, port, health check,
+    // non-root user, and multi-stage build are validated in docker-smoke-tests.test.ts
+    // This suite focuses on configurability aspects
 
     it("should set NODE_ENV to production", () => {
       // Check for ARG and ENV with variable substitution
@@ -56,11 +35,6 @@ describe("Docker Configuration Tests", () => {
     it("should run API server as CMD", () => {
       expect(dockerfileContent).toContain("CMD");
       expect(dockerfileContent).toContain("api:server");
-    });
-
-    it("should use multi-stage build for optimization", () => {
-      expect(dockerfileContent).toMatch(/FROM\s+.*\s+AS\s+(deps|runner)/);
-      expect(dockerfileContent).toContain("COPY --from");
     });
 
     it("should install dependencies before copying source code", () => {
@@ -149,13 +123,10 @@ describe("Docker Configuration Tests", () => {
       composeContent = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");
     });
 
-    it("should exist", () => {
-      expect(existsSync(DOCKER_COMPOSE_PATH)).toBe(true);
-    });
-
-    it("should define api service", () => {
-      expect(composeContent).toMatch(/services:\s*\n\s*api:/);
-    });
+    // Note: Basic docker-compose structure, service definition, port mapping,
+    // required environment variables, health check, restart policy, resource limits,
+    // volumes, and logging are validated in docker-smoke-tests.test.ts
+    // This suite focuses on configurability aspects
 
     it("should build from Dockerfile in current context", () => {
       expect(composeContent).toContain("dockerfile: Dockerfile");
@@ -166,45 +137,6 @@ describe("Docker Configuration Tests", () => {
       expect(composeContent).toMatch(/ports:.*3001/s);
       expect(composeContent).toContain("${API_PORT:-3001}");
       expect(composeContent).toContain(":3001");
-    });
-
-    it("should set required environment variables", () => {
-      expect(composeContent).toContain("NOTION_API_KEY");
-      expect(composeContent).toContain("DATABASE_ID");
-      expect(composeContent).toContain("OPENAI_API_KEY");
-    });
-
-    it("should configure health check", () => {
-      expect(composeContent).toMatch(/healthcheck:/);
-      // Health check intervals are now configurable
-      expect(composeContent).toMatch(
-        /interval:\s*\$\{HEALTHCHECK_INTERVAL:-30s\}/
-      );
-      expect(composeContent).toContain("/health");
-    });
-
-    it("should set restart policy to unless-stopped", () => {
-      // Restart policy is now configurable via environment variable
-      expect(composeContent).toMatch(
-        /restart:\s*\$\{DOCKER_RESTART_POLICY:-unless-stopped\}/
-      );
-    });
-
-    it("should configure resource limits", () => {
-      expect(composeContent).toMatch(/resources:/);
-      expect(composeContent).toMatch(/limits:/);
-      expect(composeContent).toMatch(/memory:/);
-    });
-
-    it("should define named volume for job data", () => {
-      expect(composeContent).toMatch(/volumes:/);
-      expect(composeContent).toMatch(/job-data:/);
-    });
-
-    it("should configure logging with rotation", () => {
-      expect(composeContent).toMatch(/logging:/);
-      expect(composeContent).toContain("max-size");
-      expect(composeContent).toContain("max-file");
     });
 
     // Configurability tests
@@ -405,26 +337,8 @@ describe("Docker Configuration Tests", () => {
   });
 
   describe("Docker Configuration Integration", () => {
-    it("should have consistent API port across all files", () => {
-      const dockerfile = readFileSync(DOCKERFILE_PATH, "utf-8");
-      const compose = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");
-
-      // Dockerfile exposes 3001
-      expect(dockerfile).toContain("EXPOSE 3001");
-
-      // docker-compose maps 3001
-      expect(compose).toContain(":3001");
-      expect(compose).toContain("3001");
-    });
-
-    it("should have matching health check endpoints", () => {
-      const dockerfile = readFileSync(DOCKERFILE_PATH, "utf-8");
-      const compose = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");
-
-      // Both reference /health endpoint
-      expect(dockerfile).toContain("/health");
-      expect(compose).toContain("/health");
-    });
+    // Note: Port consistency and health check endpoint validation
+    // are covered in docker-smoke-tests.test.ts
 
     it("should include all required environment variables in compose", () => {
       const compose = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");

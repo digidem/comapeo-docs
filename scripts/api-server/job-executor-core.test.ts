@@ -7,7 +7,7 @@
  * - buildArgs function for notion:fetch-all
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { JobType } from "./job-tracker";
 
 /**
@@ -43,6 +43,17 @@ const JOB_COMMANDS: Record<
       if (options.force) args.push("--force");
       if (options.dryRun) args.push("--dry-run");
       if (options.includeRemoved) args.push("--include-removed");
+      return args;
+    },
+  },
+  "notion:count-pages": {
+    script: "bun",
+    args: ["scripts/notion-count-pages"],
+    buildArgs: (options) => {
+      const args: string[] = [];
+      if (options.includeRemoved) args.push("--include-removed");
+      if (options.statusFilter)
+        args.push("--status-filter", options.statusFilter);
       return args;
     },
   },
@@ -244,6 +255,7 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       const jobTypes: JobType[] = [
         "notion:fetch",
         "notion:fetch-all",
+        "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
         "notion:status-draft",
@@ -277,6 +289,14 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       expect(config.script).toBe("bun");
       expect(config.args).toEqual(["scripts/notion-translate"]);
       expect(config.buildArgs).toBeUndefined();
+    });
+
+    it("should configure notion:count-pages with correct script and args", () => {
+      const config = JOB_COMMANDS["notion:count-pages"];
+
+      expect(config.script).toBe("bun");
+      expect(config.args).toEqual(["scripts/notion-count-pages"]);
+      expect(config.buildArgs).toBeDefined();
     });
 
     it("should configure notion:status-* jobs with workflow flags", () => {
@@ -464,6 +484,102 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       it("should treat empty string statusFilter as falsy and not add argument", () => {
         const args = buildArgs({ statusFilter: "" });
         // Empty string is falsy in JavaScript, so the condition `if (options.statusFilter)` is false
+        expect(args).toEqual([]);
+      });
+    });
+  });
+
+  describe("notion:count-pages buildArgs function", () => {
+    const buildArgs = JOB_COMMANDS["notion:count-pages"].buildArgs!;
+
+    it("should return empty array when no options provided", () => {
+      const args = buildArgs({});
+      expect(args).toEqual([]);
+    });
+
+    describe("includeRemoved option", () => {
+      it("should add --include-removed flag when true", () => {
+        const args = buildArgs({ includeRemoved: true });
+        expect(args).toEqual(["--include-removed"]);
+      });
+
+      it("should not add --include-removed when false", () => {
+        const args = buildArgs({ includeRemoved: false });
+        expect(args).not.toContain("--include-removed");
+      });
+
+      it("should not add --include-removed when undefined", () => {
+        const args = buildArgs({ includeRemoved: undefined });
+        expect(args).not.toContain("--include-removed");
+      });
+    });
+
+    describe("statusFilter option", () => {
+      it("should add --status-filter argument when provided", () => {
+        const args = buildArgs({ statusFilter: "In Progress" });
+        expect(args).toEqual(["--status-filter", "In Progress"]);
+      });
+
+      it("should handle statusFilter with spaces", () => {
+        const args = buildArgs({ statusFilter: "Published Online" });
+        expect(args).toEqual(["--status-filter", "Published Online"]);
+      });
+
+      it("should not add --status-filter when undefined", () => {
+        const args = buildArgs({ statusFilter: undefined });
+        expect(args).not.toContain("--status-filter");
+      });
+    });
+
+    describe("combined options", () => {
+      it("should build correct args with both options", () => {
+        const args = buildArgs({
+          statusFilter: "Published",
+          includeRemoved: true,
+        });
+
+        expect(args).toEqual([
+          "--include-removed",
+          "--status-filter",
+          "Published",
+        ]);
+      });
+
+      it("should maintain option order consistently", () => {
+        const args = buildArgs({
+          includeRemoved: true,
+          statusFilter: "In Progress",
+        });
+
+        expect(args).toEqual([
+          "--include-removed",
+          "--status-filter",
+          "In Progress",
+        ]);
+      });
+    });
+
+    describe("edge cases", () => {
+      it("should treat empty string statusFilter as falsy and not add argument", () => {
+        const args = buildArgs({ statusFilter: "" });
+        expect(args).toEqual([]);
+      });
+
+      it("should ignore maxPages option (not supported by count-pages)", () => {
+        const args = buildArgs({ maxPages: 100 });
+        // maxPages is not supported by count-pages, so it should be ignored
+        expect(args).toEqual([]);
+      });
+
+      it("should ignore force option (not supported by count-pages)", () => {
+        const args = buildArgs({ force: true });
+        // force is not supported by count-pages, so it should be ignored
+        expect(args).toEqual([]);
+      });
+
+      it("should ignore dryRun option (not supported by count-pages)", () => {
+        const args = buildArgs({ dryRun: true });
+        // dryRun is not supported by count-pages, so it should be ignored
         expect(args).toEqual([]);
       });
     });

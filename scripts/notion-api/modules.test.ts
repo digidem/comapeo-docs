@@ -50,6 +50,19 @@ vi.mock("../fetchNotionData", () => ({
   fetchNotionData: vi.fn(),
 }));
 
+// Mock enhancedNotion to prevent actual API calls
+vi.mock("../notionClient", () => ({
+  enhancedNotion: {
+    pagesRetrieve: vi.fn(),
+    dataSourcesQuery: vi.fn(),
+    blocksChildrenList: vi.fn(),
+    blocksChildrenAppend: vi.fn(),
+    blocksDelete: vi.fn(),
+  },
+  notion: {},
+  n2m: {},
+}));
+
 vi.mock("../notion-placeholders/pageAnalyzer", () => ({
   PageAnalyzer: {
     analyzePages: vi.fn(() => Promise.resolve(new Map())),
@@ -273,22 +286,17 @@ describe("Notion API Modules", () => {
 
   describe("fetchPage", () => {
     it("should fetch a single page by ID", async () => {
-      const { runFetchPipeline } = await import("../notion-fetch/runFetch");
-      vi.mocked(runFetchPipeline).mockResolvedValue({
-        data: [
-          {
-            id: "page-123",
-            url: "https://notion.so/page-123",
-            properties: {
-              Title: {
-                title: [{ plain_text: "Test Page" }],
-              },
-            },
-            last_edited_time: "2024-01-01T00:00:00.000Z",
-            created_time: "2024-01-01T00:00:00.000Z",
+      const { enhancedNotion } = await import("../notionClient");
+      vi.mocked(enhancedNotion.pagesRetrieve).mockResolvedValue({
+        id: "page-123",
+        url: "https://notion.so/page-123",
+        properties: {
+          Title: {
+            title: [{ plain_text: "Test Page" }],
           },
-        ],
-        metrics: undefined,
+        },
+        last_edited_time: "2024-01-01T00:00:00.000Z",
+        created_time: "2024-01-01T00:00:00.000Z",
       });
 
       const config: NotionApiConfig = {
@@ -303,11 +311,10 @@ describe("Notion API Modules", () => {
     });
 
     it("should return error when page not found", async () => {
-      const { runFetchPipeline } = await import("../notion-fetch/runFetch");
-      vi.mocked(runFetchPipeline).mockResolvedValue({
-        data: [],
-        metrics: undefined,
-      });
+      const { enhancedNotion } = await import("../notionClient");
+      vi.mocked(enhancedNotion.pagesRetrieve).mockRejectedValue(
+        new Error("Could not find page")
+      );
 
       const config: NotionApiConfig = {
         apiKey: "test-api-key",
@@ -320,8 +327,10 @@ describe("Notion API Modules", () => {
     });
 
     it("should handle fetch errors", async () => {
-      const { runFetchPipeline } = await import("../notion-fetch/runFetch");
-      vi.mocked(runFetchPipeline).mockRejectedValue(new Error("Network error"));
+      const { enhancedNotion } = await import("../notionClient");
+      vi.mocked(enhancedNotion.pagesRetrieve).mockRejectedValue(
+        new Error("Network error")
+      );
 
       const config: NotionApiConfig = {
         apiKey: "test-api-key",
@@ -418,9 +427,14 @@ describe("Notion API Modules", () => {
           [
             "page-123",
             {
+              isEmpty: true,
+              hasOnlyEmptyBlocks: true,
               contentScore: 0,
-              recommendedAction: "fill",
+              blockCount: 0,
+              recommendedAction: "fill" as const,
               recommendedContentType: "tutorial" as const,
+              recommendedContentLength: "medium" as const,
+              hasRecentActivity: false,
             },
           ],
         ])

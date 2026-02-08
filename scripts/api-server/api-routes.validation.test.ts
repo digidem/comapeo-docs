@@ -126,8 +126,9 @@ describe("API Routes - Validation", () => {
 
       const jobs = tracker.getAllJobs();
 
+      // Note: API returns "items" not "jobs" to match OpenAPI schema
       const expectedResponse = {
-        jobs: jobs.map((job) => ({
+        items: jobs.map((job) => ({
           id: job.id,
           type: job.type,
           status: job.status,
@@ -140,16 +141,16 @@ describe("API Routes - Validation", () => {
         count: jobs.length,
       };
 
-      expect(expectedResponse.jobs).toBeInstanceOf(Array);
+      expect(expectedResponse.items).toBeInstanceOf(Array);
       expect(expectedResponse).toHaveProperty("count", 1);
-      expect(expectedResponse.jobs[0]).toHaveProperty("id");
-      expect(expectedResponse.jobs[0]).toHaveProperty("type");
-      expect(expectedResponse.jobs[0]).toHaveProperty("status");
-      expect(expectedResponse.jobs[0]).toHaveProperty("createdAt");
-      expect(expectedResponse.jobs[0]).toHaveProperty("startedAt");
-      expect(expectedResponse.jobs[0]).toHaveProperty("completedAt");
-      expect(expectedResponse.jobs[0]).toHaveProperty("progress");
-      expect(expectedResponse.jobs[0]).toHaveProperty("result");
+      expect(expectedResponse.items[0]).toHaveProperty("id");
+      expect(expectedResponse.items[0]).toHaveProperty("type");
+      expect(expectedResponse.items[0]).toHaveProperty("status");
+      expect(expectedResponse.items[0]).toHaveProperty("createdAt");
+      expect(expectedResponse.items[0]).toHaveProperty("startedAt");
+      expect(expectedResponse.items[0]).toHaveProperty("completedAt");
+      expect(expectedResponse.items[0]).toHaveProperty("progress");
+      expect(expectedResponse.items[0]).toHaveProperty("result");
     });
 
     it("should return correct job creation response shape", () => {

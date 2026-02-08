@@ -77,7 +77,7 @@ describe("API Service Deployment Runbook", () => {
 
     it("should include health check verification", () => {
       expect(content).toContain("curl http://localhost:3001/health");
-      expect(content).toContain("### Step 3.3: Verify Deployment");
+      expect(content).toContain("### Step 3.4: Verify Deployment");
     });
 
     it("should provide verification steps", () => {
@@ -244,6 +244,121 @@ describe("API Service Deployment Runbook", () => {
     it("should include reference links", () => {
       expect(content).toContain("## Additional Resources");
       expect(content).toContain("](../");
+    });
+  });
+
+  describe("Existing Stack Integration", () => {
+    let content: string;
+
+    beforeAll(() => {
+      content = readFileSync(RUNBOOK_PATH, "utf-8");
+    });
+
+    it("should document both standalone and existing stack deployment options", () => {
+      expect(content).toContain("Option A: Standalone Deployment");
+      expect(content).toContain("Option B: Existing Stack Integration");
+    });
+
+    it("should describe when to use standalone deployment", () => {
+      expect(content).toMatch(/Option A.*first-time users/s);
+      expect(content).toMatch(/dedicated.*docker-compose stack/s);
+      expect(content).toMatch(/dedicated VPS.*isolated service/s);
+    });
+
+    it("should describe when to use existing stack integration", () => {
+      expect(content).toMatch(/Option B.*production environments/s);
+      expect(content).toMatch(/existing docker-compose\.yml/s);
+      expect(content).toMatch(/alongside other containers/s);
+    });
+
+    it("should provide service definition for existing stacks", () => {
+      expect(content).toContain(
+        "Add this service to your existing docker-compose.yml"
+      );
+      expect(content).toContain("# ... your existing services ...");
+    });
+
+    it("should include configurable context path in service definition", () => {
+      expect(content).toContain("context: ./path/to/comapeo-docs");
+      expect(content).toContain("Adjust path as needed");
+    });
+
+    it("should show how to configure shared networking", () => {
+      expect(content).toContain("networks:");
+      expect(content).toContain("your-existing-network");
+    });
+
+    it("should include volume configuration for existing stacks", () => {
+      expect(content).toMatch(/volumes:.*comapeo-job-data:/s);
+      expect(content).toContain("# ... your existing volumes ...");
+    });
+
+    it("should show how to integrate with external networks", () => {
+      expect(content).toContain("external: true");
+      expect(content).toContain("If using an external network");
+    });
+
+    it("should provide Nginx reverse proxy configuration example", () => {
+      expect(content).toContain("location /api/");
+      expect(content).toContain("proxy_pass http://api:3001/");
+      expect(content).toContain("proxy_set_header Host $host");
+    });
+
+    it("should document internal service-to-service communication", () => {
+      expect(content).toContain("Other containers can reach the API at:");
+      expect(content).toContain("http://api:3001/health");
+    });
+
+    it("should explain how to add environment variables to existing .env", () => {
+      expect(content).toContain("Add to your existing .env file");
+      expect(content).toMatch(/cat >> \.env/s);
+    });
+
+    it("should provide instructions for copying Dockerfile", () => {
+      expect(content).toContain("Copy the `Dockerfile`");
+      expect(content).toContain("build context");
+    });
+
+    it("should provide deployment commands for existing stack", () => {
+      expect(content).toMatch(/For Existing Stack Integration/s);
+      expect(content).toContain(
+        "docker compose --env-file .env up -d --build api"
+      );
+    });
+
+    it("should provide verification commands for existing stack", () => {
+      expect(content).toMatch(
+        /# Existing stack\s+docker compose.*\.env.*ps api/s
+      );
+    });
+
+    it("should provide log checking for existing stack", () => {
+      expect(content).toMatch(
+        /# Existing stack\s+docker compose.*\.env.*logs/s
+      );
+    });
+
+    it("should provide restart commands for existing stack", () => {
+      expect(content).toMatch(/restart api/s);
+    });
+
+    it("should provide stop commands for existing stack", () => {
+      expect(content).toMatch(/stop api/);
+      expect(content).toMatch(/rm -f api/);
+    });
+
+    it("should warn about port binding considerations", () => {
+      expect(content).toContain("127.0.0.1:3001:3001");
+      expect(content).toMatch(/restrict to localhost/s);
+    });
+
+    it("should demonstrate environment variable substitution in service definition", () => {
+      expect(content).toMatch(
+        /API_KEY_GITHUB_ACTIONS:\s*\$\{API_KEY_GITHUB_ACTIONS\}/s
+      );
+      expect(content).toMatch(
+        /API_KEY_DEPLOYMENT:\s*\$\{API_KEY_DEPLOYMENT\}/s
+      );
     });
   });
 });

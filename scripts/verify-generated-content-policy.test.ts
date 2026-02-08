@@ -147,7 +147,7 @@ describe("verify-generated-content-policy", () => {
     it("should return empty array when git command fails", async () => {
       // Mock implementation would return empty on error
       const mockResult = mockGetTrackedFilesInDirectory();
-      expect(mockResult).resolves.toEqual([]);
+      await expect(mockResult).resolves.toEqual([]);
     });
 
     it("should return file list when directory has tracked files", async () => {

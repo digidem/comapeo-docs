@@ -24,6 +24,7 @@ export const MIN_API_KEY_LENGTH = 16;
 export const VALID_JOB_TYPES: readonly JobType[] = [
   "notion:fetch",
   "notion:fetch-all",
+  "notion:count-pages",
   "notion:translate",
   "notion:status-translation",
   "notion:status-draft",

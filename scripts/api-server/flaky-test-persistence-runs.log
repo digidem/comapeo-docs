@@ -1,0 +1,30 @@
+=== RUN 1 ===
+=== RUN 2 ===
+=== RUN 3 ===
+=== RUN 4 ===
+=== RUN 5 ===
+=== RUN 6 ===
+=== RUN 7 ===
+=== RUN 8 ===
+=== RUN 9 ===
+=== RUN 10 ===
+=== RUN 11 ===
+=== RUN 12 ===
+=== RUN 13 ===
+=== RUN 14 ===
+=== RUN 15 ===
+=== RUN 16 ===
+=== RUN 17 ===
+=== RUN 18 ===
+=== RUN 19 ===
+=== RUN 20 ===
+[41m[1m FAIL [22m[49m scripts/api-server/job-persistence-deterministic.test.ts[2m:367:5[22m[2m > [22mjob-persistence - recoverable behavior[2m > [22mrecovery from corrupted data[2m > [22mshould recover from malformed JSON in jobs file
+[31m[1mAssertionError[22m: expected [ { …(7) } ] to deeply equal [][39m
+[31m+     "status": "failed",[39m
+[41m[1m FAIL [22m[49m scripts/api-server/job-persistence-deterministic.test.ts[2m:367:5[22m[2m > [22mjob-persistence - recoverable behavior[2m > [22mrecovery from corrupted data[2m > [22mshould recover from malformed JSON in jobs file
+[31m[1mAssertionError[22m: expected [ { …(7) } ] to deeply equal [][39m
+[31m+     "status": "failed",[39m
+[41m[1m FAIL [22m[49m scripts/api-server/job-persistence-deterministic.test.ts[2m:367:5[22m[2m > [22mjob-persistence - recoverable behavior[2m > [22mrecovery from corrupted data[2m > [22mshould recover from malformed JSON in jobs file
+[31m[1mAssertionError[22m: expected [ { …(7) }, { …(7) }, { …(6) }, …(1) ] to deeply equal [][39m
+[31m+     "status": "failed",[39m
+[31m+     "status": "failed",[39m

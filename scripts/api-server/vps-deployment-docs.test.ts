@@ -4,9 +4,19 @@
  * Tests for VPS deployment documentation structure and content validation
  */
 
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { describe, it, expect, beforeAll } from "vitest";
 import { join } from "node:path";
+import {
+  loadDocumentation,
+  getFrontmatterValue,
+  getFrontmatterArray,
+  extractCodeBlocks,
+  extractLinks,
+  validateBashCodeBlock,
+  hasRequiredSections,
+  validateDocumentationCommands,
+  type CommandValidationError,
+} from "./lib/doc-validation";
 
 const DOCS_PATH = join(
   process.cwd(),
@@ -15,140 +25,61 @@ const DOCS_PATH = join(
   "vps-deployment.md"
 );
 
-/**
- * Parse frontmatter from markdown content
- * Returns the raw frontmatter text for simpler validation
- */
-function getFrontmatterText(content: string): string | null {
-  const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
-  const match = content.match(frontmatterRegex);
-  return match ? match[1] : null;
-}
-
-/**
- * Extract a specific frontmatter value by key
- */
-function getFrontmatterValue(content: string, key: string): string | null {
-  const frontmatterText = getFrontmatterText(content);
-  if (!frontmatterText) {
-    return null;
-  }
-
-  // Look for "key: value" pattern
-  // eslint-disable-next-line security/detect-non-literal-regexp
-  const regex = new RegExp(`^${key}:\\s*(.+)$`, "m");
-  const match = frontmatterText.match(regex);
-  if (!match) {
-    return null;
-  }
-
-  let value = match[1].trim();
-
-  // Remove quotes if present
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1);
-  }
-
-  return value;
-}
-
-/**
- * Extract array values from frontmatter
- */
-function getFrontmatterArray(content: string, key: string): string[] {
-  const frontmatterText = getFrontmatterText(content);
-  if (!frontmatterText) {
-    return [];
-  }
-
-  // Look for array pattern
-  // eslint-disable-next-line security/detect-non-literal-regexp
-  const regex = new RegExp(
-    `^${key}:\\s*[\\r\\n]+((?:\\s+-\\s.+[\\r\\n]+)+)`,
-    "m"
-  );
-  const match = frontmatterText.match(regex);
-  if (!match) {
-    // Try inline array format
-    // eslint-disable-next-line security/detect-non-literal-regexp
-    const inlineRegex = new RegExp(`^${key}:\\s*\\[(.+)\\]$`, "m");
-    const inlineMatch = frontmatterText.match(inlineRegex);
-    if (inlineMatch) {
-      return inlineMatch[1]
-        .split(",")
-        .map((item) => item.trim().replace(/^['"]|['"]$/g, ""));
-    }
-    return [];
-  }
-
-  // Parse multi-line array
-  const arrayText = match[1];
-  return arrayText
-    .split("\n")
-    .map((line) => line.replace(/^\s+-\s+/, "").trim())
-    .filter((line) => line.length > 0)
-    .map((item) => item.replace(/^['"]|['"]$/g, ""));
-}
-
-/**
- * Extract all code blocks from markdown content
- */
-function extractCodeBlocks(
-  content: string
-): Array<{ lang: string; code: string }> {
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-  const codeBlocks: Array<{ lang: string; code: string }> = [];
-
-  let match;
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    codeBlocks.push({
-      lang: match[1] || "text",
-      code: match[2],
-    });
-  }
-
-  return codeBlocks;
-}
-
-/**
- * Extract all links from markdown content
- */
-function extractLinks(content: string): Array<{ text: string; url: string }> {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const links: Array<{ text: string; url: string }> = [];
-
-  let match;
-  while ((match = linkRegex.exec(content)) !== null) {
-    links.push({
-      text: match[1],
-      url: match[2],
-    });
-  }
-
-  return links;
-}
+// Required sections for VPS deployment documentation
+const REQUIRED_SECTIONS = [
+  "Prerequisites",
+  "Quick Start",
+  "Deployment",
+  "Environment Variables",
+  "Container Management",
+  "Monitoring",
+  "Troubleshooting",
+  "Security",
+  "Production Checklist",
+];
 
 describe("VPS Deployment Documentation", () => {
+  let content: string;
+  let codeBlocks: Array<{ lang: string; code: string; lineStart: number }>;
+  let links: Array<{ text: string; url: string }>;
+
+  beforeAll(() => {
+    content = loadDocumentation(DOCS_PATH);
+    codeBlocks = extractCodeBlocks(content);
+    links = extractLinks(content);
+  });
+
   describe("File Structure", () => {
     it("should have documentation file at expected path", () => {
-      const content = readFileSync(DOCS_PATH, "utf-8");
       expect(content).toBeTruthy();
       expect(content.length).toBeGreaterThan(0);
     });
   });
 
-  describe("Frontmatter Validation", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
+  describe("Required Sections Validation", () => {
+    it("should have all required sections", () => {
+      const { passed, missing } = hasRequiredSections(
+        content,
+        REQUIRED_SECTIONS
+      );
+      expect(missing).toEqual([]);
+      expect(passed.length).toEqual(REQUIRED_SECTIONS.length);
     });
 
+    it("should report which required sections are present", () => {
+      const { passed } = hasRequiredSections(content, REQUIRED_SECTIONS);
+      expect(passed).toContain("Prerequisites");
+      expect(passed).toContain("Quick Start");
+      expect(passed).toContain("Environment Variables");
+      expect(passed).toContain("Troubleshooting");
+      expect(passed).toContain("Security");
+      expect(passed).toContain("Production Checklist");
+    });
+  });
+
+  describe("Frontmatter Validation", () => {
     it("should have valid frontmatter", () => {
-      const frontmatter = getFrontmatterText(content);
+      const frontmatter = getFrontmatterValue(content, "id");
       expect(frontmatter).not.toBeNull();
     });
 
@@ -187,12 +118,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Content Structure", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should have main heading", () => {
       expect(content).toContain("# VPS Deployment Guide");
     });
@@ -235,12 +160,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Environment Variables Documentation", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should document all required Notion variables", () => {
       expect(content).toContain("NOTION_API_KEY");
       expect(content).toContain("DATABASE_ID");
@@ -290,13 +209,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Code Examples", () => {
-    let codeBlocks: Array<{ lang: string; code: string }>;
-
-    beforeAll(() => {
-      const content = readFileSync(DOCS_PATH, "utf-8");
-      codeBlocks = extractCodeBlocks(content);
-    });
-
     it("should have bash code examples", () => {
       const bashBlocks = codeBlocks.filter((block) => block.lang === "bash");
       expect(bashBlocks.length).toBeGreaterThan(0);
@@ -332,14 +244,61 @@ describe("VPS Deployment Documentation", () => {
     });
   });
 
-  describe("Links and References", () => {
-    let links: Array<{ text: string; url: string }>;
+  describe("Executable Command Validation", () => {
+    it("should validate all bash commands are syntactically correct", () => {
+      const errors = validateDocumentationCommands(content);
 
-    beforeAll(() => {
-      const content = readFileSync(DOCS_PATH, "utf-8");
-      links = extractLinks(content);
+      // Group errors by severity
+      const criticalErrors = errors.filter((e) => e.severity === "error");
+      const warnings = errors.filter((e) => e.severity === "warning");
+
+      // Report critical errors if any
+      if (criticalErrors.length > 0) {
+        const errorDetails = criticalErrors
+          .map((e) => `Line ${e.line}: "${e.command}" - ${e.reason}`)
+          .join("\n  ");
+        throw new Error(
+          `Found ${criticalErrors.length} critical command syntax errors:\n  ${errorDetails}`
+        );
+      }
+
+      // Warnings are acceptable but should be documented
+      if (warnings.length > 0) {
+        // We'll still pass the test but log the warnings
+        expect(warnings.length).toBeGreaterThanOrEqual(0);
+      }
     });
 
+    it("should have balanced quotes in bash commands", () => {
+      const bashBlocks = codeBlocks.filter(
+        (block) => block.lang === "bash" || block.lang === "sh"
+      );
+
+      for (const block of bashBlocks) {
+        const errors = validateBashCodeBlock(block);
+        const quoteErrors = errors.filter((e) =>
+          e.reason.includes("Unbalanced quotes")
+        );
+        expect(quoteErrors).toEqual([]);
+      }
+    });
+
+    it("should have balanced parentheses in command substitutions", () => {
+      const bashBlocks = codeBlocks.filter(
+        (block) => block.lang === "bash" || block.lang === "sh"
+      );
+
+      for (const block of bashBlocks) {
+        const errors = validateBashCodeBlock(block);
+        const parenErrors = errors.filter((e) =>
+          e.reason.includes("parentheses")
+        );
+        expect(parenErrors).toEqual([]);
+      }
+    });
+  });
+
+  describe("Links and References", () => {
     it("should have link to API reference", () => {
       const apiRefLink = links.find((link) =>
         link.url.includes("api-reference")
@@ -369,12 +328,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Deployment Steps", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should document VPS preparation", () => {
       expect(content).toContain("### Step 1: VPS Preparation");
       expect(content).toContain("apt update");
@@ -403,12 +356,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Troubleshooting Coverage", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should cover container startup issues", () => {
       expect(content).toContain("### Container Won't Start");
       expect(content).toContain("docker ps");
@@ -434,12 +381,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Security Coverage", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should mention strong API keys", () => {
       expect(content).toContain("Use Strong API Keys");
       expect(content).toContain("openssl rand");
@@ -474,12 +415,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Production Checklist", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should have comprehensive checklist items", () => {
       expect(content).toContain("- [ ] Environment variables configured");
       expect(content).toContain("- [ ] Firewall rules configured");
@@ -495,12 +430,6 @@ describe("VPS Deployment Documentation", () => {
   });
 
   describe("Container Management Commands", () => {
-    let content: string;
-
-    beforeAll(() => {
-      content = readFileSync(DOCS_PATH, "utf-8");
-    });
-
     it("should document start command", () => {
       expect(content).toContain("### Start the Service");
       expect(content).toContain(

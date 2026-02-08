@@ -55,9 +55,27 @@ export interface JobStorage {
   jobs: PersistedJob[];
 }
 
-const DATA_DIR = join(process.cwd(), ".jobs-data");
-const JOBS_FILE = join(DATA_DIR, "jobs.json");
-const LOGS_FILE = join(DATA_DIR, "jobs.log");
+/**
+ * Get data directory from environment or use default
+ * Allows tests to override with isolated temp directories
+ */
+function getDataDir(): string {
+  return process.env.JOBS_DATA_DIR || join(process.cwd(), ".jobs-data");
+}
+
+/**
+ * Get jobs file path from environment or use default
+ */
+function getJobsFile(): string {
+  return process.env.JOBS_DATA_FILE || join(getDataDir(), "jobs.json");
+}
+
+/**
+ * Get logs file path from environment or use default
+ */
+function getLogsFile(): string {
+  return process.env.JOBS_LOG_FILE || join(getDataDir(), "jobs.log");
+}
 
 /**
  * Ensure data directory exists with retry logic for race conditions
@@ -65,11 +83,11 @@ const LOGS_FILE = join(DATA_DIR, "jobs.log");
 function ensureDataDir(): void {
   const maxRetries = 3;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    if (existsSync(DATA_DIR)) {
+    if (existsSync(getDataDir())) {
       return;
     }
     try {
-      mkdirSync(DATA_DIR, { recursive: true });
+      mkdirSync(getDataDir(), { recursive: true });
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -100,11 +118,11 @@ function loadJobs(): JobStorage {
     try {
       ensureDataDir();
 
-      if (!existsSync(JOBS_FILE)) {
+      if (!existsSync(getJobsFile())) {
         return { jobs: [] };
       }
 
-      const data = readFileSync(JOBS_FILE, "utf-8");
+      const data = readFileSync(getJobsFile(), "utf-8");
       return JSON.parse(data) as JobStorage;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -146,7 +164,7 @@ function saveJobs(storage: JobStorage): void {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       ensureDataDir();
-      writeFileSync(JOBS_FILE, JSON.stringify(storage, null, 2), "utf-8");
+      writeFileSync(getJobsFile(), JSON.stringify(storage, null, 2), "utf-8");
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -228,7 +246,7 @@ export function appendLog(entry: JobLogEntry): void {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       ensureDataDir();
-      appendFileSync(LOGS_FILE, logLine, "utf-8");
+      appendFileSync(getLogsFile(), logLine, "utf-8");
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -321,11 +339,11 @@ export function getJobLogs(jobId: string): JobLogEntry[] {
     try {
       ensureDataDir();
 
-      if (!existsSync(LOGS_FILE)) {
+      if (!existsSync(getLogsFile())) {
         return [];
       }
 
-      const logContent = readFileSync(LOGS_FILE, "utf-8");
+      const logContent = readFileSync(getLogsFile(), "utf-8");
       const lines = logContent.trim().split("\n");
 
       return lines
@@ -372,11 +390,11 @@ export function getRecentLogs(limit = 100): JobLogEntry[] {
     try {
       ensureDataDir();
 
-      if (!existsSync(LOGS_FILE)) {
+      if (!existsSync(getLogsFile())) {
         return [];
       }
 
-      const logContent = readFileSync(LOGS_FILE, "utf-8");
+      const logContent = readFileSync(getLogsFile(), "utf-8");
       const lines = logContent.trim().split("\n");
 
       const entries: JobLogEntry[] = lines

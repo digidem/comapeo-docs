@@ -6,51 +6,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { JobQueue, createJobQueue, type QueuedJob } from "./job-queue";
 import { getJobTracker, destroyJobTracker, type JobType } from "./job-tracker";
 import type { JobExecutionContext, JobOptions } from "./job-executor";
-import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-
-const DATA_DIR = join(process.cwd(), ".jobs-data");
-const JOBS_FILE = join(DATA_DIR, "jobs.json");
-const LOGS_FILE = join(DATA_DIR, "jobs.log");
-
-/**
- * Clean up test data directory
- */
-function cleanupTestData(): void {
-  if (existsSync(DATA_DIR)) {
-    try {
-      // Use rmSync with recursive option if available (Node.js v14.14+)
-      rmSync(DATA_DIR, { recursive: true, force: true });
-    } catch {
-      // Fallback to manual removal
-      if (existsSync(LOGS_FILE)) {
-        unlinkSync(LOGS_FILE);
-      }
-      if (existsSync(JOBS_FILE)) {
-        unlinkSync(JOBS_FILE);
-      }
-      try {
-        rmdirSync(DATA_DIR);
-      } catch {
-        // Ignore error if directory still has files
-      }
-    }
-  }
-}
+import { setupTestEnvironment } from "./test-helpers";
 
 describe("JobQueue", () => {
   let queue: JobQueue;
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
 
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
     queue = new JobQueue({ concurrency: 2 });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await queue.awaitTeardown();
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   describe("constructor", () => {
@@ -523,15 +495,17 @@ describe("JobQueue", () => {
 });
 
 describe("concurrent request behavior", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should handle multiple simultaneous job additions correctly", async () => {
@@ -942,15 +916,17 @@ describe("concurrent request behavior", () => {
 });
 
 describe("createJobQueue", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
   afterEach(() => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should create a queue with executors for all job types", () => {
@@ -975,15 +951,17 @@ describe("createJobQueue", () => {
 });
 
 describe("cancellation behavior validation", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should abort running job with AbortSignal", async () => {
@@ -1152,15 +1130,17 @@ describe("cancellation behavior validation", () => {
 });
 
 describe("status transition validation", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should transition from pending to running to completed", async () => {
@@ -1374,15 +1354,17 @@ describe("status transition validation", () => {
 });
 
 describe("race condition validation", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should handle concurrent processQueue invocations safely", async () => {
@@ -1608,15 +1590,17 @@ describe("race condition validation", () => {
 });
 
 describe("idempotent operation validation", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should handle cancelling already cancelled job gracefully", async () => {
@@ -1812,15 +1796,17 @@ describe("idempotent operation validation", () => {
 });
 
 describe("status transition validation", () => {
+  let testEnv: ReturnType<typeof setupTestEnvironment>;
+
   beforeEach(() => {
+    testEnv = setupTestEnvironment();
     destroyJobTracker();
-    cleanupTestData();
     getJobTracker();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     destroyJobTracker();
-    cleanupTestData();
+    testEnv.cleanup();
   });
 
   it("should follow valid status state machine for successful job", async () => {

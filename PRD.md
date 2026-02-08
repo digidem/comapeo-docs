@@ -14,18 +14,18 @@ Ralphy will execute each unchecked review task sequentially using your chosen AI
 - [x] Review API server entrypoints and ensure routes match intended job operations
 - [x] Validate job queue behavior for concurrency, cancellation, and status transitions
 - [x] Confirm job persistence and log capture are deterministic and recoverable
-- [ ] Review GitHub status callback flow for idempotency and failure handling
+- [x] Review GitHub status callback flow for idempotency and failure handling
 
 ## Database & API
 
-- [ ] Validate endpoint input schemas and error responses for all API operations
-- [ ] Verify authentication middleware coverage for protected operations
-- [ ] Confirm audit records are written for authenticated and failed requests
+- [x] Validate endpoint input schemas and error responses for all API operations
+- [x] Verify authentication middleware coverage for protected operations
+- [x] Confirm audit records are written for authenticated and failed requests
 
 ## UI/UX
 
-- [ ] Validate API usage documentation examples against current request and response shapes
-- [ ] Verify deployment runbook is simple, ordered, and executable for first-time operators
+- [x] Validate API usage documentation examples against current request and response shapes
+- [x] Verify deployment runbook is simple, ordered, and executable for first-time operators
 - [ ] Confirm docker-compose integration guidance includes adding service into an existing stack
 - [ ] Confirm GitHub integration guidance covers required secrets and workflow invocation
 

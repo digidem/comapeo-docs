@@ -223,7 +223,7 @@ function logStatusSummary(pages: PageWithStatus[]) {
 /**
  * Transform raw Notion page to structured format
  */
-function transformPage(page: any): PageWithStatus {
+export function transformPage(page: any): PageWithStatus {
   const properties = page.properties || {};
 
   // Extract title safely

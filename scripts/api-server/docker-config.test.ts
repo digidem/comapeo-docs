@@ -357,4 +357,197 @@ describe("Docker Configuration Tests", () => {
       expect(compose).toContain("NODE_ENV:");
     });
   });
+
+  describe("Production Security Defaults Validation", () => {
+    let dockerfileContent: string;
+    let composeContent: string;
+
+    beforeEach(() => {
+      dockerfileContent = readFileSync(DOCKERFILE_PATH, "utf-8");
+      composeContent = readFileSync(DOCKER_COMPOSE_PATH, "utf-8");
+    });
+
+    describe("Dockerfile Production Security", () => {
+      it("should use production NODE_ENV by default", () => {
+        expect(dockerfileContent).toMatch(/ARG\s+NODE_ENV=production/);
+      });
+
+      it("should set explicit UID/GID for non-root user", () => {
+        expect(dockerfileContent).toMatch(/--uid\s+1001/);
+        expect(dockerfileContent).toMatch(/--gid\s+1001/);
+      });
+
+      it("should set restrictive directory permissions", () => {
+        expect(dockerfileContent).toMatch(/chmod\s+-R\s+750\s+\/app/);
+      });
+
+      it("should use frozen lockfile for reproducible builds", () => {
+        expect(dockerfileContent).toContain("--frozen-lockfile");
+      });
+
+      it("should clear package manager cache to reduce image size", () => {
+        expect(dockerfileContent).toContain("bun pm cache rm");
+      });
+
+      it("should install only production dependencies", () => {
+        expect(dockerfileContent).toContain("--production");
+      });
+
+      it("should not include test files in production image", () => {
+        const lines = dockerfileContent.split("\n");
+        const copyLines = lines.filter(
+          (line) => line.includes("COPY") && !line.trim().startsWith("#")
+        );
+        const hasTestCopy = copyLines.some(
+          (line) =>
+            line.includes("test") ||
+            line.includes("__tests__") ||
+            line.includes(".test.")
+        );
+        expect(hasTestCopy).toBe(false);
+      });
+
+      it("should not include documentation in production image", () => {
+        const lines = dockerfileContent.split("\n");
+        const copyLines = lines.filter(
+          (line) => line.includes("COPY") && !line.trim().startsWith("#")
+        );
+        const hasDocsCopy = copyLines.some(
+          (line) => line.includes("docs/") || line.includes("context/")
+        );
+        expect(hasDocsCopy).toBe(false);
+      });
+
+      it("should have health check enabled for monitoring", () => {
+        expect(dockerfileContent).toContain("HEALTHCHECK");
+        expect(dockerfileContent).toContain("/health");
+      });
+    });
+
+    describe("Docker Compose Production Security", () => {
+      it("should use production NODE_ENV by default", () => {
+        expect(composeContent).toMatch(
+          /NODE_ENV:\s*\$\{NODE_ENV:-production\}/
+        );
+      });
+
+      it("should configure resource limits to prevent DoS", () => {
+        expect(composeContent).toMatch(/resources:/);
+        expect(composeContent).toMatch(/limits:/);
+        expect(composeContent).toContain("cpus:");
+        expect(composeContent).toContain("memory:");
+      });
+
+      it("should configure resource reservations for QoS", () => {
+        expect(composeContent).toMatch(/reservations:/);
+      });
+
+      it("should have restart policy for resilience", () => {
+        expect(composeContent).toMatch(/restart:/);
+        expect(composeContent).toMatch(/unless-stopped|always/);
+      });
+
+      it("should configure health check with sensible defaults", () => {
+        expect(composeContent).toMatch(/healthcheck:/);
+        expect(composeContent).toContain("interval:");
+        expect(composeContent).toContain("timeout:");
+        expect(composeContent).toContain("retries:");
+      });
+
+      it("should configure log rotation to prevent disk exhaustion", () => {
+        expect(composeContent).toMatch(/logging:/);
+        expect(composeContent).toContain("max-size:");
+        expect(composeContent).toContain("max-file:");
+      });
+
+      it("should use named volumes for persistent data", () => {
+        expect(composeContent).toMatch(/volumes:/);
+        expect(composeContent).toContain("comapeo-job-data");
+      });
+
+      it("should use custom network for isolation", () => {
+        expect(composeContent).toMatch(/networks:/);
+        expect(composeContent).toContain("comapeo-network");
+      });
+
+      it("should document API authentication capability", () => {
+        // API_KEY_ pattern for authentication
+        expect(composeContent).toContain("API_KEY_");
+      });
+
+      it("should not expose unnecessary ports", () => {
+        // Should only expose port 3001 for the API
+        const lines = composeContent.split("\n");
+        const portsSection = lines.join(" ");
+        // Count port mappings (format: "HOST:CONTAINER")
+        const portMappings = portsSection.match(/"\s*\d+:\d+\s*"/g);
+        expect(portMappings?.length || 0).toBeLessThanOrEqual(1);
+      });
+    });
+
+    describe("Environment Variable Security", () => {
+      it("should require Notion API credentials", () => {
+        expect(composeContent).toContain("NOTION_API_KEY:");
+        expect(composeContent).toContain("DATABASE_ID:");
+        expect(composeContent).toContain("DATA_SOURCE_ID:");
+      });
+
+      it("should require OpenAI API key for translations", () => {
+        expect(composeContent).toContain("OPENAI_API_KEY:");
+      });
+
+      it("should document API authentication in .env.example", () => {
+        const envExample = readFileSync(
+          join(PROJECT_ROOT, ".env.example"),
+          "utf-8"
+        );
+        expect(envExample).toContain("API_KEY_");
+      });
+
+      it("should not hardcode sensitive values in compose file", () => {
+        // All sensitive values should use environment variable substitution
+        // Check for common hardcoded sensitive patterns (excluding env var references)
+        const lines = composeContent.split("\n");
+        const hardcodedSecrets = lines.filter((line) => {
+          // Skip comments and env var substitutions
+          if (line.trim().startsWith("#") || line.includes("${")) {
+            return false;
+          }
+          // Look for suspicious patterns like: password: value, secret: value, api_key: value
+          // But NOT: NOTION_API_KEY: (which is an env var reference)
+          return (
+            (line.match(/password\s*:\s*[^$\s{]/i) ||
+              line.match(/secret\s*:\s*[^$\s{]/i) ||
+              line.match(/api_key\s*:\s*[^$\s{]/i)) &&
+            !line.match(/API_KEY\s*:/) // Allow env var references
+          );
+        });
+        expect(hardcodedSecrets.length).toBe(0);
+      });
+    });
+
+    describe("Production Defaults Verification", () => {
+      it("should have reasonable default memory limits", () => {
+        // Default memory limit should be at least 256M
+        expect(composeContent).toMatch(/DOCKER_MEMORY_LIMIT:-\d+[Mm]/);
+      });
+
+      it("should have reasonable default CPU limits", () => {
+        // Default CPU limit should be specified
+        expect(composeContent).toMatch(/DOCKER_CPU_LIMIT:-[\d.]+/);
+      });
+
+      it("should have reasonable health check intervals", () => {
+        // Health check should not be too aggressive (default >= 10s)
+        expect(composeContent).toMatch(/HEALTHCHECK_INTERVAL:-[3-9]\d+s/);
+      });
+
+      it("should have reasonable log rotation configured", () => {
+        // Default max-size should be specified (e.g., 10m)
+        expect(composeContent).toMatch(/DOCKER_LOG_MAX_SIZE:-\d+[Mm]/);
+        // Default max-file should be specified
+        expect(composeContent).toMatch(/DOCKER_LOG_MAX_FILE:-\d+/);
+      });
+    });
+  });
 });

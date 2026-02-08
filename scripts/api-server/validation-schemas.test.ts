@@ -413,7 +413,7 @@ describe("Validation Helpers - safeValidate", () => {
   it("should return failure with error for invalid input", () => {
     const result = safeValidate(jobTypeSchema, "invalid:type");
     expect(result.success).toBe(false);
-    if (!result.success) {
+    if (result.success === false) {
       expect(result.error).toBeDefined();
       expect(result.error.issues.length).toBeGreaterThan(0);
     }
@@ -656,7 +656,7 @@ describe("Validation Schemas - Constants", () => {
     expect(VALID_JOB_STATUSES).toBeDefined();
     expect(MAX_JOB_ID_LENGTH).toBeDefined();
 
-    expect(VALID_JOB_TYPES).toHaveLength(7);
+    expect(VALID_JOB_TYPES).toHaveLength(8);
     expect(VALID_JOB_STATUSES).toHaveLength(4);
     expect(MAX_JOB_ID_LENGTH).toBe(100);
   });

@@ -399,10 +399,13 @@ export async function generatePlaceholders(
     // Analyze pages
     const pageAnalyses = await PageAnalyzer.analyzePages(
       pagesToProcess.map((page) => ({
-        id: page.id,
+        id: String(page.id),
         title:
-          page.properties?.[NOTION_PROPERTIES.TITLE]?.title?.[0]?.plain_text ||
-          "Untitled",
+          (
+            page.properties?.[NOTION_PROPERTIES.TITLE]?.title?.[0] as {
+              plain_text?: string;
+            }
+          )?.plain_text || "Untitled",
       })),
       {
         skipRecentlyModified: options.skipRecentlyModified ?? true,
@@ -599,6 +602,92 @@ export async function getHealthStatus(config: NotionApiConfig): Promise<
       success: false,
       error: {
         code: "HEALTH_CHECK_ERROR",
+        message: error instanceof Error ? error.message : String(error),
+        details: error,
+      },
+      metadata: {
+        executionTimeMs: Date.now() - startTime,
+        timestamp: new Date(),
+      },
+    };
+  }
+}
+
+// ============================================================================
+// COUNT OPERATIONS
+// ============================================================================
+
+/**
+ * Page count result
+ */
+export interface PageCountResult {
+  count: number;
+  fetchedCount: number;
+  processedCount: number;
+  statusFilter?: string;
+  includeRemoved: boolean;
+}
+
+/**
+ * Count pages in Notion database matching the provided filters
+ *
+ * @param config - Notion API configuration
+ * @param options - Count options (filtering)
+ * @param onProgress - Optional progress callback
+ * @returns Page count with metadata
+ *
+ * @example
+ * ```ts
+ * const result = await countPages(
+ *   { apiKey: process.env.NOTION_API_KEY!, databaseId: 'abc123' },
+ *   { statusFilter: 'Draft' }
+ * );
+ * if (result.success) {
+ *   console.log(`Found ${result.data?.count} pages`);
+ * }
+ * ```
+ */
+export async function countPages(
+  config: NotionApiConfig,
+  options: FetchAllOptions = {},
+  onProgress?: ProgressCallback
+): Promise<ApiResult<PageCountResult>> {
+  const startTime = Date.now();
+
+  try {
+    // Set environment variables for legacy functions
+    if (config.apiKey) process.env.NOTION_API_KEY = config.apiKey;
+    if (config.databaseId) process.env.DATABASE_ID = config.databaseId;
+    if (config.dataSourceId) process.env.DATA_SOURCE_ID = config.dataSourceId;
+
+    // Fetch data with exportFiles=false for counting only
+    const result = await fetchAllNotionData({
+      ...options,
+      exportFiles: false,
+      progressLogger: onProgress,
+    });
+
+    const countResult: PageCountResult = {
+      count: result.processedCount,
+      fetchedCount: result.fetchedCount,
+      processedCount: result.processedCount,
+      statusFilter: options.statusFilter,
+      includeRemoved: options.includeRemoved ?? false,
+    };
+
+    return {
+      success: true,
+      data: countResult,
+      metadata: {
+        executionTimeMs: Date.now() - startTime,
+        timestamp: new Date(),
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        code: "COUNT_ERROR",
         message: error instanceof Error ? error.message : String(error),
         details: error,
       },

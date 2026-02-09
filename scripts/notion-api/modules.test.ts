@@ -292,11 +292,35 @@ describe("Notion API Modules", () => {
         url: "https://notion.so/page-123",
         properties: {
           Title: {
-            title: [{ plain_text: "Test Page" }],
+            id: "title-property-id",
+            type: "title",
+            title: [
+              {
+                plain_text: "Test Page",
+                href: null,
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                type: "text",
+                text: { content: "Test Page", link: null },
+              },
+            ],
           },
         },
         last_edited_time: "2024-01-01T00:00:00.000Z",
         created_time: "2024-01-01T00:00:00.000Z",
+        object: "page" as const,
+        archived: false,
+        in_trash: false,
+        is_locked: false,
+        parent: { type: "workspace", workspace: true },
+        cover: null,
+        icon: null,
       });
 
       const config: NotionApiConfig = {
@@ -411,7 +435,26 @@ describe("Notion API Modules", () => {
         {
           id: "page-123",
           properties: {
-            Title: { title: [{ plain_text: "Test Page" }] },
+            Title: {
+              id: "title-property-id",
+              type: "title",
+              title: [
+                {
+                  plain_text: "Test Page",
+                  href: null,
+                  annotations: {
+                    bold: false,
+                    italic: false,
+                    strikethrough: false,
+                    underline: false,
+                    code: false,
+                    color: "default",
+                  },
+                  type: "text",
+                  text: { content: "Test Page", link: null },
+                },
+              ],
+            },
             Language: { select: { name: "English" } },
             "Element Type": { select: { name: "Page" } },
             Status: { select: { name: "Draft" } },

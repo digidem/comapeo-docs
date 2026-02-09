@@ -43,24 +43,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -70,7 +70,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -82,13 +82,23 @@ jobs:
 
       - name: PR comment with image reference
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
+            const prNumber = context.payload.pull_request.number;
             const imageRef = '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}';
-            const comment = `### Docker image built for PR #${{ github.event.number }}
+            const platformList = 'linux/amd64, linux/arm64';
+            const commitSha = context.payload.pull_request.head.sha.substring(0, 7);
 
-            Image: \`${imageRef}\`
+            const commentBody = `## 🐳 Docker Image Built
+
+            Your Docker image has been built for this PR.
+
+            **Image Reference:** \`${imageRef}\`
+
+            **Platforms:** ${platformList}
+
+            ### Testing
 
             To test this image:
             \`\`\`bash
@@ -96,11 +106,41 @@ jobs:
             docker run -p 3001:3001 ${imageRef}
             \`\`\`
 
-            *Note: This image is built but not pushed. Use the workflow dispatch to push to Docker Hub.*`;
+            ### Notes
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            > ⚠️ **Note:** This image is built but not pushed to Docker Hub.
+            > Use the workflow dispatch to push to Docker Hub after review.
+
+            ---
+
+            <sub>Built with commit ${commitSha}</sub>`;
+
+            // Check if comment already exists
+            const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment
+              issue_number: prNumber,
             });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('🐳 Docker Image Built')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: commentBody,
+              });
+            }

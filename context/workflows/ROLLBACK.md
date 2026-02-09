@@ -32,6 +32,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 ### Scenario 1: Performance Degradation
 
 **Symptoms**:
+
 - Script execution time increased significantly (>50%)
 - High memory usage during page processing
 - Timeout errors in CI/CD pipelines
@@ -39,11 +40,13 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 **Rollback Steps**:
 
 1. **Disable retry feature**:
+
    ```bash
    export ENABLE_RETRY_IMAGE_PROCESSING=false
    ```
 
 2. **Monitor metrics**:
+
    ```bash
    # Check if retry-metrics.json shows high retry frequency
    cat retry-metrics.json | jq '.metrics.retryFrequency'
@@ -52,6 +55,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 3. **Run test execution**:
+
    ```bash
    bun run notion:fetch-all
    # Time the execution and compare with baseline
@@ -65,6 +69,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 ### Scenario 2: Incorrect Image Processing
 
 **Symptoms**:
+
 - Images not downloading correctly
 - Broken image references in generated markdown
 - S3 URL detection false positives/negatives
@@ -72,11 +77,13 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 **Rollback Steps**:
 
 1. **Disable retry feature**:
+
    ```bash
    export ENABLE_RETRY_IMAGE_PROCESSING=false
    ```
 
 2. **Clear existing generated content**:
+
    ```bash
    # Switch to content branch and clean
    git worktree add worktrees/content content
@@ -88,6 +95,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 3. **Regenerate content with single-pass processing**:
+
    ```bash
    bun run notion:fetch-all
    ```
@@ -100,6 +108,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 ### Scenario 3: Retry Logic Bugs
 
 **Symptoms**:
+
 - Infinite retry loops
 - Race conditions causing crashes
 - Incorrect retry metrics reporting
@@ -107,11 +116,13 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 **Rollback Steps**:
 
 1. **Immediate disable**:
+
    ```bash
    export ENABLE_RETRY_IMAGE_PROCESSING=false
    ```
 
 2. **Check for stuck processes**:
+
    ```bash
    # If running in background, kill any hung processes
    ps aux | grep notion-fetch
@@ -119,6 +130,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 3. **Inspect retry metrics**:
+
    ```bash
    cat retry-metrics.json
    # Look for anomalies:
@@ -128,6 +140,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 4. **Clean state and restart**:
+
    ```bash
    # Remove potentially corrupted cache
    rm -f image-cache.json
@@ -142,6 +155,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 ### Key Metrics to Track
 
 1. **Execution Time**:
+
    ```bash
    # Time the script execution
    time bun run notion:fetch-all
@@ -151,6 +165,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 2. **Image Download Success Rate**:
+
    ```bash
    # Count images in output
    find static/images -type f -name "*.png" -o -name "*.jpg" | wc -l
@@ -159,6 +174,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 3. **Metrics File**:
+
    ```bash
    # After rollback, verify retry metrics show disabled state
    cat retry-metrics.json | jq '.'
@@ -176,7 +192,7 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
    ```
 
 4. **Console Output**:
-   - Look for: "ℹ️  Using single-pass processing (retry disabled)"
+   - Look for: "ℹ️ Using single-pass processing (retry disabled)"
    - Absence of: "🔄 Retry attempt X/Y" messages
    - No retry-related warnings or errors
 
@@ -185,12 +201,14 @@ echo "ENABLE_RETRY_IMAGE_PROCESSING=false" >> .env
 If the issue is resolved or was a false alarm:
 
 1. **Remove the environment variable**:
+
    ```bash
    unset ENABLE_RETRY_IMAGE_PROCESSING
    # Or remove from .env file
    ```
 
 2. **Verify default behavior**:
+
    ```bash
    # Check that retry is enabled by default
    bun scripts/notion-fetch/generateBlocks.ts
@@ -203,6 +221,7 @@ If the issue is resolved or was a false alarm:
    - Confirm execution time is acceptable
 
 4. **Gradual rollout** (if needed):
+
    ```bash
    # Test on subset of pages first
    bun run notion:fetch -- --limit 10
@@ -213,10 +232,10 @@ If the issue is resolved or was a false alarm:
 
 ## Environment Variables Reference
 
-| Variable | Default | Description | Valid Values |
-|----------|---------|-------------|--------------|
-| `ENABLE_RETRY_IMAGE_PROCESSING` | `"true"` | Enable/disable retry logic | `"true"`, `"false"` |
-| `MAX_IMAGE_RETRIES` | `"3"` | Maximum retry attempts per page | `"1"` to `"10"` |
+| Variable                        | Default  | Description                     | Valid Values        |
+| ------------------------------- | -------- | ------------------------------- | ------------------- |
+| `ENABLE_RETRY_IMAGE_PROCESSING` | `"true"` | Enable/disable retry logic      | `"true"`, `"false"` |
+| `MAX_IMAGE_RETRIES`             | `"3"`    | Maximum retry attempts per page | `"1"` to `"10"`     |
 
 **Note**: Values are case-insensitive strings. Any value other than "true" (case-insensitive) disables the feature.
 
@@ -227,6 +246,7 @@ If the issue is resolved or was a false alarm:
 **Cause**: Environment variable not set correctly or process not restarted.
 
 **Solution**:
+
 ```bash
 # Verify environment variable
 echo $ENABLE_RETRY_IMAGE_PROCESSING
@@ -243,6 +263,7 @@ env | grep ENABLE_RETRY_IMAGE_PROCESSING
 **Cause**: Issue is not related to retry logic, but underlying image download mechanism.
 
 **Solution**:
+
 - This indicates the problem existed before PR #102
 - Check Notion API connectivity
 - Verify image cache (`image-cache.json`) is not corrupted
@@ -253,6 +274,7 @@ env | grep ENABLE_RETRY_IMAGE_PROCESSING
 **Cause**: File permissions or metrics logging code failure.
 
 **Solution**:
+
 ```bash
 # Check file permissions
 ls -la retry-metrics.json
@@ -290,6 +312,7 @@ cat retry-metrics.json | jq '.configuration.retryEnabled'
 If rollback does not resolve the issue:
 
 1. **Capture diagnostics**:
+
    ```bash
    # Save full console output
    bun run notion:fetch-all > rollback-diagnostics.log 2>&1

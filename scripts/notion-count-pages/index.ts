@@ -150,6 +150,19 @@ async function countPages(options: CountOptions) {
     }
   }
 
+  // Build subpageIdSet matching generateBlocks.ts logic:
+  // Any page referenced as a Sub-item by another page is a sub-page
+  // and won't generate its own markdown file (it gets merged into its parent).
+  const subpageIdSet = new Set<string>();
+  for (const page of expandedPages) {
+    const relations = (page as any)?.properties?.["Sub-item"]?.relation ?? [];
+    for (const relation of relations) {
+      if (relation?.id) {
+        subpageIdSet.add(relation.id);
+      }
+    }
+  }
+
   const LANGUAGE_TO_LOCALE: Record<string, string> = {
     English: "en",
     Spanish: "es",
@@ -178,6 +191,12 @@ async function countPages(options: CountOptions) {
 
     // eslint-disable-next-line security/detect-object-injection -- elementType is from our own data
     byElementType[elementType] = (byElementType[elementType] || 0) + 1;
+
+    // Skip pages that are sub-items of other pages — generateBlocks.ts
+    // merges these into their parent rather than creating separate files.
+    if (subpageIdSet.has(page.id as string)) {
+      continue;
+    }
 
     // Count "Page" type parents that will produce English markdown.
     // A page produces English markdown if:

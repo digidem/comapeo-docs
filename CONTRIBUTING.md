@@ -16,9 +16,11 @@ Thank you for your interest in contributing! This guide explains our two-branch 
 We use a **two-branch architecture** to separate code from generated content:
 
 ### `main` branch
+
 **Purpose**: Source code, scripts, and configuration
 
 **Contains**:
+
 - TypeScript scripts (`scripts/`)
 - React components (`src/`)
 - Configuration files (`docusaurus.config.ts`, `package.json`, etc.)
@@ -28,9 +30,11 @@ We use a **two-branch architecture** to separate code from generated content:
 **For**: Developers working on documentation infrastructure, scripts, and site features
 
 ### `content` branch
+
 **Purpose**: Generated documentation content from Notion CMS
 
 **Contains**:
+
 - Markdown documentation (`docs/`)
 - Translations (`i18n/`)
 - Images (`static/images/`)
@@ -60,6 +64,7 @@ bun dev
 ### Making Changes
 
 1. **Create feature branch** from `main`:
+
    ```bash
    git checkout main
    git pull origin main
@@ -69,6 +74,7 @@ bun dev
 2. **Make your code changes** (src/, scripts/, .github/, etc.)
 
 3. **Test locally** with content:
+
    ```bash
    # If you need fresh content
    git fetch origin content
@@ -81,6 +87,7 @@ bun dev
    ```
 
 4. **Push changes** and create PR targeting `main`:
+
    ```bash
    git add .
    git commit -m "feat: your descriptive commit message"
@@ -93,6 +100,7 @@ bun dev
 ### Local Development Tips
 
 **Option 1: Use Content Branch** (Recommended - Fast)
+
 ```bash
 git fetch origin content
 git checkout origin/content -- docs/ i18n/ static/images/
@@ -100,6 +108,7 @@ bun dev
 ```
 
 **Option 2: Generate from Notion** (Requires API access)
+
 ```bash
 # Setup .env with Notion credentials
 cp .env.example .env
@@ -111,6 +120,7 @@ bun dev
 ```
 
 **Option 3: Git Worktree** (For multi-branch work)
+
 ```bash
 # Create worktree for content branch
 mkdir -p worktrees
@@ -126,6 +136,7 @@ cd ../..              # Work on code
 ### ⚠️ Important: Content is Managed via Notion
 
 Direct edits to the `content` branch are **not recommended** because:
+
 - Content is automatically generated from Notion CMS
 - Manual changes will be overwritten on next sync
 - Content workflow is managed by automation
@@ -133,6 +144,7 @@ Direct edits to the `content` branch are **not recommended** because:
 ### To Update Content
 
 **Primary Method** - Edit in Notion CMS:
+
 1. Update content in Notion database
 2. Trigger `Sync Notion Docs` workflow via GitHub Actions
 3. Review changes in staging deployment (GitHub Pages)
@@ -143,6 +155,7 @@ Direct edits to the `content` branch are **not recommended** because:
 If immediate content fix is needed before Notion sync:
 
 1. **Create branch from content**:
+
    ```bash
    git checkout content
    git pull origin content
@@ -150,6 +163,7 @@ If immediate content fix is needed before Notion sync:
    ```
 
 2. **Make minimal required changes**:
+
    ```bash
    # Edit specific files only
    git add docs/specific-file.md
@@ -157,6 +171,7 @@ If immediate content fix is needed before Notion sync:
    ```
 
 3. **Create PR targeting content branch**:
+
    ```bash
    git push origin hotfix/urgent-content-fix
    gh pr create --base content
@@ -270,6 +285,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 - `perf:` - Performance improvements
 
 **Examples**:
+
 - `feat: add dark mode toggle to documentation site`
 - `fix: resolve broken links in sidebar navigation`
 - `docs: update contribution guidelines for two-branch workflow`
@@ -279,9 +295,11 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ```markdown
 ## Summary
+
 Brief description of changes and motivation.
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Documentation update
@@ -289,7 +307,9 @@ Brief description of changes and motivation.
 - [ ] Other (describe)
 
 ## Testing
+
 Describe testing performed:
+
 - [ ] Ran `bun test` - all tests pass
 - [ ] Ran `bun run typecheck` - no errors
 - [ ] Ran `bun run build` - build succeeds
@@ -297,9 +317,11 @@ Describe testing performed:
 - [ ] Verified on different browsers (if UI change)
 
 ## Screenshots
+
 (If applicable, add screenshots of UI changes)
 
 ## Related Issues
+
 Closes #issue-number
 Relates to #other-issue
 ```
@@ -322,7 +344,7 @@ Before submitting PR:
   - [ ] CONTRIBUTING.md updated if workflow changes
 - [ ] **Git**
   - [ ] Commit messages follow Conventional Commits
-  - [ ] Branch name descriptive (feat/*, fix/*, docs/*, etc.)
+  - [ ] Branch name descriptive (feat/_, fix/_, docs/\*, etc.)
   - [ ] No merge conflicts with base branch
 
 ### Review Process
@@ -372,6 +394,7 @@ If critical issues arise after merging the two-branch architecture changes, foll
 ### When to Rollback
 
 Consider rollback if:
+
 - Production deployments are consistently failing
 - Content is not being synced properly to `content` branch
 - Developers are blocked and cannot work around the issue
@@ -485,6 +508,7 @@ git push origin main-backup:main --force
 ```
 
 **After running this command**:
+
 - Notify team immediately
 - Follow "Developer Cleanup" steps above
 - Complete "Post-Rollback Actions" checklist

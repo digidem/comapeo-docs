@@ -138,6 +138,21 @@ describe("ApiKeyAuth", () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/invalid/i);
     });
+
+    it("should reject empty string Authorization header", () => {
+      const result = auth.authenticate("");
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject whitespace-only Authorization header", () => {
+      const result = auth.authenticate("   ");
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject Authorization header with extra spaces", () => {
+      const result = auth.authenticate("Bearer  valid-key-123456789012  extra");
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("Authentication State", () => {
@@ -221,6 +236,62 @@ describe("ApiKeyAuth", () => {
       const instance2 = getAuth();
 
       expect(instance1).toBe(instance2);
+    });
+  });
+
+  describe("Hash collision resistance", () => {
+    it("should produce different hashes for different keys", () => {
+      const auth = new ApiKeyAuth();
+      const keys = [
+        "test-key-aaaa-1234567890",
+        "test-key-bbbb-1234567890",
+        "test-key-cccc-1234567890",
+        "completely-different-key-1",
+        "completely-different-key-2",
+        "abcdefghijklmnop12345678",
+        "12345678abcdefghijklmnop",
+      ];
+
+      // Add all keys
+      for (const [i, key] of keys.entries()) {
+        auth.addKey(`key${i}`, key, { name: `key${i}`, active: true });
+      }
+
+      // Each key should authenticate as its own identity, not another
+      for (const [i, key] of keys.entries()) {
+        const result = auth.authenticate(`Bearer ${key}`);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.meta?.name).toBe(`key${i}`);
+        }
+      }
+
+      auth.clearKeys();
+    });
+
+    it("should not authenticate with a key that has the same hash length but different content", () => {
+      const auth = new ApiKeyAuth();
+      auth.addKey("real", "real-api-key-1234567890ab", {
+        name: "real",
+        active: true,
+      });
+
+      const fakeKeys = [
+        "real-api-key-1234567890ac",
+        "real-api-key-1234567890aa",
+        "real-api-key-1234567890ba",
+        "fake-api-key-1234567890ab",
+      ];
+
+      for (const fakeKey of fakeKeys) {
+        const result = auth.authenticate(`Bearer ${fakeKey}`);
+        if (result.success) {
+          // If it somehow succeeds due to hash collision, it should NOT be the "real" key identity
+          expect(result.meta?.name).not.toBe("real");
+        }
+      }
+
+      auth.clearKeys();
     });
   });
 

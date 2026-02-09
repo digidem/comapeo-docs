@@ -278,27 +278,6 @@ export class JobQueue {
 export function createJobQueue(options: JobQueueOptions): JobQueue {
   const queue = new JobQueue(options);
 
-  // Register default executor for all job types
-  const defaultExecutor: JobExecutor = async (context, signal) => {
-    // Check if aborted before starting
-    if (signal.aborted) {
-      throw new Error("Job cancelled before starting");
-    }
-
-    // Create a promise that rejects when aborted
-    const abortPromise = new Promise<never>((_resolve, reject) => {
-      signal.addEventListener("abort", () => {
-        reject(new Error("Job cancelled"));
-      });
-    });
-
-    // Race between job execution and abort signal
-    await Promise.race([
-      executeJob("notion:fetch" as JobType, context, {} as JobOptions),
-      abortPromise,
-    ]);
-  };
-
   // Register executors for each job type
   const jobTypes: JobType[] = [
     "notion:fetch",

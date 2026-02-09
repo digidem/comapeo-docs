@@ -10,6 +10,8 @@ export default defineConfig({
       "**/dist/**",
       "**/build/**",
       "**/.{idea,git,cache,output,temp}/**",
+      // HTTP integration tests require Bun runtime (bun:test), run with: bun test
+      "**/http-integration.test.ts",
     ],
 
     // Environment configuration

@@ -40,32 +40,20 @@ import {
   getErrorCodeForStatus,
   getValidationErrorForField,
 } from "./response-schemas";
+import {
+  MAX_REQUEST_SIZE,
+  MAX_JOB_ID_LENGTH,
+  VALID_JOB_TYPES,
+  VALID_JOB_STATUSES,
+  isValidJobType,
+  isValidJobStatus,
+  isValidJobId,
+  PUBLIC_ENDPOINTS,
+  isPublicEndpoint,
+} from "./validation";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
-
-// Configuration constants
-const MAX_REQUEST_SIZE = 1_000_000; // 1MB max request size
-const MAX_JOB_ID_LENGTH = 100;
-
-// Valid job types and statuses for validation
-const VALID_JOB_TYPES: readonly JobType[] = [
-  "notion:fetch",
-  "notion:fetch-all",
-  "notion:count-pages",
-  "notion:translate",
-  "notion:status-translation",
-  "notion:status-draft",
-  "notion:status-publish",
-  "notion:status-publish-production",
-] as const;
-
-const VALID_JOB_STATUSES: readonly JobStatus[] = [
-  "pending",
-  "running",
-  "completed",
-  "failed",
-] as const;
 
 // Validation errors - extend the base ValidationError for compatibility
 class ValidationError extends BaseValidationError {
@@ -87,27 +75,6 @@ class ValidationError extends BaseValidationError {
     );
     this.name = "ValidationError";
   }
-}
-
-// Request validation
-function isValidJobType(type: string): type is JobType {
-  return VALID_JOB_TYPES.includes(type as JobType);
-}
-
-function isValidJobStatus(status: string): status is JobStatus {
-  return VALID_JOB_STATUSES.includes(status as JobStatus);
-}
-
-function isValidJobId(jobId: string): boolean {
-  // Basic validation: non-empty, reasonable length, no path traversal
-  if (!jobId || jobId.length > MAX_JOB_ID_LENGTH) {
-    return false;
-  }
-  // Prevent path traversal attacks
-  if (jobId.includes("..") || jobId.includes("/") || jobId.includes("\\")) {
-    return false;
-  }
-  return true;
 }
 
 // CORS headers
@@ -242,16 +209,6 @@ async function parseJsonBody<T>(req: Request): Promise<T> {
     }
     throw new ValidationError("Invalid JSON in request body");
   }
-}
-
-// Public endpoints that don't require authentication
-const PUBLIC_ENDPOINTS = ["/health", "/jobs/types", "/docs"];
-
-/**
- * Check if a path is a public endpoint
- */
-function isPublicEndpoint(path: string): boolean {
-  return PUBLIC_ENDPOINTS.some((endpoint) => path === endpoint);
 }
 
 /**

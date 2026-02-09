@@ -12,6 +12,7 @@ on:
           - notion:fetch-all
           - notion:fetch
           - notion:translate
+          - notion:count-pages
           - notion:status-translation
           - notion:status-draft
           - notion:status-publish
@@ -52,11 +53,13 @@ jobs:
 
       - name: Configure API endpoint
         id: config
+        env:
+          API_ENDPOINT: ${{ secrets.API_ENDPOINT }}
         run: |
           # Set API endpoint from secrets or default
-          if [ -n "${{ secrets.API_ENDPOINT }}" ]; then
-            echo "endpoint=${{ secrets.API_ENDPOINT }}" >> $GITHUB_OUTPUT
-            echo "api_url=${{ secrets.API_ENDPOINT }}" >> $GITHUB_OUTPUT
+          if [ -n "$API_ENDPOINT" ]; then
+            echo "endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+            echo "api_url=$API_ENDPOINT" >> $GITHUB_OUTPUT
             echo "mode=production" >> $GITHUB_OUTPUT
           else
             # For testing: start API server locally
@@ -83,18 +86,17 @@ jobs:
 
       - name: Start API server (local mode only)
         if: steps.config.outputs.mode == 'local'
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_KEY_GITHUB_ACTIONS: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
         run: |
-          # Set environment variables
-          export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"
-          export DATA_SOURCE_ID="${{ secrets.DATA_SOURCE_ID }}"
-          export DATABASE_ID="${{ secrets.DATABASE_ID }}"
-          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+          # Set environment variables (already set via env block above)
           export NODE_ENV=test
           export API_PORT=3001
           export API_HOST=localhost
-
-          # Set API key for authentication
-          export API_KEY_GITHUB_ACTIONS="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
 
           # Start server in background
           bun run api:server &
@@ -119,6 +121,8 @@ jobs:
 
       - name: Create job via API
         id: create-job
+        env:
+          API_KEY_GITHUB_ACTIONS: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
         run: |
           set -e
 
@@ -127,20 +131,12 @@ jobs:
           MAX_PAGES="${{ github.event.inputs.max_pages || '5' }}"
           FORCE="${{ github.event.inputs.force || 'false' }}"
 
-          # Build API request
-          API_KEY="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
-
-          # Build request body
-          BODY=$(cat <<EOF
-          {
-            "type": "$JOB_TYPE",
-            "options": {
-              "maxPages": $MAX_PAGES,
-              "force": $FORCE
-            }
-          }
-          EOF
-          )
+          # Build request body using jq for proper JSON construction
+          BODY=$(jq -n \
+            --arg type "$JOB_TYPE" \
+            --argjson maxPages "$MAX_PAGES" \
+            --argjson force "$FORCE" \
+            '{type: $type, options: {maxPages: $maxPages, force: $force}}')
 
           echo "📤 Creating job: $JOB_TYPE"
           echo "📊 Options: maxPages=$MAX_PAGES, force=$FORCE"
@@ -148,7 +144,7 @@ jobs:
           # Make API request
           RESPONSE=$(curl -s -X POST "$ENDPOINT/jobs" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $API_KEY" \
+            -H "Authorization: Bearer $API_KEY_GITHUB_ACTIONS" \
             -d "$BODY")
 
           # Parse response
@@ -176,12 +172,13 @@ jobs:
 
       - name: Poll job status
         id: poll-status
+        env:
+          API_KEY_GITHUB_ACTIONS: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
         run: |
           set -e
 
           ENDPOINT="${{ steps.config.outputs.endpoint }}"
           JOB_ID="${{ steps.create-job.outputs.job_id }}"
-          API_KEY="${{ secrets.API_KEY_GITHUB_ACTIONS }}"
           JOB_TYPE="${{ github.event.inputs.job_type || 'notion:fetch-all' }}"
 
           echo "⏳ Polling job status..."
@@ -192,7 +189,7 @@ jobs:
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             # Get job status
             RESPONSE=$(curl -s -X GET "$ENDPOINT/jobs/$JOB_ID" \
-              -H "Authorization: Bearer $API_KEY")
+              -H "Authorization: Bearer $API_KEY_GITHUB_ACTIONS")
 
             STATUS=$(echo "$RESPONSE" | jq -r '.data.status // empty')
 
@@ -297,7 +294,7 @@ jobs:
           fi
 
       - name: Notify Slack
-        if: always()
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}

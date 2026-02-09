@@ -11,6 +11,7 @@
 import { join } from "node:path";
 import { existsSync, mkdirSync, appendFileSync, writeFileSync } from "node:fs";
 import type { ApiKeyMeta } from "./auth";
+import { rotateLogIfNeeded } from "./job-persistence";
 
 /**
  * Audit log entry structure
@@ -74,6 +75,20 @@ const DEFAULT_CONFIG: AuditConfig = {
   logBodies: false, // Don't log bodies by default (security)
   logHeaders: false, // Don't log full headers by default (security)
 };
+
+/**
+ * Get maximum log file size in bytes from environment or use default (10MB)
+ */
+function getMaxLogSize(): number {
+  const envSize = process.env.MAX_LOG_SIZE_MB;
+  if (envSize) {
+    const parsed = parseFloat(envSize);
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.round(parsed * 1024 * 1024); // Convert MB to bytes
+    }
+  }
+  return 10 * 1024 * 1024; // Default: 10MB
+}
 
 /**
  * Request Audit Logger class
@@ -177,6 +192,8 @@ export class AuditLogger {
   log(entry: AuditEntry): void {
     const logLine = JSON.stringify(entry) + "\n";
     try {
+      // Rotate log file if needed before appending
+      rotateLogIfNeeded(this.logPath, getMaxLogSize());
       appendFileSync(this.logPath, logLine, "utf-8");
     } catch (error) {
       console.error("Failed to write audit log:", error);

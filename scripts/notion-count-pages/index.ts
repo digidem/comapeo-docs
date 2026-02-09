@@ -14,9 +14,34 @@
  */
 
 import "dotenv/config";
-import { fetchNotionData, sortAndExpandNotionData } from "../fetchNotionData";
-import { buildStatusFilter } from "../notion-fetch-all/fetchAll";
-import { getStatusFromRawPage } from "../notionPageUtils";
+
+// Validate environment variables BEFORE importing notionClient to ensure graceful exit
+const resolvedDatabaseId =
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+
+if (!process.env.NOTION_API_KEY) {
+  console.error(
+    "Error: NOTION_API_KEY environment variable is not set.\n" +
+      "Please set NOTION_API_KEY in your .env file or environment."
+  );
+  process.exit(1);
+}
+
+if (!resolvedDatabaseId) {
+  console.error(
+    "Error: DATABASE_ID or NOTION_DATABASE_ID environment variable is not set.\n" +
+      "Please set DATABASE_ID in your .env file or environment."
+  );
+  process.exit(1);
+}
+
+// Now it's safe to import modules that depend on these env vars
+// Use dynamic imports to ensure validation runs first
+const { fetchNotionData, sortAndExpandNotionData } = await import(
+  "../fetchNotionData"
+);
+const { buildStatusFilter } = await import("../notion-fetch-all/fetchAll");
+const { getStatusFromRawPage } = await import("../notionPageUtils");
 
 interface CountOptions {
   includeRemoved: boolean;

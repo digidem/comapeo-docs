@@ -58,11 +58,11 @@ validate_page_count() {
   # For --max-pages N, expected count is min(N, total_available)
   if [ "$FETCH_ALL" = false ] && [ -n "$EXPECTED_TOTAL" ]; then
     local EFFECTIVE_EXPECTED
-    if [ "$MAX_PAGES" -lt "$EXPECTED" ] 2>/dev/null; then
+    if [ "$MAX_PAGES" -lt "$EXPECTED_TOTAL" ] 2>/dev/null; then
       EFFECTIVE_EXPECTED="$MAX_PAGES"
       echo "  (--max-pages $MAX_PAGES limits expected to $EFFECTIVE_EXPECTED)"
     else
-      EFFECTIVE_EXPECTED="$EXPECTED"
+      EFFECTIVE_EXPECTED="$EXPECTED_TOTAL"
     fi
     EXPECTED="$EFFECTIVE_EXPECTED"
     echo "  Adjusted expected: $EXPECTED"
@@ -348,6 +348,25 @@ test_single_file_match() {
   teardown_test_env
 }
 
+# Test 11: Max-pages with different expected than total (tests min(N, total) logic)
+test_max_pages_min_logic() {
+  log_info "Test 11: Max-pages min(N, total) logic (total=20, max-pages=5, expected=20, actual=5)"
+  setup_test_env "max_pages_min" 5
+
+  FETCH_ALL=false
+  MAX_PAGES=5
+  EXPECTED_TOTAL=20  # Total available pages
+
+  # The function is called with 20 (EXPECTED_TOTAL), but should adjust to 5 (min(5, 20))
+  if validate_page_count 20; then
+    assert_equals 0 0 "Max-pages min(N, total) logic passes"
+  else
+    assert_equals 0 1 "Max-pages min(N, total) logic passes"
+  fi
+
+  teardown_test_env
+}
+
 # ===== RUN ALL TESTS =====
 
 log_info "=== Page Count Validation Unit Tests ==="
@@ -381,6 +400,9 @@ test_large_difference
 echo ""
 
 test_single_file_match
+echo ""
+
+test_max_pages_min_logic
 echo ""
 
 # ===== RESULTS =====

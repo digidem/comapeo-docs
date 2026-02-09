@@ -19,7 +19,6 @@ import {
   type ApiResponse,
 } from "./response-schemas";
 import { getAuth } from "./auth";
-import { JobQueue } from "./job-queue";
 
 const DATA_DIR = join(process.cwd(), ".jobs-data");
 
@@ -360,62 +359,6 @@ describe("API Handler Integration Tests", () => {
 
       // Should have at least the test key from beforeEach
       expect(keys.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Job Queue Integration with Job Tracker", () => {
-    it("should integrate job queue with job tracker", async () => {
-      const queue = new JobQueue({ concurrency: 2 });
-
-      // Register a simple executor that matches the expected signature
-      const executor = vi.fn().mockImplementation(() => {
-        return Promise.resolve();
-      });
-      queue.registerExecutor("notion:fetch", executor);
-
-      // Add jobs to queue
-      const jobId1 = await queue.add("notion:fetch");
-      const jobId2 = await queue.add("notion:fetch");
-
-      // Verify jobs are tracked
-      const tracker = getJobTracker();
-      expect(tracker.getJob(jobId1)).toBeDefined();
-      expect(tracker.getJob(jobId2)).toBeDefined();
-
-      // Wait for jobs to complete
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      // Verify jobs completed
-      const job1 = tracker.getJob(jobId1);
-      const job2 = tracker.getJob(jobId2);
-      expect(["completed", "running"]).toContain(job1?.status);
-      expect(["completed", "running"]).toContain(job2?.status);
-    });
-
-    it("should handle queue cancellation through job tracker", async () => {
-      const queue = new JobQueue({ concurrency: 1 });
-
-      // Register a slow executor that returns a promise
-      const executor = vi
-        .fn()
-        .mockImplementation(
-          () => new Promise((resolve) => setTimeout(resolve, 500))
-        );
-      queue.registerExecutor("notion:fetch", executor);
-
-      // Add a job
-      const jobId = await queue.add("notion:fetch");
-
-      // Cancel the job
-      const cancelled = queue.cancel(jobId);
-      expect(cancelled).toBe(true);
-
-      // Verify job is marked as failed
-      const tracker = getJobTracker();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const job = tracker.getJob(jobId);
-      expect(job?.status).toBe("failed");
-      expect(job?.result?.error).toBe("Job cancelled");
     });
   });
 

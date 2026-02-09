@@ -83,7 +83,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Generated content cleanup*: ${{ job.status }}\nConfirm flag: `${{ github.event.inputs.confirm }}`"
+                  text: "*Generated content cleanup*: ${{ job.status }}\nConfirm flag: `--confirm=yes` (hardcoded)"
               - type: "section"
                 text:
                   type: "mrkdwn"

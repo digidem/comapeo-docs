@@ -98,3 +98,6 @@ retry-metrics.json
 # Local agent artifacts
 .claude/command-history.log
 .audit-data/
+.beads/
+.junie/
+.ralphy/

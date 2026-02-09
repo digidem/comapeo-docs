@@ -72,7 +72,17 @@ export interface JobOptions {
 }
 
 /**
- * Map of job types to their Bun script commands
+ * Default timeout for jobs (5 minutes) in milliseconds
+ */
+const DEFAULT_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Time to wait after SIGTERM before sending SIGKILL (5 seconds)
+ */
+const SIGKILL_DELAY_MS = 5000;
+
+/**
+ * Map of job types to their Bun script commands and timeout configuration
  */
 export const JOB_COMMANDS: Record<
   JobType,
@@ -80,11 +90,13 @@ export const JOB_COMMANDS: Record<
     script: string;
     args: string[];
     buildArgs?: (options: JobOptions) => string[];
+    timeoutMs: number;
   }
 > = {
   "notion:fetch": {
     script: "bun",
     args: ["scripts/notion-fetch/index.ts"],
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
   "notion:fetch-all": {
     script: "bun",
@@ -99,6 +111,7 @@ export const JOB_COMMANDS: Record<
       if (options.includeRemoved) args.push("--include-removed");
       return args;
     },
+    timeoutMs: 60 * 60 * 1000, // 60 minutes
   },
   "notion:count-pages": {
     script: "bun",
@@ -110,26 +123,32 @@ export const JOB_COMMANDS: Record<
         args.push("--status-filter", options.statusFilter);
       return args;
     },
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
   "notion:translate": {
     script: "bun",
     args: ["scripts/notion-translate"],
+    timeoutMs: 30 * 60 * 1000, // 30 minutes
   },
   "notion:status-translation": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "translation"],
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
   "notion:status-draft": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "draft"],
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
   "notion:status-publish": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "publish"],
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
   "notion:status-publish-production": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "publish-production"],
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
   },
 };
 
@@ -176,6 +195,8 @@ export async function executeJob(
   let childProcess: ChildProcess | null = null;
   let stdout = "";
   let stderr = "";
+  let timeoutHandle: NodeJS.Timeout | null = null;
+  let timedOut = false;
 
   try {
     childProcess = spawn(jobConfig.script, args, {
@@ -187,6 +208,50 @@ export async function executeJob(
     jobTracker.registerProcess(jobId, {
       kill: () => childProcess?.kill("SIGTERM"),
     });
+
+    // Determine timeout: use env var override or job-specific timeout
+    const timeoutMs =
+      process.env.JOB_TIMEOUT_MS !== undefined
+        ? parseInt(process.env.JOB_TIMEOUT_MS, 10)
+        : jobConfig.timeoutMs;
+
+    logger.info("Starting job with timeout", {
+      timeoutMs,
+      timeoutSeconds: Math.floor(timeoutMs / 1000),
+    });
+
+    // Set up timeout handler
+    timeoutHandle = setTimeout(async () => {
+      if (!childProcess || childProcess.killed) {
+        return;
+      }
+
+      timedOut = true;
+      const timeoutSeconds = Math.floor(timeoutMs / 1000);
+      logger.warn("Job execution timed out, sending SIGTERM", {
+        timeoutSeconds,
+        pid: childProcess.pid,
+      });
+
+      // Send SIGTERM
+      childProcess.kill("SIGTERM");
+
+      // Wait for graceful shutdown, then force kill if needed
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (childProcess && !childProcess.killed) {
+            logger.error(
+              "Job did not terminate after SIGTERM, sending SIGKILL",
+              {
+                pid: childProcess.pid,
+              }
+            );
+            childProcess.kill("SIGKILL");
+          }
+          resolve();
+        }, SIGKILL_DELAY_MS);
+      });
+    }, timeoutMs);
 
     // Collect stdout and stderr
     childProcess.stdout?.on("data", (data: Buffer) => {
@@ -207,7 +272,13 @@ export async function executeJob(
     // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
       childProcess?.on("close", (code) => {
-        if (code === 0) {
+        if (timedOut) {
+          const timeoutSeconds = Math.floor(timeoutMs / 1000);
+          logger.error("Job timed out", { timeoutSeconds });
+          reject(
+            new Error(`Job execution timed out after ${timeoutSeconds} seconds`)
+          );
+        } else if (code === 0) {
           logger.info("Job completed successfully", { exitCode: code });
           resolve();
         } else {
@@ -224,6 +295,12 @@ export async function executeJob(
       });
     });
 
+    // Clear timeout if job completed before timeout
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+
     // Job completed successfully
     jobTracker.unregisterProcess(jobId);
     onComplete(true, { output: stdout });
@@ -232,11 +309,17 @@ export async function executeJob(
       output: stdout,
     });
   } catch (error) {
+    // Clear timeout if still active
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+
     jobTracker.unregisterProcess(jobId);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorOutput = stderr || errorMessage;
 
-    logger.error("Job failed", { error: errorOutput });
+    logger.error("Job failed", { error: errorOutput, timedOut });
     onComplete(false, undefined, errorOutput);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,

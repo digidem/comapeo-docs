@@ -9,6 +9,9 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  statSync,
+  renameSync,
+  unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 
@@ -56,6 +59,34 @@ export interface JobStorage {
 }
 
 /**
+ * Get maximum log file size in bytes from environment or use default (10MB)
+ */
+function getMaxLogSize(): number {
+  const envSize = process.env.MAX_LOG_SIZE_MB;
+  if (envSize) {
+    const parsed = parseFloat(envSize);
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.round(parsed * 1024 * 1024); // Convert MB to bytes
+    }
+  }
+  return 10 * 1024 * 1024; // Default: 10MB
+}
+
+/**
+ * Get maximum number of stored jobs from environment or use default (1000)
+ */
+function getMaxStoredJobs(): number {
+  const envMax = process.env.MAX_STORED_JOBS;
+  if (envMax) {
+    const parsed = parseInt(envMax, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 1000; // Default: 1000 jobs
+}
+
+/**
  * Get data directory from environment or use default
  * Allows tests to override with isolated temp directories
  */
@@ -75,6 +106,50 @@ function getJobsFile(): string {
  */
 function getLogsFile(): string {
   return process.env.JOBS_LOG_FILE || join(getDataDir(), "jobs.log");
+}
+
+/**
+ * Rotate log file if it exceeds the maximum size
+ * Keeps up to 3 rotated files: file.log.1, file.log.2, file.log.3
+ * Older files are deleted
+ */
+export function rotateLogIfNeeded(
+  filePath: string,
+  maxSizeBytes: number
+): void {
+  try {
+    // Check if file exists and its size
+    if (!existsSync(filePath)) {
+      return; // Nothing to rotate
+    }
+
+    const stats = statSync(filePath);
+    if (stats.size < maxSizeBytes) {
+      return; // File is below size limit
+    }
+
+    // Rotate existing files: .log.2 -> .log.3, .log.1 -> .log.2
+    for (let i = 3; i > 0; i--) {
+      const rotatedFile = `${filePath}.${i}`;
+      if (i === 3) {
+        // Delete the oldest rotated file if it exists
+        if (existsSync(rotatedFile)) {
+          unlinkSync(rotatedFile);
+        }
+      } else {
+        // Rename .log.{i} to .log.{i+1}
+        if (existsSync(rotatedFile)) {
+          renameSync(rotatedFile, `${filePath}.${i + 1}`);
+        }
+      }
+    }
+
+    // Rename current log to .log.1
+    renameSync(filePath, `${filePath}.1`);
+  } catch (error) {
+    // Log error but don't crash - rotation is best-effort
+    console.error(`Failed to rotate log file ${filePath}:`, error);
+  }
 }
 
 /**
@@ -246,7 +321,12 @@ export function appendLog(entry: JobLogEntry): void {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       ensureDataDir();
-      appendFileSync(getLogsFile(), logLine, "utf-8");
+
+      // Rotate log file if needed before appending
+      const logsFile = getLogsFile();
+      rotateLogIfNeeded(logsFile, getMaxLogSize());
+
+      appendFileSync(logsFile, logLine, "utf-8");
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -434,12 +514,14 @@ export function getRecentLogs(limit = 100): JobLogEntry[] {
 
 /**
  * Clean up old completed/failed jobs from storage
+ * First removes jobs older than maxAge, then enforces max jobs cap
  */
 export function cleanupOldJobs(maxAge = 24 * 60 * 60 * 1000): number {
   const storage = loadJobs();
   const now = Date.now();
   const initialCount = storage.jobs.length;
 
+  // Step 1: Remove jobs older than maxAge
   storage.jobs = storage.jobs.filter((job) => {
     // Keep pending or running jobs
     if (job.status === "pending" || job.status === "running") {
@@ -454,6 +536,38 @@ export function cleanupOldJobs(maxAge = 24 * 60 * 60 * 1000): number {
 
     return true;
   });
+
+  // Step 2: Enforce max jobs cap if still too many
+  const maxStoredJobs = getMaxStoredJobs();
+  if (storage.jobs.length > maxStoredJobs) {
+    // Sort by completion time (oldest first)
+    // Keep pending/running jobs, remove oldest completed/failed jobs
+    const pendingOrRunning = storage.jobs.filter(
+      (job) => job.status === "pending" || job.status === "running"
+    );
+    const completedOrFailed = storage.jobs
+      .filter((job) => job.status !== "pending" && job.status !== "running")
+      .sort((a, b) => {
+        const timeA = a.completedAt
+          ? new Date(a.completedAt).getTime()
+          : a.createdAt
+            ? new Date(a.createdAt).getTime()
+            : 0;
+        const timeB = b.completedAt
+          ? new Date(b.completedAt).getTime()
+          : b.createdAt
+            ? new Date(b.createdAt).getTime()
+            : 0;
+        return timeB - timeA; // Sort newest first
+      });
+
+    // Keep only the newest jobs up to the limit
+    const slotsAvailable = maxStoredJobs - pendingOrRunning.length;
+    storage.jobs = [
+      ...pendingOrRunning,
+      ...completedOrFailed.slice(0, Math.max(0, slotsAvailable)),
+    ];
+  }
 
   const removedCount = initialCount - storage.jobs.length;
 

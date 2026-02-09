@@ -10,6 +10,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getJobTracker, destroyJobTracker, type JobType } from "./job-tracker";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import {
+  VALID_JOB_TYPES,
+  VALID_JOB_STATUSES,
+  MAX_JOB_ID_LENGTH,
+  MAX_REQUEST_SIZE,
+  isValidJobType,
+  isValidJobStatus,
+  isValidJobId,
+} from "./validation";
 
 const DATA_DIR = join(process.cwd(), ".jobs-data");
 
@@ -18,49 +27,6 @@ function cleanupTestData(): void {
   if (existsSync(DATA_DIR)) {
     rmSync(DATA_DIR, { recursive: true, force: true });
   }
-}
-
-// Configuration constants matching the server
-const MAX_REQUEST_SIZE = 1_000_000;
-const MAX_JOB_ID_LENGTH = 100;
-
-// Valid job types and statuses
-const VALID_JOB_TYPES: readonly JobType[] = [
-  "notion:fetch",
-  "notion:fetch-all",
-  "notion:translate",
-  "notion:status-translation",
-  "notion:status-draft",
-  "notion:status-publish",
-  "notion:status-publish-production",
-] as const;
-
-const VALID_JOB_STATUSES: readonly (
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-)[] = ["pending", "running", "completed", "failed"] as const;
-
-// Validation functions (copied from index.ts for testing)
-function isValidJobType(type: string): type is JobType {
-  return VALID_JOB_TYPES.includes(type as JobType);
-}
-
-function isValidJobStatus(
-  status: string
-): status is "pending" | "running" | "completed" | "failed" {
-  return VALID_JOB_STATUSES.includes(status as never);
-}
-
-function isValidJobId(jobId: string): boolean {
-  if (!jobId || jobId.length > MAX_JOB_ID_LENGTH) {
-    return false;
-  }
-  if (jobId.includes("..") || jobId.includes("/") || jobId.includes("\\")) {
-    return false;
-  }
-  return true;
 }
 
 describe("Input Validation - Job Type Validation", () => {

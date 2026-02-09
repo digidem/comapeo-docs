@@ -290,24 +290,32 @@ describe("github-status", () => {
 
       vi.useFakeTimers();
 
-      const reportPromise = reportGitHubStatus(
-        validOptions,
-        "success",
-        "Test",
-        { maxRetries: 1, initialDelay: 100 }
-      );
+      try {
+        // Use Promise.race to ensure we catch the rejection before timers complete
+        const reportPromise = reportGitHubStatus(
+          validOptions,
+          "success",
+          "Test",
+          { maxRetries: 1, initialDelay: 100 }
+        );
 
-      // Fast forward past all retries
-      await vi.advanceTimersByTimeAsync(100);
-      await vi.advanceTimersByTimeAsync(200);
-      await vi.runAllTimersAsync();
+        // Create the expectation first, before advancing timers
+        const expectation =
+          expect(reportPromise).rejects.toThrow(GitHubStatusError);
 
-      await expect(reportPromise).rejects.toThrow(GitHubStatusError);
+        // Fast forward past all retries
+        await vi.advanceTimersByTimeAsync(100);
+        await vi.advanceTimersByTimeAsync(200);
+        await vi.runAllTimersAsync();
 
-      // Should be called initial + 1 retry = 2 times
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+        // Now await the expectation
+        await expectation;
 
-      vi.useRealTimers();
+        // Should be called initial + 1 retry = 2 times
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

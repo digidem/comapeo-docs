@@ -52,6 +52,7 @@ const MAX_JOB_ID_LENGTH = 100;
 const VALID_JOB_TYPES: readonly JobType[] = [
   "notion:fetch",
   "notion:fetch-all",
+  "notion:count-pages",
   "notion:translate",
   "notion:status-translation",
   "notion:status-draft",
@@ -909,6 +910,10 @@ async function routeRequest(
           {
             id: "notion:fetch-all",
             description: "Fetch all pages from Notion",
+          },
+          {
+            id: "notion:count-pages",
+            description: "Count pages in Notion database",
           },
           {
             id: "notion:translate",

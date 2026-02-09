@@ -1,24 +1,3 @@
----
-id: api-reference
-title: API Reference
-sidebar_label: API Reference
-sidebar_position: 1
-pagination_label: API Reference
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/developer-tools/api-reference.md
-keywords:
-  - api
-  - rest
-  - http
-  - web service
-tags:
-  - developer
-  - api
-slug: /developer-tools/api-reference
-last_update:
-  date: 06/02/2025
-  author: Awana Digital
----
-
 # API Reference
 
 The CoMapeo Documentation API provides programmatic access to Notion content management operations. This REST API allows you to trigger jobs, check status, and manage content workflows.

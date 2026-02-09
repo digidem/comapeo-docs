@@ -1,26 +1,3 @@
----
-id: github-setup
-title: GitHub Setup Guide
-sidebar_label: GitHub Setup
-sidebar_position: 3
-pagination_label: GitHub Setup Guide
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/developer-tools/github-setup.md
-keywords:
-  - github
-  - setup
-  - secrets
-  - actions
-  - ci-cd
-tags:
-  - developer
-  - deployment
-  - operations
-slug: /developer-tools/github-setup
-last_update:
-  date: 08/02/2025
-  author: Awana Digital
----
-
 # GitHub Setup Guide
 
 This guide covers setting up GitHub repository configuration, secrets, and workflows for the CoMapeo Documentation project.
@@ -56,18 +33,18 @@ Navigate to **Settings → Secrets and variables → Actions** and add the follo
 
 #### Required Secrets
 
-| Secret Name | Description | How to Get |
-|------------|-------------|------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for Pages deployment | Cloudflare Dashboard → My Profile → API Tokens |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account ID | Cloudflare Dashboard → Workers & Pages → Overview |
-| `NOTION_API_KEY` | Notion integration API key | Notion → Integrations → Create integration |
-| `DATABASE_ID` | Notion database ID | Notion database URL → extract ID |
-| `DATA_SOURCE_ID` | Notion data source ID | Notion API response or database properties |
+| Secret Name             | Description                               | How to Get                                        |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token for Pages deployment | Cloudflare Dashboard → My Profile → API Tokens    |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account ID                     | Cloudflare Dashboard → Workers & Pages → Overview |
+| `NOTION_API_KEY`        | Notion integration API key                | Notion → Integrations → Create integration        |
+| `DATABASE_ID`           | Notion database ID                        | Notion database URL → extract ID                  |
+| `DATA_SOURCE_ID`        | Notion data source ID                     | Notion API response or database properties        |
 
 #### Optional Secrets
 
-| Secret Name | Description | Purpose |
-|------------|-------------|---------|
+| Secret Name         | Description                | Purpose                  |
+| ------------------- | -------------------------- | ------------------------ |
 | `SLACK_WEBHOOK_URL` | Slack incoming webhook URL | Deployment notifications |
 
 ### 3. Verify GitHub Actions
@@ -113,12 +90,12 @@ Set up branch protection for `main`:
 2. Click **Add rule**
 3. Branch name pattern: `main`
 4. Enable:
-   - ✅ Require a pull request before merging
-   - ✅ Require approvals (1 approval)
-   - ✅ Dismiss stale reviews
-   - ✅ Require status checks to pass
-   - ✅ Require branches to be up to date
-   - ❌ Do not allow bypassing settings
+   - Require a pull request before merging
+   - Require approvals (1 approval)
+   - Dismiss stale reviews
+   - Require status checks to pass
+   - Require branches to be up to date
+   - Do not allow bypassing settings
 
 ### Step 2: Cloudflare Configuration
 
@@ -145,6 +122,7 @@ Build output directory: build
 #### Get Cloudflare Credentials
 
 **API Token:**
+
 1. Go to **My Profile → API Tokens**
 2. Click **Create Token**
 3. Use **Edit Cloudflare Workers** template
@@ -155,6 +133,7 @@ Build output directory: build
 7. Copy and save the token
 
 **Account ID:**
+
 1. Go to **Workers & Pages**
 2. Click on your Pages project
 3. Copy **Account ID** from the right sidebar
@@ -183,6 +162,7 @@ Build output directory: build
 #### Get Database IDs
 
 **Database ID:**
+
 1. Open your Notion database
 2. Copy the URL
 3. Extract the 32-character ID from the URL:
@@ -192,6 +172,7 @@ Build output directory: build
    ```
 
 **Data Source ID:**
+
 1. Query your Notion database using the API:
    ```bash
    curl -X POST https://api.notion.com/v1/databases/DATABASE_ID/query \
@@ -261,7 +242,7 @@ Ensure workflows have necessary permissions:
 
 1. Go to **Settings → Actions → General**
 2. Under **Workflow permissions**, select:
-   - ✅ Read and write permissions
+   - Read and write permissions
 3. Allow GitHub Actions to create and approve pull requests
 
 #### Manual Deployment Trigger
@@ -308,11 +289,13 @@ curl -X POST $SLACK_WEBHOOK_URL \
 ### Deploy to Production
 
 **Trigger:**
+
 - Push to `main` branch (excluding `.md` files and `docs/` directory)
 - Manual workflow dispatch
 - Repository webhook event
 
 **Process:**
+
 1. Fetches content from `content` branch
 2. Validates content exists
 3. Installs dependencies with Bun
@@ -322,6 +305,7 @@ curl -X POST $SLACK_WEBHOOK_URL \
 7. Sends Slack notification
 
 **Outputs:**
+
 - Production URL: `https://docs.comapeo.app`
 - Deployment summary in GitHub Actions
 - Slack notification (if configured)
@@ -329,20 +313,24 @@ curl -X POST $SLACK_WEBHOOK_URL \
 ### PR Preview Deployments
 
 **Trigger:**
+
 - Pull request opened/updated
 - Push to PR branch
 
 **Process:**
+
 1. Builds documentation
 2. Deploys to Cloudflare Pages preview
 3. Comments on PR with preview URL
 
 **Smart Content Strategy:**
+
 - Uses cached content from `content` branch for frontend-only changes
 - Regenerates 5 pages when Notion fetch scripts are modified
 - PR labels can override: `fetch-10-pages`, `fetch-all-pages`
 
 **Preview URL:**
+
 ```
 https://pr-{number}.comapeo-docs.pages.dev
 ```
@@ -365,6 +353,7 @@ For testing deployments:
 1. Use **Run workflow** → select `test` environment
 2. Provide branch name (default: `test`)
 3. Sets `IS_PRODUCTION=false`
+
 - Adds `noindex` meta tag
 - Skips Notion status update
 - Deploys to preview URL
@@ -488,8 +477,8 @@ gh secret set SLACK_WEBHOOK_URL
 
 ## Additional Resources
 
-- [VPS Deployment Guide](./vps-deployment.md)
-- [API Reference](./api-reference.mdx)
+- VPS Deployment Guide
+- API Reference
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Cloudflare Pages Documentation](https://developers.cloudflare.com/pages/)
 - [Notion API Documentation](https://developers.notion.com/)

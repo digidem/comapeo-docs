@@ -63,8 +63,7 @@ Processing 5/10
     });
 
     it("should return null for undefined input", () => {
-      // @ts-expect-error - Testing undefined input
-      const result = extractLastJsonLine(undefined);
+      const result = extractLastJsonLine(undefined as unknown as string);
       expect(result).toBeNull();
     });
 
@@ -203,8 +202,7 @@ Done!`;
     });
 
     it("should return empty array for null input", () => {
-      // @ts-expect-error - Testing null input
-      const results = extractAllJsonLines(null);
+      const results = extractAllJsonLines(null as unknown as string);
       expect(results).toEqual([]);
     });
 

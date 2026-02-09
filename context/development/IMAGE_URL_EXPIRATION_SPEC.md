@@ -371,7 +371,8 @@ if (markdownString?.parent) {
 ```typescript
 // In imageReplacer.ts
 export async function validateAndFixRemainingImages(markdown, safeFilename) {
-  const s3Regex = /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
+  const s3Regex =
+    /!\[.*?\]\((https:\/\/prod-files-secure\.s3\.[a-z0-9-]+\.amazonaws\.com\/[^\)]+)\)/;
   if (s3Regex.test(markdown)) {
     console.warn(`Found S3 URLs in final markdown...`);
     return processAndReplaceImages(markdown, safeFilename);
@@ -654,6 +655,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ### Pre-Deployment Checklist
 
 #### Code Quality Gates
+
 - [ ] All TypeScript type checks pass (`bun run typecheck`)
 - [ ] All ESLint rules pass (`bunx eslint scripts/notion-fetch/**/*.ts`)
 - [ ] All Prettier formatting applied (`bunx prettier --write scripts/`)
@@ -662,6 +664,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 - [ ] No console errors or warnings in test output
 
 #### Feature Validation
+
 - [ ] Feature flag system works correctly (enable/disable toggle)
 - [ ] Single-pass processing works without retry logic
 - [ ] Retry processing works with full retry loop
@@ -670,6 +673,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 - [ ] Environment variables documented in `.env.example`
 
 #### Documentation
+
 - [ ] `ROLLBACK.md` created with step-by-step rollback instructions
 - [ ] Deployment strategy added to `IMAGE_URL_EXPIRATION_SPEC.md`
 - [ ] PR description updated with fixes summary
@@ -679,9 +683,11 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 ### Deployment Phases
 
 #### Phase 1: Development Environment (Day 1)
+
 **Goal**: Validate feature flag system and basic functionality
 
 **Steps**:
+
 1. Merge PR #102 to main branch
 2. Deploy to development environment with feature flag enabled
 3. Run full Notion fetch (`bun run notion:fetch-all`)
@@ -689,6 +695,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 5. Verify `retry-metrics.json` is created with expected data
 
 **Success Criteria**:
+
 - No TypeScript errors
 - All images download successfully
 - Retry metrics show reasonable values (retry frequency <10%)
@@ -697,15 +704,18 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 **Rollback Trigger**: Any critical errors or performance degradation >20%
 
 #### Phase 2: CI/PR Preview Environment (Days 2-3)
+
 **Goal**: Validate feature in automated testing environment
 
 **Steps**:
+
 1. Enable feature flag in PR preview workflow
 2. Run multiple PR preview deployments
 3. Monitor retry metrics across different content sets
 4. Validate image quality in preview deployments
 
 **Success Criteria**:
+
 - PR previews build successfully
 - Images display correctly in preview sites
 - Retry success rate >95%
@@ -714,9 +724,11 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 **Rollback Trigger**: PR preview failures >10% or persistent image download errors
 
 #### Phase 3: Production Deployment (Day 4-7)
+
 **Goal**: Enable feature in production with monitoring
 
 **Steps**:
+
 1. Deploy with feature flag enabled by default
 2. Run production Notion sync
 3. Monitor retry metrics for 24 hours
@@ -724,6 +736,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 5. Check for any error reports or issues
 
 **Success Criteria**:
+
 - Production build completes successfully
 - Retry frequency <5% (most pages don't need retry)
 - Retry success rate >98%
@@ -732,9 +745,11 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 **Rollback Trigger**: Production errors, retry success rate <90%, or user-reported issues
 
 #### Phase 4: Feature Flag Removal (Day 14+)
+
 **Goal**: Remove feature flag after stable period
 
 **Steps**:
+
 1. Confirm feature stable for 2 weeks
 2. Remove `ENABLE_RETRY_IMAGE_PROCESSING` environment variable checks
 3. Remove `processMarkdownSinglePass()` fallback function
@@ -742,6 +757,7 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 5. Update documentation to reflect changes
 
 **Success Criteria**:
+
 - Code simplified with flag removed
 - No functionality regression
 - Metrics continue to show healthy values
@@ -750,10 +766,10 @@ if (ENABLE_IMMEDIATE_IMAGE_DOWNLOAD) {
 
 All environment variables related to this feature:
 
-| Variable | Default | Description | Valid Values |
-|----------|---------|-------------|--------------|
-| `ENABLE_RETRY_IMAGE_PROCESSING` | `"true"` | Enable/disable retry logic | `"true"`, `"false"` |
-| `MAX_IMAGE_RETRIES` | `"3"` | Maximum retry attempts per page | `"1"` to `"10"` |
+| Variable                        | Default  | Description                     | Valid Values        |
+| ------------------------------- | -------- | ------------------------------- | ------------------- |
+| `ENABLE_RETRY_IMAGE_PROCESSING` | `"true"` | Enable/disable retry logic      | `"true"`, `"false"` |
+| `MAX_IMAGE_RETRIES`             | `"3"`    | Maximum retry attempts per page | `"1"` to `"10"`     |
 
 **Note**: These variables should be documented in `.env.example` file.
 
@@ -762,6 +778,7 @@ All environment variables related to this feature:
 #### Key Metrics to Track
 
 **Primary Metrics** (check after every deployment):
+
 1. **Retry Frequency**: `(totalPagesWithRetries / totalPagesProcessed) * 100`
    - **Target**: <5% in production
    - **Alert Threshold**: >10%
@@ -773,6 +790,7 @@ All environment variables related to this feature:
    - **Alert Threshold**: <95%
 
 **Secondary Metrics** (monitor for trends):
+
 1. **Average Retry Attempts per Page**: `totalRetryAttempts / totalPagesWithRetries`
    - **Target**: <2 (most pages succeed on first or second retry)
    - **Alert Threshold**: >3
@@ -786,6 +804,7 @@ All environment variables related to this feature:
 #### How to Access Metrics
 
 **Console Output**:
+
 ```bash
 # At end of script execution, look for:
 # ═══════════════════════════════════════════════
@@ -794,6 +813,7 @@ All environment variables related to this feature:
 ```
 
 **JSON File** (`retry-metrics.json`):
+
 ```bash
 # Read metrics file
 cat retry-metrics.json | jq '.'
@@ -809,6 +829,7 @@ cat retry-metrics.json | jq '.configuration'
 ```
 
 **CI/CD Logs**:
+
 - PR preview builds log retry metrics
 - Search for "Image Retry Metrics Summary" in build logs
 - Check for any "🔄 Retry attempt" messages
@@ -816,12 +837,14 @@ cat retry-metrics.json | jq '.configuration'
 #### Alert Thresholds
 
 **Critical Alerts** (immediate action required):
+
 - Retry success rate <90%
 - Image download failures >5%
 - Processing time increase >100%
 - Any 403 errors with "expired" in message
 
 **Warning Alerts** (monitor and investigate):
+
 - Retry frequency >10%
 - Average retry attempts >3
 - Processing time increase >50%
@@ -831,6 +854,7 @@ cat retry-metrics.json | jq '.configuration'
 #### Manual Testing
 
 **Feature Flag Toggle Test**:
+
 ```bash
 # Test with retry enabled (default)
 unset ENABLE_RETRY_IMAGE_PROCESSING
@@ -848,6 +872,7 @@ cat retry-metrics.json | jq '.configuration.retryEnabled'
 ```
 
 **Retry Logic Test**:
+
 ```bash
 # Run on pages known to have S3 URLs
 bun run notion:fetch -- --limit 10
@@ -860,6 +885,7 @@ cat retry-metrics.json | jq '.metrics'
 ```
 
 **Image Quality Test**:
+
 ```bash
 # After running fetch, check images
 ls -lh static/images/notion/
@@ -876,6 +902,7 @@ grep -r "amazonaws.com" docs/
 #### Automated Testing
 
 **Unit Tests**:
+
 ```bash
 # Run full test suite
 bun test
@@ -887,6 +914,7 @@ bun test markdownRetryProcessor.test.ts
 ```
 
 **Integration Tests**:
+
 ```bash
 # Test full workflow with feature flag
 bun test --grep "processMarkdown"
@@ -896,6 +924,7 @@ bun test --grep "retry metrics"
 ```
 
 **Performance Tests**:
+
 ```bash
 # Benchmark execution time
 time bun run notion:fetch-all
@@ -909,6 +938,7 @@ time bun run notion:fetch-all
 See `ROLLBACK.md` for detailed rollback instructions.
 
 **Quick Reference**:
+
 ```bash
 # Emergency rollback
 export ENABLE_RETRY_IMAGE_PROCESSING=false
@@ -921,18 +951,21 @@ cat retry-metrics.json | jq '.configuration.retryEnabled'
 ### Post-Deployment Validation
 
 **Immediate** (within 1 hour of deployment):
+
 - [ ] Verify feature flag is set correctly in environment
 - [ ] Run test Notion fetch and check console output
 - [ ] Confirm `retry-metrics.json` is created
 - [ ] Check retry frequency and success rate
 
 **Short-term** (within 24 hours):
+
 - [ ] Monitor PR preview builds for any failures
 - [ ] Review retry metrics trends
 - [ ] Check for any error reports or support tickets
 - [ ] Validate image quality in deployed content
 
 **Long-term** (within 1 week):
+
 - [ ] Analyze retry patterns over multiple runs
 - [ ] Identify any recurring issues
 - [ ] Optimize retry configuration if needed

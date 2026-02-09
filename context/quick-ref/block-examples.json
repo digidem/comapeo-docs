@@ -12,10 +12,14 @@
           "rich_text": [
             {
               "type": "text",
-              "text": {"content": "Example paragraph text", "link": null},
+              "text": { "content": "Example paragraph text", "link": null },
               "annotations": {
-                "bold": false, "italic": false, "strikethrough": false,
-                "underline": false, "code": false, "color": "default"
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
               },
               "plain_text": "Example paragraph text",
               "href": null
@@ -37,18 +41,25 @@
           "rich_text": [
             {
               "type": "text",
-              "text": {"content": "Important information", "link": null},
+              "text": { "content": "Important information", "link": null },
               "plain_text": "Important information"
             }
           ],
-          "icon": {"type": "emoji", "emoji": "📋"},
+          "icon": { "type": "emoji", "emoji": "📋" },
           "color": "gray_background"
         }
       },
       "colors": [
-        "default", "gray_background", "brown_background",
-        "orange_background", "yellow_background", "green_background", 
-        "blue_background", "purple_background", "pink_background", "red_background"
+        "default",
+        "gray_background",
+        "brown_background",
+        "orange_background",
+        "yellow_background",
+        "green_background",
+        "blue_background",
+        "purple_background",
+        "pink_background",
+        "red_background"
       ]
     },
     "heading_1": {
@@ -63,7 +74,7 @@
           "rich_text": [
             {
               "type": "text",
-              "text": {"content": "Main Section Title", "link": null},
+              "text": { "content": "Main Section Title", "link": null },
               "plain_text": "Main Section Title"
             }
           ],
@@ -101,8 +112,8 @@
         "properties": {
           "rich_text": [
             {
-              "type": "text", 
-              "text": {"content": "List item content", "link": null},
+              "type": "text",
+              "text": { "content": "List item content", "link": null },
               "plain_text": "List item content"
             }
           ],
@@ -135,9 +146,27 @@
         "type": "table_row",
         "properties": {
           "cells": [
-            [{"type": "text", "text": {"content": "Cell 1"}, "plain_text": "Cell 1"}],
-            [{"type": "text", "text": {"content": "Cell 2"}, "plain_text": "Cell 2"}],
-            [{"type": "text", "text": {"content": "Cell 3"}, "plain_text": "Cell 3"}]
+            [
+              {
+                "type": "text",
+                "text": { "content": "Cell 1" },
+                "plain_text": "Cell 1"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": { "content": "Cell 2" },
+                "plain_text": "Cell 2"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": { "content": "Cell 3" },
+                "plain_text": "Cell 3"
+              }
+            ]
           ]
         }
       }
@@ -148,10 +177,14 @@
       "description": "Standard rich text structure used in most blocks",
       "example": {
         "type": "text",
-        "text": {"content": "text content", "link": null},
+        "text": { "content": "text content", "link": null },
         "annotations": {
-          "bold": false, "italic": false, "strikethrough": false,
-          "underline": false, "code": false, "color": "default"
+          "bold": false,
+          "italic": false,
+          "strikethrough": false,
+          "underline": false,
+          "code": false,
+          "color": "default"
         },
         "plain_text": "text content",
         "href": null

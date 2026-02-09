@@ -426,7 +426,10 @@ describe("fetchNotionData", () => {
       await fetchNotionData({ property: "Status" });
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "Notion API pagination anomaly detected; retrying once..."
+        expect.stringContaining("Notion API pagination anomaly detected")
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Retrying once to recover")
       );
 
       consoleWarnSpy.mockRestore();
@@ -458,7 +461,10 @@ describe("fetchNotionData", () => {
       await fetchNotionData({ property: "Status" });
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "Notion API pagination anomaly detected; retrying once..."
+        expect.stringContaining("Notion API pagination anomaly detected")
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Retrying once to recover")
       );
 
       consoleWarnSpy.mockRestore();
@@ -496,7 +502,10 @@ describe("fetchNotionData", () => {
 
       expect(result).toHaveLength(3);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "Notion API pagination anomaly detected; retrying once..."
+        expect.stringContaining("Notion API pagination anomaly detected")
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Retrying once to recover")
       );
 
       consoleWarnSpy.mockRestore();
@@ -1064,8 +1073,9 @@ describe("fetchNotionData", () => {
         "Block fetch error"
       );
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "Error fetching Notion blocks:",
-        error
+        expect.stringContaining(
+          "Failed to fetch Notion blocks for block ID: test-block-id"
+        )
       );
 
       consoleErrorSpy.mockRestore();

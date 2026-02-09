@@ -1,9 +1,11 @@
 # Flaky Test Investigation Report
 
 ## Executive Summary
+
 Investigated flaky tests in `scripts/api-server` by running the full test suite 20 times in parallel batches to detect race conditions and test isolation issues.
 
 ## Test Execution Details
+
 - **Total Runs**: 20 (4 batches × 5 parallel runs each)
 - **Test Suite**: `bun run test:api-server`
 - **Execution Method**: Parallel batch execution to expose race conditions
@@ -86,6 +88,7 @@ Investigated flaky tests in `scripts/api-server` by running the full test suite 
 ### Stack Trace Examples
 
 #### ENOENT Error (Most Common)
+
 ```
 Error: ENOENT: no such file or directory, open '/home/luandro/Dev/digidem/comapeo-docs/.jobs-data/jobs.json'
     at Object.writeFileSync (node:fs:2397:20)
@@ -93,6 +96,7 @@ Error: ENOENT: no such file or directory, open '/home/luandro/Dev/digidem/comape
 ```
 
 #### Assertion Failure
+
 ```
 AssertionError: expected { id: 'concurrent-job-3', …(3) } to deeply equal { id: 'concurrent-job-3', …(3) }
 → expected undefined to deeply equal { id: 'concurrent-job-0', …(3) }
@@ -103,6 +107,7 @@ AssertionError: expected { id: 'concurrent-job-3', …(3) } to deeply equal { id
 ### Immediate Fixes (High Priority)
 
 1. **Add Test Isolation**
+
    ```typescript
    // In test setup
    const testDir = `/tmp/test-${Math.random()}/.jobs-data/`;
@@ -110,14 +115,15 @@ AssertionError: expected { id: 'concurrent-job-3', …(3) } to deeply equal { id
    ```
 
 2. **Implement File Locking**
+
    ```typescript
-   import lockfile from 'proper-lockfile';
+   import lockfile from "proper-lockfile";
    // Acquire lock before file operations
    ```
 
 3. **Sequential Execution for Persistence Tests**
    ```typescript
-   describe.configure({ mode: 'serial' });
+   describe.configure({ mode: "serial" });
    // Force serial execution for file-dependent tests
    ```
 
@@ -128,6 +134,7 @@ AssertionError: expected { id: 'concurrent-job-3', …(3) } to deeply equal { id
    - Use memfs or similar library
 
 5. **Add Retry Logic with Exponential Backoff**
+
    ```typescript
    const retry = async (fn, retries = 3) => {
      for (let i = 0; i < retries; i++) {
@@ -170,6 +177,7 @@ AssertionError: expected { id: 'concurrent-job-3', …(3) } to deeply equal { id
 ## Verification
 
 To verify fixes:
+
 ```bash
 # Run tests multiple times
 for i in {1..20}; do
@@ -179,4 +187,3 @@ done
 # Run with parallel execution (should expose race conditions)
 bunx vitest run --no-coverage --threads scripts/api-server/
 ```
-

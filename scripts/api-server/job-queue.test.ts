@@ -948,6 +948,28 @@ describe("createJobQueue", () => {
     expect(job).toBeDefined();
     expect(job?.type).toBe("notion:fetch");
   });
+
+  describe("createJobQueue executor registration", () => {
+    it("should register executors for all valid job types", async () => {
+      const queue = createJobQueue({ concurrency: 1 });
+      const jobTypes = [
+        "notion:fetch",
+        "notion:fetch-all",
+        "notion:count-pages",
+        "notion:translate",
+        "notion:status-translation",
+        "notion:status-draft",
+        "notion:status-publish",
+        "notion:status-publish-production",
+      ];
+      for (const type of jobTypes) {
+        // add() should not throw "No executor registered" error
+        const jobId = await queue.add(type as any);
+        expect(jobId).toBeTruthy();
+      }
+      await queue.awaitTeardown();
+    });
+  });
 });
 
 describe("cancellation behavior validation", () => {

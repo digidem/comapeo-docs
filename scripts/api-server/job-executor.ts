@@ -28,7 +28,7 @@ export interface JobOptions {
 /**
  * Map of job types to their Bun script commands
  */
-const JOB_COMMANDS: Record<
+export const JOB_COMMANDS: Record<
   JobType,
   {
     script: string;
@@ -202,7 +202,7 @@ export async function executeJob(
 /**
  * Parse progress information from job output
  */
-function parseProgressFromOutput(
+export function parseProgressFromOutput(
   output: string,
   onProgress: (current: number, total: number, message: string) => void
 ): void {

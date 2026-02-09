@@ -367,6 +367,31 @@ test_max_pages_min_logic() {
   teardown_test_env
 }
 
+# Test 12: Graceful degradation - empty EXPECTED_TOTAL (count job failed)
+# This simulates the scenario where the count job fails and EXPECTED_TOTAL is empty.
+# The main script would set COUNT_VALIDATION_AVAILABLE=false and skip validation,
+# but if validate_page_count is called with empty input, it should handle gracefully.
+test_graceful_degradation_empty_expected() {
+  log_info "Test 12: Graceful degradation with empty EXPECTED_TOTAL (count job failed)"
+  setup_test_env "graceful_degradation" 5
+
+  FETCH_ALL=true
+  EXPECTED_TOTAL=""  # Simulates count job failure
+
+  # When EXPECTED_TOTAL is empty, the function should still validate
+  # using the passed parameter (empty string in this case)
+  # The actual behavior depends on what's passed to validate_page_count
+  # In the main script, validation is skipped when COUNT_VALIDATION_AVAILABLE=false
+  if validate_page_count ""; then
+    # Empty expected will fail validation (5 != empty)
+    assert_equals 1 0 "Empty expected count fails validation"
+  else
+    assert_equals 1 1 "Empty expected count fails validation"
+  fi
+
+  teardown_test_env
+}
+
 # ===== RUN ALL TESTS =====
 
 log_info "=== Page Count Validation Unit Tests ==="
@@ -403,6 +428,9 @@ test_single_file_match
 echo ""
 
 test_max_pages_min_logic
+echo ""
+
+test_graceful_degradation_empty_expected
 echo ""
 
 # ===== RESULTS =====

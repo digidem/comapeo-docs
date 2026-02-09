@@ -3,6 +3,8 @@
  * Handles both breadcrumbs and sidebar active items.
  *
  * @see https://docusaurus.io/docs/advanced/client#client-module-lifecycles
+ *
+ * Test change for Docker workflow verification.
  */
 
 import type { ClientModule } from "@docusaurus/types";

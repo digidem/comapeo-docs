@@ -20,16 +20,9 @@ import {
   createAuthErrorResponse,
 } from "./auth";
 import { destroyJobTracker } from "./job-tracker";
+import { PUBLIC_ENDPOINTS, isPublicEndpoint } from "./validation";
 
 const TEST_API_KEY = "protected-endpoints-test-key-123456";
-
-// Copy of PUBLIC_ENDPOINTS from index.ts for testing
-const PUBLIC_ENDPOINTS = ["/health", "/jobs/types", "/docs"] as const;
-
-// Copy of isPublicEndpoint function from index.ts for testing
-function isPublicEndpoint(path: string): boolean {
-  return PUBLIC_ENDPOINTS.some((endpoint) => path === endpoint);
-}
 
 // Simulate the handleRequest authentication logic from index.ts
 function simulateHandleRequestAuth(

@@ -625,6 +625,291 @@ describe("ComparisonEngine", () => {
       expect(report).toContain("Impact Summary");
     });
   });
+
+  describe("Diagnostics", () => {
+    it("should not include diagnostics by default", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({ title: "New Page", status: "Ready to publish" }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages
+      );
+
+      expect(result.diagnostics).toBeUndefined();
+    });
+
+    it("should include diagnostics when enabled", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({ title: "New Page", status: "Ready to publish" }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true // enable diagnostics
+      );
+
+      expect(result.diagnostics).toBeDefined();
+      expect(result.diagnostics?.mismatches).toBeDefined();
+      expect(result.diagnostics?.mismatches.length).toBeGreaterThan(0);
+      expect(result.diagnostics?.timestamp).toBeDefined();
+      expect(result.diagnostics?.comparisonMetadata).toBeDefined();
+    });
+
+    it("should provide diagnostic details for new pages", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({
+          title: "Brand New Page",
+          status: "Ready to publish",
+          language: "Spanish",
+        }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const newPageDiagnostics = result.diagnostics?.mismatches.filter(
+        (m) => m.type === "new"
+      );
+
+      expect(newPageDiagnostics?.length).toBeGreaterThan(0);
+      expect(newPageDiagnostics?.[0].pageTitle).toBe("Brand New Page");
+      expect(newPageDiagnostics?.[0].reason).toContain("not in published");
+      expect(newPageDiagnostics?.[0].details.previewStatus).toBe(
+        "Ready to publish"
+      );
+      expect(newPageDiagnostics?.[0].details.language).toBe("Spanish");
+      expect(newPageDiagnostics?.[0].suggestion).toBeDefined();
+    });
+
+    it("should provide diagnostic details for updated pages", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({ title: "Getting Started", status: "Draft" }), // Exists in published but different status
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const updatedDiagnostics = result.diagnostics?.mismatches.filter(
+        (m) => m.type === "updated"
+      );
+
+      expect(updatedDiagnostics?.length).toBeGreaterThan(0);
+      expect(updatedDiagnostics?.[0].pageTitle).toBe("Getting Started");
+      expect(updatedDiagnostics?.[0].reason).toContain("differs");
+      expect(updatedDiagnostics?.[0].details.previewStatus).toBe("Draft");
+      expect(updatedDiagnostics?.[0].details.publishedStatus).toBe("Published");
+      expect(updatedDiagnostics?.[0].suggestion).toContain("Draft");
+    });
+
+    it("should provide diagnostic details for removed pages", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      // Empty preview - all published pages should be marked as removed
+      const previewPages: PageWithStatus[] = [];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const removedDiagnostics = result.diagnostics?.mismatches.filter(
+        (m) => m.type === "removed"
+      );
+
+      expect(removedDiagnostics?.length).toBeGreaterThan(0);
+      expect(removedDiagnostics?.[0].reason).toContain("not found in preview");
+      expect(removedDiagnostics?.[0].details.publishedStatus).toBe("Published");
+      expect(removedDiagnostics?.[0].suggestion).toContain("removed");
+    });
+
+    it("should include comparison metadata in diagnostics", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({ title: "Test Page", status: "Ready to publish" }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      expect(result.diagnostics?.comparisonMetadata).toBeDefined();
+      expect(
+        result.diagnostics?.comparisonMetadata.publishedPagesAnalyzed
+      ).toBe(4); // Mock data has 4 pages (2 sections x 2 pages each)
+      expect(result.diagnostics?.comparisonMetadata.previewPagesAnalyzed).toBe(
+        1
+      );
+      expect(
+        result.diagnostics?.comparisonMetadata.comparisonDuration
+      ).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should generate diagnostic report", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({
+          title: "New Feature",
+          status: "Ready to publish",
+          language: "Portuguese",
+        }),
+        createMockPage({ title: "Getting Started", status: "Draft" }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const diagnosticReport =
+        ComparisonEngine.generateDiagnosticReport(result);
+
+      expect(diagnosticReport).toBeDefined();
+      expect(diagnosticReport).toContain("Mismatch Diagnostics Report");
+      expect(diagnosticReport).toContain("Comparison Metadata");
+      expect(diagnosticReport).toContain("Summary");
+      expect(diagnosticReport).toContain("New Feature");
+      expect(diagnosticReport).toContain("Getting Started");
+      expect(diagnosticReport).toContain("Portuguese");
+    });
+
+    it("should return null for diagnostic report when diagnostics disabled", async () => {
+      const previewSections: PreviewSection[] = [];
+      const previewPages: PageWithStatus[] = [];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        false
+      );
+
+      const diagnosticReport =
+        ComparisonEngine.generateDiagnosticReport(result);
+
+      expect(diagnosticReport).toBeNull();
+    });
+
+    it("should include troubleshooting guide in diagnostic report", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({ title: "Test Page", status: "Draft" }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const diagnosticReport =
+        ComparisonEngine.generateDiagnosticReport(result);
+
+      expect(diagnosticReport).toContain("Troubleshooting Guide");
+      expect(diagnosticReport).toContain("Common Issues and Solutions");
+      expect(diagnosticReport).toContain("Issue");
+      expect(diagnosticReport).toContain("Cause");
+      expect(diagnosticReport).toContain("Solution");
+    });
+
+    it("should handle pages with detailed diagnostic information", async () => {
+      const lastEdited = new Date("2024-01-15T10:30:00Z");
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "User Guide" }),
+      ];
+
+      const previewPages: PageWithStatus[] = [
+        createMockPage({
+          title: "Advanced Configuration",
+          status: "Ready to publish",
+          language: "Spanish",
+          lastEdited,
+          parentItem: "section-1",
+        }),
+      ];
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      const newPageDiagnostics = result.diagnostics?.mismatches.find(
+        (m) => m.pageTitle === "Advanced Configuration"
+      );
+
+      expect(newPageDiagnostics).toBeDefined();
+      expect(newPageDiagnostics?.details.lastEdited).toEqual(lastEdited);
+      expect(newPageDiagnostics?.details.language).toBe("Spanish");
+      expect(newPageDiagnostics?.details.section).toBeDefined();
+    });
+
+    it("should track comparison duration accurately", async () => {
+      const previewSections: PreviewSection[] = [
+        createMockPreviewSection({ title: "Introduction" }),
+      ];
+
+      const previewPages: PageWithStatus[] = Array.from(
+        { length: 50 },
+        (_, i) =>
+          createMockPage({
+            title: `Page ${i}`,
+            status: "Ready to publish",
+          })
+      );
+
+      const result = await ComparisonEngine.compareWithPublished(
+        previewSections,
+        previewPages,
+        true
+      );
+
+      expect(
+        result.diagnostics?.comparisonMetadata.comparisonDuration
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        result.diagnostics?.comparisonMetadata.comparisonDuration
+      ).toBeLessThan(5000); // Should complete within 5 seconds
+    });
+  });
 });
 
 // Helper functions

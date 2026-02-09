@@ -15,6 +15,9 @@
 
 import "dotenv/config";
 
+// Notion property name for status (must match fetchAll.ts)
+const STATUS_PROPERTY = "Publish Status";
+
 // Validate environment variables BEFORE importing notionClient to ensure graceful exit
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
@@ -35,13 +38,26 @@ if (!resolvedDatabaseId) {
   process.exit(1);
 }
 
-// Now it's safe to import modules that depend on these env vars
-// Use dynamic imports to ensure validation runs first
-const { fetchNotionData, sortAndExpandNotionData } = await import(
-  "../fetchNotionData"
-);
-const { buildStatusFilter } = await import("../notion-fetch-all/fetchAll");
-const { getStatusFromRawPage } = await import("../notionPageUtils");
+// Build the same filter as fetch-all without importing from fetchAll.ts
+// to avoid triggering Docusaurus initialization
+function buildStatusFilter(includeRemoved: boolean) {
+  if (includeRemoved) {
+    return undefined;
+  }
+
+  return {
+    or: [
+      {
+        property: STATUS_PROPERTY,
+        select: { is_empty: true },
+      },
+      {
+        property: STATUS_PROPERTY,
+        select: { does_not_equal: "Remove" },
+      },
+    ],
+  };
+}
 
 interface CountOptions {
   includeRemoved: boolean;
@@ -74,7 +90,13 @@ function parseArgs(): CountOptions {
 }
 
 async function countPages(options: CountOptions) {
-  // Step 1: Build the same filter as fetch-all
+  // Import modules inside the function to avoid top-level execution
+  const { fetchNotionData, sortAndExpandNotionData } = await import(
+    "../fetchNotionData"
+  );
+  const { getStatusFromRawPage } = await import("../notionPageUtils");
+
+  // Step 1: Build the same filter as fetch-all (using local function)
   const filter = buildStatusFilter(options.includeRemoved);
 
   // Step 2: Fetch all parent pages from Notion (with pagination)
@@ -127,4 +149,26 @@ async function main() {
   }
 }
 
-main();
+// Run if executed directly
+const isDirectExec =
+  process.argv[1] &&
+  require("node:path").resolve(process.argv[1]) ===
+    require("node:url").fileURLToPath(import.meta.url);
+
+if (isDirectExec && process.env.NODE_ENV !== "test") {
+  (async () => {
+    try {
+      await main();
+    } catch (error) {
+      console.error("Fatal error:", error);
+      process.exit(1);
+    }
+  })().catch((err) => {
+    console.error("Unhandled fatal error:", err);
+    process.exit(1);
+  });
+}
+
+// Export for testing
+export { main, parseArgs, buildStatusFilter };
+export type { CountOptions };

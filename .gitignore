@@ -53,6 +53,7 @@ bg.png
 favicon.ico
 favicon.svg
 /assets/
+assets/
 
 # Generated content (synced from content branch)
 # These directories are populated by checking out from the content branch

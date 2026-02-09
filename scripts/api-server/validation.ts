@@ -1,18 +1,11 @@
 import type { JobType, JobStatus } from "./job-tracker";
+import { JOB_COMMANDS } from "./job-executor";
 
 export const MAX_REQUEST_SIZE = 1_000_000; // 1MB max request size
 export const MAX_JOB_ID_LENGTH = 100;
 
-export const VALID_JOB_TYPES: readonly JobType[] = [
-  "notion:fetch",
-  "notion:fetch-all",
-  "notion:count-pages",
-  "notion:translate",
-  "notion:status-translation",
-  "notion:status-draft",
-  "notion:status-publish",
-  "notion:status-publish-production",
-] as const;
+// Derive valid job types from JOB_COMMANDS keys (single source of truth)
+export const VALID_JOB_TYPES = Object.keys(JOB_COMMANDS) as readonly JobType[];
 
 export const VALID_JOB_STATUSES: readonly JobStatus[] = [
   "pending",

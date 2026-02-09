@@ -506,7 +506,7 @@ Navigate to your repository on GitHub and add these secrets:
 | Notion Fetch via API   | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | `API_ENDPOINT`, `SLACK_WEBHOOK_URL`                                  |
 | Sync Notion Docs       | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `SLACK_WEBHOOK_URL`                                                  |
 | Translate Notion Docs  | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                           | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
-| Docker Publish         | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                       | None                                                                 |
+| Docker Publish         | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                       | `SLACK_WEBHOOK_URL`                                                  |
 | Deploy PR Preview      | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
 | Deploy to Production   | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
 | Deploy to GitHub Pages | None (uses GitHub Pages infrastructure)                                                       | `SLACK_WEBHOOK_URL`                                                  |

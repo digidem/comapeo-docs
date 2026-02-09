@@ -9,6 +9,52 @@ import { getJobTracker } from "./job-tracker";
 import { createJobLogger, type JobLogger } from "./job-persistence";
 import { reportJobCompletion } from "./github-status";
 
+/**
+ * Whitelist of environment variables that child processes are allowed to access.
+ * Only variables necessary for Notion scripts and runtime resolution are included.
+ * Sensitive vars like API_KEY_*, GITHUB_TOKEN are explicitly excluded.
+ */
+const CHILD_ENV_WHITELIST = [
+  // Notion API configuration
+  "NOTION_API_KEY",
+  "DATABASE_ID",
+  "NOTION_DATABASE_ID",
+  "DATA_SOURCE_ID",
+  // OpenAI configuration (for translations)
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL",
+  // Application configuration
+  "DEFAULT_DOCS_PAGE",
+  "NODE_ENV",
+  // Runtime resolution (required for bun/node to work correctly)
+  "PATH",
+  "HOME",
+  "BUN_INSTALL",
+  // Locale configuration
+  "LANG",
+  "LC_ALL",
+] as const;
+
+/**
+ * Build a filtered environment object for child processes.
+ * Only includes whitelisted variables from the parent process.env.
+ * This prevents sensitive variables (API_KEY_*, GITHUB_TOKEN, etc.) from being passed to children.
+ */
+function buildChildEnv(): NodeJS.ProcessEnv {
+  const childEnv: NodeJS.ProcessEnv = {};
+
+  for (const key of CHILD_ENV_WHITELIST) {
+    // eslint-disable-next-line security/detect-object-injection
+    const value = process.env[key];
+    if (value !== undefined) {
+      // eslint-disable-next-line security/detect-object-injection
+      childEnv[key] = value;
+    }
+  }
+
+  return childEnv;
+}
+
 export interface JobExecutionContext {
   jobId: string;
   onProgress: (current: number, total: number, message: string) => void;
@@ -133,7 +179,7 @@ export async function executeJob(
 
   try {
     childProcess = spawn(jobConfig.script, args, {
-      env: process.env,
+      env: buildChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
 

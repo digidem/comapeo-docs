@@ -672,6 +672,8 @@ Builds a multi-platform API image and publishes it to Docker Hub.
 **Path Filters (must change to trigger automatically):**
 
 - `Dockerfile`
+- `docker-compose.yml`
+- `docker-compose.yaml`
 - `.dockerignore`
 - `package.json`
 - `bun.lockb*`

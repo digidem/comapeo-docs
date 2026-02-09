@@ -9,99 +9,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import type { JobType } from "./job-tracker";
-
-/**
- * Replicate the JOB_COMMANDS mapping for testing
- * This ensures we test the actual structure used in job-executor.ts
- */
-const JOB_COMMANDS: Record<
-  JobType,
-  {
-    script: string;
-    args: string[];
-    buildArgs?: (options: {
-      maxPages?: number;
-      statusFilter?: string;
-      force?: boolean;
-      dryRun?: boolean;
-      includeRemoved?: boolean;
-    }) => string[];
-  }
-> = {
-  "notion:fetch": {
-    script: "bun",
-    args: ["scripts/notion-fetch"],
-  },
-  "notion:fetch-all": {
-    script: "bun",
-    args: ["scripts/notion-fetch-all"],
-    buildArgs: (options) => {
-      const args: string[] = [];
-      if (options.maxPages) args.push("--max-pages", String(options.maxPages));
-      if (options.statusFilter)
-        args.push("--status-filter", options.statusFilter);
-      if (options.force) args.push("--force");
-      if (options.dryRun) args.push("--dry-run");
-      if (options.includeRemoved) args.push("--include-removed");
-      return args;
-    },
-  },
-  "notion:count-pages": {
-    script: "bun",
-    args: ["scripts/notion-count-pages/index.ts"],
-    buildArgs: (options) => {
-      const args: string[] = [];
-      if (options.includeRemoved) args.push("--include-removed");
-      if (options.statusFilter)
-        args.push("--status-filter", options.statusFilter);
-      return args;
-    },
-  },
-  "notion:translate": {
-    script: "bun",
-    args: ["scripts/notion-translate"],
-  },
-  "notion:status-translation": {
-    script: "bun",
-    args: ["scripts/notion-status", "--workflow", "translation"],
-  },
-  "notion:status-draft": {
-    script: "bun",
-    args: ["scripts/notion-status", "--workflow", "draft"],
-  },
-  "notion:status-publish": {
-    script: "bun",
-    args: ["scripts/notion-status", "--workflow", "publish"],
-  },
-  "notion:status-publish-production": {
-    script: "bun",
-    args: ["scripts/notion-status", "--workflow", "publish-production"],
-  },
-};
-
-/**
- * Replicate the parseProgressFromOutput function for testing
- */
-function parseProgressFromOutput(
-  output: string,
-  onProgress: (current: number, total: number, message: string) => void
-): void {
-  const progressPatterns = [
-    /Progress:\s*(\d+)\/(\d+)/i,
-    /Processing\s+(\d+)\s+of\s+(\d+)/i,
-    /(\d+)\/(\d+)\s+pages?/i,
-  ];
-
-  for (const pattern of progressPatterns) {
-    const match = output.match(pattern);
-    if (match) {
-      const current = parseInt(match[1]!, 10);
-      const total = parseInt(match[2]!, 10);
-      onProgress(current, total, `Processing ${current} of ${total}`);
-      return;
-    }
-  }
-}
+import { JOB_COMMANDS, parseProgressFromOutput } from "./job-executor";
 
 describe("Core Job Logic - parseProgressFromOutput", () => {
   let progressUpdates: Array<{
@@ -279,7 +187,7 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       const config = JOB_COMMANDS["notion:fetch"];
 
       expect(config.script).toBe("bun");
-      expect(config.args).toEqual(["scripts/notion-fetch"]);
+      expect(config.args).toEqual(["scripts/notion-fetch/index.ts"]);
       expect(config.buildArgs).toBeUndefined();
     });
 

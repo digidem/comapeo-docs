@@ -290,6 +290,7 @@ describe("API Routes - Validation", () => {
       const validJobTypes: JobType[] = [
         "notion:fetch",
         "notion:fetch-all",
+        "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
         "notion:status-draft",

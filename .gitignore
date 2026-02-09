@@ -108,3 +108,4 @@ retry-metrics.json
 # Log and skill files (development artifacts)
 *.log
 *.skill
+scripts/api-server/flaky-test-counts.txt

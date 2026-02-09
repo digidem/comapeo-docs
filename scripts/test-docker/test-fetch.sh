@@ -34,6 +34,7 @@ EXPECTED_TOTAL=""
 EXPECTED_PARENTS=""
 EXPECTED_SUBPAGES=""
 EXPECTED_BY_STATUS=""
+EXPECTED_DOCS=""
 COUNT_VALIDATION_AVAILABLE=false
 
 # Parse arguments
@@ -207,11 +208,15 @@ get_expected_page_count() {
   EXPECTED_PARENTS=$(echo "$COUNT_JSON" | jq -r '.parents')
   EXPECTED_SUBPAGES=$(echo "$COUNT_JSON" | jq -r '.subPages')
   EXPECTED_BY_STATUS=$(echo "$COUNT_JSON" | jq -r '.byStatus')
+  EXPECTED_DOCS=$(echo "$COUNT_JSON" | jq -r '.expectedDocs // empty')
 
   echo -e "${GREEN}📊 Expected page count:${NC}"
-  echo "  Total (parents + sub-pages, after filtering): $EXPECTED_TOTAL"
+  echo "  Total Notion pages (parents + sub-pages, after filtering): $EXPECTED_TOTAL"
   echo "  Parents: $EXPECTED_PARENTS"
   echo "  Sub-pages: $EXPECTED_SUBPAGES"
+  if [ -n "$EXPECTED_DOCS" ] && [ "$EXPECTED_DOCS" != "null" ]; then
+    echo "  Expected English markdown files (elementType=Page): $EXPECTED_DOCS"
+  fi
   echo "  By status:"
   echo "$EXPECTED_BY_STATUS" | jq -r 'to_entries[] | "    \(.key): \(.value)"'
 
@@ -222,6 +227,7 @@ get_expected_page_count() {
 # NOTE: The count-pages script returns unique page count (not multiplied by languages).
 # The fetch pipeline generates files in docs/ (en), i18n/pt/, i18n/es/.
 # We compare against docs/ (English) count since that represents unique pages.
+# Now uses expectedDocs field (elementType=Page count) instead of total (all pages).
 validate_page_count() {
   local EXPECTED="$1"
 
@@ -237,42 +243,58 @@ validate_page_count() {
   echo -e "${BLUE}═══════════════════════════════════════${NC}"
   echo -e "${BLUE}  PAGE COUNT VALIDATION${NC}"
   echo -e "${BLUE}═══════════════════════════════════════${NC}"
-  echo "  Expected pages: $EXPECTED"
-  echo "  Actual markdown files: $ACTUAL"
 
-  # For --max-pages N, expected count is min(N, total_available)
-  if [ "$FETCH_ALL" = false ] && [ -n "$EXPECTED_TOTAL" ]; then
+  # Use expectedDocs if available (represents actual markdown files), otherwise fall back to total
+  local COMPARISON_VALUE="$EXPECTED"
+  if [ -n "$EXPECTED_DOCS" ] && [ "$EXPECTED_DOCS" != "null" ] && [ "$EXPECTED_DOCS" != "0" ]; then
+    COMPARISON_VALUE="$EXPECTED_DOCS"
+    echo "  Total Notion pages (all types): $EXPECTED_TOTAL"
+    echo "  Expected markdown files (elementType=Page): $EXPECTED_DOCS"
+    echo "  Actual markdown files: $ACTUAL"
+  else
+    # Fallback to old behavior if expectedDocs not available
+    echo "  Expected pages (fallback to total): $EXPECTED"
+    echo "  Actual markdown files: $ACTUAL"
+    echo "  (Note: expectedDocs field not available, using total)"
+  fi
+
+  # For --max-pages N, expected count is min(N, comparison_value)
+  if [ "$FETCH_ALL" = false ] && [ -n "$COMPARISON_VALUE" ]; then
     local EFFECTIVE_EXPECTED
-    if [ "$MAX_PAGES" -lt "$EXPECTED_TOTAL" ] 2>/dev/null; then
+    if [ "$MAX_PAGES" -lt "$COMPARISON_VALUE" ] 2>/dev/null; then
       EFFECTIVE_EXPECTED="$MAX_PAGES"
       echo "  (--max-pages $MAX_PAGES limits expected to $EFFECTIVE_EXPECTED)"
     else
-      EFFECTIVE_EXPECTED="$EXPECTED_TOTAL"
+      EFFECTIVE_EXPECTED="$COMPARISON_VALUE"
     fi
-    EXPECTED="$EFFECTIVE_EXPECTED"
-    echo "  Adjusted expected: $EXPECTED"
+    COMPARISON_VALUE="$EFFECTIVE_EXPECTED"
+    echo "  Adjusted expected: $COMPARISON_VALUE"
   fi
 
-  if [ "$ACTUAL" -eq "$EXPECTED" ]; then
+  if [ "$ACTUAL" -eq "$COMPARISON_VALUE" ]; then
     echo -e "${GREEN}  ✅ PASS: Page counts match!${NC}"
     echo -e "${BLUE}═══════════════════════════════════════${NC}"
     return 0
   else
-    local DIFF=$((EXPECTED - ACTUAL))
+    local DIFF=$((COMPARISON_VALUE - ACTUAL))
     echo -e "${YELLOW}  ❌ FAIL: Page count mismatch (off by $DIFF)${NC}"
     echo ""
     echo "  Diagnostics:"
-    echo "    - Expected total from Notion: $EXPECTED_TOTAL"
+    echo "    - Total Notion pages (all types): $EXPECTED_TOTAL"
+    if [ -n "$EXPECTED_DOCS" ] && [ "$EXPECTED_DOCS" != "null" ]; then
+      echo "    - Expected markdown files (elementType=Page): $EXPECTED_DOCS"
+    fi
     echo "    - Parent pages: $EXPECTED_PARENTS"
     echo "    - Sub-pages: $EXPECTED_SUBPAGES"
     echo "    - Fetch mode: $([ "$FETCH_ALL" = true ] && echo '--all' || echo "--max-pages $MAX_PAGES")"
     echo "    - Include removed: $INCLUDE_REMOVED"
-    if [ "$ACTUAL" -lt "$EXPECTED" ]; then
+    if [ "$ACTUAL" -lt "$COMPARISON_VALUE" ]; then
       echo ""
       echo "  Possible causes:"
       echo "    - Notion API pagination may have stalled (check for anomaly warnings in logs)"
       echo "    - Sub-page fetch may have timed out (check for 'Skipping sub-page' warnings)"
       echo "    - Status filtering may be more aggressive than expected"
+      echo "    - Element type filtering (only 'Page' types generate markdown)"
       echo ""
       echo "  To debug, re-run with --no-cleanup and check container logs:"
       echo "    docker logs comapeo-fetch-test 2>&1 | grep -E '(DEBUG|anomaly|Skipping|Status Summary)'"
@@ -407,7 +429,13 @@ echo "Files are saved to your host machine via Docker volume mounts."
 # Validate page count
 VALIDATION_EXIT_CODE=0
 if [ "$COUNT_VALIDATION_AVAILABLE" = true ]; then
-  if ! validate_page_count "$EXPECTED_TOTAL"; then
+  # Pass expectedDocs if available, otherwise fall back to total
+  if [ -n "$EXPECTED_DOCS" ] && [ "$EXPECTED_DOCS" != "null" ] && [ "$EXPECTED_DOCS" != "0" ]; then
+    VALIDATION_EXPECTED="$EXPECTED_DOCS"
+  else
+    VALIDATION_EXPECTED="$EXPECTED_TOTAL"
+  fi
+  if ! validate_page_count "$VALIDATION_EXPECTED"; then
     VALIDATION_EXIT_CODE=1
   fi
 else

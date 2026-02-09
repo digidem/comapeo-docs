@@ -5,6 +5,7 @@
  * Supports multiple API keys with optional metadata.
  */
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { ValidationError } from "../shared/errors";
 
 /**
@@ -25,7 +26,7 @@ export interface ApiKeyMeta {
  * API Key record with hash and metadata
  */
 interface ApiKeyRecord {
-  /** Bcrypt hash of the API key */
+  /** SHA-256 hash of the API key */
   hash: string;
   /** Metadata about the key */
   meta: ApiKeyMeta;
@@ -104,26 +105,29 @@ export class ApiKeyAuth {
   }
 
   /**
-   * Simple hash function for API keys
-   * Uses SHA-256 via Web Crypto API if available, falls back to simple hash
+   * Hash function for API keys using SHA-256
+   * Returns a cryptographically secure hash with sha256_ prefix
    */
   private hashKey(key: string): string {
-    // Simple hash for compatibility
-    let hash = 0;
-    const str = `api-key-${key}`;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return `hash_${Math.abs(hash).toString(16)}`;
+    const hash = createHash("sha256").update(key).digest("hex");
+    return `sha256_${hash}`;
   }
 
   /**
-   * Verify an API key
+   * Verify an API key using timing-safe comparison
    */
   private verifyKey(key: string, hash: string): boolean {
-    return this.hashKey(key) === hash;
+    const computedHash = this.hashKey(key);
+    // Both hashes are guaranteed to be the same length (sha256_ + 64 hex chars)
+    const hashBuffer = Buffer.from(computedHash);
+    const storedBuffer = Buffer.from(hash);
+
+    // Ensure buffers are same length before comparison (defensive check)
+    if (hashBuffer.length !== storedBuffer.length) {
+      return false;
+    }
+
+    return timingSafeEqual(hashBuffer, storedBuffer);
   }
 
   /**

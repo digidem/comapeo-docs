@@ -138,8 +138,35 @@ async function countPages(options: CountOptions) {
   }
 
   // Step 6: Count by element type (using parent pages only)
+  // and calculate expectedDocs (English markdown files)
   const byElementType: Record<string, number> = {};
   let expectedDocsCount = 0;
+
+  // Build lookup map for sub-page language checking
+  const pageById = new Map<string, Record<string, unknown>>();
+  for (const page of expandedPages) {
+    if (page?.id) {
+      pageById.set(page.id as string, page);
+    }
+  }
+
+  const LANGUAGE_TO_LOCALE: Record<string, string> = {
+    English: "en",
+    Spanish: "es",
+    Portuguese: "pt",
+  };
+
+  function getPageLocale(page: Record<string, unknown>): string {
+    const props = page.properties as Record<string, any> | undefined;
+    const langProp = props?.[NOTION_PROPERTIES.LANGUAGE] ?? props?.["Language"];
+    const langName = langProp?.select?.name;
+    // eslint-disable-next-line security/detect-object-injection -- langName is from Notion select property
+    if (langName && LANGUAGE_TO_LOCALE[langName]) {
+      // eslint-disable-next-line security/detect-object-injection -- langName is from Notion select property
+      return LANGUAGE_TO_LOCALE[langName];
+    }
+    return "en"; // default locale
+  }
 
   for (const page of parentPages) {
     // Get element type with fallback to legacy "Section" property
@@ -152,9 +179,28 @@ async function countPages(options: CountOptions) {
     // eslint-disable-next-line security/detect-object-injection -- elementType is from our own data
     byElementType[elementType] = (byElementType[elementType] || 0) + 1;
 
-    // Only "Page" type elements generate actual markdown files
+    // Count "Page" type parents that will produce English markdown.
+    // A page produces English markdown if:
+    // - Its locale is "en" (Language not set or set to "English"), OR
+    // - Any of its sub-pages has locale "en"
     if (elementType === "Page") {
-      expectedDocsCount++;
+      const parentLocale = getPageLocale(page);
+      let hasEnglish = parentLocale === "en";
+
+      if (!hasEnglish) {
+        const subItems = (page.properties as any)?.["Sub-item"]?.relation ?? [];
+        for (const rel of subItems) {
+          const subPage = pageById.get(rel.id);
+          if (subPage && getPageLocale(subPage) === "en") {
+            hasEnglish = true;
+            break;
+          }
+        }
+      }
+
+      if (hasEnglish) {
+        expectedDocsCount++;
+      }
     }
   }
 

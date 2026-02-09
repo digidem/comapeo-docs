@@ -368,7 +368,7 @@ echo "Job created: $JOB_ID"
 echo -e "${BLUE}⏳ Polling job status:${NC}"
 # Use longer timeout for full fetches
 if [ "$FETCH_ALL" = true ]; then
-  TIMEOUT=900
+  TIMEOUT=3600
 else
   TIMEOUT=120
 fi
@@ -395,7 +395,32 @@ done
 
 # Final status
 echo -e "${BLUE}✅ Final job status:${NC}"
-curl -s "$API_BASE_URL/jobs/$JOB_ID" | jq '.data | {status, result}'
+FINAL_STATUS=$(curl -s "$API_BASE_URL/jobs/$JOB_ID")
+echo "$FINAL_STATUS" | jq '.data | {status, result}'
+
+# Extract final state for validation
+STATE=$(echo "$FINAL_STATUS" | jq -r '.data.status')
+
+# Check if job completed successfully
+if [ "$STATE" != "completed" ]; then
+  if [ "$STATE" = "running" ]; then
+    echo -e "${YELLOW}❌ TIMEOUT: Fetch job still running after ${TIMEOUT}s${NC}"
+    echo "  The job needs more time to process all pages."
+    echo "  Re-run with --no-cleanup and wait, or check:"
+    echo "    docker logs $CONTAINER_NAME --tail 50"
+  else
+    echo -e "${YELLOW}❌ FAILED: Fetch job status: $STATE${NC}"
+    # Try to show error details
+    ERROR_DETAILS=$(echo "$FINAL_STATUS" | jq '.data.result.error // .data.result' 2>/dev/null)
+    if [ -n "$ERROR_DETAILS" ] && [ "$ERROR_DETAILS" != "null" ]; then
+      echo "  Error details:"
+      echo "$ERROR_DETAILS" | jq '.' 2>/dev/null || echo "$ERROR_DETAILS"
+    fi
+  fi
+  echo ""
+  # Continue to show generated files for debugging, but mark for exit
+  VALIDATION_EXIT_CODE=1
+fi
 
 # List all jobs
 echo -e "${BLUE}✅ All jobs:${NC}"
@@ -426,9 +451,13 @@ fi
 echo ""
 echo "Files are saved to your host machine via Docker volume mounts."
 
-# Validate page count
-VALIDATION_EXIT_CODE=0
-if [ "$COUNT_VALIDATION_AVAILABLE" = true ]; then
+# Validate page count (only if job completed successfully)
+# Initialize VALIDATION_EXIT_CODE if not already set (from job state check)
+if [ -z "${VALIDATION_EXIT_CODE+x}" ]; then
+  VALIDATION_EXIT_CODE=0
+fi
+
+if [ "$VALIDATION_EXIT_CODE" -eq 0 ] && [ "$COUNT_VALIDATION_AVAILABLE" = true ]; then
   # Pass expectedDocs if available, otherwise fall back to total
   if [ -n "$EXPECTED_DOCS" ] && [ "$EXPECTED_DOCS" != "null" ] && [ "$EXPECTED_DOCS" != "0" ]; then
     VALIDATION_EXPECTED="$EXPECTED_DOCS"
@@ -438,6 +467,8 @@ if [ "$COUNT_VALIDATION_AVAILABLE" = true ]; then
   if ! validate_page_count "$VALIDATION_EXPECTED"; then
     VALIDATION_EXIT_CODE=1
   fi
+elif [ "$VALIDATION_EXIT_CODE" -ne 0 ]; then
+  echo -e "${YELLOW}⚠️  Skipping page count validation (job did not complete successfully)${NC}"
 else
   echo -e "${YELLOW}⚠️  Skipping page count validation (count job was unavailable)${NC}"
 fi

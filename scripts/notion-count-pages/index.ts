@@ -6,7 +6,19 @@
  *   bun scripts/notion-count-pages [--include-removed] [--status-filter STATUS]
  *
  * Outputs JSON to stdout:
- *   { "total": N, "parents": N, "subPages": N, "byStatus": { "Ready to publish": N, ... } }
+ *   {
+ *     "total": N,
+ *     "parents": N,
+ *     "subPages": N,
+ *     "byStatus": { "Ready to publish": N, ... },
+ *     "byElementType": { "Page": N, "Toggle": N, "Title": N, ... },
+ *     "expectedDocs": N
+ *   }
+ *
+ * Notes:
+ *   - expectedDocs counts only parent pages with elementType "Page"
+ *     (these are the ones that generate actual English markdown files)
+ *   - byElementType breaks down parent pages by their Element Type property
  *
  * Exit codes:
  *   0 = success
@@ -95,6 +107,7 @@ async function countPages(options: CountOptions) {
     "../fetchNotionData"
   );
   const { getStatusFromRawPage } = await import("../notionPageUtils");
+  const { NOTION_PROPERTIES } = await import("../constants");
 
   // Step 1: Build the same filter as fetch-all (using local function)
   const filter = buildStatusFilter(options.includeRemoved);
@@ -124,11 +137,34 @@ async function countPages(options: CountOptions) {
     byStatus[status] = (byStatus[status] || 0) + 1;
   }
 
+  // Step 6: Count by element type (using parent pages only)
+  const byElementType: Record<string, number> = {};
+  let expectedDocsCount = 0;
+
+  for (const page of parentPages) {
+    // Get element type with fallback to legacy "Section" property
+    const elementTypeProp =
+      page.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
+      page.properties?.["Section"];
+
+    const elementType = elementTypeProp?.select?.name || "(unknown)";
+
+    // eslint-disable-next-line security/detect-object-injection -- elementType is from our own data
+    byElementType[elementType] = (byElementType[elementType] || 0) + 1;
+
+    // Only "Page" type elements generate actual markdown files
+    if (elementType === "Page") {
+      expectedDocsCount++;
+    }
+  }
+
   return {
     total: filtered.length,
     parents: parentCount,
     subPages: subPageCount,
     byStatus,
+    byElementType,
+    expectedDocs: expectedDocsCount,
   };
 }
 

@@ -243,11 +243,11 @@ validate_page_count() {
   # For --max-pages N, expected count is min(N, total_available)
   if [ "$FETCH_ALL" = false ] && [ -n "$EXPECTED_TOTAL" ]; then
     local EFFECTIVE_EXPECTED
-    if [ "$MAX_PAGES" -lt "$EXPECTED" ] 2>/dev/null; then
+    if [ "$MAX_PAGES" -lt "$EXPECTED_TOTAL" ] 2>/dev/null; then
       EFFECTIVE_EXPECTED="$MAX_PAGES"
       echo "  (--max-pages $MAX_PAGES limits expected to $EFFECTIVE_EXPECTED)"
     else
-      EFFECTIVE_EXPECTED="$EXPECTED"
+      EFFECTIVE_EXPECTED="$EXPECTED_TOTAL"
     fi
     EXPECTED="$EFFECTIVE_EXPECTED"
     echo "  Adjusted expected: $EXPECTED"

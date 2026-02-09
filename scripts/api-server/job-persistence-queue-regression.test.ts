@@ -4,7 +4,7 @@
  * Focuses on deleteJob operations and queue completion events
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   saveJob,
   loadJob,
@@ -94,13 +94,13 @@ describe("Job Persistence and Queue Regression Tests", () => {
           type: "notion:fetch",
           status: "pending",
           createdAt: new Date().toISOString(),
-          result: { cycle: i },
+          result: { success: true, data: { cycle: i } },
         };
         saveJob(job);
 
         const loaded = loadJob(jobId);
         expect(loaded).toBeDefined();
-        expect(loaded?.result?.cycle).toBe(i);
+        expect((loaded?.result?.data as { cycle: number })?.cycle).toBe(i);
 
         deleteJob(jobId);
         expect(loadJob(jobId)).toBeUndefined();
@@ -244,7 +244,9 @@ describe("Job Persistence and Queue Regression Tests", () => {
         const jobTracker = getJobTracker();
         const job = jobTracker.getJob(jobId);
         expect(job?.status).toBe("completed");
-        expect(job?.result?.data?.iteration).toBe(i + 1);
+        expect((job?.result?.data as { iteration: number })?.iteration).toBe(
+          i + 1
+        );
       }
 
       expect(completeCount).toBe(completionCount);

@@ -31,7 +31,7 @@ concurrency:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: communityfirst/comapeo-docs-api
 
 jobs:
   build:
@@ -147,3 +147,25 @@ jobs:
                 body: commentBody,
               });
             }
+
+      - name: Notify Slack
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Docker Publish*: ${{ job.status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Docker Publish*: ${{ job.status }}\nRepository: `${{ env.IMAGE_NAME }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <${{ github.server_url }}/${{ github.actor }}|${{ github.actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ github.event_name == 'pull_request' && format('Published tag: `pr-{0}`', github.event.number) || github.ref == 'refs/heads/main' && format('Published tags: `latest`, `{0}`', github.sha) || format('Manual run on ref `{0}`', github.ref_name) }}"

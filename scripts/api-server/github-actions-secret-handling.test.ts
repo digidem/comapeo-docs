@@ -102,9 +102,13 @@ describe("GitHub Actions Secret Handling", () => {
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain(
-        'export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"'
+      // Secrets should be set in the env block, not exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBe(
+        "${{ secrets.NOTION_API_KEY }}"
       );
+      // Shell script should NOT have export statements for secrets
+      expect(startServerStep.run).not.toContain("export NOTION_API_KEY=");
     });
 
     it("should pass OPENAI_API_KEY securely", () => {
@@ -113,9 +117,13 @@ describe("GitHub Actions Secret Handling", () => {
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain(
-        'export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"'
+      // Secrets should be set in the env block, not exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.OPENAI_API_KEY).toBe(
+        "${{ secrets.OPENAI_API_KEY }}"
       );
+      // Shell script should NOT have export statements for secrets
+      expect(startServerStep.run).not.toContain("export OPENAI_API_KEY=");
     });
   });
 
@@ -274,10 +282,17 @@ describe("GitHub Actions Secret Handling", () => {
 
       expect(startServerStep).toBeDefined();
 
-      // Verify secrets are exported, not echoed (which would leak to logs)
-      expect(startServerStep.run).toContain("export NOTION_API_KEY=");
-      expect(startServerStep.run).toContain("export OPENAI_API_KEY=");
-      expect(startServerStep.run).toContain("export API_KEY_GITHUB_ACTIONS=");
+      // Secrets should be set in env block, NOT exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBeDefined();
+      expect(startServerStep.env.OPENAI_API_KEY).toBeDefined();
+      expect(startServerStep.env.API_KEY_GITHUB_ACTIONS).toBeDefined();
+      // Verify secrets are NOT exported in shell script (prevents log leaks)
+      expect(startServerStep.run).not.toContain("export NOTION_API_KEY=");
+      expect(startServerStep.run).not.toContain("export OPENAI_API_KEY=");
+      expect(startServerStep.run).not.toContain(
+        "export API_KEY_GITHUB_ACTIONS="
+      );
 
       // Verify there are no echo statements that would leak secrets
       const linesWithSecrets = startServerStep.run
@@ -405,13 +420,15 @@ describe("GitHub Actions Secret Handling", () => {
       expect(configStep).toBeDefined();
       expect(configStep.run).toContain("endpoint=");
 
-      // 2. Start server step - should use secrets
+      // 2. Start server step - should use secrets from env block
       const startServerStep = job.steps.find((s: any) =>
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain("NOTION_API_KEY");
-      expect(startServerStep.run).toContain("API_KEY_GITHUB_ACTIONS");
+      // Secrets should be in env block
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBeDefined();
+      expect(startServerStep.env.API_KEY_GITHUB_ACTIONS).toBeDefined();
 
       // 3. Create job step - should authenticate with API key
       const createJobStep = job.steps.find((s: any) => s.id === "create-job");

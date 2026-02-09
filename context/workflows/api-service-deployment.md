@@ -475,6 +475,15 @@ Navigate to your repository on GitHub and add these secrets:
 
 **Note:** Without `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, PR preview deployments and production deployments to Cloudflare Pages will not work.
 
+#### Docker Hub Secrets (Required for Docker Publish Workflow)
+
+| Secret Name          | Value                    | Used By Workflows |
+| -------------------- | ------------------------ | ----------------- |
+| `DOCKERHUB_USERNAME` | Your Docker Hub username | Docker Publish    |
+| `DOCKERHUB_TOKEN`    | Docker Hub access token  | Docker Publish    |
+
+**Note:** Use a Docker Hub access token (not your Docker Hub password) with repository write permissions.
+
 #### Notification Secrets (Optional)
 
 | Secret Name         | Value                  | Used By Workflows                                 |
@@ -497,6 +506,7 @@ Navigate to your repository on GitHub and add these secrets:
 | Notion Fetch via API   | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | `API_ENDPOINT`, `SLACK_WEBHOOK_URL`                                  |
 | Sync Notion Docs       | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `SLACK_WEBHOOK_URL`                                                  |
 | Translate Notion Docs  | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                           | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
+| Docker Publish         | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                       | None                                                                 |
 | Deploy PR Preview      | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
 | Deploy to Production   | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
 | Deploy to GitHub Pages | None (uses GitHub Pages infrastructure)                                                       | `SLACK_WEBHOOK_URL`                                                  |
@@ -638,7 +648,39 @@ Add labels to control how many Notion pages to fetch:
 - `CLOUDFLARE_ACCOUNT_ID` - Required for Cloudflare Pages deployment
 - `SLACK_WEBHOOK_URL` - For Slack notifications
 
-#### 5. Deploy to Production (`.github/workflows/deploy-production.yml`)
+#### 5. Docker Publish (`.github/workflows/docker-publish.yml`)
+
+Builds a multi-platform API image and publishes it to Docker Hub.
+
+**Triggers:**
+
+- Automatic on pushes to `main` when Docker build inputs change
+- Automatic on PRs targeting `main` when Docker build inputs change
+- Manual via **Run workflow** (`workflow_dispatch`)
+
+**Tag Behavior:**
+
+- `main` pushes publish `latest` and a SHA tag
+- PRs publish `pr-{number}` (for example, PR #126 publishes `pr-126`)
+- Fork PRs build without push to avoid secret exposure
+
+**Required Secrets:**
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+**Path Filters (must change to trigger automatically):**
+
+- `Dockerfile`
+- `.dockerignore`
+- `package.json`
+- `bun.lockb*`
+- `scripts/**`
+- `tsconfig.json`
+- `docusaurus.config.ts`
+- `src/client/**`
+
+#### 6. Deploy to Production (`.github/workflows/deploy-production.yml`)
 
 Deploys documentation to production on Cloudflare Pages.
 
@@ -676,7 +718,7 @@ Deploys documentation to production on Cloudflare Pages.
 - Production: `https://docs.comapeo.app`
 - Test: `https://{branch_name}.comapeo-docs.pages.dev`
 
-#### 6. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
+#### 7. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
 
 Deploys documentation to GitHub Pages (staging environment).
 

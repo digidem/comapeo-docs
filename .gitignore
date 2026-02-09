@@ -104,3 +104,7 @@ retry-metrics.json
 .beads/
 .junie/
 .ralphy/
+
+# Log and skill files (development artifacts)
+*.log
+*.skill

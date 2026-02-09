@@ -2,7 +2,7 @@
 
 > **Generated from**: `notion_db_complete_20250923T0919.json`  
 > **Export Date**: September 23, 2025 09:24:22 UTC  
-> **Version**: 2.0.0-comprehensive  
+> **Version**: 2.0.0-comprehensive
 
 ## Database Statistics
 
@@ -24,6 +24,7 @@
 ## Quick Distribution Summary
 
 ### Page Status
+
 - **No Status**: 139 (72.0%) - Empty placeholders
 - **Ready to publish**: 15 (7.8%) - Completed content
 - **Not started**: 19 (9.8%) - Planned content
@@ -32,11 +33,13 @@
 - **Remove**: 3 (1.6%) - Marked for deletion
 
 ### Languages
+
 - **Portuguese**: 51 (34.7%)
-- **English**: 48 (32.7%) 
+- **English**: 48 (32.7%)
 - **Spanish**: 46 (31.3%)
 
 ### Element Types
+
 - **Page**: 136 (70.5%) - Standard content
 - **Title**: 37 (19.2%) - Section headers
 - **Toggle**: 10 (5.2%) - Collapsible sections

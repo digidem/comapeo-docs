@@ -155,7 +155,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       const result = safeValidate(createJobRequestSchema, {});
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_123");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toContain("expected one of");
@@ -168,7 +168,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_456");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toContain("expected one of");
@@ -182,7 +182,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_789");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         // Zod reports the error - just verify it's formatted
@@ -208,7 +208,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_abc");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
       }
@@ -223,7 +223,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_def");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_INPUT);
         // formatZodError formats unrecognized_keys as "Unknown option: 'unknownOption'"
@@ -240,7 +240,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_ghi");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
         // Zod includes the path as "options.maxPages"
@@ -257,7 +257,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_jkl");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
         // Zod includes the path as "options.maxPages"
@@ -274,7 +274,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_mno");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
         expect(formatted.message).toContain("integer");
@@ -290,7 +290,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_pqr");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
         expect(formatted.message).toContain("cannot be empty");
@@ -309,7 +309,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
         });
         expect(result.success).toBe(false);
 
-        if (!result.success) {
+        if (result.success === false) {
           const formatted = formatZodError(result.error, "req_test_bool");
           validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
           // Zod includes the path as "options.force"
@@ -357,7 +357,7 @@ describe("Endpoint Schema Validation - GET /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_status");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toContain("expected one of");
@@ -370,7 +370,7 @@ describe("Endpoint Schema Validation - GET /jobs", () => {
       });
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_type");
         validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toContain("expected one of");
@@ -426,7 +426,7 @@ describe("Endpoint Schema Validation - GET /jobs/:id and DELETE /jobs/:id", () =
       const result = safeValidate(jobIdSchema, "");
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_empty");
         validateZodErrorFormat(formatted);
         expect(formatted.message).toContain("empty");
@@ -445,7 +445,7 @@ describe("Endpoint Schema Validation - GET /jobs/:id and DELETE /jobs/:id", () =
         const result = safeValidate(jobIdSchema, id);
         expect(result.success).toBe(false);
 
-        if (!result.success) {
+        if (result.success === false) {
           const formatted = formatZodError(result.error, "req_test_path");
           validateZodErrorFormat(formatted);
           expect(formatted.message).toContain("path traversal");
@@ -457,7 +457,7 @@ describe("Endpoint Schema Validation - GET /jobs/:id and DELETE /jobs/:id", () =
       const result = safeValidate(jobIdSchema, "path/with/slash");
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_slash");
         validateZodErrorFormat(formatted);
         expect(formatted.message).toContain("slash");
@@ -468,7 +468,7 @@ describe("Endpoint Schema Validation - GET /jobs/:id and DELETE /jobs/:id", () =
       const result = safeValidate(jobIdSchema, "path\\with\\backslash");
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_backslash");
         validateZodErrorFormat(formatted);
         expect(formatted.message).toContain("backslash");
@@ -479,7 +479,7 @@ describe("Endpoint Schema Validation - GET /jobs/:id and DELETE /jobs/:id", () =
       const result = safeValidate(jobIdSchema, "a".repeat(101));
       expect(result.success).toBe(false);
 
-      if (!result.success) {
+      if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_length");
         validateZodErrorFormat(formatted);
         expect(formatted.message).toContain("exceed");
@@ -513,7 +513,7 @@ describe("Endpoint Schema Validation - Error Response Consistency", () => {
     const result = safeValidate(jobTypeSchema, "invalid");
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_consistency");
 
       // formatZodError returns a subset of ErrorResponse (without status/timestamp)
@@ -590,7 +590,7 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     const result = jobTypeSchema.safeParse("invalid");
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_enum");
       validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
       expect(formatted.details.field).toBeDefined();
@@ -602,7 +602,7 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     const result = jobOptionsSchema.safeParse({ maxPages: "not-a-number" });
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_type");
       validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
       expect(formatted.details.field).toBe("maxPages");
@@ -614,7 +614,7 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     const result = jobIdSchema.safeParse("");
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_small");
       validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
       expect(formatted.details.minimum).toBeDefined();
@@ -625,7 +625,7 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     const result = jobIdSchema.safeParse("a".repeat(101));
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_big");
       validateZodErrorFormat(formatted, ErrorCode.INVALID_FORMAT);
       expect(formatted.details.maximum).toBeDefined();
@@ -636,7 +636,7 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     const result = jobOptionsSchema.safeParse({ unknownOption: "value" });
     expect(result.success).toBe(false);
 
-    if (!result.success) {
+    if (result.success === false) {
       const formatted = formatZodError(result.error, "req_test_unknown");
       validateZodErrorFormat(formatted, ErrorCode.INVALID_INPUT);
       expect(formatted.message).toContain("Unknown option");

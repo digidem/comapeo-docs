@@ -11,6 +11,7 @@ next_agents: [issue-spec-generator, implementation-planner, code-reviewer]
 
 **Research Request:** Best practices for properly typing mocked functions in Vitest with TypeScript
 **Scope:**
+
 - Correct syntax for `vi.mocked(import(...))` usage
 - Module mocking with `vi.mock()` while maintaining types
 - Mocking axios, promises, and library functions
@@ -23,19 +24,20 @@ next_agents: [issue-spec-generator, implementation-planner, code-reviewer]
 #### 1. Using `vi.mocked()` for Type-Safe Mocks
 
 **Core Pattern:**
+
 ```typescript
-import { vi, describe, it, expect } from 'vitest';
-import axios from 'axios';
+import { vi, describe, it, expect } from "vitest";
+import axios from "axios";
 
-vi.mock('axios');
+vi.mock("axios");
 
-describe('API Service', () => {
-  it('should fetch data', async () => {
+describe("API Service", () => {
+  it("should fetch data", async () => {
     // Proper typing with vi.mocked
     vi.mocked(axios.get).mockResolvedValue({ data: { id: 1 } });
 
     // Now axios.get has proper mock types
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith('/api/users');
+    expect(vi.mocked(axios.get)).toHaveBeenCalledWith("/api/users");
   });
 });
 ```
@@ -47,9 +49,10 @@ describe('API Service', () => {
 #### 2. Module Mocking with Type Safety
 
 **Pattern with Module-Level Mocking:**
+
 ```typescript
 // ✅ CORRECT: Using vi.mock with proper module path
-vi.mock('./notionClient', () => ({
+vi.mock("./notionClient", () => ({
   enhancedNotion: {
     blocksChildrenList: vi.fn().mockResolvedValue({
       results: [],
@@ -60,9 +63,9 @@ vi.mock('./notionClient', () => ({
 }));
 
 // ✅ Then access in tests with vi.mocked
-describe('Notion API', () => {
-  it('should call API', async () => {
-    const { enhancedNotion } = await import('./notionClient');
+describe("Notion API", () => {
+  it("should call API", async () => {
+    const { enhancedNotion } = await import("./notionClient");
     expect(vi.mocked(enhancedNotion.blocksChildrenList)).toHaveBeenCalled();
   });
 });
@@ -73,16 +76,18 @@ describe('Notion API', () => {
 #### 3. Type-Safe `importActual` Pattern (Partial Mocking)
 
 **For Selective Module Mocking:**
-```typescript
-import type * as UserModule from './userService';
 
-vi.mock('./userService', async () => {
+```typescript
+import type * as UserModule from "./userService";
+
+vi.mock("./userService", async () => {
   // Use typeof to get proper typing from the original module
-  const actualModule = await vi.importActual<typeof UserModule>('./userService');
+  const actualModule =
+    await vi.importActual<typeof UserModule>("./userService");
 
   return {
     ...actualModule,
-    fetchUser: vi.fn().mockResolvedValue({ id: 1, name: 'Test' }),
+    fetchUser: vi.fn().mockResolvedValue({ id: 1, name: "Test" }),
   };
 });
 ```
@@ -94,33 +99,34 @@ vi.mock('./userService', async () => {
 #### 4. Mocking Axios Specifically
 
 **Basic Axios Mock:**
+
 ```typescript
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import axios from 'axios';
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import axios from "axios";
 
-vi.mock('axios');
+vi.mock("axios");
 
-describe('API Client', () => {
+describe("API Client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should mock axios.get with proper types', async () => {
+  it("should mock axios.get with proper types", async () => {
     // Option 1: Direct mockResolvedValue
     const mockResponse = { data: { users: [] } };
     vi.mocked(axios.get).mockResolvedValue(mockResponse);
 
     // Option 2: Using mockImplementation for complex behavior
     vi.mocked(axios.get).mockImplementation(async (url) => ({
-      data: url.includes('users') ? { users: [] } : { posts: [] },
+      data: url.includes("users") ? { users: [] } : { posts: [] },
     }));
 
-    const result = await axios.get('/api/users');
+    const result = await axios.get("/api/users");
     expect(result.data).toEqual({ users: [] });
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith('/api/users');
+    expect(vi.mocked(axios.get)).toHaveBeenCalledWith("/api/users");
   });
 
-  it('should mock axios.post with deep: true for nested properties', async () => {
+  it("should mock axios.post with deep: true for nested properties", async () => {
     const mockedAxios = vi.mocked(axios, true); // deep: true for nested mocks
     mockedAxios.create().mockResolvedValue({ data: {} });
   });
@@ -132,37 +138,40 @@ describe('API Client', () => {
 #### 5. Handling Promise-Based Functions
 
 **Mocking Async Functions:**
+
 ```typescript
 // ✅ CORRECT: Using mockResolvedValue for promises
-vi.mock('./dataFetcher', () => ({
-  fetchData: vi.fn().mockResolvedValue({ status: 'success' }),
-  fetchMultiple: vi.fn()
+vi.mock("./dataFetcher", () => ({
+  fetchData: vi.fn().mockResolvedValue({ status: "success" }),
+  fetchMultiple: vi
+    .fn()
     .mockResolvedValueOnce({ id: 1 })
     .mockResolvedValueOnce({ id: 2 })
-    .mockRejectedValueOnce(new Error('API Error')),
+    .mockRejectedValueOnce(new Error("API Error")),
 }));
 
 // ✅ CORRECT: Using mockRejectedValue for promise rejections
-vi.mock('./errorHandler', () => ({
-  validate: vi.fn().mockRejectedValue(new Error('Validation failed')),
+vi.mock("./errorHandler", () => ({
+  validate: vi.fn().mockRejectedValue(new Error("Validation failed")),
 }));
 
 // In tests:
-describe('Async Operations', () => {
-  it('should handle successful promises', async () => {
-    const { fetchData } = await import('./dataFetcher');
+describe("Async Operations", () => {
+  it("should handle successful promises", async () => {
+    const { fetchData } = await import("./dataFetcher");
     const result = await fetchData();
-    expect(result).toEqual({ status: 'success' });
+    expect(result).toEqual({ status: "success" });
   });
 
-  it('should handle rejected promises', async () => {
-    const { validate } = await import('./errorHandler');
-    await expect(validate()).rejects.toThrow('Validation failed');
+  it("should handle rejected promises", async () => {
+    const { validate } = await import("./errorHandler");
+    await expect(validate()).rejects.toThrow("Validation failed");
   });
 });
 ```
 
 **Best Practices:**
+
 - Use `mockResolvedValue()` for successful promises
 - Use `mockResolvedValueOnce()` for sequential different responses
 - Use `mockRejectedValue()` for error scenarios
@@ -171,26 +180,29 @@ describe('Async Operations', () => {
 #### 6. Casting Incompatible Types - The Right Way
 
 **❌ AVOID - Old Pattern (Don't Use):**
+
 ```typescript
 // This loses type safety
 const mockedFn = vi.mocked(someFunction) as any;
-const result = mockedFn.mockReturnValue('wrong-type');
+const result = mockedFn.mockReturnValue("wrong-type");
 ```
 
 **✅ CORRECT - Using `partial` Option:**
+
 ```typescript
 // When you only need partial type compatibility
-vi.mock('./service', () => ({
+vi.mock("./service", () => ({
   fetchUser: vi.fn().mockResolvedValue({ id: 1 } as Partial<User>),
 }));
 ```
 
 **✅ CORRECT - For Complex Type Mismatches:**
-```typescript
-import type { ComplexType } from './types';
 
-vi.mock('./complex', async () => {
-  const actual = await vi.importActual<typeof import('./complex')>('./complex');
+```typescript
+import type { ComplexType } from "./types";
+
+vi.mock("./complex", async () => {
+  const actual = await vi.importActual<typeof import("./complex")>("./complex");
 
   return {
     ...actual,
@@ -200,6 +212,7 @@ vi.mock('./complex', async () => {
 ```
 
 **Key Rule:** Avoid `as any` casting. Use:
+
 1. `Partial<T>` when you only need some properties
 2. `typeof import()` pattern for proper type inference
 3. Casting to `unknown` only as last resort, but prefer the above
@@ -207,9 +220,10 @@ vi.mock('./complex', async () => {
 #### 7. Best Practices for Library Function Mocking
 
 **HTTP Libraries (axios, fetch):**
+
 ```typescript
 // ✅ Mock at module level in setup or test file
-vi.mock('axios');
+vi.mock("axios");
 
 // ✅ Mock global fetch
 global.fetch = vi.fn().mockResolvedValue({
@@ -219,8 +233,9 @@ global.fetch = vi.fn().mockResolvedValue({
 ```
 
 **Database Clients:**
+
 ```typescript
-vi.mock('@notionhq/client', () => ({
+vi.mock("@notionhq/client", () => ({
   Client: vi.fn().mockImplementation(() => ({
     databases: {
       query: vi.fn().mockResolvedValue({ results: [] }),
@@ -230,9 +245,10 @@ vi.mock('@notionhq/client', () => ({
 ```
 
 **File System Operations:**
+
 ```typescript
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn().mockResolvedValue('file content'),
+vi.mock("fs/promises", () => ({
+  readFile: vi.fn().mockResolvedValue("file content"),
   writeFile: vi.fn().mockResolvedValue(undefined),
 }));
 ```
@@ -244,6 +260,7 @@ vi.mock('fs/promises', () => ({
 The project already follows many best practices in `/home/luandro/Dev/digidem/comapeo-docs/scripts/notion-fetch/imageReplacer.test.ts`:
 
 ✅ **Correct Patterns Being Used:**
+
 1. Using `vi.mock()` at top level with factory functions
 2. Using `vi.fn()` to create individual mock functions
 3. Using `mockResolvedValue()` for promises
@@ -251,6 +268,7 @@ The project already follows many best practices in `/home/luandro/Dev/digidem/co
 5. Using `beforeEach(() => vi.clearAllMocks())` for test isolation
 
 ✅ **Type-Safe Mock Access:**
+
 ```typescript
 // From imageReplacer.test.ts - using dynamic imports
 const { sanitizeMarkdownImages } = await import("./markdownTransform");
@@ -258,6 +276,7 @@ expect(sanitizeMarkdownImages).toHaveBeenCalled(); // Works with vi.mocked
 ```
 
 ✅ **Promise Mocking Pattern:**
+
 ```typescript
 // Correct use of mockResolvedValue
 processImageWithFallbacks: vi.fn((url: string) => {
@@ -265,7 +284,7 @@ processImageWithFallbacks: vi.fn((url: string) => {
     return Promise.resolve({ success: false, error: "Download failed" });
   }
   return Promise.resolve({ success: true, newPath: `/images/...` });
-})
+});
 ```
 
 ## 📊 Analysis Results
@@ -273,6 +292,7 @@ processImageWithFallbacks: vi.fn((url: string) => {
 ### Consensus Patterns Across Sources
 
 **Authoritative Sources Alignment:**
+
 1. ✅ Vitest Official Docs + Stack Overflow + LogRocket all agree on `vi.mocked()` pattern
 2. ✅ All sources recommend avoiding `as any` in favor of type-aware patterns
 3. ✅ All recommend `vi.clearAllMocks()` in `beforeEach` for test isolation
@@ -281,30 +301,33 @@ processImageWithFallbacks: vi.fn((url: string) => {
 ### Divergent Opinions
 
 **When to use `vi.spyOn()` vs `vi.mock()`:**
+
 - **`vi.mock()`:** Better for unit tests where you want complete isolation
 - **`vi.spyOn()`:** Better for integration tests where you want to spy on existing behavior
 - **Note:** The project uses `vi.mock()` exclusively, which is correct for their test strategy
 
 ## 🚧 Risks & Trade-offs
 
-| Pattern | Pros | Cons | Recommendation |
-|---------|------|------|-----------------|
-| `vi.mocked()` wrapping | Type-safe, IDE support, mock assertions | Requires discipline | **ALWAYS USE** |
-| `vi.mock()` module level | Complete isolation, hoisting understood | Complex for partial mocks | **DEFAULT for unit tests** |
-| `importActual` partial | Only mock what you need, preserve original | Requires typeof pattern | **For selective mocking** |
-| `as any` casting | Quick fix when types conflict | Loses type safety, hides bugs | **NEVER USE - use Partial<T> instead** |
-| `mockResolvedValue()` | Clear async behavior, chainable | Can't use mockImplementation simultaneously | **STANDARD for promises** |
+| Pattern                  | Pros                                       | Cons                                        | Recommendation                         |
+| ------------------------ | ------------------------------------------ | ------------------------------------------- | -------------------------------------- |
+| `vi.mocked()` wrapping   | Type-safe, IDE support, mock assertions    | Requires discipline                         | **ALWAYS USE**                         |
+| `vi.mock()` module level | Complete isolation, hoisting understood    | Complex for partial mocks                   | **DEFAULT for unit tests**             |
+| `importActual` partial   | Only mock what you need, preserve original | Requires typeof pattern                     | **For selective mocking**              |
+| `as any` casting         | Quick fix when types conflict              | Loses type safety, hides bugs               | **NEVER USE - use Partial<T> instead** |
+| `mockResolvedValue()`    | Clear async behavior, chainable            | Can't use mockImplementation simultaneously | **STANDARD for promises**              |
 
 ## 🔗 Artifacts & References
 
 ### Sources Consulted
 
 **Official Documentation:**
+
 - Vitest Official Mocking Guide: https://vitest.dev/guide/mocking
 - Vitest API Reference (vi.mocked): https://vitest.dev/api/vi
 - Vitest Modules Mocking: https://vitest.dev/guide/mocking/modules
 
 **Community Best Practices:**
+
 - LogRocket Advanced Guide: https://blog.logrocket.com/advanced-guide-vitest-testing-mocking/
 - DEV Community (vi.fn vs vi.spyOn): https://dev.to/mayashavin/two-shades-of-mocking-a-function-in-vitest-41im
 - Stack Overflow TypeScript Mocking: https://stackoverflow.com/questions/76273947/how-type-mocks-with-vitest
@@ -320,22 +343,23 @@ processImageWithFallbacks: vi.fn((url: string) => {
 ### Implementation Guidance for Tests
 
 **Template for Module Mocking:**
+
 ```typescript
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from "vitest";
 
 // 1. Mock at module level (hoisted before imports)
-vi.mock('./dependency', () => ({
+vi.mock("./dependency", () => ({
   exportedFunction: vi.fn().mockResolvedValue({}),
 }));
 
-describe('Feature', () => {
+describe("Feature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should do something', async () => {
+  it("should do something", async () => {
     // 2. Import and access with vi.mocked for types
-    const { exportedFunction } = await import('./dependency');
+    const { exportedFunction } = await import("./dependency");
     const typed = vi.mocked(exportedFunction);
 
     // 3. Use mock methods with full type checking
@@ -358,6 +382,7 @@ describe('Feature', () => {
 ### Project-Specific Guidance
 
 **For comapeo-docs scripts:**
+
 - Current test patterns are correct and should be maintained
 - When mocking Notion API calls, continue using the factory function pattern
 - For S3/image processing, continue using Promise.resolve/reject pattern
@@ -390,50 +415,57 @@ describe('Feature', () => {
 ### TypeScript Mocking Patterns
 
 **Pattern 1: Basic Module Mock with Types**
+
 ```typescript
-vi.mock('./module', () => ({
+vi.mock("./module", () => ({
   fn: vi.fn().mockResolvedValue({ success: true }),
 }));
 ```
 
 **Pattern 2: Partial Module Mock (Keep Original)**
+
 ```typescript
-vi.mock('./module', async () => {
-  const actual = await vi.importActual<typeof import('./module')>('./module');
+vi.mock("./module", async () => {
+  const actual = await vi.importActual<typeof import("./module")>("./module");
   return { ...actual, override: vi.fn() };
 });
 ```
 
 **Pattern 3: Deep Module Mock (Nested Objects)**
+
 ```typescript
 const mockedLib = vi.mocked(complexLib, true); // deep: true
-mockedLib.nested.deep.method.mockReturnValue('value');
+mockedLib.nested.deep.method.mockReturnValue("value");
 ```
 
 **Pattern 4: Promise Chain Mocking**
+
 ```typescript
 vi.mocked(asyncFn)
   .mockResolvedValueOnce(response1)
   .mockResolvedValueOnce(response2)
-  .mockRejectedValueOnce(new Error('Failed'));
+  .mockRejectedValueOnce(new Error("Failed"));
 ```
 
 ### Common Library Mocking
 
 **Axios:**
+
 ```typescript
-vi.mock('axios');
+vi.mock("axios");
 vi.mocked(axios.get).mockResolvedValue({ data: {} });
 ```
 
 **Fetch:**
+
 ```typescript
 global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({})));
 ```
 
 **Notion Client:**
+
 ```typescript
-vi.mock('@notionhq/client', () => ({
+vi.mock("@notionhq/client", () => ({
   Client: vi.fn().mockImplementation(() => ({ databases: { query: vi.fn() } })),
 }));
 ```

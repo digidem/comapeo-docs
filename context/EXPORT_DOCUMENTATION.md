@@ -12,15 +12,15 @@ npm run notion:export [options]
 
 ## Command Options
 
-| Option | Short | Description | Example |
-|--------|-------|-------------|---------|
-| `--verbose` | `-v` | Show detailed progress information | `--verbose` |
-| `--quick` | `-q` | Skip detailed content analysis (faster) | `--quick` |
-| `--output-prefix` | `-o` | Custom prefix for output files | `--output-prefix "test"` |
-| `--max-pages` | | Limit number of pages to process | `--max-pages 50` |
-| `--status-filter` | | Only export pages with specific status | `--status-filter "Ready to publish"` |
-| `--no-raw-data` | | Exclude raw page data from export | `--no-raw-data` |
-| `--help` | `-h` | Show help message | `--help` |
+| Option            | Short | Description                             | Example                              |
+| ----------------- | ----- | --------------------------------------- | ------------------------------------ |
+| `--verbose`       | `-v`  | Show detailed progress information      | `--verbose`                          |
+| `--quick`         | `-q`  | Skip detailed content analysis (faster) | `--quick`                            |
+| `--output-prefix` | `-o`  | Custom prefix for output files          | `--output-prefix "test"`             |
+| `--max-pages`     |       | Limit number of pages to process        | `--max-pages 50`                     |
+| `--status-filter` |       | Only export pages with specific status  | `--status-filter "Ready to publish"` |
+| `--no-raw-data`   |       | Exclude raw page data from export       | `--no-raw-data`                      |
+| `--help`          | `-h`  | Show help message                       | `--help`                             |
 
 ## Output Files
 
@@ -88,50 +88,65 @@ For each block, the system extracts:
 ## Use Cases
 
 ### 1. Content Gap Analysis
+
 ```bash
 npm run notion:export --status-filter "Draft"
 ```
+
 Identify pages that need content development.
 
 ### 2. Translation Planning
+
 ```bash
 npm run notion:export --verbose
 ```
+
 Get comprehensive language breakdown and content statistics.
 
 ### 3. Documentation Completeness Assessment
+
 ```bash
 npm run notion:export --no-raw-data
 ```
+
 Generate analysis-focused export without large raw data.
 
 ### 4. Quick Testing/Development
+
 ```bash
 npm run notion:export --quick --max-pages 20 --output-prefix "test"
 ```
+
 Fast export for development/testing purposes.
 
 ### 5. Publication Readiness Check
+
 ```bash
 npm run notion:export --status-filter "Ready to publish" --verbose
 ```
+
 Analyze content ready for publication.
 
 ## Advanced Features
 
 ### Null Status Handling
+
 The export system properly handles Notion's null status values, ensuring pages without explicit status assignments are included appropriately.
 
 ### Recursive Block Fetching
+
 All nested blocks and their children are fetched recursively, providing complete content hierarchy.
 
 ### Error Recovery
+
 Robust error handling ensures the export continues even if individual pages fail to load.
 
 ### Progress Tracking
+
 Real-time progress updates with different verbosity levels for different use cases.
 
 ### Flexible Output
+
 Configurable output with options to exclude raw data for smaller files or focus on specific page types.
 
 ## Performance Considerations
@@ -152,6 +167,7 @@ The export data can be used with:
 ## Example Outputs
 
 ### Sample Analysis Summary
+
 ```json
 {
   "summary": {
@@ -176,6 +192,7 @@ The export data can be used with:
 ```
 
 ### Sample Page Analysis
+
 ```json
 {
   "id": "page-id",
@@ -188,8 +205,8 @@ The export data can be used with:
   "totalTextLength": 1200,
   "structure": {
     "headings": [
-      {"level": 1, "text": "Getting Started"},
-      {"level": 2, "text": "Installation"}
+      { "level": 1, "text": "Getting Started" },
+      { "level": 2, "text": "Installation" }
     ],
     "paragraphs": 8,
     "images": 3,
@@ -213,6 +230,7 @@ The export data can be used with:
 ### Debug Information
 
 Use `--verbose` to see:
+
 - Detailed progress information
 - Applied filters and options
 - Page processing statistics

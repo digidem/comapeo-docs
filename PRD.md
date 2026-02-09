@@ -168,9 +168,9 @@ bun run typecheck --noEmit
 
 ### Review: Task 2
 
-- [ ] TypeScript compiles without errors
-- [ ] `notion:count-pages` appears in the `JobType` union, `VALID_JOB_TYPES` array, and `JOB_COMMANDS` mapping
-- [ ] The `buildArgs` function correctly maps `includeRemoved` and `statusFilter` to CLI flags
+- [x] TypeScript compiles without errors
+- [x] `notion:count-pages` appears in the `JobType` union, `VALID_JOB_TYPES` array, and `JOB_COMMANDS` mapping
+- [x] The `buildArgs` function correctly maps `includeRemoved` and `statusFilter` to CLI flags
 
 ---
 
@@ -317,10 +317,10 @@ bun scripts/notion-count-pages --include-removed
 
 ### Review: Task 3
 
-- [ ] Script runs without errors and outputs valid JSON
-- [ ] Count matches what you see in the Notion UI (accounting for sub-pages and status filtering)
-- [ ] `--include-removed` flag increases the count (if there are pages with "Remove" status)
-- [ ] `--status-filter "Ready to publish"` reduces the count to only that status
+- [x] Script runs without errors and outputs valid JSON
+- [x] Count matches what you see in the Notion UI (accounting for sub-pages and status filtering)
+- [x] `--include-removed` flag increases the count (if there are pages with "Remove" status)
+- [x] `--status-filter "Ready to publish"` reduces the count to only that status
 
 ---
 
@@ -566,12 +566,12 @@ echo "matches the expected count from Notion (queried before fetching)."
 
 ### Review: Task 4
 
-- [ ] `get_expected_page_count()` successfully creates and polls the count job
-- [ ] `validate_page_count()` correctly compares expected vs actual
-- [ ] `--max-pages N` correctly adjusts the expected count to min(N, total)
-- [ ] Test exits with code 1 when counts mismatch
-- [ ] Diagnostic output is helpful for debugging mismatches
-- [ ] When count job fails, test still runs but skips validation (graceful degradation)
+- [x] `get_expected_page_count()` successfully creates and polls the count job
+- [x] `validate_page_count()` correctly compares expected vs actual
+- [x] `--max-pages N` correctly adjusts the expected count to min(N, total)
+- [x] Test exits with code 1 when counts mismatch
+- [x] Diagnostic output is helpful for debugging mismatches
+- [x] When count job fails, test still runs but skips validation (graceful degradation)
 
 ---
 
@@ -612,49 +612,49 @@ The `fetchNotionData()` function already has a safety limit of 10,000 pagination
 
 ### Review: Task 5
 
-- [ ] JSON extraction from mixed log output works correctly
-- [ ] Unit test passes: `bunx vitest run scripts/notion-count-pages/`
-- [ ] Count script handles missing env vars gracefully (exits with code 1 and error message)
+- [x] JSON extraction from mixed log output works correctly
+- [x] Unit test passes: `bunx vitest run scripts/notion-count-pages/`
+- [x] Count script handles missing env vars gracefully (exits with code 1 and error message)
 
 ---
 
 ## Task 6: Release readiness
 
-- [ ] Run lint on all changed/new files:
+- [x] Run lint on all changed/new files:
   ```bash
   bunx eslint scripts/api-server/job-tracker.ts scripts/api-server/validation-schemas.ts scripts/api-server/job-executor.ts scripts/notion-fetch-all/fetchAll.ts scripts/notion-count-pages/index.ts --fix
   ```
-- [ ] Run format:
+- [x] Run format:
   ```bash
   bunx prettier --write scripts/api-server/job-tracker.ts scripts/api-server/validation-schemas.ts scripts/api-server/job-executor.ts scripts/notion-fetch-all/fetchAll.ts scripts/notion-count-pages/index.ts scripts/test-docker/test-fetch.sh
   ```
-- [ ] Run typecheck:
+- [x] Run typecheck:
   ```bash
   bun run typecheck --noEmit
   ```
-- [ ] Run unit tests:
+- [x] Run unit tests:
   ```bash
   bunx vitest run scripts/notion-count-pages/
   ```
-- [ ] Run integration test — quick (5 pages, validates count):
+- [x] Run integration test — quick (5 pages, validates count):
   ```bash
   ./scripts/test-docker/test-fetch.sh --max-pages 5
   ```
-- [ ] Run integration test — full (all pages, validates count):
+- [x] Run integration test — full (all pages, validates count):
   ```bash
   ./scripts/test-docker/test-fetch.sh --all
   ```
-- [ ] Run integration test — with include-removed:
+- [x] Run integration test — with include-removed:
   ```bash
   ./scripts/test-docker/test-fetch.sh --all --include-removed
   ```
-- [ ] Verify that when all pages are fetched, the test PASSES (exit code 0)
-- [ ] Verify that the count validation output is clear and informative
+- [x] Verify that when all pages are fetched, the test PASSES (exit code 0)
+- [x] Verify that the count validation output is clear and informative
 
 ### Review: Final
 
-- [ ] All lint/format/typecheck passes
-- [ ] `test-fetch.sh --all` passes with matching page counts
+- [x] All lint/format/typecheck passes
+- [x] `test-fetch.sh --all` passes with matching page counts
 - [ ] `test-fetch.sh --max-pages 5` passes (expected = min(5, total))
 - [ ] `test-fetch.sh --all --include-removed` passes (count includes "Remove" pages)
 - [ ] If counts DON'T match, the diagnostic output helps identify the root cause

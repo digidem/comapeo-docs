@@ -79,25 +79,28 @@ Every PR automatically gets a staging deployment on Cloudflare Pages:
 The preview workflow automatically chooses the optimal content generation strategy:
 
 **When Notion fetch scripts ARE modified:**
+
 - Regenerates content from Notion API to validate script changes
 - Default: Fetches 5 pages (provides reliable validation coverage)
 - Takes ~90s
 - Script paths monitored: `scripts/notion-fetch/`, `scripts/notion-fetch-all/`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/notionPageUtils.ts`, `scripts/constants.ts`
 
 **When Notion fetch scripts are NOT modified:**
+
 - Uses content from `content` branch (fast, ~30s)
 - Falls back to regenerating 5 pages if content branch is empty
 - No API calls needed (unless fallback triggered)
 
 **Override via PR labels** (forces regeneration regardless of script changes):
 
-| Label | Pages Fetched | Est. Time | When to Use |
-|-------|---------------|-----------|-------------|
-| (no label) | Content branch or 5 pages | ~30-90s | Default - fast for frontend, tests scripts |
-| `fetch-10-pages` | 10 pages | ~2min | Test pagination, multiple content types |
-| `fetch-all-pages` | All (~50-100) | ~8min | Major refactoring, full validation |
+| Label             | Pages Fetched             | Est. Time | When to Use                                |
+| ----------------- | ------------------------- | --------- | ------------------------------------------ |
+| (no label)        | Content branch or 5 pages | ~30-90s   | Default - fast for frontend, tests scripts |
+| `fetch-10-pages`  | 10 pages                  | ~2min     | Test pagination, multiple content types    |
+| `fetch-all-pages` | All (~50-100)             | ~8min     | Major refactoring, full validation         |
 
 **How to use labels:**
+
 ```bash
 # Add label to force regeneration with more pages
 gh pr edit <PR#> --add-label "fetch-10-pages"
@@ -110,6 +113,7 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 ```
 
 **Label recommendations:**
+
 - Frontend-only changes → no label (uses content branch, ~30s)
 - Script bug fixes → no label (auto-detects, regenerates 5 pages)
 - New block type support → no label (auto-detects changes)
@@ -118,6 +122,7 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 - Force fresh content → any label (overrides content branch)
 
 **Important notes:**
+
 - Labels override the smart detection and always regenerate
 - Frontend-only PRs use content branch for speed (unless labeled)
 - Script changes always regenerate to test new code
@@ -146,6 +151,7 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 1. **Start dev server**: `bun run dev` and wait for it to be ready
 
 2. **Capture BEFORE screenshot**:
+
    ```bash
    # Use the automated script (recommended)
    bun scripts/screenshot-prs.ts --url /docs/page --name before
@@ -164,6 +170,7 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 4. **Capture AFTER screenshot** with same approach
 
 5. **Create PR comment and MANUALLY upload screenshots**:
+
    ```bash
    # ONLY create text comment first (no automation for images!)
    gh pr comment <PR#> --body "## Visual Comparison

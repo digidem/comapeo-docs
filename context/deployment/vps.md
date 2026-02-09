@@ -1,24 +1,3 @@
----
-id: vps-deployment
-title: VPS Deployment Guide
-sidebar_label: VPS Deployment
-sidebar_position: 2
-pagination_label: VPS Deployment Guide
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/developer-tools/vps-deployment.md
-keywords:
-  - deployment
-  - vps
-  - docker
-  - production
-tags:
-  - developer
-  - deployment
-  - operations
-slug: /developer-tools/vps-deployment
-last_update:
-  date: 06/02/2025
-  author: Awana Digital
----
 
 # VPS Deployment Guide
 

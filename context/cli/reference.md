@@ -1,24 +1,3 @@
----
-id: cli-reference
-title: CLI Reference
-sidebar_label: CLI Reference
-sidebar_position: 2
-pagination_label: CLI Reference
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/developer-tools/cli-reference.md
-keywords:
-  - cli
-  - command line
-  - terminal
-  - scripts
-tags:
-  - developer
-  - cli
-slug: /developer-tools/cli-reference
-last_update:
-  date: 06/02/2025
-  author: Awana Digital
----
-
 # CLI Reference
 
 The CoMapeo Documentation project provides command-line interface (CLI) tools for managing Notion content, translations, and the API server. All commands are run using Bun.
@@ -53,6 +32,7 @@ bun run notion:fetch
 ```
 
 **Options:**
+
 - `--max-pages <number>` - Limit number of pages to fetch
 - `--status <status>` - Filter by page status
 - `--force` - Force re-fetch even if already cached
@@ -98,6 +78,7 @@ bun run notion:fetch-all
 ```
 
 **Options:**
+
 - `--max-pages <number>` - Limit number of pages to fetch
 - `--force` - Force re-fetch even if already cached
 
@@ -273,6 +254,7 @@ bun run api:server
 ```
 
 **Environment Variables:**
+
 - `API_HOST` - Server hostname (default: `localhost`)
 - `API_PORT` - Server port (default: `3001`)
 - `API_KEY_*` - API keys for authentication (optional)
@@ -301,6 +283,7 @@ bun run dev
 ```
 
 **Options:**
+
 - `--locale <locale>` - Start with specific locale
 
 **Examples:**
@@ -553,5 +536,5 @@ API_PORT=3002 bun run api:server
 
 ## See Also
 
-- [API Reference](/developer-tools/api-reference) - HTTP API documentation
-- [Development Setup](/developer-tools/development-setup) - Setting up your development environment
+- API Reference - HTTP API documentation
+- Development Setup - Setting up your development environment

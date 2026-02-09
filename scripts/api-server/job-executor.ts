@@ -56,7 +56,7 @@ const JOB_COMMANDS: Record<
   },
   "notion:count-pages": {
     script: "bun",
-    args: ["scripts/notion-count-pages"],
+    args: ["scripts/notion-count-pages/index.ts"],
     buildArgs: (options) => {
       const args: string[] = [];
       if (options.includeRemoved) args.push("--include-removed");

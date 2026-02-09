@@ -48,7 +48,7 @@ const JOB_COMMANDS: Record<
   },
   "notion:count-pages": {
     script: "bun",
-    args: ["scripts/notion-count-pages"],
+    args: ["scripts/notion-count-pages/index.ts"],
     buildArgs: (options) => {
       const args: string[] = [];
       if (options.includeRemoved) args.push("--include-removed");
@@ -295,7 +295,7 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       const config = JOB_COMMANDS["notion:count-pages"];
 
       expect(config.script).toBe("bun");
-      expect(config.args).toEqual(["scripts/notion-count-pages"]);
+      expect(config.args).toEqual(["scripts/notion-count-pages/index.ts"]);
       expect(config.buildArgs).toBeDefined();
     });
 

@@ -140,6 +140,37 @@ describe("notion-count-pages", () => {
       expect(output).toBe("Count: 42");
     });
 
+    it("should output clear and informative message for zero count", async () => {
+      const { formatResult } = await import("./notion-count-pages");
+      const result = {
+        count: 0,
+        fetchedCount: 0,
+        processedCount: 0,
+        includeRemoved: false,
+      };
+
+      const output = formatResult(result, false);
+
+      expect(output).toBe("Count: 0");
+      expect(output.length).toBeGreaterThan(0);
+      expect(output.trim()).not.toBe("");
+    });
+
+    it("should output clear message for large counts with formatting", async () => {
+      const { formatResult } = await import("./notion-count-pages");
+      const result = {
+        count: 1234,
+        fetchedCount: 1234,
+        processedCount: 1234,
+        includeRemoved: false,
+      };
+
+      const output = formatResult(result, false);
+
+      expect(output).toContain("Count: 1234");
+      expect(output.length).toBeGreaterThan(0);
+    });
+
     it("should format result as JSON when requested", async () => {
       const { formatResult } = await import("./notion-count-pages");
       const result = {
@@ -200,6 +231,79 @@ describe("notion-count-pages", () => {
 
       expect(output).toContain("Count: 55");
       expect(output).toContain("Include removed: true");
+    });
+
+    it("should provide clear output for complex scenario with all options", async () => {
+      const { formatResult } = await import("./notion-count-pages");
+      const result = {
+        count: 5,
+        fetchedCount: 100,
+        processedCount: 5,
+        statusFilter: "Ready to publish",
+        includeRemoved: false,
+      };
+
+      const output = formatResult(result, false);
+
+      // Verify all relevant information is present
+      expect(output).toContain("Count: 5");
+      expect(output).toContain("Status filter: Ready to publish");
+      expect(output).toContain("Fetched: 100");
+      expect(output).toContain("After filtering: 5");
+
+      // Verify output is well-structured
+      const lines = output.split("\n");
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines[0]).toContain("Count: 5");
+    });
+
+    it("should ensure output is human-readable and not just raw data", async () => {
+      const { formatResult } = await import("./notion-count-pages");
+      const result = {
+        count: 42,
+        fetchedCount: 50,
+        processedCount: 42,
+        statusFilter: "Draft",
+        includeRemoved: false,
+      };
+
+      const output = formatResult(result, false);
+
+      // Verify labels are descriptive, not cryptic
+      expect(output).toContain("Count:");
+      expect(output).toContain("Status filter:");
+      expect(output).toContain("Fetched:");
+      expect(output).toContain("After filtering:");
+
+      // Verify no raw property names
+      expect(output).not.toContain("fetchedCount");
+      expect(output).not.toContain("processedCount");
+      expect(output).not.toContain("includeRemoved");
+    });
+
+    it("should maintain consistent format across different scenarios", async () => {
+      const { formatResult } = await import("./notion-count-pages");
+
+      const scenarios = [
+        { count: 1, fetchedCount: 1, processedCount: 1, includeRemoved: false },
+        {
+          count: 10,
+          fetchedCount: 10,
+          processedCount: 10,
+          includeRemoved: false,
+        },
+        {
+          count: 100,
+          fetchedCount: 100,
+          processedCount: 100,
+          includeRemoved: false,
+        },
+      ];
+
+      for (const scenario of scenarios) {
+        const output = formatResult(scenario, false);
+        expect(output).toMatch(/^Count: \d+$/);
+      }
     });
   });
 

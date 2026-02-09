@@ -201,7 +201,7 @@ export async function markdownToNotionBlocks(
           }
 
           // Add each chunk as a separate code block without visible part indicators
-          for (let i = 0; i < codeChunks.length; i++) {
+          for (const [i, codeChunk] of codeChunks.entries()) {
             // For the first chunk, add a paragraph with the language info
             if (i === 0) {
               notionBlocks.push({
@@ -227,7 +227,7 @@ export async function markdownToNotionBlocks(
                   {
                     type: "text",
                     text: {
-                      content: codeChunks[i],
+                      content: codeChunk,
                     },
                     annotations: {
                       code: true,
@@ -472,27 +472,27 @@ export function removeFrontMatter(content: string): string {
  * Maps markdown code language to Notion code block language
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
-  const languageMap: Record<string, NotionCodeLanguage> = {
-    js: "javascript",
-    ts: "typescript",
-    py: "python",
-    rb: "ruby",
-    go: "go",
-    java: "java",
-    php: "php",
-    c: "c",
-    cpp: "c++",
-    cs: "c#",
-    html: "html",
-    css: "css",
-    shell: "shell",
-    bash: "bash",
-    json: "json",
-    yaml: "yaml",
-    md: "markdown",
-  };
+  const languageMap = new Map<string, NotionCodeLanguage>([
+    ["js", "javascript"],
+    ["ts", "typescript"],
+    ["py", "python"],
+    ["rb", "ruby"],
+    ["go", "go"],
+    ["java", "java"],
+    ["php", "php"],
+    ["c", "c"],
+    ["cpp", "c++"],
+    ["cs", "c#"],
+    ["html", "html"],
+    ["css", "css"],
+    ["shell", "shell"],
+    ["bash", "bash"],
+    ["json", "json"],
+    ["yaml", "yaml"],
+    ["md", "markdown"],
+  ]);
 
-  return languageMap[language] || "plain text";
+  return languageMap.get(language) || "plain text";
 }
 
 interface NotionPageProperties {
@@ -524,7 +524,8 @@ export async function createNotionPageFromMarkdown(
   markdownPath: string,
   properties: Record<string, unknown> = {},
   isContent: boolean = false,
-  language?: string
+  language?: string,
+  existingPageId?: string
 ): Promise<string> {
   // Maximum number of retries
   let retryCount = 0;
@@ -547,48 +548,7 @@ export async function createNotionPageFromMarkdown(
         throw new Error(ENGLISH_MODIFICATION_ERROR);
       }
 
-      // Check if a page with this title and language already exists
-      const filter = language
-        ? {
-            and: [
-              {
-                property: NOTION_PROPERTIES.TITLE,
-                title: {
-                  equals: title,
-                },
-              },
-              {
-                property: NOTION_PROPERTIES.LANGUAGE,
-                select: {
-                  equals: language,
-                },
-              },
-            ],
-          }
-        : {
-            property: NOTION_PROPERTIES.TITLE,
-            title: {
-              equals: title,
-            },
-          };
-
-      const response = await notion.dataSources.query({
-        // v5 API: use data_source_id instead of database_id
-        data_source_id: databaseId,
-        filter: filter,
-      });
-
-      // If we're not filtering by language, make sure we don't modify English pages
-      const nonEnglishResults = language
-        ? response.results
-        : response.results.filter((page) => {
-            const pageLanguage = (page as any).properties?.[
-              NOTION_PROPERTIES.LANGUAGE
-            ]?.select?.name;
-            return pageLanguage !== MAIN_LANGUAGE;
-          });
-
-      let pageId: string;
+      let pageId: string | null = existingPageId ?? null;
       // Always include Parent item relation in properties for both update and create
       const pageRelation = {
         "Parent item": {
@@ -596,11 +556,56 @@ export async function createNotionPageFromMarkdown(
         },
       };
 
-      if (nonEnglishResults.length > 0) {
+      if (!existingPageId) {
+        // Check if a page with this title and language already exists
+        const filter = language
+          ? {
+              and: [
+                {
+                  property: NOTION_PROPERTIES.TITLE,
+                  title: {
+                    equals: title,
+                  },
+                },
+                {
+                  property: NOTION_PROPERTIES.LANGUAGE,
+                  select: {
+                    equals: language,
+                  },
+                },
+              ],
+            }
+          : {
+              property: NOTION_PROPERTIES.TITLE,
+              title: {
+                equals: title,
+              },
+            };
+
+        const response = await notion.dataSources.query({
+          // v5 API: use data_source_id instead of database_id
+          data_source_id: databaseId,
+          filter: filter,
+        });
+
+        // If we're not filtering by language, make sure we don't modify English pages
+        const nonEnglishResults = language
+          ? response.results
+          : response.results.filter((page) => {
+              const pageLanguage = (page as any).properties?.[
+                NOTION_PROPERTIES.LANGUAGE
+              ]?.select?.name;
+              return pageLanguage !== MAIN_LANGUAGE;
+            });
+
+        if (nonEnglishResults.length > 0) {
+          pageId = nonEnglishResults[0].id;
+        }
+      }
+
+      if (pageId) {
         // Update existing page
         // TODO: should check existing content and compare to maintain fixes from previous revisions
-        pageId = nonEnglishResults[0].id;
-
         // Create properties object with proper typing, always include Parent item
         const pageProperties: NotionPageProperties = {
           Title: {

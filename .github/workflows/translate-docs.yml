@@ -2,6 +2,12 @@ name: Translate Notion Docs
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to run translation updates on"
+        required: true
+        default: "content"
+        type: string
   repository_dispatch:
     types:
       - translate-docs
@@ -14,17 +20,43 @@ concurrency:
 jobs:
   translate-docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'content' }}
     steps:
-      - name: Checkout content branch
+      - name: Checkout target branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: content
+          ref: ${{ env.TARGET_BRANCH }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
 
       - name: Install dependencies
         run: bun i
+
+      - name: Validate required secrets
+        run: |
+          missing=0
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "❌ Missing required secret: $name"
+              missing=1
+            fi
+          }
+
+          check_secret "NOTION_API_KEY" "${{ secrets.NOTION_API_KEY }}"
+          check_secret "DATA_SOURCE_ID" "${{ secrets.DATA_SOURCE_ID }}"
+          check_secret "DATABASE_ID" "${{ secrets.DATABASE_ID }}"
+          check_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
+          check_secret "OPENAI_MODEL" "${{ secrets.OPENAI_MODEL }}"
+
+          if [ "$missing" -ne 0 ]; then
+            echo "One or more required secrets are missing."
+            exit 1
+          fi
 
       - name: Notion Translate
         run: bun notion:translate
@@ -36,6 +68,7 @@ jobs:
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
       - name: Update Notion Status → Auto Translation Generated
+        if: success()
         run: bun run notionStatus:translation
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -43,6 +76,7 @@ jobs:
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
 
       - name: Commit translated docs
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -56,8 +90,8 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
-          # Push to content branch
-          git push origin content
+          # Push to target branch
+          git push origin "${TARGET_BRANCH}"
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,22 +1,23 @@
 import { vi } from "vitest";
 
-type ParseResult = {
-  output_parsed: {
-    markdown: string;
-    title: string;
-  };
-};
-
-export const mockOpenAIParse = vi.fn().mockResolvedValue({
-  output_parsed: {
-    markdown: "# translated\n\nMock content",
-    title: "Mock Title",
-  },
-} as ParseResult);
+export const mockOpenAIChatCompletionCreate = vi.fn().mockResolvedValue({
+  choices: [
+    {
+      message: {
+        content: JSON.stringify({
+          markdown: "# translated\n\nMock content",
+          title: "Mock Title",
+        }),
+      },
+    },
+  ],
+});
 
 class MockOpenAI {
-  responses = {
-    parse: mockOpenAIParse,
+  chat = {
+    completions: {
+      create: mockOpenAIChatCompletionCreate,
+    },
   };
 
   constructor(public config: { apiKey?: string } = {}) {
@@ -29,5 +30,5 @@ vi.mock("openai", () => ({
 }));
 
 export const resetOpenAIMock = () => {
-  mockOpenAIParse.mockClear();
+  mockOpenAIChatCompletionCreate.mockClear();
 };

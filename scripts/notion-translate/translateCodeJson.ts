@@ -88,8 +88,8 @@ export async function translateJson(
         message: { type: "string" },
         description: { type: "string" },
       },
-      required: ["message", "description"],
-      additionalProperties: false,
+      required: ["message"],
+      additionalProperties: true,
     },
   };
   try {
@@ -118,20 +118,23 @@ export async function translateJson(
     );
     return translatedJsonString;
   } catch (error) {
+    const message = (error as Error).message || String(error);
     spinner.fail(
-      chalk.red(
-        `Translation failed for ${targetLanguage}: ${(error as Error).message || error}`
-      )
+      chalk.red(`Translation failed for ${targetLanguage}: ${message}`)
     );
     if (retryCount < MAX_RETRIES - 1) {
+      const baseDelayMs = 750 * 2 ** retryCount;
+      const jitterMs = Math.floor(Math.random() * 250);
+      const retryDelayMs = baseDelayMs + jitterMs;
       spinner.info(
-        chalk.yellow(`Retrying translation for ${targetLanguage}...`)
+        chalk.yellow(
+          `Retrying translation for ${targetLanguage} in ${retryDelayMs}ms...`
+        )
       );
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       return translateJson(jsonContent, targetLanguage, retryCount + 1);
     } else {
-      throw new Error(
-        `Invalid JSON after ${MAX_RETRIES} attempts: ${(error as Error).message || error}`
-      );
+      throw new Error(`Invalid JSON after ${MAX_RETRIES} attempts: ${message}`);
     }
   }
 }
@@ -181,6 +184,7 @@ export function extractTranslatableText(
       nav.items.forEach((item: NavbarItem) => {
         if (item.label) {
           const key = `item.label.${item.label}`;
+          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
           result[key] = {
             message: item.label,
             description: `Navbar item with label ${item.label}`,
@@ -196,6 +200,7 @@ export function extractTranslatableText(
       footer.links.forEach((section: FooterSection) => {
         if (section.title) {
           const titleKey = `links.title.${section.title}`;
+          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
           result[titleKey] = {
             message: section.title,
             description: `Footer section title: ${section.title}`,
@@ -206,6 +211,7 @@ export function extractTranslatableText(
           section.items.forEach((item: FooterLink) => {
             if (item.label) {
               const labelKey = `links.${section.title}.${item.label}`;
+              // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
               result[labelKey] = {
                 message: item.label,
                 description: `Footer link label: ${item.label}`,
@@ -316,6 +322,7 @@ export function getLanguageName(langCode: string): string {
     en: "English",
   };
 
+  // eslint-disable-next-line security/detect-object-injection -- dictionary lookup by locale code is expected behavior
   return languageMap[langCode] || langCode;
 }
 

@@ -54,6 +54,9 @@ import {
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+  : null; // null means allow all origins (backwards compatible)
 
 // Validation errors - extend the base ValidationError for compatibility
 class ValidationError extends BaseValidationError {
@@ -77,20 +80,51 @@ class ValidationError extends BaseValidationError {
   }
 }
 
-// CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+/**
+ * Get CORS headers for a request
+ * If ALLOWED_ORIGINS is set, only allow requests from those origins
+ * If ALLOWED_ORIGINS is null (default), allow all origins
+ */
+function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
+  let origin: string;
+
+  if (!ALLOWED_ORIGINS) {
+    // No origin restrictions - allow all
+    origin = "*";
+  } else if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    // Origin is in allowlist - echo it back
+    origin = requestOrigin;
+  } else {
+    // Origin not allowed - return empty string (will block request)
+    origin = "";
+  }
+
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+
+  // Add Vary header when using origin allowlist
+  // This tells caches that the response varies by Origin header
+  if (ALLOWED_ORIGINS) {
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
+}
 
 // JSON response helper
-function jsonResponse(data: unknown, status = 200): Response {
+function jsonResponse(
+  data: unknown,
+  status = 200,
+  requestOrigin: string | null = null
+): Response {
   return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders,
+      ...getCorsHeaders(requestOrigin),
     },
   });
 }
@@ -100,14 +134,15 @@ function successResponse<T>(
   data: T,
   requestId: string,
   status = 200,
-  pagination?: PaginationMeta
+  pagination?: PaginationMeta,
+  requestOrigin: string | null = null
 ): Response {
   const response: ApiResponse<T> = createApiResponse(
     data,
     requestId,
     pagination
   );
-  return jsonResponse(response, status);
+  return jsonResponse(response, status, requestOrigin);
 }
 
 // Standardized error response with error code
@@ -117,7 +152,8 @@ function standardErrorResponse(
   status: number,
   requestId: string,
   details?: Record<string, unknown>,
-  suggestions?: string[]
+  suggestions?: string[],
+  requestOrigin: string | null = null
 ): Response {
   const error: ErrorResponse = createErrorResponse(
     code,
@@ -127,7 +163,7 @@ function standardErrorResponse(
     details,
     suggestions
   );
-  return jsonResponse(error, status);
+  return jsonResponse(error, status, requestOrigin);
 }
 
 // Legacy error response helper for backward compatibility (will be deprecated)
@@ -152,14 +188,17 @@ function errorResponse(
 function validationError(
   message: string,
   requestId: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
+  requestOrigin: string | null = null
 ): Response {
   return standardErrorResponse(
     ErrorCode.VALIDATION_ERROR,
     message,
     400,
     requestId,
-    details
+    details,
+    undefined,
+    requestOrigin
   );
 }
 
@@ -167,7 +206,8 @@ function validationError(
 function fieldValidationError(
   field: string,
   requestId: string,
-  additionalContext?: Record<string, unknown>
+  additionalContext?: Record<string, unknown>,
+  requestOrigin: string | null = null
 ): Response {
   const { code, message } = getValidationErrorForField(field);
   return standardErrorResponse(
@@ -175,7 +215,9 @@ function fieldValidationError(
     message,
     400,
     requestId,
-    additionalContext
+    additionalContext,
+    undefined,
+    requestOrigin
   );
 }
 
@@ -218,11 +260,16 @@ async function routeRequest(
   req: Request,
   path: string,
   url: URL,
-  requestId: string
+  requestId: string,
+  requestOrigin: string | null
 ): Promise<Response> {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    const requestOrigin = req.headers.get("origin");
+    return new Response(null, {
+      status: 204,
+      headers: getCorsHeaders(requestOrigin),
+    });
   }
 
   // Health check
@@ -237,613 +284,648 @@ async function routeRequest(
           keysConfigured: getAuth().listKeys().length,
         },
       },
-      requestId
+      requestId,
+      200,
+      undefined,
+      requestOrigin
     );
   }
 
   // API documentation (OpenAPI-style spec)
   if (path === "/docs" && req.method === "GET") {
-    return jsonResponse({
-      openapi: "3.0.0",
-      info: {
-        title: "CoMapeo Documentation API",
-        version: "1.0.0",
-        description: "API for managing Notion content operations and jobs",
-      },
-      servers: [
-        {
-          url: `http://${HOST}:${PORT}`,
-          description: "Local development server",
+    return jsonResponse(
+      {
+        openapi: "3.0.0",
+        info: {
+          title: "CoMapeo Documentation API",
+          version: "1.0.0",
+          description: "API for managing Notion content operations and jobs",
         },
-      ],
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: "http",
-            scheme: "bearer",
-            bearerFormat: "API Key",
+        servers: [
+          {
+            url: `http://${HOST}:${PORT}`,
+            description: "Local development server",
           },
-        },
-        schemas: {
-          // Standard response envelopes
-          ApiResponse: {
-            type: "object",
-            required: ["data", "requestId", "timestamp"],
-            properties: {
-              data: {
-                type: "object",
-                description: "Response data (varies by endpoint)",
-              },
-              requestId: {
-                type: "string",
-                description: "Unique request identifier for tracing",
-                pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
-              },
-              timestamp: {
-                type: "string",
-                format: "date-time",
-                description: "ISO 8601 timestamp of response",
-              },
-              pagination: {
-                $ref: "#/components/schemas/PaginationMeta",
-              },
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "API Key",
+              description: "Bearer token authentication using API key",
+            },
+            apiKeyAuth: {
+              type: "http",
+              scheme: "api-key",
+              description: "Api-Key header authentication using API key",
             },
           },
-          ErrorResponse: {
-            type: "object",
-            required: ["code", "message", "status", "requestId", "timestamp"],
-            properties: {
-              code: {
-                type: "string",
-                description: "Machine-readable error code",
-                enum: [
-                  "VALIDATION_ERROR",
-                  "INVALID_INPUT",
-                  "MISSING_REQUIRED_FIELD",
-                  "INVALID_FORMAT",
-                  "INVALID_ENUM_VALUE",
-                  "UNAUTHORIZED",
-                  "FORBIDDEN",
-                  "INVALID_API_KEY",
-                  "API_KEY_INACTIVE",
-                  "NOT_FOUND",
-                  "RESOURCE_NOT_FOUND",
-                  "ENDPOINT_NOT_FOUND",
-                  "CONFLICT",
-                  "INVALID_STATE_TRANSITION",
-                  "RESOURCE_LOCKED",
-                  "RATE_LIMIT_EXCEEDED",
-                  "INTERNAL_ERROR",
-                  "SERVICE_UNAVAILABLE",
-                  "JOB_EXECUTION_FAILED",
-                ],
-              },
-              message: {
-                type: "string",
-                description: "Human-readable error message",
-              },
-              status: {
-                type: "integer",
-                description: "HTTP status code",
-              },
-              requestId: {
-                type: "string",
-                description: "Unique request identifier for tracing",
-              },
-              timestamp: {
-                type: "string",
-                format: "date-time",
-                description: "ISO 8601 timestamp of error",
-              },
-              details: {
-                type: "object",
-                description: "Additional error context",
-              },
-              suggestions: {
-                type: "array",
-                items: {
+          schemas: {
+            // Standard response envelopes
+            ApiResponse: {
+              type: "object",
+              required: ["data", "requestId", "timestamp"],
+              properties: {
+                data: {
+                  type: "object",
+                  description: "Response data (varies by endpoint)",
+                },
+                requestId: {
                   type: "string",
+                  description: "Unique request identifier for tracing",
+                  pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
                 },
-                description: "Suggestions for resolving the error",
-              },
-            },
-          },
-          PaginationMeta: {
-            type: "object",
-            required: [
-              "page",
-              "perPage",
-              "total",
-              "totalPages",
-              "hasNext",
-              "hasPrevious",
-            ],
-            properties: {
-              page: {
-                type: "integer",
-                minimum: 1,
-                description: "Current page number (1-indexed)",
-              },
-              perPage: {
-                type: "integer",
-                minimum: 1,
-                description: "Number of items per page",
-              },
-              total: {
-                type: "integer",
-                minimum: 0,
-                description: "Total number of items",
-              },
-              totalPages: {
-                type: "integer",
-                minimum: 1,
-                description: "Total number of pages",
-              },
-              hasNext: {
-                type: "boolean",
-                description: "Whether there is a next page",
-              },
-              hasPrevious: {
-                type: "boolean",
-                description: "Whether there is a previous page",
-              },
-            },
-          },
-          HealthResponse: {
-            type: "object",
-            properties: {
-              status: {
-                type: "string",
-                example: "ok",
-              },
-              timestamp: {
-                type: "string",
-                format: "date-time",
-              },
-              uptime: {
-                type: "number",
-                description: "Server uptime in seconds",
-              },
-              auth: {
-                type: "object",
-                properties: {
-                  enabled: {
-                    type: "boolean",
-                  },
-                  keysConfigured: {
-                    type: "integer",
-                  },
+                timestamp: {
+                  type: "string",
+                  format: "date-time",
+                  description: "ISO 8601 timestamp of response",
+                },
+                pagination: {
+                  $ref: "#/components/schemas/PaginationMeta",
                 },
               },
             },
-          },
-          JobTypesResponse: {
-            type: "object",
-            properties: {
-              types: {
-                type: "array",
-                items: {
+            ErrorResponse: {
+              type: "object",
+              required: ["code", "message", "status", "requestId", "timestamp"],
+              properties: {
+                code: {
+                  type: "string",
+                  description: "Machine-readable error code",
+                  enum: [
+                    "VALIDATION_ERROR",
+                    "INVALID_INPUT",
+                    "MISSING_REQUIRED_FIELD",
+                    "INVALID_FORMAT",
+                    "INVALID_ENUM_VALUE",
+                    "UNAUTHORIZED",
+                    "FORBIDDEN",
+                    "INVALID_API_KEY",
+                    "API_KEY_INACTIVE",
+                    "NOT_FOUND",
+                    "RESOURCE_NOT_FOUND",
+                    "ENDPOINT_NOT_FOUND",
+                    "CONFLICT",
+                    "INVALID_STATE_TRANSITION",
+                    "RESOURCE_LOCKED",
+                    "RATE_LIMIT_EXCEEDED",
+                    "INTERNAL_ERROR",
+                    "SERVICE_UNAVAILABLE",
+                    "JOB_EXECUTION_FAILED",
+                  ],
+                },
+                message: {
+                  type: "string",
+                  description: "Human-readable error message",
+                },
+                status: {
+                  type: "integer",
+                  description: "HTTP status code",
+                },
+                requestId: {
+                  type: "string",
+                  description: "Unique request identifier for tracing",
+                },
+                timestamp: {
+                  type: "string",
+                  format: "date-time",
+                  description: "ISO 8601 timestamp of error",
+                },
+                details: {
+                  type: "object",
+                  description: "Additional error context",
+                },
+                suggestions: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                  description: "Suggestions for resolving the error",
+                },
+              },
+            },
+            PaginationMeta: {
+              type: "object",
+              required: [
+                "page",
+                "perPage",
+                "total",
+                "totalPages",
+                "hasNext",
+                "hasPrevious",
+              ],
+              properties: {
+                page: {
+                  type: "integer",
+                  minimum: 1,
+                  description: "Current page number (1-indexed)",
+                },
+                perPage: {
+                  type: "integer",
+                  minimum: 1,
+                  description: "Number of items per page",
+                },
+                total: {
+                  type: "integer",
+                  minimum: 0,
+                  description: "Total number of items",
+                },
+                totalPages: {
+                  type: "integer",
+                  minimum: 1,
+                  description: "Total number of pages",
+                },
+                hasNext: {
+                  type: "boolean",
+                  description: "Whether there is a next page",
+                },
+                hasPrevious: {
+                  type: "boolean",
+                  description: "Whether there is a previous page",
+                },
+              },
+            },
+            HealthResponse: {
+              type: "object",
+              properties: {
+                status: {
+                  type: "string",
+                  example: "ok",
+                },
+                timestamp: {
+                  type: "string",
+                  format: "date-time",
+                },
+                uptime: {
+                  type: "number",
+                  description: "Server uptime in seconds",
+                },
+                auth: {
                   type: "object",
                   properties: {
-                    id: {
-                      type: "string",
+                    enabled: {
+                      type: "boolean",
                     },
-                    description: {
-                      type: "string",
+                    keysConfigured: {
+                      type: "integer",
                     },
                   },
                 },
               },
             },
-          },
-          JobsListResponse: {
-            type: "object",
-            required: ["items", "count"],
-            properties: {
-              items: {
-                type: "array",
+            JobTypesResponse: {
+              type: "object",
+              properties: {
+                types: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: {
+                        type: "string",
+                      },
+                      description: {
+                        type: "string",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            JobsListResponse: {
+              type: "object",
+              required: ["items", "count"],
+              properties: {
                 items: {
-                  $ref: "#/components/schemas/Job",
+                  type: "array",
+                  items: {
+                    $ref: "#/components/schemas/Job",
+                  },
                 },
-              },
-              count: {
-                type: "integer",
-              },
-            },
-          },
-          Job: {
-            type: "object",
-            properties: {
-              id: {
-                type: "string",
-              },
-              type: {
-                type: "string",
-                enum: VALID_JOB_TYPES,
-              },
-              status: {
-                type: "string",
-                enum: ["pending", "running", "completed", "failed"],
-              },
-              createdAt: {
-                type: "string",
-                format: "date-time",
-              },
-              startedAt: {
-                type: "string",
-                format: "date-time",
-                nullable: true,
-              },
-              completedAt: {
-                type: "string",
-                format: "date-time",
-                nullable: true,
-              },
-              progress: {
-                $ref: "#/components/schemas/JobProgress",
-              },
-              result: {
-                type: "object",
-                nullable: true,
-              },
-            },
-          },
-          JobProgress: {
-            type: "object",
-            properties: {
-              current: {
-                type: "integer",
-              },
-              total: {
-                type: "integer",
-              },
-              message: {
-                type: "string",
-              },
-            },
-          },
-          CreateJobRequest: {
-            type: "object",
-            required: ["type"],
-            properties: {
-              type: {
-                type: "string",
-                enum: VALID_JOB_TYPES,
-              },
-              options: {
-                type: "object",
-                properties: {
-                  maxPages: {
-                    type: "integer",
-                  },
-                  statusFilter: {
-                    type: "string",
-                  },
-                  force: {
-                    type: "boolean",
-                  },
-                  dryRun: {
-                    type: "boolean",
-                  },
-                  includeRemoved: {
-                    type: "boolean",
-                  },
+                count: {
+                  type: "integer",
                 },
               },
             },
-          },
-          CreateJobResponse: {
-            type: "object",
-            properties: {
-              jobId: {
-                type: "string",
-              },
-              type: {
-                type: "string",
-              },
-              status: {
-                type: "string",
-                enum: ["pending"],
-              },
-              message: {
-                type: "string",
-              },
-              _links: {
-                type: "object",
-                properties: {
-                  self: {
-                    type: "string",
-                  },
-                  status: {
-                    type: "string",
-                  },
-                },
-              },
-            },
-          },
-          JobStatusResponse: {
-            $ref: "#/components/schemas/Job",
-          },
-          CancelJobResponse: {
-            type: "object",
-            properties: {
-              id: {
-                type: "string",
-              },
-              status: {
-                type: "string",
-                enum: ["cancelled"],
-              },
-              message: {
-                type: "string",
-              },
-            },
-          },
-        },
-      },
-      headers: {
-        "X-Request-ID": {
-          description: "Unique request identifier for tracing",
-          schema: {
-            type: "string",
-            pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
-          },
-          required: false,
-        },
-      },
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      tags: [
-        {
-          name: "Health",
-          description: "Health check endpoints",
-        },
-        {
-          name: "Jobs",
-          description: "Job management endpoints",
-        },
-      ],
-      paths: {
-        "/health": {
-          get: {
-            summary: "Health check",
-            description: "Check if the API server is running",
-            tags: ["Health"],
-            security: [],
-            responses: {
-              "200": {
-                description: "Server is healthy",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/HealthResponse",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        "/jobs/types": {
-          get: {
-            summary: "List job types",
-            description: "Get a list of all available job types",
-            tags: ["Jobs"],
-            security: [],
-            responses: {
-              "200": {
-                description: "List of job types",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/JobTypesResponse",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        "/jobs": {
-          get: {
-            summary: "List jobs",
-            description: "Retrieve all jobs with optional filtering",
-            tags: ["Jobs"],
-            parameters: [
-              {
-                name: "status",
-                in: "query",
-                schema: {
+            Job: {
+              type: "object",
+              properties: {
+                id: {
                   type: "string",
-                  enum: ["pending", "running", "completed", "failed"],
                 },
-                description: "Filter by job status",
-              },
-              {
-                name: "type",
-                in: "query",
-                schema: {
+                type: {
                   type: "string",
                   enum: VALID_JOB_TYPES,
                 },
-                description: "Filter by job type",
-              },
-            ],
-            responses: {
-              "200": {
-                description: "List of jobs",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/JobsListResponse",
-                    },
-                  },
+                status: {
+                  type: "string",
+                  enum: ["pending", "running", "completed", "failed"],
+                },
+                createdAt: {
+                  type: "string",
+                  format: "date-time",
+                },
+                startedAt: {
+                  type: "string",
+                  format: "date-time",
+                  nullable: true,
+                },
+                completedAt: {
+                  type: "string",
+                  format: "date-time",
+                  nullable: true,
+                },
+                progress: {
+                  $ref: "#/components/schemas/JobProgress",
+                },
+                result: {
+                  type: "object",
+                  nullable: true,
                 },
               },
-              "401": {
-                description: "Unauthorized",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
+            },
+            JobProgress: {
+              type: "object",
+              properties: {
+                current: {
+                  type: "integer",
+                },
+                total: {
+                  type: "integer",
+                },
+                message: {
+                  type: "string",
+                },
+              },
+            },
+            CreateJobRequest: {
+              type: "object",
+              required: ["type"],
+              properties: {
+                type: {
+                  type: "string",
+                  enum: VALID_JOB_TYPES,
+                },
+                options: {
+                  type: "object",
+                  properties: {
+                    maxPages: {
+                      type: "integer",
+                    },
+                    statusFilter: {
+                      type: "string",
+                    },
+                    force: {
+                      type: "boolean",
+                    },
+                    dryRun: {
+                      type: "boolean",
+                    },
+                    includeRemoved: {
+                      type: "boolean",
                     },
                   },
                 },
               },
             },
-          },
-          post: {
-            summary: "Create job",
-            description: "Create and trigger a new job",
-            tags: ["Jobs"],
-            requestBody: {
-              required: true,
-              content: {
-                "application/json": {
-                  schema: {
-                    $ref: "#/components/schemas/CreateJobRequest",
+            CreateJobResponse: {
+              type: "object",
+              properties: {
+                jobId: {
+                  type: "string",
+                },
+                type: {
+                  type: "string",
+                },
+                status: {
+                  type: "string",
+                  enum: ["pending"],
+                },
+                message: {
+                  type: "string",
+                },
+                _links: {
+                  type: "object",
+                  properties: {
+                    self: {
+                      type: "string",
+                    },
+                    status: {
+                      type: "string",
+                    },
                   },
                 },
               },
             },
-            responses: {
-              "201": {
-                description: "Job created successfully",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/CreateJobResponse",
-                    },
-                  },
+            JobStatusResponse: {
+              $ref: "#/components/schemas/Job",
+            },
+            CancelJobResponse: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
                 },
-              },
-              "400": {
-                description: "Bad request",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
-                    },
-                  },
+                status: {
+                  type: "string",
+                  enum: ["cancelled"],
                 },
-              },
-              "401": {
-                description: "Unauthorized",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
-                    },
-                  },
+                message: {
+                  type: "string",
                 },
               },
             },
           },
         },
-        "/jobs/{id}": {
-          get: {
-            summary: "Get job status",
-            description: "Retrieve detailed status of a specific job",
-            tags: ["Jobs"],
-            parameters: [
-              {
-                name: "id",
-                in: "path",
-                required: true,
-                schema: {
-                  type: "string",
-                },
-                description: "Job ID",
-              },
-            ],
-            responses: {
-              "200": {
-                description: "Job details",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/JobStatusResponse",
-                    },
-                  },
-                },
-              },
-              "401": {
-                description: "Unauthorized",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
-                    },
-                  },
-                },
-              },
-              "404": {
-                description: "Job not found",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
+        headers: {
+          "X-Request-ID": {
+            description: "Unique request identifier for tracing",
+            schema: {
+              type: "string",
+              pattern: "^req_[a-z0-9]+_[a-z0-9]+$",
+            },
+            required: false,
+          },
+        },
+        security: [
+          {
+            bearerAuth: [],
+          },
+          {
+            apiKeyAuth: [],
+          },
+        ],
+        tags: [
+          {
+            name: "Health",
+            description: "Health check endpoints",
+          },
+          {
+            name: "Jobs",
+            description: "Job management endpoints",
+          },
+        ],
+        paths: {
+          "/health": {
+            get: {
+              summary: "Health check",
+              description: "Check if the API server is running",
+              tags: ["Health"],
+              security: [],
+              responses: {
+                "200": {
+                  description: "Server is healthy",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/HealthResponse",
+                      },
                     },
                   },
                 },
               },
             },
           },
-          delete: {
-            summary: "Cancel job",
-            description: "Cancel a pending or running job",
-            tags: ["Jobs"],
-            parameters: [
-              {
-                name: "id",
-                in: "path",
+          "/docs": {
+            get: {
+              summary: "API documentation",
+              description: "Get OpenAPI specification for this API",
+              tags: ["Health"],
+              security: [],
+              responses: {
+                "200": {
+                  description: "OpenAPI specification",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        type: "object",
+                        description: "OpenAPI 3.0.0 specification document",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "/jobs/types": {
+            get: {
+              summary: "List job types",
+              description: "Get a list of all available job types",
+              tags: ["Jobs"],
+              security: [],
+              responses: {
+                "200": {
+                  description: "List of job types",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/JobTypesResponse",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "/jobs": {
+            get: {
+              summary: "List jobs",
+              description: "Retrieve all jobs with optional filtering",
+              tags: ["Jobs"],
+              parameters: [
+                {
+                  name: "status",
+                  in: "query",
+                  schema: {
+                    type: "string",
+                    enum: ["pending", "running", "completed", "failed"],
+                  },
+                  description: "Filter by job status",
+                },
+                {
+                  name: "type",
+                  in: "query",
+                  schema: {
+                    type: "string",
+                    enum: VALID_JOB_TYPES,
+                  },
+                  description: "Filter by job type",
+                },
+              ],
+              responses: {
+                "200": {
+                  description: "List of jobs",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/JobsListResponse",
+                      },
+                    },
+                  },
+                },
+                "401": {
+                  description: "Unauthorized",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            post: {
+              summary: "Create job",
+              description: "Create and trigger a new job",
+              tags: ["Jobs"],
+              requestBody: {
                 required: true,
-                schema: {
-                  type: "string",
-                },
-                description: "Job ID",
-              },
-            ],
-            responses: {
-              "200": {
-                description: "Job cancelled successfully",
                 content: {
                   "application/json": {
                     schema: {
-                      $ref: "#/components/schemas/CancelJobResponse",
+                      $ref: "#/components/schemas/CreateJobRequest",
                     },
                   },
                 },
               },
-              "401": {
-                description: "Unauthorized",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
+              responses: {
+                "201": {
+                  description: "Job created successfully",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/CreateJobResponse",
+                      },
+                    },
+                  },
+                },
+                "400": {
+                  description: "Bad request",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
+                    },
+                  },
+                },
+                "401": {
+                  description: "Unauthorized",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
                     },
                   },
                 },
               },
-              "404": {
-                description: "Job not found",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
+            },
+          },
+          "/jobs/{id}": {
+            get: {
+              summary: "Get job status",
+              description: "Retrieve detailed status of a specific job",
+              tags: ["Jobs"],
+              parameters: [
+                {
+                  name: "id",
+                  in: "path",
+                  required: true,
+                  schema: {
+                    type: "string",
+                  },
+                  description: "Job ID",
+                },
+              ],
+              responses: {
+                "200": {
+                  description: "Job details",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/JobStatusResponse",
+                      },
+                    },
+                  },
+                },
+                "401": {
+                  description: "Unauthorized",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
+                    },
+                  },
+                },
+                "404": {
+                  description: "Job not found",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
                     },
                   },
                 },
               },
-              "409": {
-                description: "Cannot cancel job in current state",
-                content: {
-                  "application/json": {
-                    schema: {
-                      $ref: "#/components/schemas/ErrorResponse",
+            },
+            delete: {
+              summary: "Cancel job",
+              description: "Cancel a pending or running job",
+              tags: ["Jobs"],
+              parameters: [
+                {
+                  name: "id",
+                  in: "path",
+                  required: true,
+                  schema: {
+                    type: "string",
+                  },
+                  description: "Job ID",
+                },
+              ],
+              responses: {
+                "200": {
+                  description: "Job cancelled successfully",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/CancelJobResponse",
+                      },
+                    },
+                  },
+                },
+                "401": {
+                  description: "Unauthorized",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
+                    },
+                  },
+                },
+                "404": {
+                  description: "Job not found",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
+                    },
+                  },
+                },
+                "409": {
+                  description: "Cannot cancel job in current state",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "#/components/schemas/ErrorResponse",
+                      },
                     },
                   },
                 },
@@ -852,47 +934,33 @@ async function routeRequest(
           },
         },
       },
-    });
+      200,
+      requestOrigin
+    );
   }
 
   // List available job types
   if (path === "/jobs/types" && req.method === "GET") {
+    // Job type descriptions (derived from VALID_JOB_TYPES single source of truth)
+    const jobTypeDescriptions: Record<JobType, string> = {
+      "notion:fetch": "Fetch pages from Notion",
+      "notion:fetch-all": "Fetch all pages from Notion",
+      "notion:count-pages": "Count pages in Notion database",
+      "notion:translate": "Translate content",
+      "notion:status-translation": "Update status for translation workflow",
+      "notion:status-draft": "Update status for draft publish workflow",
+      "notion:status-publish": "Update status for publish workflow",
+      "notion:status-publish-production":
+        "Update status for production publish workflow",
+    };
+
     return successResponse(
       {
-        types: [
-          {
-            id: "notion:fetch",
-            description: "Fetch pages from Notion",
-          },
-          {
-            id: "notion:fetch-all",
-            description: "Fetch all pages from Notion",
-          },
-          {
-            id: "notion:count-pages",
-            description: "Count pages in Notion database",
-          },
-          {
-            id: "notion:translate",
-            description: "Translate content",
-          },
-          {
-            id: "notion:status-translation",
-            description: "Update status for translation workflow",
-          },
-          {
-            id: "notion:status-draft",
-            description: "Update status for draft publish workflow",
-          },
-          {
-            id: "notion:status-publish",
-            description: "Update status for publish workflow",
-          },
-          {
-            id: "notion:status-publish-production",
-            description: "Update status for production publish workflow",
-          },
-        ],
+        types: VALID_JOB_TYPES.map((type) => ({
+          id: type,
+          // eslint-disable-next-line security/detect-object-injection -- type is from VALID_JOB_TYPES constant, not user input
+          description: jobTypeDescriptions[type],
+        })),
       },
       requestId
     );
@@ -909,7 +977,8 @@ async function routeRequest(
       return validationError(
         `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`,
         requestId,
-        { filter: statusFilter, validValues: VALID_JOB_STATUSES }
+        { filter: statusFilter, validValues: VALID_JOB_STATUSES },
+        requestOrigin
       );
     }
 
@@ -918,7 +987,8 @@ async function routeRequest(
       return validationError(
         `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
         requestId,
-        { filter: typeFilter, validValues: VALID_JOB_TYPES }
+        { filter: typeFilter, validValues: VALID_JOB_TYPES },
+        requestOrigin
       );
     }
 
@@ -948,7 +1018,10 @@ async function routeRequest(
         })),
         count: jobs.length,
       },
-      requestId
+      requestId,
+      200,
+      undefined,
+      requestOrigin
     );
   }
 
@@ -981,7 +1054,9 @@ async function routeRequest(
           "Job not found",
           404,
           requestId,
-          { jobId }
+          { jobId },
+          undefined,
+          requestOrigin
         );
       }
 
@@ -996,7 +1071,10 @@ async function routeRequest(
           progress: job.progress,
           result: job.result,
         },
-        requestId
+        requestId,
+        200,
+        undefined,
+        requestOrigin
       );
     }
 
@@ -1010,7 +1088,9 @@ async function routeRequest(
           "Job not found",
           404,
           requestId,
-          { jobId }
+          { jobId },
+          undefined,
+          requestOrigin
         );
       }
 
@@ -1021,7 +1101,9 @@ async function routeRequest(
           `Cannot cancel job with status: ${job.status}. Only pending or running jobs can be cancelled.`,
           409,
           requestId,
-          { jobId, currentStatus: job.status }
+          { jobId, currentStatus: job.status },
+          undefined,
+          requestOrigin
         );
       }
 
@@ -1034,7 +1116,10 @@ async function routeRequest(
           status: "cancelled",
           message: "Job cancelled successfully",
         },
-        requestId
+        requestId,
+        200,
+        undefined,
+        requestOrigin
       );
     }
   }
@@ -1047,13 +1132,21 @@ async function routeRequest(
       body = await parseJsonBody<{ type: string; options?: unknown }>(req);
     } catch (error) {
       if (error instanceof ValidationError) {
-        return validationError(error.message, requestId);
+        return validationError(
+          error.message,
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       return standardErrorResponse(
         ErrorCode.INTERNAL_ERROR,
         "Failed to parse request body",
         500,
-        requestId
+        requestId,
+        undefined,
+        undefined,
+        requestOrigin
       );
     }
 
@@ -1061,12 +1154,14 @@ async function routeRequest(
     if (!body || typeof body !== "object") {
       return validationError(
         "Request body must be a valid JSON object",
-        requestId
+        requestId,
+        undefined,
+        requestOrigin
       );
     }
 
     if (!body.type || typeof body.type !== "string") {
-      return fieldValidationError("type", requestId);
+      return fieldValidationError("type", requestId, undefined, requestOrigin);
     }
 
     if (!isValidJobType(body.type)) {
@@ -1075,14 +1170,21 @@ async function routeRequest(
         `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
         400,
         requestId,
-        { providedType: body.type, validTypes: VALID_JOB_TYPES }
+        { providedType: body.type, validTypes: VALID_JOB_TYPES },
+        undefined,
+        requestOrigin
       );
     }
 
     // Validate options if provided
     if (body.options !== undefined) {
       if (typeof body.options !== "object" || body.options === null) {
-        return fieldValidationError("options", requestId);
+        return fieldValidationError(
+          "options",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       // Check for known option keys and their types
       const options = body.options as Record<string, unknown>;
@@ -1101,7 +1203,9 @@ async function routeRequest(
             `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`,
             400,
             requestId,
-            { option: key, validOptions: knownOptions }
+            { option: key, validOptions: knownOptions },
+            undefined,
+            requestOrigin
           );
         }
       }
@@ -1111,25 +1215,50 @@ async function routeRequest(
         options.maxPages !== undefined &&
         typeof options.maxPages !== "number"
       ) {
-        return fieldValidationError("maxPages", requestId);
+        return fieldValidationError(
+          "maxPages",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       if (
         options.statusFilter !== undefined &&
         typeof options.statusFilter !== "string"
       ) {
-        return fieldValidationError("statusFilter", requestId);
+        return fieldValidationError(
+          "statusFilter",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       if (options.force !== undefined && typeof options.force !== "boolean") {
-        return fieldValidationError("force", requestId);
+        return fieldValidationError(
+          "force",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       if (options.dryRun !== undefined && typeof options.dryRun !== "boolean") {
-        return fieldValidationError("dryRun", requestId);
+        return fieldValidationError(
+          "dryRun",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
       if (
         options.includeRemoved !== undefined &&
         typeof options.includeRemoved !== "boolean"
       ) {
-        return fieldValidationError("includeRemoved", requestId);
+        return fieldValidationError(
+          "includeRemoved",
+          requestId,
+          undefined,
+          requestOrigin
+        );
       }
     }
 
@@ -1155,7 +1284,9 @@ async function routeRequest(
         },
       },
       requestId,
-      201
+      201,
+      undefined,
+      requestOrigin
     );
   }
 
@@ -1191,7 +1322,9 @@ async function routeRequest(
           description: "Cancel a pending or running job",
         },
       ],
-    }
+    },
+    undefined,
+    requestOrigin
   );
 }
 
@@ -1252,7 +1385,14 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // Handle the request
   try {
-    const response = await routeRequest(req, path, url, requestId);
+    const requestOrigin = req.headers.get("origin");
+    const response = await routeRequest(
+      req,
+      path,
+      url,
+      requestId,
+      requestOrigin
+    );
     const responseTime = Date.now() - startTime;
     audit.logSuccess(entry, response.status, responseTime);
     // Add request ID header to response

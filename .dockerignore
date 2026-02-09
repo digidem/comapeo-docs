@@ -75,7 +75,6 @@ robots.txt
 .git/
 .gitignore
 .gitattributes
-.gitattributes
 
 # IDE
 .vscode/

@@ -486,4 +486,132 @@ describe("notion-translate index", () => {
       expect(ptFailure?.error).toContain("Portuguese translation failed");
     });
   });
+
+  describe("deterministic file output", () => {
+    it("produces identical file paths when running translation twice with no source changes", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Track all files written in the first run
+      const firstRunFiles: Map<string, string> = new Map();
+
+      // Capture writeFile calls in the first run
+      mockWriteFile.mockImplementation(
+        async (filePath: string, content: string) => {
+          firstRunFiles.set(filePath, content);
+          return Promise.resolve();
+        }
+      );
+
+      const { main: main1 } = await import("./index");
+      await main1();
+
+      const firstRunFileCount = firstRunFiles.size;
+      const firstRunFilePaths = Array.from(firstRunFiles.keys());
+
+      // Reset mocks for second run
+      mockWriteFile.mockClear();
+
+      // Track all files written in the second run
+      const secondRunFiles: Map<string, string> = new Map();
+      mockWriteFile.mockImplementation(
+        async (filePath: string, content: string) => {
+          secondRunFiles.set(filePath, content);
+          return Promise.resolve();
+        }
+      );
+
+      // Reset other mocks for the second run
+      mockFetchNotionData.mockReset();
+      mockSortAndExpandNotionData.mockReset();
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [
+            createMockNotionPage({
+              id: "english-page-1",
+              title: "Hello World",
+              status: "Ready for translation",
+              language: "English",
+              order: 7,
+              parentItem: "parent-1",
+              elementType: "Page",
+              lastEdited: "2026-02-01T00:00:00.000Z",
+            }),
+          ];
+        }
+        return [];
+      });
+      mockSortAndExpandNotionData.mockImplementation(async (pages) => pages);
+
+      // Clear module cache to get a fresh import
+      vi.resetModules();
+      const { main: main2 } = await import("./index");
+
+      // Run translation a second time with the same source
+      await main2();
+
+      const secondRunFileCount = secondRunFiles.size;
+      const secondRunFilePaths = Array.from(secondRunFiles.keys());
+
+      // Verify: same number of files written
+      expect(secondRunFileCount).toBe(firstRunFileCount);
+
+      // Verify: identical file paths (no -1/-2 suffix drift)
+      expect(secondRunFilePaths).toEqual(firstRunFilePaths);
+
+      // Verify: file contents are identical
+      for (const filePath of firstRunFilePaths) {
+        expect(secondRunFiles.get(filePath)).toBe(firstRunFiles.get(filePath));
+      }
+
+      // Verify: no files have suffixes like -1, -2, -3
+      const filesWithNumericSuffixes = firstRunFilePaths.filter(
+        (path) =>
+          /-\d+\.md$/.test(path) ||
+          /-\d+\.json$/.test(path) ||
+          /-\d+\/_category_\.json$/.test(path)
+      );
+      expect(filesWithNumericSuffixes).toEqual([]);
+    });
+
+    it("generates deterministic filenames using stable page ID", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const mockPage = createMockNotionPage({
+        id: "abc123def456", // Stable ID
+        title: "Test Page",
+        elementType: "Page",
+      });
+
+      const mockConfig = {
+        language: "pt-BR",
+        notionLangCode: "Portuguese",
+        outputDir: "/test/output",
+      };
+
+      const filePath1 = await saveTranslatedContentToDisk(
+        mockPage,
+        "# Test Content",
+        mockConfig
+      );
+
+      const filePath2 = await saveTranslatedContentToDisk(
+        mockPage,
+        "# Test Content",
+        mockConfig
+      );
+
+      // Both calls should produce the same exact path
+      expect(filePath1).toBe(filePath2);
+
+      // The filename should include the stable page ID (sanitized)
+      expect(filePath1).toContain("abc123def456");
+      expect(filePath1).toContain("test-page");
+    });
+  });
 });

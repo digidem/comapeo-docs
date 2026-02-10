@@ -4,7 +4,7 @@
 
 - [x] Create `PROGRESS.md` before starting tests.
 - [x] After each task, append a short entry in `PROGRESS.md` with: task, pass/fail, evidence, next action.
-- [ ] If a task fails, log issue severity (`high`, `medium`, `low`), impact, and reproduction steps in `PROGRESS.md`.
+- [x] If a task fails, log issue severity (`high`, `medium`, `low`), impact, and reproduction steps in `PROGRESS.md`.
 - [ ] Keep entries simple (KISS): 3-6 lines per update.
 
 ## Scope And Acceptance

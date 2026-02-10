@@ -52,9 +52,9 @@
 
 ### Review Gate: Runtime
 
-- [ ] Confirm `TRANSLATION_SUMMARY` is emitted in all runs (success and failure).
-- [ ] Confirm generated locale output is correct and no unintended English output writes occurred.
-- [ ] Log review outcome in `PROGRESS.md`.
+- [x] Confirm `TRANSLATION_SUMMARY` is emitted in all runs (success and failure).
+- [x] Confirm generated locale output is correct and no unintended English output writes occurred.
+- [x] Log review outcome in `PROGRESS.md`.
 
 ## Batch 4: Failure And Soft-Fail Coverage
 

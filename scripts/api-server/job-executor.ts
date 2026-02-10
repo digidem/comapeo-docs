@@ -82,6 +82,38 @@ const DEFAULT_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const SIGKILL_DELAY_MS = 5000;
 
 /**
+ * Parse and validate JOB_TIMEOUT_MS environment variable override.
+ * Returns a finite positive integer, or the fallback value if invalid.
+ *
+ * @param envValue - The value from process.env.JOB_TIMEOUT_MS
+ * @param fallback - The default timeout to use if env value is invalid
+ * @returns A valid timeout in milliseconds
+ */
+function parseTimeoutOverride(
+  envValue: string | undefined,
+  fallback: number
+): number {
+  // If no override, use fallback
+  if (envValue === undefined) {
+    return fallback;
+  }
+
+  // Parse as integer (base 10)
+  const parsed = parseInt(envValue, 10);
+
+  // Validate: must be finite, positive integer
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+    console.warn(
+      `Invalid JOB_TIMEOUT_MS value: "${envValue}". ` +
+        `Must be a positive integer. Using fallback: ${fallback}ms`
+    );
+    return fallback;
+  }
+
+  return parsed;
+}
+
+/**
  * Map of job types to their Bun script commands and timeout configuration
  */
 export const JOB_COMMANDS: Record<
@@ -211,10 +243,10 @@ export async function executeJob(
     });
 
     // Determine timeout: use env var override or job-specific timeout
-    const timeoutMs =
-      process.env.JOB_TIMEOUT_MS !== undefined
-        ? parseInt(process.env.JOB_TIMEOUT_MS, 10)
-        : jobConfig.timeoutMs;
+    const timeoutMs = parseTimeoutOverride(
+      process.env.JOB_TIMEOUT_MS,
+      jobConfig.timeoutMs
+    );
 
     logger.info("Starting job with timeout", {
       timeoutMs,

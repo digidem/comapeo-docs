@@ -94,7 +94,8 @@ jobs:
           API_KEY_GITHUB_ACTIONS: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
         run: |
           # Set environment variables (already set via env block above)
-          export NODE_ENV=test
+          # NOTE: Don't set NODE_ENV=test here - it forces random port binding
+          # The workflow needs deterministic port 3001 for health checks
           export API_PORT=3001
           export API_HOST=localhost
 

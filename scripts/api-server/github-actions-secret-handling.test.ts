@@ -328,14 +328,17 @@ describe("GitHub Actions Secret Handling", () => {
       }
     });
 
-    it("should set NODE_ENV=test in local mode", () => {
+    it("should NOT set NODE_ENV=test in local mode (needs deterministic port)", () => {
       const job = workflow.jobs["fetch-via-api"];
       const startServerStep = job.steps.find((s: any) =>
         s.run?.includes("bun run api:server")
       );
 
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain("export NODE_ENV=test");
+      // NODE_ENV=test forces random port binding, which breaks health checks
+      expect(startServerStep.run).not.toContain("export NODE_ENV=test");
+      // Verify the comment explains why
+      expect(startServerStep.run).toContain("Don't set NODE_ENV=test");
     });
 
     it("should configure API host and port for local mode", () => {

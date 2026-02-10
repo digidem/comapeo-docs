@@ -93,8 +93,59 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
-          # Push to target branch
-          git push origin "${TARGET_BRANCH}"
+          # Push to target branch with retry logic
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          PUSH_SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+            CURRENT_ATTEMPT=$((RETRY_COUNT + 1))
+            if PUSH_OUTPUT=$(git push origin "${TARGET_BRANCH}" 2>&1); then
+              PUSH_SUCCESS=true
+              echo "✅ Push succeeded on attempt $CURRENT_ATTEMPT"
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+
+              # Check if error is due to non-fast-forward (push race condition)
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️ Push failed (attempt $RETRY_COUNT/$MAX_RETRIES). Attempting to resolve..."
+                echo "❌ Error output:"
+                echo "$PUSH_OUTPUT"
+
+                # Fetch latest changes from remote
+                echo "Fetching latest changes from origin/${TARGET_BRANCH}..."
+                if git fetch origin "${TARGET_BRANCH}" 2>&1; then
+                  # Attempt rebase with remote changes
+                  echo "Rebasing local changes on top of origin/${TARGET_BRANCH}..."
+                  if git rebase "origin/${TARGET_BRANCH}" 2>&1; then
+                    # Calculate exponential backoff: 2^N seconds (2s, 4s, 8s)
+                    BACKOFF_TIME=$((2 ** RETRY_COUNT))
+                    echo "Waiting ${BACKOFF_TIME}s before retry..."
+                    sleep $BACKOFF_TIME
+                  else
+                    echo "❌ Rebase failed. Aborting rebase..."
+                    git rebase --abort 2>/dev/null || true
+                    echo "❌ Cannot resolve conflicts automatically. Please resolve manually."
+                    exit 1
+                  fi
+                else
+                  echo "❌ Fetch failed. Cannot proceed with retry."
+                  exit 1
+                fi
+              else
+                echo "❌ Push failed after $MAX_RETRIES attempts. Giving up."
+                echo "❌ Error: This may indicate persistent conflicts or network issues."
+                echo "💡 Suggestion: Check recent commits to ${TARGET_BRANCH} and resolve manually."
+                exit 1
+              fi
+            fi
+          done
+
+          # Verify push succeeded before continuing
+          if [ "$PUSH_SUCCESS" = false ]; then
+            echo "❌ Push did not succeed after retries. Exiting with error."
+            exit 1
+          fi
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

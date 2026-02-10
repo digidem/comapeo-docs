@@ -48,8 +48,11 @@ jobs:
           }
 
           check_secret "NOTION_API_KEY" "${{ secrets.NOTION_API_KEY }}"
-          check_secret "DATA_SOURCE_ID" "${{ secrets.DATA_SOURCE_ID }}"
-          check_secret "DATABASE_ID" "${{ secrets.DATABASE_ID }}"
+          # Require either DATA_SOURCE_ID or DATABASE_ID (runtime accepts either)
+          if [ -z "${{ secrets.DATA_SOURCE_ID }}" ] && [ -z "${{ secrets.DATABASE_ID }}" ]; then
+            echo "❌ Missing required secret: at least one of DATA_SOURCE_ID or DATABASE_ID must be set"
+            missing=1
+          fi
           check_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           # OPENAI_MODEL is optional - uses DEFAULT_OPENAI_MODEL fallback if not set
 
@@ -108,7 +111,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Translation sync*: ${{ job.status }}\nLocales: `i18n` updates committed to `content`"
+                  text: "*Translation sync*: ${{ job.status }}\nLocales: `i18n` updates committed to `${{ env.TARGET_BRANCH }}`"
               - type: "section"
                 text:
                   type: "mrkdwn"

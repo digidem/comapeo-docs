@@ -9,6 +9,7 @@ interface UpdateStatusOptions {
   fromStatus: string;
   toStatus: string;
   setPublishedDate?: boolean;
+  languageFilter?: string;
 }
 
 /**
@@ -18,24 +19,55 @@ interface UpdateStatusOptions {
 export async function updateNotionPageStatus(
   options: UpdateStatusOptions
 ): Promise<void> {
-  const { token, databaseId, fromStatus, toStatus, setPublishedDate } = options;
+  const {
+    token,
+    databaseId,
+    fromStatus,
+    toStatus,
+    setPublishedDate,
+    languageFilter,
+  } = options;
 
   const notion = new Client({ auth: token });
+  const languageMsg = languageFilter ? ` (Language: ${languageFilter})` : "";
   const spinner = ora(
-    `Updating pages from "${fromStatus}" to "${toStatus}"`
+    `Updating pages from "${fromStatus}" to "${toStatus}"${languageMsg}`
   ).start();
 
   try {
-    // Query pages with the "from" status
+    // Build filter for status and optionally language
+    const filter: any = {
+      property: NOTION_PROPERTIES.STATUS,
+      select: {
+        equals: fromStatus,
+      },
+    };
+
+    // Add compound filter if language filter is specified
+    const queryFilter: any = languageFilter
+      ? {
+          and: [
+            {
+              property: NOTION_PROPERTIES.STATUS,
+              select: {
+                equals: fromStatus,
+              },
+            },
+            {
+              property: NOTION_PROPERTIES.LANGUAGE,
+              select: {
+                equals: languageFilter,
+              },
+            },
+          ],
+        }
+      : filter;
+
+    // Query pages with the "from" status (and optionally language)
     const response = await notion.dataSources.query({
       // v5 API: use data_source_id instead of database_id
       data_source_id: databaseId,
-      filter: {
-        property: NOTION_PROPERTIES.STATUS,
-        select: {
-          equals: fromStatus,
-        },
-      },
+      filter: queryFilter,
     });
 
     const pages = response.results;
@@ -106,6 +138,12 @@ export async function updateNotionPageStatus(
  * Predefined workflow configurations
  */
 const WORKFLOWS = {
+  "ready-for-translation": {
+    from: "No Status",
+    to: "Ready for translation",
+    languageFilter: "English",
+    setPublishedDate: false,
+  },
   translation: {
     from: "Ready for translation",
     to: "Auto translation generated",
@@ -139,6 +177,7 @@ async function main() {
   let workflow: string | undefined;
 
   for (let i = 0; i < args.length; i += 2) {
+    // eslint-disable-next-line security/detect-object-injection -- Safe: validated in switch statement below
     const flag = args[i];
     const value = args[i + 1];
 
@@ -201,10 +240,13 @@ async function main() {
   } else {
     console.error(
       chalk.red(
-        "Either --workflow must be specified (translation|draft|publish|publish-production) or both --from and --to must be provided"
+        "Either --workflow must be specified (ready-for-translation|translation|draft|publish|publish-production) or both --from and --to must be provided"
       )
     );
     console.error(chalk.gray("Examples:"));
+    console.error(
+      chalk.gray("  updateStatus.ts --workflow ready-for-translation")
+    );
     console.error(chalk.gray("  updateStatus.ts --workflow translation"));
     console.error(chalk.gray("  updateStatus.ts --workflow draft"));
     console.error(chalk.gray("  updateStatus.ts --workflow publish"));
@@ -239,6 +281,16 @@ async function main() {
     process.exit(1);
   }
 
+  // Get language filter from workflow config if applicable
+  let languageFilter: string | undefined;
+  if (workflow && workflow in WORKFLOWS) {
+    const workflowConfig = WORKFLOWS[workflow as keyof typeof WORKFLOWS];
+    languageFilter =
+      "languageFilter" in workflowConfig
+        ? workflowConfig.languageFilter
+        : undefined;
+  }
+
   try {
     await updateNotionPageStatus({
       token,
@@ -246,6 +298,7 @@ async function main() {
       fromStatus,
       toStatus,
       setPublishedDate,
+      languageFilter,
     });
   } catch (error) {
     console.error(chalk.red("Status update failed:", error.message));

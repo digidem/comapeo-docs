@@ -295,4 +295,167 @@ describe("notion-translate index", () => {
       vi.resetModules();
     }
   });
+
+  describe("code.json soft-fail behavior", () => {
+    it("continues doc translation when code.json is missing (soft-fail)", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Mock readFile to simulate ENOENT (file not found)
+      mockReadFile.mockRejectedValue(
+        Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" })
+      );
+
+      const { main } = await import("./index");
+
+      // Should NOT throw - should continue with doc translation
+      const summary = await main();
+
+      // Verify warning was logged (ignore Docusaurus warnings)
+      const codeJsonWarnings = warnSpy.mock.calls.filter((args) =>
+        String(args[0]).includes("English code.json")
+      );
+      expect(codeJsonWarnings.length).toBeGreaterThan(0);
+
+      // Verify doc translation still happened
+      expect(summary).toMatchObject({
+        totalEnglishPages: 1,
+        processedLanguages: 2,
+        newTranslations: 2, // Docs were translated
+        codeJsonFailures: 0, // No actual failures when source is missing (soft-fail)
+        codeJsonSourceFileMissing: true, // Flag indicates source was missing
+        themeFailures: 0, // Theme should still work (doesn't depend on code.json)
+      });
+
+      // Verify the failure is marked as non-critical
+      const codeJsonFailure = summary.failures.find(
+        (f) => f.title === "code.json (source file)"
+      );
+      expect(codeJsonFailure).toBeDefined();
+      expect(codeJsonFailure?.isCritical).toBe(false);
+      expect(codeJsonFailure?.error).toContain("Source file not found");
+
+      // Verify TRANSLATION_SUMMARY was emitted
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary).toEqual(summary);
+    });
+
+    it("continues doc translation when code.json is malformed (soft-fail)", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Mock readFile to return invalid JSON
+      mockReadFile.mockResolvedValue('{"invalid": json}');
+
+      const { main } = await import("./index");
+
+      // Should NOT throw - should continue with doc translation
+      const summary = await main();
+
+      // Verify warning was logged (ignore Docusaurus warnings)
+      const codeJsonWarnings = warnSpy.mock.calls.filter((args) =>
+        String(args[0]).includes("English code.json")
+      );
+      expect(codeJsonWarnings.length).toBeGreaterThan(0);
+
+      // Verify doc translation still happened
+      expect(summary).toMatchObject({
+        totalEnglishPages: 1,
+        processedLanguages: 2,
+        newTranslations: 2, // Docs were translated
+        codeJsonFailures: 0, // No actual failures when source is malformed (soft-fail)
+        codeJsonSourceFileMissing: true, // Flag indicates source was malformed
+        themeFailures: 0,
+      });
+
+      // Verify the failure is marked as non-critical
+      const codeJsonFailure = summary.failures.find(
+        (f) => f.title === "code.json (source file)"
+      );
+      expect(codeJsonFailure).toBeDefined();
+      expect(codeJsonFailure?.isCritical).toBe(false);
+      expect(codeJsonFailure?.error).toContain("Source file malformed");
+
+      // Verify TRANSLATION_SUMMARY was emitted
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary).toEqual(summary);
+    });
+
+    it("translates code.json successfully when file is valid", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      // Mock valid code.json
+      mockReadFile.mockResolvedValue('{"hello": {"message": "Hello"}}');
+
+      const { main } = await import("./index");
+
+      const summary = await main();
+
+      // Verify code.json-specific warnings (allow Docusaurus warnings)
+      const codeJsonWarnings = warnSpy.mock.calls.filter((args) =>
+        String(args[0]).includes("English code.json")
+      );
+      expect(codeJsonWarnings.length).toBe(0);
+
+      // Verify code.json was translated successfully
+      expect(summary).toMatchObject({
+        totalEnglishPages: 1,
+        processedLanguages: 2,
+        newTranslations: 2,
+        codeJsonFailures: 0, // No failures when file is valid
+        codeJsonSourceFileMissing: false, // Source file was present
+      });
+
+      // Verify translateJson was called:
+      // - 2 times for code.json (pt and es)
+      // - 4 times for theme (navbar + footer) × 2 languages = 4
+      // Total: 6 times
+      expect(mockTranslateJson).toHaveBeenCalledTimes(6);
+
+      // Verify TRANSLATION_SUMMARY was emitted
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary).toEqual(summary);
+    });
+
+    it("reports individual code.json translation failures separately", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      // Mock valid code.json
+      mockReadFile.mockResolvedValue('{"hello": {"message": "Hello"}}');
+
+      // Mock translateJson to fail for Portuguese but succeed for Spanish
+      mockTranslateJson.mockImplementation(
+        async (_json: string, targetLang: string) => {
+          if (targetLang === "Portuguese") {
+            throw new Error("Portuguese translation failed");
+          }
+          return '{"hello": {"message": "Hola"}}';
+        }
+      );
+
+      const { main } = await import("./index");
+
+      // Should throw due to translation failures
+      await expect(main()).rejects.toThrow(
+        "Translation workflow completed with failures"
+      );
+
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary).toMatchObject({
+        codeJsonFailures: 1, // Portuguese failed
+        codeJsonSourceFileMissing: false, // Source file was present
+      });
+
+      // Verify the failure is for Portuguese code.json
+      const ptFailure = loggedSummary.failures.find(
+        (f: { title: string; language: string }) =>
+          f.title === "code.json" && f.language === "pt-BR"
+      );
+      expect(ptFailure).toBeDefined();
+      expect(ptFailure?.error).toContain("Portuguese translation failed");
+    });
+  });
 });

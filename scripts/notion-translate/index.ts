@@ -58,6 +58,7 @@ type TranslationRunSummary = {
   skippedTranslations: number;
   failedTranslations: number;
   codeJsonFailures: number;
+  codeJsonSourceFileMissing: boolean; // Indicates source file was missing/malformed (soft-fail)
   themeFailures: number;
   failures: TranslationFailure[];
 };
@@ -686,6 +687,7 @@ export async function main() {
     skippedTranslations: 0,
     failedTranslations: 0,
     codeJsonFailures: 0,
+    codeJsonSourceFileMissing: false,
     themeFailures: 0,
     failures,
   };
@@ -703,28 +705,60 @@ export async function main() {
       );
     }
 
-    // Translate code.json for each language
+    // Translate code.json for each language (soft-fail if missing/malformed)
     const englishCodeJsonPath = path.join(
       process.cwd(),
       "i18n",
       "en",
       "code.json"
     );
-    let englishCodeJson: string;
+    let codeJsonFailures: TranslationFailure[] = [];
+    let codeJsonSkipped = false;
+
     try {
-      englishCodeJson = await fs.readFile(englishCodeJsonPath, "utf8");
+      const englishCodeJson = await fs.readFile(englishCodeJsonPath, "utf8");
+      // Validate JSON syntax
       JSON.parse(englishCodeJson);
+
+      // If we get here, file exists and is valid JSON
+      codeJsonFailures = await translateAllCodeJsons(englishCodeJson);
+      failures.push(...codeJsonFailures);
+      summary.codeJsonFailures = codeJsonFailures.length;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        chalk.red(`Error reading or parsing English code.json: ${message}`)
-      );
-      throw new Error(`English code.json is required and invalid: ${message}`);
-    }
+      const isNotFound =
+        error instanceof Error &&
+        ("code" in error
+          ? error.code === "ENOENT"
+          : message.includes("ENOENT"));
 
-    const codeJsonFailures = await translateAllCodeJsons(englishCodeJson);
-    failures.push(...codeJsonFailures);
-    summary.codeJsonFailures = codeJsonFailures.length;
+      if (isNotFound) {
+        console.warn(
+          chalk.yellow(
+            "⚠ English code.json not found. Skipping UI string translation (continuing with doc translation)."
+          )
+        );
+      } else {
+        console.warn(
+          chalk.yellow(
+            `⚠ English code.json is malformed. Skipping UI string translation (continuing with doc translation). Error: ${message}`
+          )
+        );
+      }
+
+      // Add a special failure entry to indicate code.json was skipped
+      const skippedFailure: TranslationFailure = {
+        language: "en",
+        title: "code.json (source file)",
+        error: isNotFound
+          ? "Source file not found - UI string translation skipped"
+          : `Source file malformed - UI string translation skipped: ${message}`,
+        isCritical: false, // Non-critical: doc translation continues
+      };
+      failures.push(skippedFailure);
+      summary.codeJsonSourceFileMissing = true; // Mark source file as missing (soft-fail)
+      codeJsonSkipped = true;
+    }
 
     // Translate theme config (navbar and footer)
     const themeFailures = await translateThemeConfig();
@@ -749,7 +783,15 @@ export async function main() {
       summary.failedTranslations > 0 ||
       summary.codeJsonFailures > 0 ||
       summary.themeFailures > 0;
-    if (hasFailures) {
+
+    // Only throw if there are actual failures (excluding soft-fail source file issues)
+    // Source file missing is a soft-fail - it's tracked but doesn't cause workflow to fail
+    const hasActualFailures =
+      summary.failedTranslations > 0 ||
+      (summary.codeJsonFailures > 0 && !summary.codeJsonSourceFileMissing) ||
+      summary.themeFailures > 0;
+
+    if (hasActualFailures) {
       throw new Error(
         `Translation workflow completed with failures (docs: ${summary.failedTranslations}, code.json: ${summary.codeJsonFailures}, theme: ${summary.themeFailures})`
       );

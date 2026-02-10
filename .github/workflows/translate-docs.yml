@@ -35,6 +35,40 @@ jobs:
       - name: Install dependencies
         run: bun i
 
+      - name: Validate safe test environment
+        run: |
+          # Check if we're in test mode
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Test mode detected - validating target branch..."
+
+            TARGET="${{ env.TARGET_BRANCH }}"
+
+            # Protected branches that should NEVER be used in test mode
+            PROTECTED_BRANCHES="^main$|^master$|^content$"
+
+            # Safe branch patterns for testing
+            SAFE_PATTERNS="^test/|^fix/|^feat/|^chore/|^refactor/"
+
+            # Check if branch is protected
+            if echo "$TARGET" | grep -qE "$PROTECTED_BRANCHES"; then
+              echo "❌ ERROR: Cannot run test workflow on protected branch '$TARGET'"
+              echo "   Protected branches: main, master, content"
+              echo "   Please use a safe test branch pattern (test/*, fix/*, feat/*, chore/*, refactor/*)"
+              exit 1
+            fi
+
+            # Check if branch matches safe patterns or contains "test" (case-insensitive)
+            if echo "$TARGET" | grep -qE "$SAFE_PATTERNS" || echo "$TARGET" | grep -iq "test"; then
+              echo "✅ Safe test branch: $TARGET"
+            else
+              echo "⚠️  Warning: Branch '$TARGET' does not match safe test patterns"
+              echo "   Recommended patterns: test/*, fix/*, feat/*, chore/*, refactor/*, or branches containing 'test'"
+              echo "   Protected branches (main, master, content) are rejected in test mode"
+            fi
+          else
+            echo "✅ Production mode - no test mode validation required"
+          fi
+
       - name: Validate required secrets
         run: |
           missing=0
@@ -64,6 +98,14 @@ jobs:
       - name: Notion Translate
         id: notion_translate
         run: |
+          # Use test database if test mode is enabled
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Running in test mode with test database"
+            export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
+            export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            export TEST_MODE="true"
+          fi
+
           bun notion:translate 2>&1 | tee /tmp/translate_output.log
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -71,6 +113,9 @@ jobs:
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          TEST_DATA_SOURCE_ID: ${{ secrets.TEST_DATA_SOURCE_ID }}
+          TEST_DATABASE_ID: ${{ secrets.TEST_DATABASE_ID }}
+          TEST_MODE: ${{ secrets.TEST_MODE }}
 
       - name: Parse translation summary
         if: always()
@@ -141,11 +186,23 @@ jobs:
 
       - name: Update Notion Status → Auto Translation Generated
         if: success()
-        run: bun run notionStatus:translation
+        run: |
+          # Use test database if test mode is enabled
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Running in test mode with test database"
+            export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
+            export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            export TEST_MODE="true"
+          fi
+
+          bun run notionStatus:translation
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          TEST_DATA_SOURCE_ID: ${{ secrets.TEST_DATA_SOURCE_ID }}
+          TEST_DATABASE_ID: ${{ secrets.TEST_DATABASE_ID }}
+          TEST_MODE: ${{ secrets.TEST_MODE }}
 
       - name: Commit translated docs
         if: success()

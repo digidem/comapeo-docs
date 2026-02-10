@@ -454,6 +454,45 @@ if (!rawDataSourceId && !IS_TEST_ENV) {
 
 export const DATA_SOURCE_ID = rawDataSourceId || resolvedDatabaseId;
 
+// Test environment support
+// When test mode is enabled, use test database if provided
+const isTestMode =
+  process.env.TEST_MODE === "true" ||
+  !!process.env.TEST_DATABASE_ID ||
+  !!process.env.TEST_DATA_SOURCE_ID;
+
+export const TEST_DATABASE_ID = process.env.TEST_DATABASE_ID;
+export const TEST_DATA_SOURCE_ID = process.env.TEST_DATA_SOURCE_ID;
+
+// Log test mode status
+if (isTestMode) {
+  const testSource = TEST_DATA_SOURCE_ID || TEST_DATABASE_ID;
+  console.info(
+    chalk.blue(
+      `🧪 Test mode enabled: using test database ${testSource ? `"${testSource}"` : "(fallback to production)"}`
+    )
+  );
+}
+
+// Export the active data source ID based on test mode
+export const getActiveDataSourceId = (): string => {
+  if (isTestMode && TEST_DATA_SOURCE_ID) {
+    return TEST_DATA_SOURCE_ID;
+  }
+  if (isTestMode && TEST_DATABASE_ID) {
+    return TEST_DATABASE_ID;
+  }
+  return DATA_SOURCE_ID;
+};
+
+// Export the active database ID based on test mode
+export const getActiveDatabaseId = (): string => {
+  if (isTestMode && TEST_DATABASE_ID) {
+    return TEST_DATABASE_ID;
+  }
+  return DATABASE_ID;
+};
+
 /**
  * Sleep utility for retry delays
  */

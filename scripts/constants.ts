@@ -73,3 +73,56 @@ export const ENGLISH_MODIFICATION_ERROR =
   "SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.";
 export const ENGLISH_DIR_SAVE_ERROR =
   "Safety check failed: Cannot save translated content to English docs directory";
+
+// Test environment configuration
+export const SAFE_BRANCH_PATTERNS = [
+  "test/*",
+  "fix/*",
+  "feat/*",
+  "chore/*",
+  "refactor/*",
+];
+
+export const PROTECTED_BRANCHES = ["main", "master", "content"];
+
+export function isTestMode(): boolean {
+  return (
+    process.env.TEST_MODE === "true" ||
+    !!process.env.TEST_DATABASE_ID ||
+    !!process.env.TEST_DATA_SOURCE_ID
+  );
+}
+
+export function getTestDataSourceId(): string | undefined {
+  return process.env.TEST_DATA_SOURCE_ID;
+}
+
+export function getTestDatabaseId(): string | undefined {
+  return process.env.TEST_DATABASE_ID;
+}
+
+export function isSafeTestBranch(branch: string): boolean {
+  // In test mode, only allow safe branch patterns
+  if (!isTestMode()) {
+    return true; // If not in test mode, allow any branch
+  }
+
+  // Check if branch matches any safe pattern
+  const isSafePattern = SAFE_BRANCH_PATTERNS.some((pattern) => {
+    // Use literal string comparison instead of RegExp to avoid ESLint warning
+    // SAFE_BRANCH_PATTERNS uses "*" as wildcard, so we do simple prefix check
+    if (pattern.endsWith("/*")) {
+      const prefix = pattern.slice(0, -2); // Remove "/*" suffix
+      return branch.startsWith(prefix + "/");
+    }
+    return branch === pattern;
+  });
+
+  // Check if branch contains "test" (case-insensitive)
+  const hasTestInName = /test/i.test(branch);
+
+  // Check if branch is a protected branch (never allow in test mode)
+  const isProtected = PROTECTED_BRANCHES.includes(branch);
+
+  return (isSafePattern || hasTestInName) && !isProtected;
+}

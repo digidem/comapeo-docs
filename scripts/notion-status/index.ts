@@ -2,6 +2,11 @@ import { Client } from "@notionhq/client";
 import ora from "ora";
 import chalk from "chalk";
 import { NOTION_PROPERTIES } from "../constants";
+import {
+  RollbackRecorder,
+  getRollbackRecorder,
+  recordStatusChanges,
+} from "./rollbackRecorder";
 
 interface UpdateStatusOptions {
   token: string;
@@ -10,15 +15,31 @@ interface UpdateStatusOptions {
   toStatus: string;
   setPublishedDate?: boolean;
   languageFilter?: string;
+  /** Enable rollback recording (default: true) */
+  enableRollback?: boolean;
+  /** Operation name for rollback tracking (default: auto-generated) */
+  operationName?: string;
+}
+
+/**
+ * Helper to extract page title from a Notion page response
+ */
+function getPageTitle(page: any): string | undefined {
+  const titleProp = page.properties?.[NOTION_PROPERTIES.TITLE];
+  if (titleProp?.title?.length > 0) {
+    return titleProp.title[0]?.plain_text || undefined;
+  }
+  return undefined;
 }
 
 /**
  * Updates the status of Notion pages from one status to another
+ * Records changes for rollback if enableRollback is true (default)
  * @param options Configuration options for the status update
  */
 export async function updateNotionPageStatus(
   options: UpdateStatusOptions
-): Promise<void> {
+): Promise<{ sessionId?: string; successCount: number; errorCount: number }> {
   const {
     token,
     databaseId,
@@ -26,6 +47,8 @@ export async function updateNotionPageStatus(
     toStatus,
     setPublishedDate,
     languageFilter,
+    enableRollback = true,
+    operationName,
   } = options;
 
   const notion = new Client({ auth: token });
@@ -33,6 +56,61 @@ export async function updateNotionPageStatus(
   const spinner = ora(
     `Updating pages from "${fromStatus}" to "${toStatus}"${languageMsg}`
   ).start();
+
+  // Generate operation name if not provided
+  const opName =
+    operationName ||
+    `${fromStatus.replace(/\s+/g, "-").toLowerCase()}-to-${toStatus.replace(/\s+/g, "-").toLowerCase()}`;
+
+  // Use rollback recording wrapper if enabled
+  if (enableRollback) {
+    return recordStatusChanges(
+      opName,
+      fromStatus,
+      toStatus,
+      async (recorder, sessionId) => {
+        return performStatusUpdate(
+          notion,
+          databaseId,
+          fromStatus,
+          toStatus,
+          setPublishedDate,
+          languageFilter,
+          recorder,
+          spinner
+        );
+      },
+      { languageFilter }
+    );
+  }
+
+  // Perform update without recording
+  return performStatusUpdate(
+    notion,
+    databaseId,
+    fromStatus,
+    toStatus,
+    setPublishedDate,
+    languageFilter,
+    null,
+    spinner
+  );
+}
+
+/**
+ * Internal function to perform the actual status update
+ */
+async function performStatusUpdate(
+  notion: Client,
+  databaseId: string,
+  fromStatus: string,
+  toStatus: string,
+  setPublishedDate: boolean | undefined,
+  languageFilter: string | undefined,
+  recorder: RollbackRecorder | null,
+  spinner: any
+): Promise<{ sessionId?: string; successCount: number; errorCount: number }> {
+  const sessionId = recorder?.getCurrentSession()?.sessionId;
 
   try {
     // Build filter for status and optionally language
@@ -76,7 +154,7 @@ export async function updateNotionPageStatus(
       spinner.succeed(
         chalk.yellow(`No pages found with status "${fromStatus}"`)
       );
-      return;
+      return { sessionId, successCount: 0, errorCount: 0 };
     }
 
     spinner.text = `Found ${pages.length} pages to update`;
@@ -87,6 +165,7 @@ export async function updateNotionPageStatus(
 
     for (const page of pages) {
       try {
+        const pageTitle = getPageTitle(page);
         const properties: Record<string, unknown> = {
           [NOTION_PROPERTIES.STATUS]: {
             select: {
@@ -108,11 +187,30 @@ export async function updateNotionPageStatus(
           page_id: page.id,
           properties: properties as any,
         });
+
+        // Record the change for rollback
+        if (recorder) {
+          await recorder.recordChange(page.id, fromStatus, true, {
+            pageTitle,
+            languageFilter,
+          });
+        }
+
         successCount++;
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         console.error(
-          chalk.red(`Failed to update page ${page.id}: ${error.message}`)
+          chalk.red(`Failed to update page ${page.id}: ${errorMessage}`)
         );
+
+        // Record failed change
+        if (recorder) {
+          await recorder.recordChange(page.id, fromStatus, false, {
+            languageFilter,
+          });
+        }
+
         errorCount++;
       }
     }
@@ -128,8 +226,12 @@ export async function updateNotionPageStatus(
         chalk.yellow(`Updated ${successCount} pages, ${errorCount} failed`)
       );
     }
+
+    return { sessionId, successCount, errorCount };
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to update page statuses: ${error.message}`));
+    spinner.fail(
+      chalk.red(`Failed to update page statuses: ${(error as Error).message}`)
+    );
     throw error;
   }
 }
@@ -292,16 +394,26 @@ async function main() {
   }
 
   try {
-    await updateNotionPageStatus({
+    const result = await updateNotionPageStatus({
       token,
       databaseId: dataSourceId,
       fromStatus,
       toStatus,
       setPublishedDate,
       languageFilter,
+      enableRollback: true,
+      operationName: workflow,
     });
+
+    // Show session info if rollback was enabled
+    if (result.sessionId) {
+      console.log(chalk.gray(`Rollback session: ${result.sessionId}`));
+      console.log(
+        chalk.gray(`Use rollback commands to revert these changes if needed.`)
+      );
+    }
   } catch (error) {
-    console.error(chalk.red("Status update failed:", error.message));
+    console.error(chalk.red("Status update failed:", (error as Error).message));
     process.exit(1);
   }
 }

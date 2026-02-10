@@ -348,12 +348,27 @@ export async function main() {
       // Validate JSON
       JSON.parse(englishCodeJson);
     } catch (error) {
-      console.error(
-        chalk.red(
-          `Error reading or parsing English code.json: ${error.message}`
-        )
-      );
-      process.exit(1);
+      const message = error instanceof Error ? error.message : String(error);
+      const isNotFound =
+        error instanceof Error &&
+        ("code" in error
+          ? error.code === "ENOENT"
+          : message.includes("ENOENT"));
+
+      if (isNotFound) {
+        console.warn(
+          chalk.yellow(
+            "⚠ English code.json not found. Skipping code.json translation."
+          )
+        );
+      } else {
+        console.warn(
+          chalk.yellow(
+            `⚠ English code.json is malformed: ${message}. Skipping code.json translation.`
+          )
+        );
+      }
+      return; // Exit gracefully instead of hard exit
     }
 
     // Process each language directory (except 'en')

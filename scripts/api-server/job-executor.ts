@@ -13,8 +13,27 @@ import { reportJobCompletion } from "./github-status";
  * Whitelist of environment variables that child processes are allowed to access.
  * Only variables necessary for Notion scripts and runtime resolution are included.
  * Sensitive vars like API_KEY_*, GITHUB_TOKEN are explicitly excluded.
+ *
+ * Audit rationale:
+ * - NOTION_API_KEY: Required by all Notion scripts for API authentication
+ * - DATABASE_ID: Database ID for Notion API (legacy v4)
+ * - NOTION_DATABASE_ID: Alternative database ID (backward compatibility)
+ * - DATA_SOURCE_ID: Data source ID for Notion API v5
+ * - OPENAI_API_KEY: Required for translation scripts
+ * - OPENAI_MODEL: Optional OpenAI model override (has default)
+ * - DEFAULT_DOCS_PAGE: Application configuration for default docs page
+ * - BASE_URL: Base URL path for emoji and asset URLs in production (e.g., "/comapeo-docs/")
+ * - NODE_ENV: Environment mode (test/production/development)
+ * - DEBUG: Optional debug logging for notion-fetch scripts
+ * - NOTION_PERF_LOG: Optional performance telemetry logging flag
+ * - NOTION_PERF_OUTPUT: Optional performance telemetry output path
+ * - PATH: Required for runtime resolution (bun/node executables)
+ * - HOME: Required for runtime resolution (user home directory)
+ * - BUN_INSTALL: Required for bun runtime to locate installation
+ * - LANG: Locale configuration for text processing
+ * - LC_ALL: Locale configuration for collation and character handling
  */
-const CHILD_ENV_WHITELIST = [
+export const CHILD_ENV_WHITELIST = [
   // Notion API configuration
   "NOTION_API_KEY",
   "DATABASE_ID",
@@ -25,7 +44,12 @@ const CHILD_ENV_WHITELIST = [
   "OPENAI_MODEL",
   // Application configuration
   "DEFAULT_DOCS_PAGE",
+  "BASE_URL",
   "NODE_ENV",
+  // Debug and performance telemetry (optional but used by production workflows)
+  "DEBUG",
+  "NOTION_PERF_LOG",
+  "NOTION_PERF_OUTPUT",
   // Runtime resolution (required for bun/node to work correctly)
   "PATH",
   "HOME",
@@ -40,7 +64,7 @@ const CHILD_ENV_WHITELIST = [
  * Only includes whitelisted variables from the parent process.env.
  * This prevents sensitive variables (API_KEY_*, GITHUB_TOKEN, etc.) from being passed to children.
  */
-function buildChildEnv(): NodeJS.ProcessEnv {
+export function buildChildEnv(): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = {};
 
   for (const key of CHILD_ENV_WHITELIST) {

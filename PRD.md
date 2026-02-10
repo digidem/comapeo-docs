@@ -5,13 +5,13 @@
 - [x] Create `PROGRESS.md` before starting tests.
 - [x] After each task, append a short entry in `PROGRESS.md` with: task, pass/fail, evidence, next action.
 - [x] If a task fails, log issue severity (`high`, `medium`, `low`), impact, and reproduction steps in `PROGRESS.md`.
-- [ ] Keep entries simple (KISS): 3-6 lines per update.
+- [x] Keep entries simple (KISS): 3-6 lines per update.
 
 ## Scope And Acceptance
 
-- [ ] Confirm acceptance criteria: `TRANSLATION_SUMMARY` always prints, failures are classified correctly, and workflow gating blocks status/commit on failed translation.
-- [ ] Confirm test boundaries: use dedicated Notion test pages and a safe test branch.
-- [ ] Log scope confirmation in `PROGRESS.md`.
+- [x] Confirm acceptance criteria: `TRANSLATION_SUMMARY` always prints, failures are classified correctly, and workflow gating blocks status/commit on failed translation.
+- [x] Confirm test boundaries: use dedicated Notion test pages and a safe test branch.
+- [x] Log scope confirmation in `PROGRESS.md`.
 
 ## Batch 1: Baseline Checks
 

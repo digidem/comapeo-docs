@@ -33,6 +33,7 @@ vi.mock("fs/promises", () => ({
 
 vi.mock("../notionClient", () => ({
   notion: {},
+  // DATA_SOURCE_ID is primary, DATABASE_ID is fallback (standardization policy)
   DATABASE_ID: "test-database-id",
   DATA_SOURCE_ID: "test-data-source-id",
   n2m: mockN2m,

@@ -98,6 +98,9 @@ function validateRequiredEnvironment(): void {
     // eslint-disable-next-line security/detect-object-injection -- keys come from trusted static array
     (name) => !process.env[name]
   );
+  // DATA_SOURCE_ID is the primary variable for Notion API v5 (2025-09-03)
+  // DATABASE_ID is accepted as a fallback for backward compatibility
+  // See: scripts/migration/discoverDataSource.ts for migration guidance
   if (!process.env.DATA_SOURCE_ID && !process.env.DATABASE_ID) {
     missingVariables.push("DATA_SOURCE_ID (or DATABASE_ID fallback)");
   }
@@ -650,10 +653,11 @@ async function processSinglePageTranslation({
     );
   }
   // Create or update translation page in Notion as a sibling (child of the same parent)
+  // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
   await createNotionPageFromMarkdown(
     notion,
     parentInfo,
-    DATA_SOURCE_ID || DATABASE_ID,
+    DATA_SOURCE_ID || DATABASE_ID, // Primary: DATA_SOURCE_ID, Fallback: DATABASE_ID
     translatedTitle,
     translatedContent,
     properties,

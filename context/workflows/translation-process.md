@@ -160,6 +160,81 @@ export const LANGUAGES: TranslationConfig[] = [
 - Backward compatibility: `DATABASE_ID` is still accepted as a fallback where needed.
 - In GitHub Actions, keep `DATA_SOURCE_ID` and `DATABASE_ID` aligned until full migration completes.
 
+#### DATA_SOURCE_ID Migration Policy
+
+**Status**: Standardization in progress
+
+**Background**: Notion API v5 (version `2025-09-03`) introduced `data_sources` as a new concept. Databases are now called "data sources" and may have different IDs than the legacy `DATABASE_ID`.
+
+**Current Standard** (as of 2026-02):
+
+1. **Primary Variable**: `DATA_SOURCE_ID` is the required variable for all new code
+2. **Fallback Support**: `DATABASE_ID` is accepted for backward compatibility
+3. **Validation**: Scripts warn when `DATA_SOURCE_ID` is not set
+4. **Runtime Behavior**: Code uses `DATA_SOURCE_ID || DATABASE_ID` pattern
+
+**Migration Steps**:
+
+1. **Discover your DATA_SOURCE_ID**:
+
+   ```bash
+   bun scripts/migration/discoverDataSource.ts
+   ```
+
+2. **Update your `.env` file**:
+
+   ```bash
+   # Add the discovered DATA_SOURCE_ID
+   DATA_SOURCE_ID=your_discovered_data_source_id_here
+
+   # Keep DATABASE_ID for now (will be deprecated in future)
+   DATABASE_ID=your_existing_database_id_here
+   ```
+
+3. **Update GitHub Secrets**:
+   - Go to repository Settings → Secrets and variables → Actions
+   - Add `DATA_SOURCE_ID` with the discovered value
+   - Keep `DATABASE_ID` secret until full migration completes
+
+4. **Verify the migration**:
+
+   ```bash
+   # Test locally
+   bun run notion:translate
+
+   # Test via workflow (use dry-run label first)
+   gh workflow run translate-docs.yml
+   ```
+
+**Deprecation Timeline**:
+
+- **Current Phase** (2026-02): Migration and discovery phase
+  - Both `DATA_SOURCE_ID` and `DATABASE_ID` accepted
+  - Scripts prefer `DATA_SOURCE_ID` with fallback to `DATABASE_ID`
+  - Warnings logged when `DATA_SOURCE_ID` is missing
+
+- **Next Phase** (TBD): Hard requirement phase
+  - `DATA_SOURCE_ID` becomes required
+  - `DATABASE_ID` fallback removed
+  - Migration deadline communicated in advance
+
+- **Final Phase** (TBD): Deprecation phase
+  - `DATABASE_ID` fully removed from codebase
+  - All references updated to `DATA_SOURCE_ID`
+
+**Compatibility Notes**:
+
+- In Notion API v5, `DATABASE_ID` and `DATA_SOURCE_ID` may be **different values**
+- Always run the discovery script to find the correct `DATA_SOURCE_ID`
+- Do not assume `DATA_SOURCE_ID === DATABASE_ID`
+- The fallback pattern (`DATA_SOURCE_ID || DATABASE_ID`) ensures smooth migration
+
+**See Also**:
+
+- Migration script: `scripts/migration/discoverDataSource.ts`
+- Notion Client implementation: `scripts/notionClient.ts` (lines 437-455)
+- Translation workflow: `.github/workflows/translate-docs.yml`
+
 ## Content Synchronization
 
 ### Shared Metadata

@@ -230,17 +230,25 @@ test_job_cancellation() {
     return 1
   fi
 
-  # Verify job is marked as cancelled
+  # Verify job is marked as failed with cancellation reason
+  # The API contract stores cancelled jobs as status="failed" with error message
   STATUS_RESPONSE=$(curl -s "$API_BASE_URL/jobs/$JOB_ID")
   JOB_STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.data.status')
+  JOB_ERROR=$(echo "$STATUS_RESPONSE" | jq -r '.data.result.error // empty')
 
-  if [ "$JOB_STATUS" != "cancelled" ]; then
-    test_fail "Expected status 'cancelled', got '$JOB_STATUS'"
+  if [ "$JOB_STATUS" != "failed" ]; then
+    test_fail "Expected status 'failed', got '$JOB_STATUS'"
     echo "$STATUS_RESPONSE" | jq '.data'
     return 1
   fi
 
-  echo "  Job successfully cancelled"
+  if [[ ! "$JOB_ERROR" =~ cancelled ]]; then
+    test_fail "Expected error message to contain 'cancelled', got '$JOB_ERROR'"
+    echo "$STATUS_RESPONSE" | jq '.data'
+    return 1
+  fi
+
+  echo "  Job successfully cancelled (status: $JOB_STATUS, error: $JOB_ERROR)"
   test_pass
 }
 

@@ -62,13 +62,82 @@ jobs:
           fi
 
       - name: Notion Translate
-        run: bun notion:translate
+        id: notion_translate
+        run: |
+          bun notion:translate 2>&1 | tee /tmp/translate_output.log
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+
+      - name: Parse translation summary
+        if: always()
+        id: parse_summary
+        run: |
+          # Default values if TRANSLATION_SUMMARY not found
+          export TOTAL_PAGES="0"
+          export PROCESSED_LANGS="0"
+          export NEW_TRANSLATIONS="0"
+          export UPDATED_TRANSLATIONS="0"
+          export SKIPPED_TRANSLATIONS="0"
+          export FAILED_TRANSLATIONS="0"
+          export CODE_JSON_FAILURES="0"
+          export THEME_FAILURES="0"
+          export HAS_FAILURES="false"
+
+          # Extract TRANSLATION_SUMMARY line from output
+          if [ -f /tmp/translate_output.log ]; then
+            SUMMARY_LINE=$(grep "^TRANSLATION_SUMMARY " /tmp/translate_output.log | head -1 || echo "")
+
+            if [ -n "$SUMMARY_LINE" ]; then
+              # Extract JSON portion and parse using GitHub Actions syntax
+              JSON_PART="${SUMMARY_LINE#TRANSLATION_SUMMARY }"
+
+              # Parse JSON values using jq (available on GitHub runners)
+              # Add error handling for malformed JSON
+              TOTAL_PAGES=$(echo "$JSON_PART" | jq -r '.totalEnglishPages // "0"' 2>/dev/null || echo "0")
+              PROCESSED_LANGS=$(echo "$JSON_PART" | jq -r '.processedLanguages // "0"' 2>/dev/null || echo "0")
+              NEW_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.newTranslations // "0"' 2>/dev/null || echo "0")
+              UPDATED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.updatedTranslations // "0"' 2>/dev/null || echo "0")
+              SKIPPED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.skippedTranslations // "0"' 2>/dev/null || echo "0")
+              FAILED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.failedTranslations // "0"' 2>/dev/null || echo "0")
+              CODE_JSON_FAILURES=$(echo "$JSON_PART" | jq -r '.codeJsonFailures // "0"' 2>/dev/null || echo "0")
+              THEME_FAILURES=$(echo "$JSON_PART" | jq -r '.themeFailures // "0"' 2>/dev/null || echo "0")
+
+              # Determine if there were any failures
+              TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+              if [ "$TOTAL_FAILURES" -gt 0 ]; then
+                HAS_FAILURES="true"
+              fi
+            fi
+          fi
+
+          # Set outputs for use in notification step
+          {
+            echo "total_pages=$TOTAL_PAGES"
+            echo "processed_langs=$PROCESSED_LANGS"
+            echo "new_translations=$NEW_TRANSLATIONS"
+            echo "updated_translations=$UPDATED_TRANSLATIONS"
+            echo "skipped_translations=$SKIPPED_TRANSLATIONS"
+            echo "failed_translations=$FAILED_TRANSLATIONS"
+            echo "code_json_failures=$CODE_JSON_FAILURES"
+            echo "theme_failures=$THEME_FAILURES"
+            echo "has_failures=$HAS_FAILURES"
+          } >> "$GITHUB_OUTPUT"
+
+          # Log summary for debugging
+          echo "Translation Summary:"
+          echo "  Total pages: $TOTAL_PAGES"
+          echo "  Processed languages: $PROCESSED_LANGS"
+          echo "  New translations: $NEW_TRANSLATIONS"
+          echo "  Updated translations: $UPDATED_TRANSLATIONS"
+          echo "  Skipped translations: $SKIPPED_TRANSLATIONS"
+          echo "  Failed translations: $FAILED_TRANSLATIONS"
+          echo "  Code.json failures: $CODE_JSON_FAILURES"
+          echo "  Theme failures: $THEME_FAILURES"
+          echo "  Has failures: $HAS_FAILURES"
 
       - name: Update Notion Status → Auto Translation Generated
         if: success()
@@ -162,7 +231,21 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Translation sync*: ${{ job.status }}\nLocales: `i18n` updates committed to `${{ env.TARGET_BRANCH }}`"
+                  text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: |
+                    *Translation Results:*
+                    • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
+                    • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
+                    • New translations: ${{ steps.parse_summary.outputs.new_translations }}
+                    • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
+                    • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
+                    ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
+                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: ']')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']")[0] || '' }}
+                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']")[0] || '' }}
+                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']")[0] || '' }}
               - type: "section"
                 text:
                   type: "mrkdwn"
@@ -170,4 +253,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Reminder: Review translations before publishing."
+                  text: "${{ steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success' && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"

@@ -677,7 +677,6 @@ async function processSinglePageTranslation({
  */
 export async function main() {
   console.log(chalk.bold.cyan("🚀 Starting Notion translation workflow\n"));
-  validateRequiredEnvironment();
   const failures: TranslationFailure[] = [];
   const summary: TranslationRunSummary = {
     totalEnglishPages: 0,
@@ -692,6 +691,8 @@ export async function main() {
   };
 
   try {
+    validateRequiredEnvironment();
+
     // Fetch published English pages
     const englishPages = await fetchPublishedEnglishPages();
     summary.totalEnglishPages = englishPages.length;

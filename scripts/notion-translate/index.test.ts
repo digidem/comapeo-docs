@@ -246,4 +246,53 @@ describe("notion-translate index", () => {
     });
     expect(loggedSummary.failures).toHaveLength(6);
   });
+
+  it("emits TRANSLATION_SUMMARY even when required environment is missing", async () => {
+    // This test verifies that env validation failures still emit TRANSLATION_SUMMARY
+    // The env validation happens inside try/catch, so even early failures emit the summary
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Clear environment variables before importing the module
+    const originalEnv = { ...process.env };
+    delete process.env.NOTION_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.DATA_SOURCE_ID;
+    delete process.env.DATABASE_ID;
+
+    try {
+      // Import the module with empty environment to trigger env validation failure
+      vi.resetModules();
+      const { main } = await import("./index");
+
+      // Use regex for partial match since error includes list of missing variables
+      await expect(main()).rejects.toThrow(
+        /Missing required environment variables/
+      );
+
+      // Verify that TRANSLATION_SUMMARY was still emitted despite env failure
+      const summaryLine = logSpy.mock.calls
+        .map((args) => args.map(String).join(" "))
+        .find((line) => line.startsWith("TRANSLATION_SUMMARY "));
+
+      expect(summaryLine).toBeTruthy();
+      const loggedSummary = JSON.parse(
+        summaryLine!.slice("TRANSLATION_SUMMARY ".length)
+      );
+      expect(loggedSummary).toMatchObject({
+        totalEnglishPages: 0,
+        processedLanguages: 0,
+        newTranslations: 0,
+        updatedTranslations: 0,
+        skippedTranslations: 0,
+        failedTranslations: 0,
+        codeJsonFailures: 0,
+        themeFailures: 0,
+      });
+    } finally {
+      // Restore environment variables safely
+      Object.assign(process.env, originalEnv);
+      vi.resetModules();
+    }
+  });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getStatusFromRawPage,
   getElementTypeFromRawPage,
+  getLanguageFromRawPage,
   shouldIncludePage,
   filterPagesByStatus,
   filterPagesByElementType,
@@ -276,6 +277,207 @@ describe("notionPageUtils", () => {
 
         expect(elementType).toBe(typeName);
       });
+    });
+  });
+
+  describe("getLanguageFromRawPage", () => {
+    it("should extract language from valid page", () => {
+      const page = {
+        properties: {
+          Language: {
+            select: {
+              name: "English",
+            },
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBe("English");
+    });
+
+    it("should return undefined for null page", () => {
+      const language = getLanguageFromRawPage(null as any);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for undefined page", () => {
+      const language = getLanguageFromRawPage(undefined as any);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page without properties", () => {
+      const page = {};
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page with null properties", () => {
+      const page = {
+        properties: null,
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page without Language property", () => {
+      const page = {
+        properties: {
+          Title: { title: [{ plain_text: "Test" }] },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page with empty select", () => {
+      const page = {
+        properties: {
+          Language: {
+            select: null,
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page with empty language name", () => {
+      const page = {
+        properties: {
+          Language: {
+            select: {
+              name: "",
+            },
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should return undefined for page with whitespace-only language", () => {
+      const page = {
+        properties: {
+          Language: {
+            select: {
+              name: "   ",
+            },
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBeUndefined();
+    });
+
+    it("should trim whitespace from language name", () => {
+      const page = {
+        properties: {
+          Language: {
+            select: {
+              name: "  Portuguese  ",
+            },
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(page);
+
+      expect(language).toBe("Portuguese");
+    });
+
+    it("should handle various language values", () => {
+      const languages = [
+        "English",
+        "Spanish",
+        "Portuguese",
+        "French",
+        "German",
+        "Japanese",
+      ];
+
+      languages.forEach((languageName) => {
+        const page = {
+          properties: {
+            Language: {
+              select: {
+                name: languageName,
+              },
+            },
+          },
+        };
+
+        const language = getLanguageFromRawPage(page);
+
+        expect(language).toBe(languageName);
+      });
+    });
+
+    it("should verify Language = English for source pages", () => {
+      const englishPage = {
+        properties: {
+          Language: {
+            select: {
+              name: "English",
+            },
+          },
+        },
+      };
+
+      const language = getLanguageFromRawPage(englishPage);
+
+      expect(language).toBe("English");
+    });
+
+    it("should distinguish between different languages", () => {
+      const englishPage = {
+        properties: {
+          Language: {
+            select: {
+              name: "English",
+            },
+          },
+        },
+      };
+
+      const spanishPage = {
+        properties: {
+          Language: {
+            select: {
+              name: "Spanish",
+            },
+          },
+        },
+      };
+
+      const portuguesePage = {
+        properties: {
+          Language: {
+            select: {
+              name: "Portuguese",
+            },
+          },
+        },
+      };
+
+      expect(getLanguageFromRawPage(englishPage)).toBe("English");
+      expect(getLanguageFromRawPage(spanishPage)).toBe("Spanish");
+      expect(getLanguageFromRawPage(portuguesePage)).toBe("Portuguese");
     });
   });
 

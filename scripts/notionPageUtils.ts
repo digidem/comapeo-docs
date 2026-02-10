@@ -48,6 +48,28 @@ export function getElementTypeFromRawPage(page: Record<string, any>): string {
 }
 
 /**
+ * Extract language from a raw Notion page
+ * @returns The language name (e.g., "English", "Spanish", "Portuguese"), or undefined if not set
+ */
+export function getLanguageFromRawPage(
+  page: Record<string, any>
+): string | undefined {
+  if (!page || typeof page !== "object") return undefined;
+  const properties = (page as any).properties;
+  if (!properties || typeof properties !== "object") return undefined;
+
+  const languageProperty =
+    properties[NOTION_PROPERTIES.LANGUAGE] || properties["Language"];
+
+  const name = languageProperty?.select?.name;
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (normalized) {
+    return normalized;
+  }
+  return undefined;
+}
+
+/**
  * Check if a page should be included (not marked for removal)
  * @param page - Raw Notion page object
  * @param includeRemoved - Whether to include pages marked for removal

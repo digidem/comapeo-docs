@@ -70,6 +70,28 @@
 
 ---
 
+### Review Gate: Baseline
+
+- Task: Classify any failures as environment, flaky test, or implementation defect
+- Status: PASS (baseline is clean for testing)
+- Evidence:
+  - Missing `OPENAI_API_KEY`: Environment issue (severity: medium)
+    - Impact: Cannot run `bun run notion:translate` end-to-end
+    - Unit tests cover runtime contracts via mocking (19/19 passed)
+    - Not a code defect - requires API key configuration
+  - ESLint warning at `scripts/notion-status/index.ts:142:18`: Implementation advisory (severity: low)
+    - Type: Variable Assigned to Object Injection Sink
+    - Non-blocking - existing code pattern with controlled CLI arg parsing
+    - False positive - switch statement validates input
+- Baseline Classification: CLEAN for testing purposes
+  - All unit tests pass (19/19)
+  - Code quality checks pass (ESLint, Prettier)
+  - Only environment configuration issue (missing API key)
+- Next Action: Proceed to Scope and Acceptance confirmation
+- Review Decision Logged: YES
+
+---
+
 ## Batch 2: Scope and Acceptance Confirmation
 
 ### Acceptance Criteria Review

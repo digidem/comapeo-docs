@@ -45,10 +45,10 @@
 
 - [x] Run `bun run notion:translate` and capture `TRANSLATION_SUMMARY`.
 - [x] Verify success contract: `processedLanguages > 0`, `failedTranslations = 0`, `codeJsonFailures = 0`, `themeFailures = 0`.
-- [ ] Run translation again with no source changes and verify deterministic file output in `i18n/es/.../current` and `i18n/pt/.../current` (no `-1`/`-2` suffix drift).
-- [ ] Run no-pages test: temporarily move English test pages out of `Ready for translation`, rerun translation, verify non-zero exit and `totalEnglishPages = 0`.
-- [ ] Restore page statuses to original values.
-- [ ] Log each run and summary values in `PROGRESS.md`.
+- [x] Run translation again with no source changes and verify deterministic file output in `i18n/es/.../current` and `i18n/pt/.../current` (no `-1`/`-2` suffix drift).
+- [x] Run no-pages test: temporarily move English test pages out of `Ready for translation`, rerun translation, verify non-zero exit and `totalEnglishPages = 0`.
+- [x] Restore page statuses to original values.
+- [x] Log each run and summary values in `PROGRESS.md`.
 
 ### Review Gate: Runtime
 

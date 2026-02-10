@@ -34,6 +34,7 @@
 - Task: Run ESLint on translation files
 - Status: PASS (with 1 warning)
 - Evidence: 1 warning in `scripts/notion-status/index.ts:142:18` - Variable Assigned to Object Injection Sink (non-blocking)
+- Command Output: (no output, all files passed)
 - Next Action: Proceed with Prettier
 
 ### Prettier Check
@@ -47,12 +48,24 @@
 
 - Task: Run targeted tests on translation files
 - Status: PASS
-- Evidence: 5 test files, 19 tests passed in 2.37s
+- Evidence: 5 test files, 19 tests passed in 2.96s
+- Command Output:
+
+  ```
+  Test Files  5 passed (5)
+       Tests  19 passed (19)
+   Start at  13:18:30
+   Duration  2.96s (transform 2.03s, setup 1.22s, import 1.40s, tests 3.58s, environment 2ms)
+
+  JSON report written to test-results.json
+  ```
+
   - `scripts/notion-status/index.test.ts`: 2 tests passed
   - `scripts/notion-translate/translateCodeJson.test.ts`: 2 tests passed
   - `scripts/notion-translate/translateFrontMatter.test.ts`: 4 tests passed
   - `scripts/notion-translate/markdownToNotion.test.ts`: 2 tests passed
   - `scripts/notion-translate/index.test.ts`: 9 tests passed
+
 - Next Action: Proceed to Scope and Acceptance confirmation
 
 ---

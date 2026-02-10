@@ -15,31 +15,31 @@
 
 ## Batch 1: Baseline Checks
 
-- [ ] Verify prerequisites: `.env` has `NOTION_API_KEY`, `OPENAI_API_KEY`, and `DATA_SOURCE_ID` (or `DATABASE_ID` fallback), and dependencies are installed (`bun i`).
-- [ ] Run targeted quality checks on touched files: `bunx eslint <touched-files> --fix` and `bunx prettier --write <touched-files>`.
-- [ ] Run targeted tests: `bunx vitest run scripts/notion-translate/translateFrontMatter.test.ts scripts/notion-translate/translateCodeJson.test.ts scripts/notion-translate/index.test.ts scripts/notion-status/index.test.ts scripts/notion-translate/markdownToNotion.test.ts`.
-- [ ] Log command outputs and result status in `PROGRESS.md`.
+- [x] Verify prerequisites: `.env` has `NOTION_API_KEY`, `OPENAI_API_KEY`, and `DATA_SOURCE_ID` (or `DATABASE_ID` fallback), and dependencies are installed (`bun i`).
+- [x] Run targeted quality checks on touched files: `bunx eslint <touched-files> --fix` and `bunx prettier --write <touched-files>`.
+- [x] Run targeted tests: `bunx vitest run scripts/notion-translate/translateFrontMatter.test.ts scripts/notion-translate/translateCodeJson.test.ts scripts/notion-translate/index.test.ts scripts/notion-status/index.test.ts scripts/notion-translate/markdownToNotion.test.ts`.
+- [x] Log command outputs and result status in `PROGRESS.md`.
 
 ### Review Gate: Baseline
 
-- [ ] Classify any failures as environment, flaky test, or implementation defect.
-- [ ] Confirm baseline is clean or defects are clearly listed with reproduction.
-- [ ] Log review decision in `PROGRESS.md`.
+- [x] Classify any failures as environment, flaky test, or implementation defect.
+- [x] Confirm baseline is clean or defects are clearly listed with reproduction.
+- [x] Log review decision in `PROGRESS.md`.
 
 ## Batch 2: Notion Test Data Setup
 
-- [ ] Create or select at least two English test pages with realistic content blocks.
-- [ ] Set `Publish Status = Ready for translation` for those English source pages.
-- [ ] Verify `Language = English` for source pages.
-- [ ] Ensure translation siblings exist/can be created for `Spanish` and `Portuguese`.
-- [ ] Record page IDs and original statuses for rollback.
-- [ ] Log all setup actions in `PROGRESS.md`.
+- [x] Create or select at least two English test pages with realistic content blocks.
+- [x] Set `Publish Status = Ready for translation` for those English source pages.
+- [x] Verify `Language = English` for source pages.
+- [x] Ensure translation siblings exist/can be created for `Spanish` and `Portuguese`.
+- [x] Record page IDs and original statuses for rollback.
+- [x] Log all setup actions in `PROGRESS.md`.
 
 ### Review Gate: Notion Setup
 
-- [ ] Confirm no tag change is required; selection is based on `Publish Status` and `Language`.
-- [ ] Confirm only isolated test pages were modified.
-- [ ] Log review outcome in `PROGRESS.md`.
+- [x] Confirm no tag change is required; selection is based on `Publish Status` and `Language`.
+- [x] Confirm only isolated test pages were modified.
+- [x] Log review outcome in `PROGRESS.md`.
 
 ## Batch 3: Runtime Contract Tests
 

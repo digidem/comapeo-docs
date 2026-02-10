@@ -173,6 +173,33 @@ describe("notion-translate index", () => {
     expect(loggedSummary).toEqual(summary);
   });
 
+  it("verifies success contract: processedLanguages > 0 and all failures = 0", async () => {
+    // Success contract from PRD:
+    // - processedLanguages > 0 (at least one language was processed)
+    // - failedTranslations = 0 (no document translation failures)
+    // - codeJsonFailures = 0 (no UI string translation failures)
+    // - themeFailures = 0 (no navbar/footer translation failures)
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { main } = await import("./index");
+
+    const summary = await main();
+
+    // Verify success contract conditions
+    expect(summary.processedLanguages).toBeGreaterThan(0);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.codeJsonFailures).toBe(0);
+    expect(summary.themeFailures).toBe(0);
+
+    // Verify no errors were logged
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    // Verify TRANSLATION_SUMMARY was emitted
+    const loggedSummary = findSummaryLog(logSpy);
+    expect(loggedSummary).toBeDefined();
+    expect(loggedSummary.processedLanguages).toBeGreaterThan(0);
+  });
+
   it("fails with explicit contract when no pages are ready for translation", async () => {
     mockFetchNotionData.mockResolvedValue([]);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

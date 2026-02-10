@@ -43,8 +43,8 @@
 
 ## Batch 3: Runtime Contract Tests
 
-- [ ] Run `bun run notion:translate` and capture `TRANSLATION_SUMMARY`.
-- [ ] Verify success contract: `processedLanguages > 0`, `failedTranslations = 0`, `codeJsonFailures = 0`, `themeFailures = 0`.
+- [x] Run `bun run notion:translate` and capture `TRANSLATION_SUMMARY`.
+- [x] Verify success contract: `processedLanguages > 0`, `failedTranslations = 0`, `codeJsonFailures = 0`, `themeFailures = 0`.
 - [ ] Run translation again with no source changes and verify deterministic file output in `i18n/es/.../current` and `i18n/pt/.../current` (no `-1`/`-2` suffix drift).
 - [ ] Run no-pages test: temporarily move English test pages out of `Ready for translation`, rerun translation, verify non-zero exit and `totalEnglishPages = 0`.
 - [ ] Restore page statuses to original values.

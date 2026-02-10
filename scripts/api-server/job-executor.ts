@@ -197,6 +197,7 @@ export async function executeJob(
   let stderr = "";
   let timeoutHandle: NodeJS.Timeout | null = null;
   let timedOut = false;
+  let processExited = false;
 
   try {
     childProcess = spawn(jobConfig.script, args, {
@@ -239,7 +240,8 @@ export async function executeJob(
       // Wait for graceful shutdown, then force kill if needed
       await new Promise<void>((resolve) => {
         setTimeout(() => {
-          if (childProcess && !childProcess.killed) {
+          // Check if process has actually exited, not just if kill() was called
+          if (childProcess && !processExited) {
             logger.error(
               "Job did not terminate after SIGTERM, sending SIGKILL",
               {
@@ -272,6 +274,7 @@ export async function executeJob(
     // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
       childProcess?.on("close", (code) => {
+        processExited = true;
         if (timedOut) {
           const timeoutSeconds = Math.floor(timeoutMs / 1000);
           logger.error("Job timed out", { timeoutSeconds });
@@ -290,6 +293,7 @@ export async function executeJob(
       });
 
       childProcess?.on("error", (err) => {
+        processExited = true;
         logger.error("Job process error", { error: err.message });
         reject(err);
       });

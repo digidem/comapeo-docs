@@ -14,6 +14,8 @@ import { randomBytes } from "node:crypto";
 export interface TestEnvironment {
   /** Unique temporary directory for this test */
   tempDir: string;
+  /** Alias for tempDir (used by some tests) */
+  dataDir: string;
   /** Path to jobs.json file */
   jobsFile: string;
   /** Path to jobs.log file */
@@ -53,6 +55,7 @@ export function setupTestEnvironment(): TestEnvironment {
 
   return {
     tempDir,
+    dataDir: tempDir, // Alias for compatibility
     jobsFile,
     logsFile,
     cleanup: () => {

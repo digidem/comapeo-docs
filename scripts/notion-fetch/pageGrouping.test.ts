@@ -5,6 +5,11 @@ import {
   resolvePageLocale,
   groupPagesByLang,
   createStandalonePageGroup,
+  ensureTranslationSiblings,
+  getTranslationLocales,
+  hasTranslation,
+  getMissingTranslations,
+  type TranslationSiblingsResult,
 } from "./pageGrouping";
 import { NOTION_PROPERTIES } from "../constants";
 
@@ -477,6 +482,445 @@ describe("pageGrouping", () => {
 
       const result = createStandalonePageGroup(page);
       expect(result.section).toBe("");
+    });
+  });
+
+  describe("ensureTranslationSiblings", () => {
+    const createMockPage = (
+      id: string,
+      title: string,
+      language: string
+    ): Record<string, any> => ({
+      id,
+      properties: {
+        [NOTION_PROPERTIES.TITLE]: {
+          title: [{ plain_text: title }],
+        },
+        [NOTION_PROPERTIES.LANGUAGE]: {
+          select: { name: language },
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: { name: "Page" },
+        },
+      },
+    });
+
+    it("should return all translations when all siblings exist", () => {
+      const englishPage = createMockPage("en-1", "English Content", "English");
+      const spanishPage = createMockPage(
+        "es-1",
+        "Contenido en Español",
+        "Spanish"
+      );
+      const portuguesePage = createMockPage(
+        "pt-1",
+        "Conteúdo em Português",
+        "Portuguese"
+      );
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }, { id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage, portuguesePage];
+      const result = ensureTranslationSiblings(pages, mainPage);
+
+      expect(result.hasAllTranslations).toBe(true);
+      expect(result.availableLocales).toEqual(
+        expect.arrayContaining(["en", "es", "pt"])
+      );
+      expect(result.missingLocales).toEqual([]);
+    });
+
+    it("should detect missing Spanish translation", () => {
+      const englishPage = createMockPage("en-1", "English Content", "English");
+      const portuguesePage = createMockPage(
+        "pt-1",
+        "Conteúdo em Português",
+        "Portuguese"
+      );
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, portuguesePage];
+      const result = ensureTranslationSiblings(pages, mainPage);
+
+      expect(result.hasAllTranslations).toBe(false);
+      expect(result.availableLocales).toEqual(
+        expect.arrayContaining(["en", "pt"])
+      );
+      expect(result.missingLocales).toEqual(["es"]);
+    });
+
+    it("should detect missing Portuguese translation", () => {
+      const englishPage = createMockPage("en-1", "English Content", "English");
+      const spanishPage = createMockPage(
+        "es-1",
+        "Contenido en Español",
+        "Spanish"
+      );
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage];
+      const result = ensureTranslationSiblings(pages, mainPage);
+
+      expect(result.hasAllTranslations).toBe(false);
+      expect(result.availableLocales).toEqual(
+        expect.arrayContaining(["en", "es"])
+      );
+      expect(result.missingLocales).toEqual(["pt"]);
+    });
+
+    it("should detect all translations missing", () => {
+      const englishPage = createMockPage("en-1", "English Content", "English");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [],
+          },
+        },
+      };
+
+      const pages = [mainPage];
+      const result = ensureTranslationSiblings(pages, mainPage);
+
+      expect(result.hasAllTranslations).toBe(false);
+      expect(result.availableLocales).toEqual(["en"]);
+      expect(result.missingLocales).toEqual(["es", "pt"]);
+    });
+
+    it("should return grouped page in result", () => {
+      const englishPage = createMockPage("en-1", "Main Page", "English");
+      const spanishPage = createMockPage("es-1", "Página Principal", "Spanish");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage];
+      const result = ensureTranslationSiblings(pages, mainPage);
+
+      expect(result.groupedPage.mainTitle).toBe("Main Page");
+      expect(result.groupedPage.section).toBe("Page");
+      expect(result.groupedPage.content.en).toBeDefined();
+      expect(result.groupedPage.content.es).toBeDefined();
+    });
+
+    it("should handle pages with no sub-items", () => {
+      const englishPage = createMockPage("en-1", "English Only", "English");
+
+      const pages = [englishPage];
+      const result = ensureTranslationSiblings(pages, englishPage);
+
+      expect(result.hasAllTranslations).toBe(false);
+      expect(result.availableLocales).toEqual(["en"]);
+      expect(result.missingLocales).toEqual(["es", "pt"]);
+    });
+  });
+
+  describe("getTranslationLocales", () => {
+    const createMockPage = (
+      id: string,
+      title: string,
+      language: string
+    ): Record<string, any> => ({
+      id,
+      properties: {
+        [NOTION_PROPERTIES.TITLE]: {
+          title: [{ plain_text: title }],
+        },
+        [NOTION_PROPERTIES.LANGUAGE]: {
+          select: { name: language },
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: { name: "Page" },
+        },
+      },
+    });
+
+    it("should return all available locales", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+      const portuguesePage = createMockPage("pt-1", "Portuguese", "Portuguese");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }, { id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage, portuguesePage];
+      const locales = getTranslationLocales(pages, mainPage);
+
+      expect(locales).toEqual(expect.arrayContaining(["en", "es", "pt"]));
+      expect(locales).toHaveLength(3);
+    });
+
+    it("should return only available locales when some are missing", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage];
+      const locales = getTranslationLocales(pages, mainPage);
+
+      expect(locales).toEqual(expect.arrayContaining(["en", "es"]));
+      expect(locales).not.toContain("pt");
+      expect(locales).toHaveLength(2);
+    });
+
+    it("should return only English when no translations exist", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+
+      const pages = [englishPage];
+      const locales = getTranslationLocales(pages, englishPage);
+
+      expect(locales).toEqual(["en"]);
+    });
+  });
+
+  describe("hasTranslation", () => {
+    const createMockPage = (
+      id: string,
+      title: string,
+      language: string
+    ): Record<string, any> => ({
+      id,
+      properties: {
+        [NOTION_PROPERTIES.TITLE]: {
+          title: [{ plain_text: title }],
+        },
+        [NOTION_PROPERTIES.LANGUAGE]: {
+          select: { name: language },
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: { name: "Page" },
+        },
+      },
+    });
+
+    it("should return true when Spanish translation exists", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage];
+
+      expect(hasTranslation(pages, mainPage, "es")).toBe(true);
+      expect(hasTranslation(pages, mainPage, "pt")).toBe(false);
+    });
+
+    it("should return true when Portuguese translation exists", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const portuguesePage = createMockPage("pt-1", "Portuguese", "Portuguese");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, portuguesePage];
+
+      expect(hasTranslation(pages, mainPage, "pt")).toBe(true);
+      expect(hasTranslation(pages, mainPage, "es")).toBe(false);
+    });
+
+    it("should return true for English locale (source page)", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+
+      const pages = [englishPage];
+
+      expect(hasTranslation(pages, englishPage, "en")).toBe(true);
+    });
+
+    it("should return false for non-existent locales", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+
+      const pages = [englishPage];
+
+      expect(hasTranslation(pages, englishPage, "fr")).toBe(false);
+      expect(hasTranslation(pages, englishPage, "de")).toBe(false);
+    });
+
+    it("should return true when all translations exist", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+      const portuguesePage = createMockPage("pt-1", "Portuguese", "Portuguese");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }, { id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage, portuguesePage];
+
+      expect(hasTranslation(pages, mainPage, "en")).toBe(true);
+      expect(hasTranslation(pages, mainPage, "es")).toBe(true);
+      expect(hasTranslation(pages, mainPage, "pt")).toBe(true);
+    });
+  });
+
+  describe("getMissingTranslations", () => {
+    const createMockPage = (
+      id: string,
+      title: string,
+      language: string
+    ): Record<string, any> => ({
+      id,
+      properties: {
+        [NOTION_PROPERTIES.TITLE]: {
+          title: [{ plain_text: title }],
+        },
+        [NOTION_PROPERTIES.LANGUAGE]: {
+          select: { name: language },
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: { name: "Page" },
+        },
+      },
+    });
+
+    it("should return empty array when all translations exist", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+      const portuguesePage = createMockPage("pt-1", "Portuguese", "Portuguese");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }, { id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage, portuguesePage];
+      const missing = getMissingTranslations(pages, mainPage);
+
+      expect(missing).toEqual([]);
+    });
+
+    it("should return ['es'] when Spanish is missing", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const portuguesePage = createMockPage("pt-1", "Portuguese", "Portuguese");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "pt-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, portuguesePage];
+      const missing = getMissingTranslations(pages, mainPage);
+
+      expect(missing).toEqual(["es"]);
+    });
+
+    it("should return ['pt'] when Portuguese is missing", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+      const spanishPage = createMockPage("es-1", "Spanish", "Spanish");
+
+      const mainPage = {
+        ...englishPage,
+        properties: {
+          ...englishPage.properties,
+          "Sub-item": {
+            relation: [{ id: "es-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, spanishPage];
+      const missing = getMissingTranslations(pages, mainPage);
+
+      expect(missing).toEqual(["pt"]);
+    });
+
+    it("should return ['es', 'pt'] when all translations are missing", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+
+      const pages = [englishPage];
+      const missing = getMissingTranslations(pages, englishPage);
+
+      expect(missing).toEqual(["es", "pt"]);
+    });
+
+    it("should not include English in missing translations", () => {
+      const englishPage = createMockPage("en-1", "English", "English");
+
+      const pages = [englishPage];
+      const missing = getMissingTranslations(pages, englishPage);
+
+      expect(missing).not.toContain("en");
     });
   });
 });

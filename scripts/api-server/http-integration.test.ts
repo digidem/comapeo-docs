@@ -98,6 +98,23 @@ describe("HTTP Integration Tests", () => {
       expect(res.headers.get("access-control-allow-origin")).toBe("*");
       expect(res.headers.get("access-control-allow-methods")).toContain("POST");
     });
+
+    it("should handle requests with custom Origin header in allow-all mode", async () => {
+      // In allow-all mode (no ALLOWED_ORIGINS set), custom origins should get wildcard
+      const res = await fetch(`${BASE_URL}/jobs`, {
+        method: "OPTIONS",
+        headers: { Origin: "https://example.com" },
+      });
+      expect(res.status).toBe(204);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    });
+
+    it("should handle requests without Origin header", async () => {
+      // Requests without Origin header are same-origin and should work
+      const res = await fetch(`${BASE_URL}/jobs`, { method: "OPTIONS" });
+      expect(res.status).toBe(204);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    });
   });
 
   // --- Authentication ---

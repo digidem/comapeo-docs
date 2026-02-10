@@ -87,6 +87,7 @@
 - Status: PASS
 - Acceptance criteria confirmed: `TRANSLATION_SUMMARY` emission verified, failure classification implemented
 - Test boundaries confirmed: safe branch pattern active, protected branches in place
+- Scope confirmation logged in PROGRESS.md as required by PRD
 - Next Action: Proceed to Notion Test Data Setup
 
 ---

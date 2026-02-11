@@ -736,6 +736,15 @@ export async function main() {
           ? error.code === "ENOENT"
           : message.includes("ENOENT"));
 
+      // Check if this is a SyntaxError from JSON.parse (malformed JSON)
+      const isMalformedJson = error instanceof SyntaxError;
+
+      // Only soft-fail for ENOENT (file not found) or SyntaxError (malformed JSON)
+      // Re-throw system errors like EACCES, EIO, etc.
+      if (!isNotFound && !isMalformedJson) {
+        throw error;
+      }
+
       if (isNotFound) {
         console.warn(
           chalk.yellow(

@@ -91,7 +91,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: PR comment with image reference
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event_name != 'pull_request'
         uses: actions/github-script@v8
         with:
           script: |

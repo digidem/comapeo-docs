@@ -274,6 +274,65 @@ describe("notion-translate index", () => {
     expect(loggedSummary.failures).toHaveLength(6);
   });
 
+  it("exits with failure on theme-only translation failures and reports themeFailures > 0", async () => {
+    // This test validates theme-only failure behavior per PRD Batch 4:
+    // "Validate theme translation failure behavior: non-zero exit and themeFailures > 0"
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Track call count to differentiate code.json calls (2) from theme calls (4: 2 langs × 2 files)
+    let translateJsonCallCount = 0;
+    mockTranslateJson.mockImplementation(
+      async (_json: string, _targetLang: string) => {
+        translateJsonCallCount++;
+        // First 2 calls are for code.json (pt and es) - succeed
+        // Next 4 calls are for theme (navbar/footer for pt and es) - fail
+        if (translateJsonCallCount <= 2) {
+          return '{"hello": {"message": "Translated"}}';
+        }
+        throw new Error(
+          `Theme translation failed (call ${translateJsonCallCount})`
+        );
+      }
+    );
+
+    const { main } = await import("./index");
+
+    // Should throw due to theme failures
+    await expect(main()).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+
+    const loggedSummary = findSummaryLog(logSpy);
+
+    // Verify theme-specific failure counts
+    expect(loggedSummary).toMatchObject({
+      totalEnglishPages: 1,
+      processedLanguages: 2,
+      failedTranslations: 0, // Doc translations succeeded
+      codeJsonFailures: 0, // code.json translations succeeded
+      themeFailures: 4, // 2 languages × 2 theme files (navbar + footer) = 4 failures
+    });
+
+    // Verify all failures are theme-related (navbar.json or footer.json)
+    expect(loggedSummary.failures).toHaveLength(4);
+    loggedSummary.failures.forEach(
+      (failure: { title: string; error: string; isCritical: boolean }) => {
+        expect(["navbar.json", "footer.json"]).toContain(failure.title);
+        expect(failure.error).toContain("Theme translation failed");
+        // Note: isCritical is false because we throw a regular Error, not TranslationError
+        // This is intentional - the test validates that theme failures cause workflow exit
+        // regardless of the isCritical flag value
+      }
+    );
+
+    // Verify error was logged (check last call which contains the fatal error message)
+    const lastErrorCall = errorSpy.mock.calls[errorSpy.mock.calls.length - 1];
+    expect(String(lastErrorCall[0])).toContain(
+      "Fatal error during translation process"
+    );
+  });
+
   it("emits TRANSLATION_SUMMARY even when required environment is missing", async () => {
     // This test verifies that env validation failures still emit TRANSLATION_SUMMARY
     // The env validation happens inside try/catch, so even early failures emit the summary

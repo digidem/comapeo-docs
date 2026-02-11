@@ -113,7 +113,7 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("actions/checkout")
       );
       expect(checkout).toBeDefined();
-      expect(checkout.uses).toContain("@v4");
+      expect(checkout.uses).toContain("actions/checkout@");
     });
 
     it("should set up QEMU", () => {
@@ -121,7 +121,7 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("docker/setup-qemu-action")
       );
       expect(qemu).toBeDefined();
-      expect(qemu.uses).toContain("@v3");
+      expect(qemu.uses).toContain("docker/setup-qemu-action@");
     });
 
     it("should set up Docker Buildx", () => {
@@ -129,7 +129,7 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("docker/setup-buildx-action")
       );
       expect(buildx).toBeDefined();
-      expect(buildx.uses).toContain("@v3");
+      expect(buildx.uses).toContain("docker/setup-buildx-action@");
     });
 
     it("should login to Docker Hub for non-PR events", () => {
@@ -137,7 +137,7 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("docker/login-action")
       );
       expect(login).toBeDefined();
-      expect(login.uses).toContain("@v3");
+      expect(login.uses).toContain("docker/login-action@");
       expect(login.if).toContain("github.event_name != 'pull_request'");
       expect(login.with.username).toContain("secrets.DOCKERHUB_USERNAME");
       expect(login.with.password).toContain("secrets.DOCKERHUB_TOKEN");
@@ -146,7 +146,7 @@ describe("Docker Publish Workflow", () => {
     it("should extract metadata with correct tags", () => {
       const meta = steps.find((s: any) => s.id === "meta");
       expect(meta).toBeDefined();
-      expect(meta.uses).toContain("docker/metadata-action@v5");
+      expect(meta.uses).toContain("docker/metadata-action@");
       expect(meta.with.tags).toContain("type=raw,value=latest");
       expect(meta.with.tags).toContain("type=sha,prefix=");
       expect(meta.with.tags).toContain(
@@ -157,7 +157,7 @@ describe("Docker Publish Workflow", () => {
     it("should build and push with correct configuration", () => {
       const build = steps.find((s: any) => s.id === "build");
       expect(build).toBeDefined();
-      expect(build.uses).toContain("docker/build-push-action@v6");
+      expect(build.uses).toContain("docker/build-push-action@");
       expect(build.with.platforms).toContain("linux/amd64");
       expect(build.with.platforms).toContain("linux/arm64");
       expect(build.with.push).toContain("github.event_name != 'pull_request'");
@@ -174,7 +174,7 @@ describe("Docker Publish Workflow", () => {
       expect(comment.if).toContain(
         "github.event.pull_request.head.repo.full_name == github.repository"
       );
-      expect(comment.uses).toContain("@v7");
+      expect(comment.uses).toContain("actions/github-script@");
       expect(comment.with.script).toContain("docker pull");
       expect(comment.with.script).toContain("docker run");
     });

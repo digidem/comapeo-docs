@@ -38,6 +38,11 @@ function cleanupTestData(): void {
   }
 }
 
+function extractAuthorizationHeader(runScript: string): string | undefined {
+  const match = runScript.match(/Authorization:\s*(Bearer\s+\$[A-Z0-9_]+)/);
+  return match?.[1]?.trim();
+}
+
 describe("GitHub Actions Secret Handling", () => {
   let workflow: any;
   let auth: ApiKeyAuth;
@@ -91,9 +96,16 @@ describe("GitHub Actions Secret Handling", () => {
     );
 
     it("should use API_KEY_GITHUB_ACTIONS for authentication", () => {
-      const workflowContent = readFileSync(WORKFLOW_PATH, "utf-8");
-      expect(workflowContent).toContain("API_KEY_GITHUB_ACTIONS");
-      expect(workflowContent).toContain("Authorization: Bearer $API_KEY");
+      const job = workflow.jobs["fetch-via-api"];
+      const createJobStep = job.steps.find((s: any) => s.id === "create-job");
+
+      expect(createJobStep).toBeDefined();
+      expect(createJobStep.env.API_KEY_GITHUB_ACTIONS).toBe(
+        "${{ secrets.API_KEY_GITHUB_ACTIONS }}"
+      );
+
+      const authHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should pass NOTION_API_KEY securely to local server", () => {
@@ -102,9 +114,13 @@ describe("GitHub Actions Secret Handling", () => {
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain(
-        'export NOTION_API_KEY="${{ secrets.NOTION_API_KEY }}"'
+      // Secrets should be set in the env block, not exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBe(
+        "${{ secrets.NOTION_API_KEY }}"
       );
+      // Shell script should NOT have export statements for secrets
+      expect(startServerStep.run).not.toContain("export NOTION_API_KEY=");
     });
 
     it("should pass OPENAI_API_KEY securely", () => {
@@ -113,9 +129,13 @@ describe("GitHub Actions Secret Handling", () => {
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain(
-        'export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"'
+      // Secrets should be set in the env block, not exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.OPENAI_API_KEY).toBe(
+        "${{ secrets.OPENAI_API_KEY }}"
       );
+      // Shell script should NOT have export statements for secrets
+      expect(startServerStep.run).not.toContain("export OPENAI_API_KEY=");
     });
   });
 
@@ -274,10 +294,17 @@ describe("GitHub Actions Secret Handling", () => {
 
       expect(startServerStep).toBeDefined();
 
-      // Verify secrets are exported, not echoed (which would leak to logs)
-      expect(startServerStep.run).toContain("export NOTION_API_KEY=");
-      expect(startServerStep.run).toContain("export OPENAI_API_KEY=");
-      expect(startServerStep.run).toContain("export API_KEY_GITHUB_ACTIONS=");
+      // Secrets should be set in env block, NOT exported in shell script
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBeDefined();
+      expect(startServerStep.env.OPENAI_API_KEY).toBeDefined();
+      expect(startServerStep.env.API_KEY_GITHUB_ACTIONS).toBeDefined();
+      // Verify secrets are NOT exported in shell script (prevents log leaks)
+      expect(startServerStep.run).not.toContain("export NOTION_API_KEY=");
+      expect(startServerStep.run).not.toContain("export OPENAI_API_KEY=");
+      expect(startServerStep.run).not.toContain(
+        "export API_KEY_GITHUB_ACTIONS="
+      );
 
       // Verify there are no echo statements that would leak secrets
       const linesWithSecrets = startServerStep.run
@@ -313,14 +340,17 @@ describe("GitHub Actions Secret Handling", () => {
       }
     });
 
-    it("should set NODE_ENV=test in local mode", () => {
+    it("should NOT set NODE_ENV=test in local mode (needs deterministic port)", () => {
       const job = workflow.jobs["fetch-via-api"];
       const startServerStep = job.steps.find((s: any) =>
         s.run?.includes("bun run api:server")
       );
 
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain("export NODE_ENV=test");
+      // NODE_ENV=test forces random port binding, which breaks health checks
+      expect(startServerStep.run).not.toContain("export NODE_ENV=test");
+      // Verify the comment explains why
+      expect(startServerStep.run).toContain("Don't set NODE_ENV=test");
     });
 
     it("should configure API host and port for local mode", () => {
@@ -341,7 +371,8 @@ describe("GitHub Actions Secret Handling", () => {
       const createJobStep = job.steps.find((s: any) => s.id === "create-job");
 
       expect(createJobStep).toBeDefined();
-      expect(createJobStep.run).toContain("Authorization: Bearer $API_KEY");
+      const authHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should include Authorization header in status polling", () => {
@@ -349,7 +380,8 @@ describe("GitHub Actions Secret Handling", () => {
       const pollStep = job.steps.find((s: any) => s.id === "poll-status");
 
       expect(pollStep).toBeDefined();
-      expect(pollStep.run).toContain("Authorization: Bearer $API_KEY");
+      const authHeader = extractAuthorizationHeader(pollStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should use secure curl options", () => {
@@ -405,23 +437,27 @@ describe("GitHub Actions Secret Handling", () => {
       expect(configStep).toBeDefined();
       expect(configStep.run).toContain("endpoint=");
 
-      // 2. Start server step - should use secrets
+      // 2. Start server step - should use secrets from env block
       const startServerStep = job.steps.find((s: any) =>
         s.run?.includes("bun run api:server")
       );
       expect(startServerStep).toBeDefined();
-      expect(startServerStep.run).toContain("NOTION_API_KEY");
-      expect(startServerStep.run).toContain("API_KEY_GITHUB_ACTIONS");
+      // Secrets should be in env block
+      expect(startServerStep.env).toBeDefined();
+      expect(startServerStep.env.NOTION_API_KEY).toBeDefined();
+      expect(startServerStep.env.API_KEY_GITHUB_ACTIONS).toBeDefined();
 
       // 3. Create job step - should authenticate with API key
       const createJobStep = job.steps.find((s: any) => s.id === "create-job");
       expect(createJobStep).toBeDefined();
-      expect(createJobStep.run).toContain("Authorization: Bearer");
+      const createJobAuthHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(createJobAuthHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
 
       // 4. Poll status step - should maintain authentication
       const pollStep = job.steps.find((s: any) => s.id === "poll-status");
       expect(pollStep).toBeDefined();
-      expect(pollStep.run).toContain("Authorization: Bearer");
+      const pollAuthHeader = extractAuthorizationHeader(pollStep.run);
+      expect(pollAuthHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should handle both production and local modes", () => {

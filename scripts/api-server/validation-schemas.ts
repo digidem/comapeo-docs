@@ -11,33 +11,27 @@
 import { z } from "zod";
 import type { JobType, JobStatus } from "./job-tracker";
 import { ErrorCode } from "./response-schemas";
+import {
+  VALID_JOB_TYPES,
+  VALID_JOB_STATUSES,
+  MAX_REQUEST_SIZE,
+  MAX_JOB_ID_LENGTH,
+} from "./validation";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-export const MAX_REQUEST_SIZE = 1_000_000; // 1MB
-export const MAX_JOB_ID_LENGTH = 100;
 export const MIN_API_KEY_LENGTH = 16;
 
-// Valid job types and statuses
-export const VALID_JOB_TYPES: readonly JobType[] = [
-  "notion:fetch",
-  "notion:fetch-all",
-  "notion:count-pages",
-  "notion:translate",
-  "notion:status-translation",
-  "notion:status-draft",
-  "notion:status-publish",
-  "notion:status-publish-production",
-] as const;
-
-export const VALID_JOB_STATUSES: readonly JobStatus[] = [
-  "pending",
-  "running",
-  "completed",
-  "failed",
-] as const;
+// Re-export validation constants for convenience
+// Note: VALID_JOB_TYPES is derived from JOB_COMMANDS keys (single source of truth)
+export {
+  VALID_JOB_TYPES,
+  VALID_JOB_STATUSES,
+  MAX_REQUEST_SIZE,
+  MAX_JOB_ID_LENGTH,
+};
 
 // =============================================================================
 // Base Schemas
@@ -72,14 +66,17 @@ export const jobIdSchema = z
 /**
  * Job type validation schema
  * - Must be one of the valid job types
+ * - Derived from JOB_COMMANDS keys (single source of truth)
  */
-export const jobTypeSchema = z.enum(VALID_JOB_TYPES);
+export const jobTypeSchema = z.enum(VALID_JOB_TYPES as [string, ...string[]]);
 
 /**
  * Job status validation schema
  * - Must be one of the valid job statuses
  */
-export const jobStatusSchema = z.enum(VALID_JOB_STATUSES);
+export const jobStatusSchema = z.enum(
+  VALID_JOB_STATUSES as [string, ...string[]]
+);
 
 // =============================================================================
 // Request Schemas

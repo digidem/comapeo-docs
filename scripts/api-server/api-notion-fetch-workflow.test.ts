@@ -18,6 +18,11 @@ const WORKFLOW_PATH = resolve(
   ".github/workflows/api-notion-fetch.yml"
 );
 
+function extractAuthorizationHeader(runScript: string): string | undefined {
+  const match = runScript.match(/Authorization:\s*(Bearer\s+\$[A-Z0-9_]+)/);
+  return match?.[1]?.trim();
+}
+
 describe("API Notion Fetch Workflow", () => {
   let workflow: any;
 
@@ -269,7 +274,9 @@ describe("API Notion Fetch Workflow", () => {
 
     it("should use API key authentication", () => {
       const workflowContent = readFileSync(WORKFLOW_PATH, "utf-8");
-      expect(workflowContent).toContain("Authorization: Bearer");
+      expect(extractAuthorizationHeader(workflowContent)).toBe(
+        "Bearer $API_KEY_GITHUB_ACTIONS"
+      );
       expect(workflowContent).toContain("API_KEY_GITHUB_ACTIONS");
     });
 
@@ -283,6 +290,7 @@ describe("API Notion Fetch Workflow", () => {
 
   describe("Job Types", () => {
     const expectedJobTypes = [
+      "notion:count-pages",
       "notion:fetch-all",
       "notion:fetch",
       "notion:translate",

@@ -38,6 +38,11 @@ function cleanupTestData(): void {
   }
 }
 
+function extractAuthorizationHeader(runScript: string): string | undefined {
+  const match = runScript.match(/Authorization:\s*(Bearer\s+\$[A-Z0-9_]+)/);
+  return match?.[1]?.trim();
+}
+
 describe("GitHub Actions Secret Handling", () => {
   let workflow: any;
   let auth: ApiKeyAuth;
@@ -91,9 +96,16 @@ describe("GitHub Actions Secret Handling", () => {
     );
 
     it("should use API_KEY_GITHUB_ACTIONS for authentication", () => {
-      const workflowContent = readFileSync(WORKFLOW_PATH, "utf-8");
-      expect(workflowContent).toContain("API_KEY_GITHUB_ACTIONS");
-      expect(workflowContent).toContain("Authorization: Bearer $API_KEY");
+      const job = workflow.jobs["fetch-via-api"];
+      const createJobStep = job.steps.find((s: any) => s.id === "create-job");
+
+      expect(createJobStep).toBeDefined();
+      expect(createJobStep.env.API_KEY_GITHUB_ACTIONS).toBe(
+        "${{ secrets.API_KEY_GITHUB_ACTIONS }}"
+      );
+
+      const authHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should pass NOTION_API_KEY securely to local server", () => {
@@ -359,7 +371,8 @@ describe("GitHub Actions Secret Handling", () => {
       const createJobStep = job.steps.find((s: any) => s.id === "create-job");
 
       expect(createJobStep).toBeDefined();
-      expect(createJobStep.run).toContain("Authorization: Bearer $API_KEY");
+      const authHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should include Authorization header in status polling", () => {
@@ -367,7 +380,8 @@ describe("GitHub Actions Secret Handling", () => {
       const pollStep = job.steps.find((s: any) => s.id === "poll-status");
 
       expect(pollStep).toBeDefined();
-      expect(pollStep.run).toContain("Authorization: Bearer $API_KEY");
+      const authHeader = extractAuthorizationHeader(pollStep.run);
+      expect(authHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should use secure curl options", () => {
@@ -436,12 +450,14 @@ describe("GitHub Actions Secret Handling", () => {
       // 3. Create job step - should authenticate with API key
       const createJobStep = job.steps.find((s: any) => s.id === "create-job");
       expect(createJobStep).toBeDefined();
-      expect(createJobStep.run).toContain("Authorization: Bearer");
+      const createJobAuthHeader = extractAuthorizationHeader(createJobStep.run);
+      expect(createJobAuthHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
 
       // 4. Poll status step - should maintain authentication
       const pollStep = job.steps.find((s: any) => s.id === "poll-status");
       expect(pollStep).toBeDefined();
-      expect(pollStep.run).toContain("Authorization: Bearer");
+      const pollAuthHeader = extractAuthorizationHeader(pollStep.run);
+      expect(pollAuthHeader).toBe("Bearer $API_KEY_GITHUB_ACTIONS");
     });
 
     it("should handle both production and local modes", () => {

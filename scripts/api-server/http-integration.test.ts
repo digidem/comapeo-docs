@@ -8,13 +8,20 @@
  * (requires Bun runtime for native serve() support)
  */
 
-// eslint-disable-next-line import/no-unresolved
-import { describe, it, expect, afterAll, beforeEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "bun:test"; // eslint-disable-line import/no-unresolved
 import { server, actualPort } from "./index";
 import { getJobTracker, destroyJobTracker } from "./job-tracker";
 import { getAuth } from "./auth";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { clearAllowedOriginsCache } from "./middleware/cors";
 
 const DATA_DIR = join(process.cwd(), ".jobs-data");
 const BASE_URL = `http://localhost:${actualPort}`;
@@ -32,6 +39,11 @@ describe("HTTP Integration Tests", () => {
     getJobTracker(); // fresh tracker
     const auth = getAuth();
     auth.clearKeys();
+  });
+
+  afterEach(() => {
+    delete process.env.ALLOWED_ORIGINS;
+    clearAllowedOriginsCache();
   });
 
   afterAll(() => {
@@ -92,11 +104,17 @@ describe("HTTP Integration Tests", () => {
   // --- CORS ---
 
   describe("OPTIONS preflight", () => {
-    it("should return 204 with CORS headers", async () => {
+    it("should return 204 with full CORS headers", async () => {
       const res = await fetch(`${BASE_URL}/jobs`, { method: "OPTIONS" });
       expect(res.status).toBe(204);
       expect(res.headers.get("access-control-allow-origin")).toBe("*");
-      expect(res.headers.get("access-control-allow-methods")).toContain("POST");
+      expect(res.headers.get("access-control-allow-methods")).toBe(
+        "GET, POST, DELETE, OPTIONS"
+      );
+      expect(res.headers.get("access-control-allow-headers")).toBe(
+        "Content-Type, Authorization"
+      );
+      expect(res.headers.get("vary")).toBeNull();
     });
 
     it("should handle requests with custom Origin header in allow-all mode", async () => {
@@ -107,6 +125,13 @@ describe("HTTP Integration Tests", () => {
       });
       expect(res.status).toBe(204);
       expect(res.headers.get("access-control-allow-origin")).toBe("*");
+      expect(res.headers.get("access-control-allow-methods")).toBe(
+        "GET, POST, DELETE, OPTIONS"
+      );
+      expect(res.headers.get("access-control-allow-headers")).toBe(
+        "Content-Type, Authorization"
+      );
+      expect(res.headers.get("vary")).toBeNull();
     });
 
     it("should handle requests without Origin header", async () => {
@@ -114,6 +139,35 @@ describe("HTTP Integration Tests", () => {
       const res = await fetch(`${BASE_URL}/jobs`, { method: "OPTIONS" });
       expect(res.status).toBe(204);
       expect(res.headers.get("access-control-allow-origin")).toBe("*");
+      expect(res.headers.get("access-control-allow-methods")).toBe(
+        "GET, POST, DELETE, OPTIONS"
+      );
+      expect(res.headers.get("access-control-allow-headers")).toBe(
+        "Content-Type, Authorization"
+      );
+      expect(res.headers.get("vary")).toBeNull();
+    });
+
+    it("should include Vary: Origin in restricted origin mode", async () => {
+      process.env.ALLOWED_ORIGINS = "https://example.com";
+      clearAllowedOriginsCache();
+
+      const res = await fetch(`${BASE_URL}/jobs`, {
+        method: "OPTIONS",
+        headers: { Origin: "https://example.com" },
+      });
+
+      expect(res.status).toBe(204);
+      expect(res.headers.get("access-control-allow-origin")).toBe(
+        "https://example.com"
+      );
+      expect(res.headers.get("access-control-allow-methods")).toBe(
+        "GET, POST, DELETE, OPTIONS"
+      );
+      expect(res.headers.get("access-control-allow-headers")).toBe(
+        "Content-Type, Authorization"
+      );
+      expect(res.headers.get("vary")).toBe("Origin");
     });
   });
 
@@ -128,6 +182,7 @@ describe("HTTP Integration Tests", () => {
       });
       const res = await fetch(`${BASE_URL}/jobs`);
       expect(res.status).toBe(401);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
       auth.clearKeys();
     });
 
@@ -371,6 +426,7 @@ describe("HTTP Integration Tests", () => {
     it("should return 404 with available endpoints", async () => {
       const res = await fetch(`${BASE_URL}/nonexistent`);
       expect(res.status).toBe(404);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
       const body = await res.json();
       expect(body.code).toBe("ENDPOINT_NOT_FOUND");
       expect(body.details.availableEndpoints).toBeDefined();
@@ -390,8 +446,21 @@ describe("HTTP Integration Tests", () => {
 
   describe("CORS headers", () => {
     it("should include CORS headers on all responses", async () => {
-      const res = await fetch(`${BASE_URL}/health`);
-      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+      const responses = await Promise.all([
+        fetch(`${BASE_URL}/health`),
+        fetch(`${BASE_URL}/nonexistent`),
+      ]);
+
+      for (const res of responses) {
+        expect(res.headers.get("access-control-allow-origin")).toBe("*");
+        expect(res.headers.get("access-control-allow-methods")).toBe(
+          "GET, POST, DELETE, OPTIONS"
+        );
+        expect(res.headers.get("access-control-allow-headers")).toBe(
+          "Content-Type, Authorization"
+        );
+        expect(res.headers.get("vary")).toBeNull();
+      }
     });
   });
 });

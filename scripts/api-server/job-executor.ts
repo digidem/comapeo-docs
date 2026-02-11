@@ -106,6 +106,16 @@ const DEFAULT_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const SIGKILL_DELAY_MS = 5000;
 
 /**
+ * Fail-safe delay after SIGKILL before force-failing unresponsive process (1 second)
+ */
+const SIGKILL_FAILSAFE_MS = 1000;
+
+/**
+ * Maximum allowed timeout override (2 hours) in milliseconds
+ */
+const MAX_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours max
+
+/**
  * Parse and validate JOB_TIMEOUT_MS environment variable override.
  * Returns a finite positive integer, or the fallback value if invalid.
  *
@@ -122,16 +132,32 @@ function parseTimeoutOverride(
     return fallback;
   }
 
-  // Parse as integer (base 10)
-  const parsed = parseInt(envValue, 10);
+  const trimmed = envValue.trim();
+
+  // Strict positive integer validation (reject decimals, scientific notation, signs, text)
+  if (!/^\d+$/.test(trimmed)) {
+    console.warn(
+      `Invalid JOB_TIMEOUT_MS: "${envValue}" - must be positive integer`
+    );
+    return fallback;
+  }
+
+  const parsed = parseInt(trimmed, 10);
 
   // Validate: must be finite, positive integer
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
     console.warn(
-      `Invalid JOB_TIMEOUT_MS value: "${envValue}". ` +
-        `Must be a positive integer. Using fallback: ${fallback}ms`
+      `Invalid JOB_TIMEOUT_MS: "${envValue}" - must be positive integer`
     );
     return fallback;
+  }
+
+  // Enforce upper bound to prevent unbounded long-running timeouts
+  if (parsed > MAX_TIMEOUT_MS) {
+    console.warn(
+      `JOB_TIMEOUT_MS "${envValue}" exceeds max ${MAX_TIMEOUT_MS}ms; capping to ${MAX_TIMEOUT_MS}ms`
+    );
+    return MAX_TIMEOUT_MS;
   }
 
   return parsed;
@@ -152,7 +178,7 @@ export const JOB_COMMANDS: Record<
   "notion:fetch": {
     script: "bun",
     args: ["scripts/notion-fetch/index.ts"],
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
   "notion:fetch-all": {
     script: "bun",
@@ -179,7 +205,7 @@ export const JOB_COMMANDS: Record<
         args.push("--status-filter", options.statusFilter);
       return args;
     },
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
   "notion:translate": {
     script: "bun",
@@ -189,22 +215,22 @@ export const JOB_COMMANDS: Record<
   "notion:status-translation": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "translation"],
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
   "notion:status-draft": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "draft"],
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
   "notion:status-publish": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "publish"],
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
   "notion:status-publish-production": {
     script: "bun",
     args: ["scripts/notion-status", "--workflow", "publish-production"],
-    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    timeoutMs: DEFAULT_JOB_TIMEOUT_MS,
   },
 };
 
@@ -252,8 +278,11 @@ export async function executeJob(
   let stdout = "";
   let stderr = "";
   let timeoutHandle: NodeJS.Timeout | null = null;
+  let failSafeTimer: NodeJS.Timeout | null = null;
   let timedOut = false;
   let processExited = false;
+  let rejectProcessCompletion: ((error: Error) => void) | null = null;
+  let pendingProcessCompletionError: Error | null = null;
 
   try {
     childProcess = spawn(jobConfig.script, args, {
@@ -305,6 +334,25 @@ export async function executeJob(
               }
             );
             childProcess.kill("SIGKILL");
+
+            // Hard fail-safe: if process never emits close/error after SIGKILL,
+            // force the job into a failed terminal state.
+            failSafeTimer = setTimeout(() => {
+              if (!processExited) {
+                const failSafeError = new Error(
+                  "Process unresponsive after timeout (no close/error after SIGKILL)"
+                );
+                logger.error("Process unresponsive after SIGKILL fail-safe", {
+                  pid: childProcess?.pid,
+                });
+
+                if (rejectProcessCompletion) {
+                  rejectProcessCompletion(failSafeError);
+                } else {
+                  pendingProcessCompletionError = failSafeError;
+                }
+              }
+            }, SIGKILL_FAILSAFE_MS);
           }
           resolve();
         }, SIGKILL_DELAY_MS);
@@ -329,29 +377,54 @@ export async function executeJob(
 
     // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
+      let completionSettled = false;
+      const resolveOnce = () => {
+        if (completionSettled) return;
+        completionSettled = true;
+        resolve();
+      };
+      const rejectOnce = (error: Error) => {
+        if (completionSettled) return;
+        completionSettled = true;
+        reject(error);
+      };
+
+      rejectProcessCompletion = rejectOnce;
+      if (pendingProcessCompletionError) {
+        rejectOnce(pendingProcessCompletionError);
+      }
+
       childProcess?.on("close", (code) => {
         processExited = true;
+        if (failSafeTimer) {
+          clearTimeout(failSafeTimer);
+          failSafeTimer = null;
+        }
         if (timedOut) {
           const timeoutSeconds = Math.floor(timeoutMs / 1000);
           logger.error("Job timed out", { timeoutSeconds });
-          reject(
+          rejectOnce(
             new Error(`Job execution timed out after ${timeoutSeconds} seconds`)
           );
         } else if (code === 0) {
           logger.info("Job completed successfully", { exitCode: code });
-          resolve();
+          resolveOnce();
         } else {
           logger.error("Job failed with non-zero exit code", {
             exitCode: code,
           });
-          reject(new Error(`Process exited with code ${code}`));
+          rejectOnce(new Error(`Process exited with code ${code}`));
         }
       });
 
       childProcess?.on("error", (err) => {
         processExited = true;
+        if (failSafeTimer) {
+          clearTimeout(failSafeTimer);
+          failSafeTimer = null;
+        }
         logger.error("Job process error", { error: err.message });
-        reject(err);
+        rejectOnce(err);
       });
     });
 
@@ -359,6 +432,10 @@ export async function executeJob(
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
+    }
+    if (failSafeTimer) {
+      clearTimeout(failSafeTimer);
+      failSafeTimer = null;
     }
 
     // Job completed successfully
@@ -373,6 +450,10 @@ export async function executeJob(
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
+    }
+    if (failSafeTimer) {
+      clearTimeout(failSafeTimer);
+      failSafeTimer = null;
     }
 
     jobTracker.unregisterProcess(jobId);

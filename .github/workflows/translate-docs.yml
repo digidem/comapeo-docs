@@ -185,7 +185,7 @@ jobs:
           echo "  Has failures: $HAS_FAILURES"
 
       - name: Update Notion Status → Auto Translation Generated
-        if: success()
+        if: success() && (steps.parse_summary.outputs.new_translations != '0' || steps.parse_summary.outputs.updated_translations != '0')
         run: |
           # Use test database if test mode is enabled
           if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then

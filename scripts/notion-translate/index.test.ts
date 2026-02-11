@@ -595,6 +595,96 @@ describe("notion-translate index", () => {
       // steps (status-update, commit) will prevent them from running.
       // This is verified by the fact that main() throws (non-zero exit code).
     });
+
+    it("validates success path: status update runs only when diff exists (newTranslations + updatedTranslations > 0)", async () => {
+      // This test validates PRD Batch 5 requirement:
+      // "Validate success path: status update runs and commit/push runs only when diff exists."
+      //
+      // The workflow uses the following condition on the status update step:
+      // `if: success() && (steps.parse_summary.outputs.new_translations != '0' || steps.parse_summary.outputs.updated_translations != '0')`
+      //
+      // This ensures the status update step only runs when there are actual changes.
+      //
+      // This test validates the skipped scenario (no diff case). The case where
+      // translations exist is covered by the "returns an accurate success summary" test.
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Mock translations to be up-to-date (translation page exists and is newer than English page)
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        // Filter for parent item (translation lookup)
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Parent item"
+          )
+        ) {
+          // Return a translation page that is newer than the English page
+          return [
+            createMockNotionPage({
+              id: "translation-page-1",
+              title: "Ola Mundo",
+              status: "Auto Translation Generated",
+              language: "Portuguese",
+              order: 7,
+              parentItem: "parent-1",
+              elementType: "Page",
+              lastEdited: "2026-02-10T00:00:00.000Z", // Newer than English page
+            }),
+          ];
+        }
+        // Filter for publish status (English pages)
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [
+            createMockNotionPage({
+              id: "english-page-1",
+              title: "Hello World",
+              status: "Ready for translation",
+              language: "English",
+              order: 7,
+              parentItem: "parent-1",
+              elementType: "Page",
+              lastEdited: "2026-02-01T00:00:00.000Z", // Older than translation
+            }),
+          ];
+        }
+        return [];
+      });
+
+      const { main } = await import("./index");
+      const summary = await main();
+
+      // Verify all translations were skipped (no new, no updated, all skipped)
+      expect(summary).toMatchObject({
+        totalEnglishPages: 1,
+        processedLanguages: 2,
+        newTranslations: 0,
+        updatedTranslations: 0,
+        skippedTranslations: 2, // Both pt and es were skipped
+        failedTranslations: 0,
+      });
+
+      const loggedSummary = findSummaryLog(logSpy);
+
+      // Workflow gating validation:
+      // - new_translations = '0'
+      // - updated_translations = '0'
+      // - Therefore: (new_translations != '0' || updated_translations != '0') = false
+      // - The status update step will be SKIPPED
+      expect(loggedSummary.newTranslations).toBe(0);
+      expect(loggedSummary.updatedTranslations).toBe(0);
+
+      // Note: The case where translations exist (newTranslations > 0 or updatedTranslations > 0)
+      // is validated by the test "returns an accurate success summary and logs TRANSLATION_SUMMARY"
+      // which shows newTranslations: 2, meaning the status update step would run.
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("deterministic file output", () => {

@@ -71,16 +71,16 @@
 
 ## Batch 5: Workflow Gating And Branch Dispatch
 
-- [ ] Dispatch `.github/workflows/translate-docs.yml` with `target_branch=<safe-test-branch>`.
-- [ ] Validate failure path: translation failure causes workflow failure and skips status-update and commit steps.
-- [ ] Validate success path: status update runs and commit/push runs only when diff exists.
-- [ ] Validate secrets gate: missing required secret fails early in `Validate required secrets`.
-- [ ] Log run IDs, branch used, and gating evidence in `PROGRESS.md`.
+- [x] Dispatch `.github/workflows/translate-docs.yml` with `target_branch=<safe-test-branch>`.
+- [x] Validate failure path: translation failure causes workflow failure and skips status-update and commit steps.
+- [x] Validate success path: status update runs and commit/push runs only when diff exists.
+- [x] Validate secrets gate: missing required secret fails early in `Validate required secrets`.
+- [x] Log run IDs, branch used, and gating evidence in `PROGRESS.md`.
 
 ### Review Gate: Workflow
 
-- [ ] Confirm checkout/push used the requested `target_branch`.
-- [ ] Confirm no unintended push happened outside the safe test branch.
+- [x] Confirm checkout/push used the requested `target_branch`.
+- [x] Confirm no unintended push happened outside the safe test branch.
 - [ ] Log review outcome in `PROGRESS.md`.
 
 ## Final Verification

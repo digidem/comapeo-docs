@@ -75,7 +75,6 @@ describe("notion-translate index", () => {
 
   beforeEach(() => {
     restoreEnv = installTestNotionEnv();
-    vi.resetModules();
 
     const englishPage = createMockNotionPage({
       id: "english-page-1",
@@ -290,7 +289,6 @@ describe("notion-translate index", () => {
 
     try {
       // Import the module with empty environment to trigger env validation failure
-      vi.resetModules();
       const { main } = await import("./index");
 
       // Use regex for partial match since error includes list of missing variables
@@ -320,7 +318,6 @@ describe("notion-translate index", () => {
     } finally {
       // Restore environment variables safely
       Object.assign(process.env, originalEnv);
-      vi.resetModules();
     }
   });
 
@@ -548,8 +545,7 @@ describe("notion-translate index", () => {
       });
       mockSortAndExpandNotionData.mockImplementation(async (pages) => pages);
 
-      // Clear module cache to get a fresh import
-      vi.resetModules();
+      // Get a fresh import for the second run
       const { main: main2 } = await import("./index");
 
       // Run translation a second time with the same source

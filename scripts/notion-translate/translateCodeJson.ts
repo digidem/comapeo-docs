@@ -4,7 +4,10 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_TEMPERATURE,
+} from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -79,13 +82,20 @@ export async function translateJson(
   const CodeJsonSchema = {
     type: "object",
     properties: {},
-    additionalProperties: false,
-    required: [],
+    additionalProperties: {
+      type: "object",
+      properties: {
+        message: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["message"],
+      additionalProperties: true,
+    },
   };
 
   try {
-    const modelParams = getModelParams(model);
     const response = await openai.chat.completions.create({
+      model,
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: jsonContent },
@@ -97,8 +107,8 @@ export async function translateJson(
           schema: CodeJsonSchema,
           strict: true,
         },
-        ...modelParams,
       },
+      temperature: DEFAULT_OPENAI_TEMPERATURE,
     });
     const translatedJsonObj = JSON.parse(response.choices[0].message.content!);
     // Remove debug log for production

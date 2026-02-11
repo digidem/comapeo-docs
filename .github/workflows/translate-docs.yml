@@ -98,16 +98,28 @@ jobs:
       - name: Notion Translate
         id: notion_translate
         run: |
-          # Use test database if test mode is enabled AND test secrets are actually set
-          # Only override production secrets if test values are non-empty
-          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+          # Check if any test mode indicator is set
+          HAS_TEST_MODE="${{ secrets.TEST_MODE }}"
+          HAS_TEST_DATA_SOURCE="${{ secrets.TEST_DATA_SOURCE_ID }}"
+          HAS_TEST_DATABASE="${{ secrets.TEST_DATABASE_ID }}"
+
+          if [ "$HAS_TEST_MODE" = "true" ] || [ -n "$HAS_TEST_DATA_SOURCE" ] || [ -n "$HAS_TEST_DATABASE" ]; then
+            echo "🧪 Test mode detected"
+
+            # Require at least one test ID to be set - fail if test mode is enabled without test IDs
+            if [ -z "$HAS_TEST_DATA_SOURCE" ] && [ -z "$HAS_TEST_DATABASE" ]; then
+              echo "❌ ERROR: Test mode enabled but no test IDs provided"
+              echo "   Set TEST_DATA_SOURCE_ID or TEST_DATABASE_ID to use test mode"
+              exit 1
+            fi
+
             echo "🧪 Running in test mode with test database"
             # Only override if test secret is non-empty to avoid breaking with empty secrets
-            if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ]; then
-              export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
+            if [ -n "$HAS_TEST_DATA_SOURCE" ]; then
+              export DATA_SOURCE_ID="$HAS_TEST_DATA_SOURCE"
             fi
-            if [ -n "${{ secrets.TEST_DATABASE_ID }}" ]; then
-              export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            if [ -n "$HAS_TEST_DATABASE" ]; then
+              export DATABASE_ID="$HAS_TEST_DATABASE"
             fi
             export TEST_MODE="true"
           fi

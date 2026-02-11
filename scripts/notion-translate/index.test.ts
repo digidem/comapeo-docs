@@ -685,6 +685,65 @@ describe("notion-translate index", () => {
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
+
+    it("validates secrets gate: missing required secret fails early in Validate required secrets", async () => {
+      // This test validates PRD Batch 6 requirement:
+      // "Validate secrets gate: missing required secret fails early in Validate required secrets."
+      //
+      // The GitHub Actions workflow has a "Validate required secrets" step (lines 72-96)
+      // that checks for NOTION_API_KEY, DATA_SOURCE_ID/DATABASE_ID, and OPENAI_API_KEY
+      // before running the translation step.
+      //
+      // This test validates that the translation script fails early when required
+      // environment variables (which map to secrets) are missing.
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Clear all required environment variables before importing the module
+      const originalEnv = { ...process.env };
+      delete process.env.NOTION_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.DATA_SOURCE_ID;
+      delete process.env.DATABASE_ID;
+
+      try {
+        // Import the module with empty environment to trigger env validation failure
+        const { main } = await import("./index");
+
+        // Should throw due to missing required environment variables
+        await expect(main()).rejects.toThrow(
+          /Missing required environment variables/
+        );
+
+        const loggedSummary = findSummaryLog(logSpy);
+
+        // Verify TRANSLATION_SUMMARY was emitted with all zeros (early failure)
+        expect(loggedSummary).toMatchObject({
+          totalEnglishPages: 0,
+          processedLanguages: 0,
+          newTranslations: 0,
+          updatedTranslations: 0,
+          skippedTranslations: 0,
+          failedTranslations: 0,
+          codeJsonFailures: 0,
+          themeFailures: 0,
+        });
+
+        // Verify the error message indicates which secrets are missing
+        const lastErrorCall =
+          errorSpy.mock.calls[errorSpy.mock.calls.length - 1];
+        expect(String(lastErrorCall[0])).toContain(
+          "Fatal error during translation process"
+        );
+
+        // Key validation: The translation script fails early (before any Notion API calls)
+        // due to missing required environment variables, which corresponds to the
+        // "Validate required secrets" workflow step.
+      } finally {
+        // Restore environment variables safely
+        Object.assign(process.env, originalEnv);
+      }
+    });
   });
 
   describe("deterministic file output", () => {

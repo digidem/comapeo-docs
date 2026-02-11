@@ -68,6 +68,52 @@ export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
 
+/**
+ * GPT-5.2 supports custom temperature ONLY when reasoning_effort="none"
+ * Based on: https://platform.openai.com/docs/guides/reasoning
+ */
+const GPT5_2_MODEL = "gpt-5.2";
+
+/**
+ * Gets model-specific parameters for OpenAI API requests.
+ * GPT-5 models have different temperature support depending on variant:
+ * - gpt-5, gpt-5-nano, gpt-5-mini: Only temperature=1 (or omit)
+ * - gpt-5.2 with reasoning_effort="none": Supports custom temperature
+ * - Other models: Use DEFAULT_OPENAI_TEMPERATURE
+ *
+ * @param modelName The OpenAI model name (e.g., "gpt-5-nano", "gpt-4o")
+ * @param options Optional configuration for reasoning behavior
+ * @returns Request params object with temperature and optionally reasoning_effort
+ */
+export function getModelParams(
+  modelName: string,
+  options: { useReasoningNone?: boolean } = {}
+): { temperature: number; reasoning_effort?: "none" } {
+  // Normalize model name for consistent matching
+  const normalizedModel = modelName.trim().toLowerCase();
+
+  // GPT-5.2 with reasoning_effort="none" supports custom temperature
+  if (normalizedModel === GPT5_2_MODEL && options.useReasoningNone) {
+    return {
+      temperature: DEFAULT_OPENAI_TEMPERATURE,
+      reasoning_effort: "none",
+    };
+  }
+
+  // GPT-5 models (gpt-5, gpt-5-nano, gpt-5-mini) only support temperature=1
+  const gpt5BaseModels = ["gpt-5", "gpt-5-nano", "gpt-5-mini"];
+  const isGpt5BaseModel = gpt5BaseModels.some(
+    (m) => normalizedModel === m || normalizedModel.startsWith(m + "-")
+  );
+
+  if (isGpt5BaseModel) {
+    return { temperature: 1 };
+  }
+
+  // All other models use configured temperature
+  return { temperature: DEFAULT_OPENAI_TEMPERATURE };
+}
+
 // Safety messages
 export const ENGLISH_MODIFICATION_ERROR =
   "SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss.";

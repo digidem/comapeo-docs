@@ -81,10 +81,10 @@
 
 - [x] Confirm checkout/push used the requested `target_branch`.
 - [x] Confirm no unintended push happened outside the safe test branch.
-- [ ] Log review outcome in `PROGRESS.md`.
+- [x] Log review outcome in `PROGRESS.md`.
 
 ## Final Verification
 
-- [ ] Re-run targeted checks for touched files (`eslint`, `prettier`, targeted `vitest`).
-- [ ] Confirm all translation features passed or list remaining defects with severity and owner.
-- [ ] Finalize `PROGRESS.md` with a short final summary: overall status, open issues, and next actions.
+- [x] Re-run targeted checks for touched files (`eslint`, `prettier`, targeted `vitest`).
+- [x] Confirm all translation features passed or list remaining defects with severity and owner.
+- [x] Finalize `PROGRESS.md` with a short final summary: overall status, open issues, and next actions.

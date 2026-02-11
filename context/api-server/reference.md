@@ -32,9 +32,53 @@ curl -H "Authorization: Bearer your-secret-key-here" \
 
 :::note Public Endpoints
 The following endpoints do not require authentication:
+
 - `GET /health` - Health check
 - `GET /jobs/types` - List available job types
+
 :::
+
+## Child Process Environment Variables (Whitelisted)
+
+The following environment variables are whitelisted for passing to child processes:
+
+### Notion Configuration Variables
+
+- `NOTION_API_KEY` - Notion API authentication
+- `DATABASE_ID` / `NOTION_DATABASE_ID` - Target database
+- `DATA_SOURCE_ID` - Data source identifier
+
+### Translation Options
+
+- `OPENAI_API_KEY` - OpenAI API key for translations
+- `OPENAI_MODEL` - Model to use for translations
+
+### Application Configuration
+
+- `DEFAULT_DOCS_PAGE` - Default docs page
+- `BASE_URL` - Base URL for API
+- `NODE_ENV` - Runtime environment
+- `DEBUG` - Debug logging flag
+
+### Debug and Performance Telemetry
+
+- `NOTION_PERF_LOG` - Internal performance logging
+- `NOTION_PERF_OUTPUT` - Performance output destination
+
+### Runtime and Locale
+
+- `PATH` - System PATH for executable resolution
+- `HOME` - User home directory
+- `BUN_INSTALL` - Bun installation directory
+- `LANG` - Locale language setting
+- `LC_ALL` - Locale all categories setting
+
+### Security (Explicitly Blocked)
+
+The following variables are NOT passed to child processes:
+
+- `GITHUB_TOKEN` - GitHub token (never passed to child)
+- Variables with names starting with `API_KEY_` (Note: `OPENAI_API_KEY` is explicitly whitelisted above)
 
 ## Endpoints
 
@@ -66,15 +110,15 @@ Check if the API server is running and get basic status information.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.status` | string | Server health status ("ok" if healthy) |
-| `data.timestamp` | string | ISO 8601 timestamp when health check was performed |
-| `data.uptime` | number | Server uptime in seconds |
-| `data.auth.enabled` | boolean | Whether authentication is enabled |
-| `data.auth.keysConfigured` | number | Number of API keys configured |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field                      | Type    | Description                                        |
+| -------------------------- | ------- | -------------------------------------------------- |
+| `data.status`              | string  | Server health status ("ok" if healthy)             |
+| `data.timestamp`           | string  | ISO 8601 timestamp when health check was performed |
+| `data.uptime`              | number  | Server uptime in seconds                           |
+| `data.auth.enabled`        | boolean | Whether authentication is enabled                  |
+| `data.auth.keysConfigured` | number  | Number of API keys configured                      |
+| `requestId`                | string  | Unique request identifier for tracing              |
+| `timestamp`                | string  | ISO 8601 timestamp of response                     |
 
 **Example:**
 
@@ -133,11 +177,11 @@ Get a list of all available job types that can be created.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.types` | array | Array of available job types |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field        | Type   | Description                           |
+| ------------ | ------ | ------------------------------------- |
+| `data.types` | array  | Array of available job types          |
+| `requestId`  | string | Unique request identifier for tracing |
+| `timestamp`  | string | ISO 8601 timestamp of response        |
 
 **Example:**
 
@@ -155,10 +199,10 @@ Retrieve all jobs with optional filtering by status or type.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `status` | string | Filter by job status (`pending`, `running`, `completed`, `failed`) |
-| `type` | string | Filter by job type (see job types list) |
+| Parameter | Type   | Description                                                        |
+| --------- | ------ | ------------------------------------------------------------------ |
+| `status`  | string | Filter by job status (`pending`, `running`, `completed`, `failed`) |
+| `type`    | string | Filter by job type (see job types list)                            |
 
 **Response:**
 
@@ -193,12 +237,12 @@ Retrieve all jobs with optional filtering by status or type.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.items` | array | Array of job objects |
-| `data.count` | number | Total number of jobs returned |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field        | Type   | Description                           |
+| ------------ | ------ | ------------------------------------- |
+| `data.items` | array  | Array of job objects                  |
+| `data.count` | number | Total number of jobs returned         |
+| `requestId`  | string | Unique request identifier for tracing |
+| `timestamp`  | string | ISO 8601 timestamp of response        |
 
 **Examples:**
 
@@ -242,20 +286,20 @@ Create and trigger a new job.
 
 **Fields:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | Yes | Job type (see job types list) |
-| `options` | object | No | Job-specific options |
+| Field     | Type   | Required | Description                   |
+| --------- | ------ | -------- | ----------------------------- |
+| `type`    | string | Yes      | Job type (see job types list) |
+| `options` | object | No       | Job-specific options          |
 
 **Available Options:**
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `maxPages` | number | Maximum number of pages to fetch (for `notion:fetch`) |
-| `statusFilter` | string | Filter pages by status |
-| `force` | boolean | Force re-processing even if already processed |
-| `dryRun` | boolean | Simulate the job without making changes |
-| `includeRemoved` | boolean | Include removed pages in results |
+| Option           | Type    | Description                                           |
+| ---------------- | ------- | ----------------------------------------------------- |
+| `maxPages`       | number  | Maximum number of pages to fetch (for `notion:fetch`) |
+| `statusFilter`   | string  | Filter pages by status                                |
+| `force`          | boolean | Force re-processing even if already processed         |
+| `dryRun`         | boolean | Simulate the job without making changes               |
+| `includeRemoved` | boolean | Include removed pages in results                      |
 
 **Response (201 Created):**
 
@@ -278,16 +322,16 @@ Create and trigger a new job.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.jobId` | string | Unique job identifier |
-| `data.type` | string | Job type that was created |
-| `data.status` | string | Initial job status (always "pending") |
-| `data.message` | string | Success message |
-| `data._links.self` | string | URL path to the job |
-| `data._links.status` | string | URL path to job status |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field                | Type   | Description                           |
+| -------------------- | ------ | ------------------------------------- |
+| `data.jobId`         | string | Unique job identifier                 |
+| `data.type`          | string | Job type that was created             |
+| `data.status`        | string | Initial job status (always "pending") |
+| `data.message`       | string | Success message                       |
+| `data._links.self`   | string | URL path to the job                   |
+| `data._links.status` | string | URL path to job status                |
+| `requestId`          | string | Unique request identifier for tracing |
+| `timestamp`          | string | ISO 8601 timestamp of response        |
 
 **Examples:**
 
@@ -333,9 +377,9 @@ Retrieve detailed status of a specific job.
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | string | Job ID |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Job ID      |
 
 **Response:**
 
@@ -362,21 +406,21 @@ Retrieve detailed status of a specific job.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.id` | string | Job identifier |
-| `data.type` | string | Job type |
-| `data.status` | string | Job status |
-| `data.createdAt` | string | ISO 8601 timestamp when job was created |
-| `data.startedAt` | string/null | ISO 8601 timestamp when job started (null if not started) |
-| `data.completedAt` | string/null | ISO 8601 timestamp when job completed (null if not completed) |
-| `data.progress` | object/null | Progress information (null if not available) |
-| `data.progress.current` | number | Current progress value |
-| `data.progress.total` | number | Total progress value |
-| `data.progress.message` | string | Progress message |
-| `data.result` | object/null | Job result data (null if not completed) |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field                   | Type        | Description                                                   |
+| ----------------------- | ----------- | ------------------------------------------------------------- |
+| `data.id`               | string      | Job identifier                                                |
+| `data.type`             | string      | Job type                                                      |
+| `data.status`           | string      | Job status                                                    |
+| `data.createdAt`        | string      | ISO 8601 timestamp when job was created                       |
+| `data.startedAt`        | string/null | ISO 8601 timestamp when job started (null if not started)     |
+| `data.completedAt`      | string/null | ISO 8601 timestamp when job completed (null if not completed) |
+| `data.progress`         | object/null | Progress information (null if not available)                  |
+| `data.progress.current` | number      | Current progress value                                        |
+| `data.progress.total`   | number      | Total progress value                                          |
+| `data.progress.message` | string      | Progress message                                              |
+| `data.result`           | object/null | Job result data (null if not completed)                       |
+| `requestId`             | string      | Unique request identifier for tracing                         |
+| `timestamp`             | string      | ISO 8601 timestamp of response                                |
 
 **Example:**
 
@@ -395,9 +439,9 @@ Cancel a pending or running job.
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | string | Job ID |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Job ID      |
 
 **Response:**
 
@@ -415,13 +459,13 @@ Cancel a pending or running job.
 
 **Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.id` | string | Job identifier |
-| `data.status` | string | New job status ("cancelled") |
-| `data.message` | string | Success message |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of response |
+| Field          | Type   | Description                           |
+| -------------- | ------ | ------------------------------------- |
+| `data.id`      | string | Job identifier                        |
+| `data.status`  | string | New job status ("cancelled")          |
+| `data.message` | string | Success message                       |
+| `requestId`    | string | Unique request identifier for tracing |
+| `timestamp`    | string | ISO 8601 timestamp of response        |
 
 **Example:**
 
@@ -454,46 +498,46 @@ Errors follow this standardized format:
 
 **Error Response Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | string | Machine-readable error code (see error codes below) |
-| `message` | string | Human-readable error message |
-| `status` | number | HTTP status code |
-| `requestId` | string | Unique request identifier for tracing |
-| `timestamp` | string | ISO 8601 timestamp of the error |
-| `details` | object | Additional error context (optional) |
-| `suggestions` | array | Suggestions for resolving the error (optional) |
+| Field         | Type   | Description                                         |
+| ------------- | ------ | --------------------------------------------------- |
+| `code`        | string | Machine-readable error code (see error codes below) |
+| `message`     | string | Human-readable error message                        |
+| `status`      | number | HTTP status code                                    |
+| `requestId`   | string | Unique request identifier for tracing               |
+| `timestamp`   | string | ISO 8601 timestamp of the error                     |
+| `details`     | object | Additional error context (optional)                 |
+| `suggestions` | array  | Suggestions for resolving the error (optional)      |
 
 **Common Error Codes:**
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `VALIDATION_ERROR` | 400 | Request validation failed |
-| `INVALID_INPUT` | 400 | Invalid input provided |
-| `MISSING_REQUIRED_FIELD` | 400 | Required field is missing |
-| `INVALID_FORMAT` | 400 | Field format is invalid |
-| `INVALID_ENUM_VALUE` | 400 | Invalid enum value provided |
-| `UNAUTHORIZED` | 401 | Authentication failed or missing |
-| `INVALID_API_KEY` | 401 | API key is invalid |
-| `API_KEY_INACTIVE` | 401 | API key is inactive |
-| `NOT_FOUND` | 404 | Resource not found |
-| `ENDPOINT_NOT_FOUND` | 404 | Endpoint does not exist |
-| `CONFLICT` | 409 | Request conflicts with current state |
-| `INVALID_STATE_TRANSITION` | 409 | Invalid state transition attempted |
-| `INTERNAL_ERROR` | 500 | Internal server error |
-| `SERVICE_UNAVAILABLE` | 503 | Service is unavailable |
+| Code                       | HTTP Status | Description                          |
+| -------------------------- | ----------- | ------------------------------------ |
+| `VALIDATION_ERROR`         | 400         | Request validation failed            |
+| `INVALID_INPUT`            | 400         | Invalid input provided               |
+| `MISSING_REQUIRED_FIELD`   | 400         | Required field is missing            |
+| `INVALID_FORMAT`           | 400         | Field format is invalid              |
+| `INVALID_ENUM_VALUE`       | 400         | Invalid enum value provided          |
+| `UNAUTHORIZED`             | 401         | Authentication failed or missing     |
+| `INVALID_API_KEY`          | 401         | API key is invalid                   |
+| `API_KEY_INACTIVE`         | 401         | API key is inactive                  |
+| `NOT_FOUND`                | 404         | Resource not found                   |
+| `ENDPOINT_NOT_FOUND`       | 404         | Endpoint does not exist              |
+| `CONFLICT`                 | 409         | Request conflicts with current state |
+| `INVALID_STATE_TRANSITION` | 409         | Invalid state transition attempted   |
+| `INTERNAL_ERROR`           | 500         | Internal server error                |
+| `SERVICE_UNAVAILABLE`      | 503         | Service is unavailable               |
 
 ### Common HTTP Status Codes
 
-| Status | Description |
-|--------|-------------|
-| 200 | Success |
-| 201 | Created |
-| 400 | Bad Request - Invalid input |
-| 401 | Unauthorized - Missing or invalid API key |
-| 404 | Not Found - Resource doesn't exist |
-| 409 | Conflict - Cannot cancel job in current state |
-| 500 | Internal Server Error |
+| Status | Description                                   |
+| ------ | --------------------------------------------- |
+| 200    | Success                                       |
+| 201    | Created                                       |
+| 400    | Bad Request - Invalid input                   |
+| 401    | Unauthorized - Missing or invalid API key     |
+| 404    | Not Found - Resource doesn't exist            |
+| 409    | Conflict - Cannot cancel job in current state |
+| 500    | Internal Server Error                         |
 
 ## Rate Limiting
 

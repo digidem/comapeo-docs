@@ -15,6 +15,35 @@ import {
   clearAllowedOriginsCache,
 } from "./middleware/cors";
 
+function expectStandardCorsHeaders(
+  headers: Record<string, string> | Headers,
+  expectedOrigin: string
+): void {
+  const getHeader = (name: string): string | null => {
+    if (headers instanceof Headers) {
+      return headers.get(name);
+    }
+    if (name === "Access-Control-Allow-Origin") {
+      return headers["Access-Control-Allow-Origin"] ?? null;
+    }
+    if (name === "Access-Control-Allow-Methods") {
+      return headers["Access-Control-Allow-Methods"] ?? null;
+    }
+    if (name === "Access-Control-Allow-Headers") {
+      return headers["Access-Control-Allow-Headers"] ?? null;
+    }
+    return null;
+  };
+
+  expect(getHeader("Access-Control-Allow-Origin")).toBe(expectedOrigin);
+  expect(getHeader("Access-Control-Allow-Methods")).toBe(
+    "GET, POST, DELETE, OPTIONS"
+  );
+  expect(getHeader("Access-Control-Allow-Headers")).toBe(
+    "Content-Type, Authorization"
+  );
+}
+
 describe("CORS Middleware", () => {
   const ORIGINAL_ENV = process.env.ALLOWED_ORIGINS;
 
@@ -36,18 +65,12 @@ describe("CORS Middleware", () => {
 
     it("should allow all origins with wildcard", () => {
       const headers = getCorsHeaders("https://example.com");
-      expect(headers["Access-Control-Allow-Origin"]).toBe("*");
-      expect(headers["Access-Control-Allow-Methods"]).toBe(
-        "GET, POST, DELETE, OPTIONS"
-      );
-      expect(headers["Access-Control-Allow-Headers"]).toBe(
-        "Content-Type, Authorization"
-      );
+      expectStandardCorsHeaders(headers, "*");
     });
 
     it("should handle requests without Origin header", () => {
       const headers = getCorsHeaders(null);
-      expect(headers["Access-Control-Allow-Origin"]).toBe("*");
+      expectStandardCorsHeaders(headers, "*");
       expect(headers).not.toHaveProperty("Vary");
     });
 
@@ -59,7 +82,8 @@ describe("CORS Middleware", () => {
     it("should handle preflight requests", () => {
       const response = handleCorsPreflightRequest("https://example.com");
       expect(response.status).toBe(204);
-      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+      expectStandardCorsHeaders(response.headers, "*");
+      expect(response.headers.get("Vary")).toBeNull();
     });
   });
 
@@ -71,9 +95,7 @@ describe("CORS Middleware", () => {
     describe("Allowed origins", () => {
       it("should echo back allowed origin", () => {
         const headers = getCorsHeaders("https://example.com");
-        expect(headers["Access-Control-Allow-Origin"]).toBe(
-          "https://example.com"
-        );
+        expectStandardCorsHeaders(headers, "https://example.com");
       });
 
       it("should handle multiple allowed origins", () => {
@@ -96,9 +118,7 @@ describe("CORS Middleware", () => {
       it("should handle preflight for allowed origins", () => {
         const response = handleCorsPreflightRequest("https://test.com");
         expect(response.status).toBe(204);
-        expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
-          "https://test.com"
-        );
+        expectStandardCorsHeaders(response.headers, "https://test.com");
         expect(response.headers.get("Vary")).toBe("Origin");
       });
     });
@@ -125,9 +145,7 @@ describe("CORS Middleware", () => {
     describe("No Origin header (same-origin requests)", () => {
       it("should allow requests without Origin header", () => {
         const headers = getCorsHeaders(null);
-        expect(headers["Access-Control-Allow-Origin"]).toBe("*");
-        expect(headers["Access-Control-Allow-Methods"]).toBeDefined();
-        expect(headers["Access-Control-Allow-Headers"]).toBeDefined();
+        expectStandardCorsHeaders(headers, "*");
       });
 
       it("should not include Vary header for same-origin requests", () => {
@@ -173,17 +191,15 @@ describe("CORS Middleware", () => {
     it("should always include standard CORS methods", () => {
       delete process.env.ALLOWED_ORIGINS;
       const headers = getCorsHeaders("https://example.com");
-      expect(headers["Access-Control-Allow-Methods"]).toBe(
-        "GET, POST, DELETE, OPTIONS"
-      );
+      expectStandardCorsHeaders(headers, "*");
+      expect(headers).not.toHaveProperty("Vary");
     });
 
     it("should always include standard CORS headers", () => {
       delete process.env.ALLOWED_ORIGINS;
       const headers = getCorsHeaders("https://example.com");
-      expect(headers["Access-Control-Allow-Headers"]).toBe(
-        "Content-Type, Authorization"
-      );
+      expectStandardCorsHeaders(headers, "*");
+      expect(headers).not.toHaveProperty("Vary");
     });
   });
 });

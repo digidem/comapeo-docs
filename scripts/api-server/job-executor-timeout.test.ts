@@ -222,7 +222,7 @@ describe("job-executor - timeout behavior", () => {
       expect(mockChild.kill).toHaveBeenCalledWith("SIGTERM");
     });
 
-    it("should send SIGKILL if process doesn't terminate after SIGTERM", async () => {
+    it("should fail job if process doesn't emit close/error after SIGKILL", async () => {
       const tracker = getJobTracker();
       const mockChild = createMockChildProcess();
 
@@ -246,12 +246,17 @@ describe("job-executor - timeout behavior", () => {
         expect(mockSpawn).toHaveBeenCalled();
       });
 
-      // Wait for timeout + SIGKILL delay (100ms + 5000ms + buffer)
-      await new Promise((resolve) => setTimeout(resolve, 5200));
+      // Wait for timeout + SIGKILL delay + fail-safe delay (100ms + 5000ms + 1000ms + buffer)
+      await new Promise((resolve) => setTimeout(resolve, 6300));
 
       // Verify both SIGTERM and SIGKILL were sent
       expect(mockChild.kill).toHaveBeenCalledWith("SIGTERM");
       expect(mockChild.kill).toHaveBeenCalledWith("SIGKILL");
+
+      // Verify fail-safe marks job as failed even without close/error events
+      const job = tracker.getJob(jobId);
+      expect(job?.status).toBe("failed");
+      expect(job?.result?.error).toContain("unresponsive after timeout");
     });
 
     it("should send SIGKILL based on actual exit, not killed property", async () => {
@@ -597,7 +602,7 @@ describe("job-executor - timeout behavior", () => {
 
       // Verify warning was logged
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid JOB_TIMEOUT_MS value: "not-a-number"')
+        'Invalid JOB_TIMEOUT_MS: "not-a-number" - must be positive integer'
       );
 
       // Wait to ensure no immediate timeout occurs
@@ -629,7 +634,7 @@ describe("job-executor - timeout behavior", () => {
 
       // Verify warning was logged
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid JOB_TIMEOUT_MS value: "-1000"')
+        'Invalid JOB_TIMEOUT_MS: "-1000" - must be positive integer'
       );
 
       // Wait to ensure no immediate timeout occurs
@@ -661,7 +666,7 @@ describe("job-executor - timeout behavior", () => {
 
       // Verify warning was logged
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid JOB_TIMEOUT_MS value: "0"')
+        'Invalid JOB_TIMEOUT_MS: "0" - must be positive integer'
       );
 
       // Wait to ensure no immediate timeout occurs
@@ -671,13 +676,13 @@ describe("job-executor - timeout behavior", () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it("should truncate decimal JOB_TIMEOUT_MS to integer", async () => {
+    it("should reject decimal JOB_TIMEOUT_MS and fall back to job timeout", async () => {
       const tracker = getJobTracker();
       const mockChild = createMockChildProcess();
 
       mockSpawn.mockReturnValue(mockChild.process);
 
-      // Set timeout with decimal value - parseInt truncates to 1000
+      // Set timeout with decimal value - strict parsing should reject
       process.env.JOB_TIMEOUT_MS = "1000.5";
 
       const consoleWarnSpy = vi
@@ -691,10 +696,74 @@ describe("job-executor - timeout behavior", () => {
         expect(mockSpawn).toHaveBeenCalled();
       });
 
-      // No warning should be logged (parseInt truncates decimals to integers)
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
+      // Verify warning was logged
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Invalid JOB_TIMEOUT_MS: "1000.5" - must be positive integer'
+      );
 
-      // Wait to ensure no immediate timeout occurs (truncated to 1000ms)
+      // Wait to ensure no immediate timeout occurs (fallback 5 minutes)
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(mockChild.kill).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should reject scientific notation JOB_TIMEOUT_MS and fall back to job timeout", async () => {
+      const tracker = getJobTracker();
+      const mockChild = createMockChildProcess();
+
+      mockSpawn.mockReturnValue(mockChild.process);
+
+      // Strict parsing should reject scientific notation
+      process.env.JOB_TIMEOUT_MS = "1e6";
+
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const jobId = tracker.createJob("notion:status-draft");
+      executeJobAsync("notion:status-draft", jobId, {});
+
+      await vi.waitFor(() => {
+        expect(mockSpawn).toHaveBeenCalled();
+      });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Invalid JOB_TIMEOUT_MS: "1e6" - must be positive integer'
+      );
+
+      // Wait to ensure no immediate timeout occurs (fallback 5 minutes)
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(mockChild.kill).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should reject signed JOB_TIMEOUT_MS and fall back to job timeout", async () => {
+      const tracker = getJobTracker();
+      const mockChild = createMockChildProcess();
+
+      mockSpawn.mockReturnValue(mockChild.process);
+
+      // Strict parsing should reject explicit plus signs
+      process.env.JOB_TIMEOUT_MS = "+1000";
+
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const jobId = tracker.createJob("notion:status-draft");
+      executeJobAsync("notion:status-draft", jobId, {});
+
+      await vi.waitFor(() => {
+        expect(mockSpawn).toHaveBeenCalled();
+      });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Invalid JOB_TIMEOUT_MS: "+1000" - must be positive integer'
+      );
+
+      // Wait to ensure no immediate timeout occurs (fallback 5 minutes)
       await new Promise((resolve) => setTimeout(resolve, 200));
       expect(mockChild.kill).not.toHaveBeenCalled();
 
@@ -723,7 +792,7 @@ describe("job-executor - timeout behavior", () => {
 
       // Verify warning was logged
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid JOB_TIMEOUT_MS value: "Infinity"')
+        'Invalid JOB_TIMEOUT_MS: "Infinity" - must be positive integer'
       );
 
       // Wait to ensure no immediate timeout occurs
@@ -763,6 +832,37 @@ describe("job-executor - timeout behavior", () => {
       // After timeout - kill should be called
       await new Promise((resolve) => setTimeout(resolve, 150));
       expect(mockChild.kill).toHaveBeenCalledWith("SIGTERM");
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should cap JOB_TIMEOUT_MS to max bound when value is too large", async () => {
+      const tracker = getJobTracker();
+      const mockChild = createMockChildProcess();
+
+      mockSpawn.mockReturnValue(mockChild.process);
+
+      // Set timeout larger than max cap (2 hours)
+      process.env.JOB_TIMEOUT_MS = "999999999";
+
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const jobId = tracker.createJob("notion:status-draft");
+      executeJobAsync("notion:status-draft", jobId, {});
+
+      await vi.waitFor(() => {
+        expect(mockSpawn).toHaveBeenCalled();
+      });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'JOB_TIMEOUT_MS "999999999" exceeds max 7200000ms; capping to 7200000ms'
+      );
+
+      // Should not timeout quickly; capped timeout is still 2 hours
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(mockChild.kill).not.toHaveBeenCalled();
 
       consoleWarnSpy.mockRestore();
     });

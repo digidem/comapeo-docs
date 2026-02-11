@@ -315,10 +315,18 @@ describe("Locale Output Verification", () => {
           expect(entry).toHaveProperty("message");
         }
       } catch (error) {
-        // File might not exist yet - that's okay for initial verification
-        console.log(
-          "Spanish navbar.json not found - may need to run translation"
-        );
+        // Only catch ENOENT (file not found) - let other errors propagate
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          console.log(
+            "Spanish navbar.json not found - may need to run translation"
+          );
+          return; // Exit gracefully for missing file only
+        }
+        throw error; // Re-throw all other errors (including assertion failures)
       }
     });
 
@@ -340,9 +348,17 @@ describe("Locale Output Verification", () => {
           expect(entry).toHaveProperty("message");
         }
       } catch (error) {
-        console.log(
-          "Spanish footer.json not found - may need to run translation"
-        );
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          console.log(
+            "Spanish footer.json not found - may need to run translation"
+          );
+          return;
+        }
+        throw error;
       }
     });
 
@@ -364,9 +380,17 @@ describe("Locale Output Verification", () => {
           expect(entry).toHaveProperty("message");
         }
       } catch (error) {
-        console.log(
-          "Portuguese navbar.json not found - may need to run translation"
-        );
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          console.log(
+            "Portuguese navbar.json not found - may need to run translation"
+          );
+          return;
+        }
+        throw error;
       }
     });
 
@@ -388,9 +412,17 @@ describe("Locale Output Verification", () => {
           expect(entry).toHaveProperty("message");
         }
       } catch (error) {
-        console.log(
-          "Portuguese footer.json not found - may need to run translation"
-        );
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          console.log(
+            "Portuguese footer.json not found - may need to run translation"
+          );
+          return;
+        }
+        throw error;
       }
     });
   });

@@ -5,13 +5,13 @@ import chalk from "chalk";
 import fs from "fs/promises";
 import path from "path";
 import { notion, DATA_SOURCE_ID, DATABASE_ID, n2m } from "../notionClient";
-import { translateText, TranslationError } from "./translateFrontMatter";
+import { translateText, TranslationError } from "./translateFrontMatter.js";
 import {
   translateJson,
   extractTranslatableText,
   getLanguageName,
-} from "./translateCodeJson";
-import { createNotionPageFromMarkdown } from "./markdownToNotion";
+} from "./translateCodeJson.js";
+import { createNotionPageFromMarkdown } from "./markdownToNotion.js";
 import {
   fetchNotionData,
   sortAndExpandNotionData,

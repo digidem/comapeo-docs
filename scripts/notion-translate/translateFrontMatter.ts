@@ -4,10 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import {
-  DEFAULT_OPENAI_MODEL,
-  DEFAULT_OPENAI_TEMPERATURE,
-} from "../constants.js";
+import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -280,15 +277,9 @@ export async function translateText(
   // Create the prompt with the target language
   const prompt = TRANSLATION_PROMPT.replace("{targetLanguage}", targetLanguage);
 
-  const translationSchema = {
-    type: "object",
-    properties: {
-      markdown: { type: "string" },
-      title: { type: "string" },
-    },
-    required: ["markdown", "title"],
-    additionalProperties: false,
-  };
+  // Get model-specific parameters (handles GPT-5 temperature constraints)
+  // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
+  const modelParams = getModelParams(model, { useReasoningNone: true });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -302,11 +293,19 @@ export async function translateText(
           type: "json_schema",
           json_schema: {
             name: "translation",
-            schema: translationSchema,
+            schema: {
+              type: "object",
+              properties: {
+                markdown: { type: "string" },
+                title: { type: "string" },
+              },
+              required: ["markdown", "title"],
+              additionalProperties: false,
+            },
             strict: true,
           },
         },
-        temperature: DEFAULT_OPENAI_TEMPERATURE,
+        ...modelParams,
       });
 
       const content = response.choices[0]?.message?.content;

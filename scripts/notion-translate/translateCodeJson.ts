@@ -4,10 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import {
-  DEFAULT_OPENAI_MODEL,
-  DEFAULT_OPENAI_TEMPERATURE,
-} from "../constants.js";
+import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -69,9 +66,9 @@ export async function translateJson(
     targetLanguage
   );
 
-  // Zod schema for code.json: require both message and description as strings
-  // Accept objects with at least a "message" string, and optionally a "description" string
-  // The schema must match the code.json format:
+  // JSON schema for code.json translation
+  // Requires both "message" and "description" fields (standard Docusaurus i18n format)
+  // Structure:
   // {
   //   "Some Key": {
   //     "message": "Some message",
@@ -88,10 +85,14 @@ export async function translateJson(
         message: { type: "string" },
         description: { type: "string" },
       },
-      required: ["message"],
-      additionalProperties: true,
+      required: ["message", "description"],
+      additionalProperties: false,
     },
   };
+
+  // Get model-specific parameters (handles GPT-5 temperature constraints)
+  // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
+  const modelParams = getModelParams(model, { useReasoningNone: true });
 
   try {
     const response = await openai.chat.completions.create({
@@ -108,9 +109,15 @@ export async function translateJson(
           strict: true,
         },
       },
-      temperature: DEFAULT_OPENAI_TEMPERATURE,
+      ...modelParams,
     });
-    const translatedJsonObj = JSON.parse(response.choices[0].message.content!);
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("OpenAI returned empty JSON translation response");
+    }
+
+    const translatedJsonObj = JSON.parse(content);
     // Remove debug log for production
     const translatedJsonString = JSON.stringify(translatedJsonObj, null, 2);
 

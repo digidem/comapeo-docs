@@ -225,12 +225,12 @@ jobs:
           PUSH_SUCCESS=false
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-            CURRENT_ATTEMPT=$((RETRY_COUNT + 1))
+            CURRENT_ATTEMPT=$$((RETRY_COUNT + 1))
             if PUSH_OUTPUT=$(git push origin "${TARGET_BRANCH}" 2>&1); then
               PUSH_SUCCESS=true
               echo "✅ Push succeeded on attempt $CURRENT_ATTEMPT"
             else
-              RETRY_COUNT=$((RETRY_COUNT + 1))
+              RETRY_COUNT=$$((RETRY_COUNT + 1))
 
               # Check if error is due to non-fast-forward (push race condition)
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
@@ -245,7 +245,7 @@ jobs:
                   echo "Rebasing local changes on top of origin/${TARGET_BRANCH}..."
                   if git rebase "origin/${TARGET_BRANCH}" 2>&1; then
                     # Calculate exponential backoff: 2^N seconds (2s, 4s, 8s)
-                    BACKOFF_TIME=$((2 ** RETRY_COUNT))
+                    BACKOFF_TIME=$$((2 ** RETRY_COUNT))
                     echo "Waiting ${BACKOFF_TIME}s before retry..."
                     sleep $BACKOFF_TIME
                   else

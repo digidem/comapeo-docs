@@ -152,7 +152,7 @@ jobs:
               THEME_FAILURES=$(echo "$JSON_PART" | jq -r '.themeFailures // "0"' 2>/dev/null || echo "0")
 
               # Determine if there were any failures
-              TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+              TOTAL_FAILURES=$$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
               if [ "$TOTAL_FAILURES" -gt 0 ]; then
                 HAS_FAILURES="true"
               fi

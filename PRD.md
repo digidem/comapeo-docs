@@ -58,10 +58,10 @@
 
 ## Batch 4: Failure And Soft-Fail Coverage
 
-- [ ] Validate missing required env var behavior: non-zero exit and summary still emitted.
-- [ ] Validate `i18n/en/code.json` soft-fail behavior (missing or malformed): doc translation continues and summary captures non-critical classification.
-- [ ] Validate theme translation failure behavior: non-zero exit and `themeFailures > 0`.
-- [ ] Log each failure scenario and classification in `PROGRESS.md`.
+- [x] Validate missing required env var behavior: non-zero exit and summary still emitted.
+- [x] Validate `i18n/en/code.json` soft-fail behavior (missing or malformed): doc translation continues and summary captures non-critical classification.
+- [x] Validate theme translation failure behavior: non-zero exit and `themeFailures > 0`.
+- [x] Log each failure scenario and classification in `PROGRESS.md`.
 
 ### Review Gate: Failure Model
 

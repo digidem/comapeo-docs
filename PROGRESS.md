@@ -313,6 +313,233 @@
 
 ---
 
+## Failure Scenario Classification Log
+
+### 1. Missing Required Environment Variables
+
+**Scenario**: One or more required environment variables are not set (`NOTION_API_KEY`, `OPENAI_API_KEY`, `DATA_SOURCE_ID`/`DATABASE_ID`)
+
+**Classification**: HARD-FAIL (exit non-zero)
+
+**Behavior**:
+
+- Emits `TRANSLATION_SUMMARY` with all counts set to 0
+- Throws error: "Missing required environment variables"
+- Process exits with non-zero exit code
+- Workflow fails early in validation phase
+
+**Test Coverage**:
+
+- Test: "emits TRANSLATION_SUMMARY even when required environment is missing"
+- File: `scripts/notion-translate/index.test.ts:336-381`
+
+**Impact**: Blocks translation workflow entirely until environment is properly configured
+
+**Reproduction Steps**:
+
+1. Clear `NOTION_API_KEY` or `OPENAI_API_KEY` from environment
+2. Run `bun run notion:translate`
+3. Verify error is thrown and `TRANSLATION_SUMMARY` is emitted
+
+---
+
+### 2. code.json Source File Missing (Soft-Fail)
+
+**Scenario**: The `i18n/en/code.json` source file does not exist (ENOENT error)
+
+**Classification**: SOFT-FAIL (continue processing)
+
+**Behavior**:
+
+- Logs warning about missing source file
+- Sets `codeJsonSourceFileMissing: true` in summary
+- Continues with document translation
+- Does NOT increment `codeJsonFailures` count
+- Process exits successfully (zero exit code) if no other failures
+- Theme translation proceeds normally (independent of code.json)
+
+**Test Coverage**:
+
+- Test: "continues doc translation when code.json is missing (soft-fail)"
+- File: `scripts/notion-translate/index.test.ts:384-426`
+
+**Impact**: UI strings remain untranslated, but documentation translation continues
+
+**Reproduction Steps**:
+
+1. Mock `fs/promises.readFile` to reject with ENOENT for `i18n/en/code.json`
+2. Run translation
+3. Verify summary includes `codeJsonSourceFileMissing: true`
+4. Verify document translation still completes (`newTranslations > 0`)
+
+---
+
+### 3. code.json Source File Malformed (Soft-Fail)
+
+**Scenario**: The `i18n/en/code.json` source file exists but contains invalid JSON
+
+**Classification**: SOFT-FAIL (continue processing)
+
+**Behavior**:
+
+- Logs warning about malformed source file
+- Sets `codeJsonSourceFileMissing: true` in summary
+- Continues with document translation
+- Does NOT increment `codeJsonFailures` count
+- Process exits successfully (zero exit code) if no other failures
+- Theme translation proceeds normally
+
+**Test Coverage**:
+
+- Test: "continues doc translation when code.json is malformed (soft-fail)"
+- File: `scripts/notion-translate/index.test.ts:428-468`
+
+**Impact**: UI strings remain untranslated, but documentation translation continues
+
+**Reproduction Steps**:
+
+1. Mock `fs/promises.readFile` to return invalid JSON (e.g., `'{"invalid": json}'`)
+2. Run translation
+3. Verify summary includes `codeJsonSourceFileMissing: true`
+4. Verify document translation still completes
+
+---
+
+### 4. Document Translation Failure (Hard-Fail)
+
+**Scenario**: Translation of document content fails (e.g., OpenAI API error for specific language)
+
+**Classification**: HARD-FAIL (exit non-zero)
+
+**Behavior**:
+
+- Increments `failedTranslations` count
+- Adds failure to `failures` array with details (title, language, error)
+- Throws error: "Translation workflow completed with failures"
+- Process exits with non-zero exit code
+- Workflow skips status-update and commit steps
+
+**Test Coverage**:
+
+- Test: "exits with failure on partial doc translation failures and reports counts"
+- File: `scripts/notion-translate/index.test.ts:225-255`
+
+**Impact**: Incomplete translations are not committed; workflow fails to prevent partial deployment
+
+**Reproduction Steps**:
+
+1. Mock `translateText` to throw error for one language (e.g., Spanish)
+2. Run translation
+3. Verify `failedTranslations > 0`
+4. Verify error is thrown with "Translation workflow completed with failures"
+
+---
+
+### 5. Theme Translation Failure (Hard-Fail)
+
+**Scenario**: Translation of theme files (`navbar.json`, `footer.json`) fails
+
+**Classification**: HARD-FAIL (exit non-zero)
+
+**Behavior**:
+
+- Increments `themeFailures` count (2 languages × 2 theme files = up to 4 failures)
+- Adds each failure to `failures` array with file title and error
+- Throws error: "Translation workflow completed with failures"
+- Process exits with non-zero exit code
+- `TRANSLATION_SUMMARY` shows `themeFailures > 0`
+
+**Test Coverage**:
+
+- Test: "exits with failure on theme-only translation failures and reports themeFailures > 0"
+- File: `scripts/notion-translate/index.test.ts:277-334`
+
+**Impact**: Theme files are partially translated; workflow fails to ensure consistency
+
+**Reproduction Steps**:
+
+1. Mock `translateJson` to succeed for code.json but fail for theme files
+2. Run translation
+3. Verify `themeFailures > 0` and `codeJsonFailures = 0`
+4. Verify error is thrown with "Translation workflow completed with failures"
+
+---
+
+### 6. code.json Translation Failure (Hard-Fail)
+
+**Scenario**: Translation of `code.json` to target language fails (when source file is valid)
+
+**Classification**: HARD-FAIL (exit non-zero)
+
+**Behavior**:
+
+- Increments `codeJsonFailures` count per failed language
+- Adds failure to `failures` array with language-specific details
+- Throws error: "Translation workflow completed with failures"
+- Sets `codeJsonSourceFileMissing: false` (source was present)
+- Process exits with non-zero exit code
+
+**Test Coverage**:
+
+- Test: "reports individual code.json translation failures separately"
+- File: `scripts/notion-translate/index.test.ts:507-543`
+
+**Impact**: Some UI strings remain untranslated; workflow fails to ensure consistency
+
+**Reproduction Steps**:
+
+1. Mock valid source `code.json` file
+2. Mock `translateJson` to fail for one language (e.g., Portuguese)
+3. Run translation
+4. Verify `codeJsonFailures > 0` with specific language failure logged
+
+---
+
+### 7. No Pages Ready for Translation (Hard-Fail)
+
+**Scenario**: No English pages have `Publish Status = "Ready for translation"`
+
+**Classification**: HARD-FAIL (exit non-zero)
+
+**Behavior**:
+
+- Emits `TRANSLATION_SUMMARY` with `totalEnglishPages = 0`
+- Throws error: "No English pages found with status 'Ready for translation'."
+- Process exits with non-zero exit code
+- No translation work is performed
+
+**Test Coverage**:
+
+- Test: "fails with explicit contract when no pages are ready for translation"
+- File: `scripts/notion-translate/index.test.ts:202-223`
+
+**Impact**: Workflow fails gracefully when there's nothing to translate
+
+**Reproduction Steps**:
+
+1. Ensure no pages have `Publish Status = "Ready for translation"`
+2. Run translation
+3. Verify error is thrown with "No English pages found"
+4. Verify `totalEnglishPages = 0` in summary
+
+---
+
+## Summary Table: Failure Classifications
+
+| Scenario                      | Classification | Exit Code | Workflow Continues | Summary Field                     |
+| ----------------------------- | -------------- | --------- | ------------------ | --------------------------------- |
+| Missing env vars              | HARD-FAIL      | Non-zero  | No                 | All counts = 0                    |
+| code.json missing             | SOFT-FAIL      | Zero      | Yes                | `codeJsonSourceFileMissing: true` |
+| code.json malformed           | SOFT-FAIL      | Zero      | Yes                | `codeJsonSourceFileMissing: true` |
+| Doc translation failure       | HARD-FAIL      | Non-zero  | No                 | `failedTranslations > 0`          |
+| Theme translation failure     | HARD-FAIL      | Non-zero  | No                 | `themeFailures > 0`               |
+| code.json translation failure | HARD-FAIL      | Non-zero  | No                 | `codeJsonFailures > 0`            |
+| No pages ready                | HARD-FAIL      | Non-zero  | No                 | `totalEnglishPages = 0`           |
+
+---
+
+---
+
 ## Batch 6: Workflow Gating And Branch Dispatch
 
 ### Workflow Gating Analysis

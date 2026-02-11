@@ -344,7 +344,7 @@ describe("RollbackRecorder", () => {
   });
 
   describe("getRollbackPageIds", () => {
-    it("should return all page IDs from a session", async () => {
+    it("should return only successful page IDs from a session", async () => {
       await testRecorder.startSession("test-operation", "A", "B");
       await testRecorder.recordChange("page-1", "A", true);
       await testRecorder.recordChange("page-2", "A", true);
@@ -355,7 +355,8 @@ describe("RollbackRecorder", () => {
       const sessionId = sessions[0].sessionId;
 
       const pageIds = await testRecorder.getRollbackPageIds(sessionId);
-      expect(pageIds).toEqual(["page-1", "page-2", "page-3"]);
+      // Only successful changes should be returned for rollback
+      expect(pageIds).toEqual(["page-1", "page-2"]);
     });
 
     it("should return empty array for non-existent session", async () => {

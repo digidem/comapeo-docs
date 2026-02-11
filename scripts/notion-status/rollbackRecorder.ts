@@ -26,6 +26,8 @@ export interface StatusChangeRecord {
   pageTitle?: string;
   /** Optional language filter applied during the operation */
   languageFilter?: string;
+  /** Whether this specific change was successful */
+  success?: boolean;
 }
 
 /**
@@ -142,6 +144,7 @@ export class RollbackRecorder {
       timestamp: new Date(),
       pageTitle: options.pageTitle,
       languageFilter: options.languageFilter,
+      success,
     };
 
     this.currentSession.changes.push(record);
@@ -354,7 +357,10 @@ export class RollbackRecorder {
     if (!session) {
       return [];
     }
-    return session.changes.map((c) => c.pageId);
+    // Only return page IDs for successful changes
+    return session.changes
+      .filter((c) => c.success !== false)
+      .map((c) => c.pageId);
   }
 
   /**

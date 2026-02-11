@@ -16,6 +16,9 @@ import {
   NOTION_PROPERTIES,
 } from "../constants.js";
 
+const EMPTY_TRANSLATED_CONTENT_ERROR =
+  "Translated content is empty - cannot create page. Please check if the English source has content.";
+
 // Define types for markdown nodes
 interface HeadingNode {
   type: "heading";
@@ -543,6 +546,14 @@ export async function createNotionPageFromMarkdown(
       // Convert markdown to Notion blocks
       const blocks = await markdownToNotionBlocks(markdownContent);
 
+      if (markdownContent.trim().length === 0) {
+        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+      }
+
+      if (blocks.length === 0) {
+        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+      }
+
       // CRITICAL SAFETY CHECK: Never modify main language pages
       if (language === MAIN_LANGUAGE) {
         throw new Error(ENGLISH_MODIFICATION_ERROR);
@@ -691,12 +702,19 @@ export async function createNotionPageFromMarkdown(
 
       return pageId;
     } catch (error) {
-      lastError = error;
+      const parsedError =
+        error instanceof Error ? error : new Error(String(error));
+      lastError = parsedError;
+
+      if (parsedError.message === EMPTY_TRANSLATED_CONTENT_ERROR) {
+        throw parsedError;
+      }
+
       retryCount++;
 
       if (retryCount < MAX_RETRIES) {
         console.warn(
-          `Attempt ${retryCount}/${MAX_RETRIES} failed: ${error.message}. Retrying...`
+          `Attempt ${retryCount}/${MAX_RETRIES} failed: ${parsedError.message}. Retrying...`
         );
         // Exponential backoff: wait longer between retries
         await new Promise((resolve) =>
@@ -705,10 +723,10 @@ export async function createNotionPageFromMarkdown(
       } else {
         console.error(
           "Error creating Notion page from markdown after multiple retries:",
-          error
+          parsedError
         );
         throw new Error(
-          `Failed after ${MAX_RETRIES} attempts: ${error.message}`
+          `Failed after ${MAX_RETRIES} attempts: ${parsedError.message}`
         );
       }
     }

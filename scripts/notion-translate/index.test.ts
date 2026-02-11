@@ -14,6 +14,7 @@ const mockMkdir = vi.fn();
 const mockAccess = vi.fn();
 const mockReaddir = vi.fn();
 const mockStat = vi.fn();
+const mockBlocksChildrenList = vi.fn();
 
 const mockN2m = {
   pageToMarkdown: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock("../notionClient", () => ({
   DATABASE_ID: "test-database-id",
   DATA_SOURCE_ID: "test-data-source-id",
   n2m: mockN2m,
+  enhancedNotion: {
+    blocksChildrenList: mockBlocksChildrenList,
+  },
 }));
 
 vi.mock("../fetchNotionData.js", () => ({
@@ -100,6 +104,7 @@ describe("notion-translate index", () => {
     mockAccess.mockReset();
     mockReaddir.mockReset();
     mockStat.mockReset();
+    mockBlocksChildrenList.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
 
@@ -118,6 +123,17 @@ describe("notion-translate index", () => {
     mockN2m.pageToMarkdown.mockResolvedValue([]);
     mockN2m.toMarkdownString.mockReturnValue({
       parent: "# Hello\n\nEnglish markdown",
+    });
+    mockBlocksChildrenList.mockResolvedValue({
+      results: [
+        {
+          type: "paragraph",
+          has_children: false,
+          paragraph: { rich_text: [{ plain_text: "Translated content" }] },
+        },
+      ],
+      has_more: false,
+      next_cursor: null,
     });
     mockTranslateText.mockResolvedValue({
       markdown: "# Ola",
@@ -140,6 +156,111 @@ describe("notion-translate index", () => {
     mockReaddir.mockResolvedValue(["es", "pt"]);
     mockStat.mockResolvedValue({
       isDirectory: () => true,
+    });
+  });
+
+  describe("needsTranslationUpdate", () => {
+    it("requests update when translation page has no meaningful content", async () => {
+      const englishPage = createMockNotionPage({
+        id: "english-page-1",
+        title: "Hello World",
+        status: "Ready for translation",
+        language: "English",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const translationPage = createMockNotionPage({
+        id: "translation-page-1",
+        title: "Ola Mundo",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        lastEdited: "2026-02-05T00:00:00.000Z",
+      });
+
+      mockBlocksChildrenList.mockResolvedValue({
+        results: [
+          {
+            type: "paragraph",
+            has_children: false,
+            paragraph: { rich_text: [] },
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      });
+
+      const { needsTranslationUpdate } = await import("./index");
+      const result = await needsTranslationUpdate(englishPage, translationPage);
+
+      expect(result).toMatchObject({
+        needsUpdate: true,
+        reason: "Translation is empty",
+        blockCount: 0,
+      });
+    });
+
+    it("skips update when translation has content and is newer than English", async () => {
+      const englishPage = createMockNotionPage({
+        id: "english-page-1",
+        title: "Hello World",
+        status: "Ready for translation",
+        language: "English",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const translationPage = createMockNotionPage({
+        id: "translation-page-1",
+        title: "Ola Mundo",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        lastEdited: "2026-02-05T00:00:00.000Z",
+      });
+
+      mockBlocksChildrenList.mockResolvedValue({
+        results: [
+          {
+            type: "paragraph",
+            has_children: false,
+            paragraph: { rich_text: [{ plain_text: "Conteudo" }] },
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      });
+
+      const { needsTranslationUpdate } = await import("./index");
+      const result = await needsTranslationUpdate(englishPage, translationPage);
+
+      expect(result).toMatchObject({
+        needsUpdate: false,
+        reason: "Translation has content",
+        blockCount: 1,
+      });
+    });
+
+    it("fails open when content inspection fails and requests update", async () => {
+      const englishPage = createMockNotionPage({
+        id: "english-page-1",
+        title: "Hello World",
+        status: "Ready for translation",
+        language: "English",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const translationPage = createMockNotionPage({
+        id: "translation-page-1",
+        title: "Ola Mundo",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        lastEdited: "2026-02-05T00:00:00.000Z",
+      });
+
+      mockBlocksChildrenList.mockRejectedValue(new Error("rate limit"));
+
+      const { needsTranslationUpdate } = await import("./index");
+      const result = await needsTranslationUpdate(englishPage, translationPage);
+
+      expect(result).toMatchObject({
+        needsUpdate: true,
+        reason: "Unable to verify translation content",
+      });
     });
   });
 
@@ -219,6 +340,244 @@ describe("notion-translate index", () => {
       failedTranslations: 0,
       codeJsonFailures: 0,
       themeFailures: 0,
+    });
+  });
+
+  describe("CLI page-id mode", () => {
+    it("parses and normalizes --page-id values", async () => {
+      const { parseCliOptions } = await import("./index");
+
+      expect(
+        parseCliOptions(["--page-id", "2641b081-62d5-8035-9153-cac75e4f09f2"])
+      ).toEqual({
+        pageId: "2641b08162d580359153cac75e4f09f2",
+      });
+
+      expect(
+        parseCliOptions(["--page-id=2641b08162d580359153cac75e4f09f2"])
+      ).toEqual({
+        pageId: "2641b08162d580359153cac75e4f09f2",
+      });
+    });
+
+    it("throws a clear error for invalid --page-id values", async () => {
+      const { parseCliOptions } = await import("./index");
+
+      expect(() => parseCliOptions(["--page-id", "invalid-id"])).toThrow(
+        "Invalid --page-id value"
+      );
+    });
+
+    it("processes only the requested page in single-page mode", async () => {
+      const targetPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "Target Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 7,
+        parentItem: "parent-1",
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const otherPage = createMockNotionPage({
+        id: "2641b08162d5813a9fcecb1deca11158",
+        title: "Other Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 8,
+        parentItem: "parent-2",
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [targetPage, otherPage];
+        }
+        return [];
+      });
+
+      const { main } = await import("./index");
+      const summary = await main({
+        pageId: "2641b08162d580359153cac75e4f09f2",
+      });
+
+      expect(summary.totalEnglishPages).toBe(1);
+      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(2);
+      expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(2);
+      expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
+        1,
+        "2641b08162d580359153cac75e4f09f2"
+      );
+      expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
+        2,
+        "2641b08162d580359153cac75e4f09f2"
+      );
+    });
+
+    it("bypasses missing Parent item relation for --page-id and looks up translation by source page id", async () => {
+      const sourcePageId = "2641b08162d580359153cac75e4f09f2";
+      const englishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "EN Page Without Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 4,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const existingPortugueseTranslation = createMockNotionPage({
+        id: "2641b08162d5813a9fcecb1deca11158",
+        title: "PT Existing",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        order: 4,
+        parentItem: sourcePageId,
+        elementType: "Page",
+        lastEdited: "2026-01-01T00:00:00.000Z",
+      });
+
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [englishPage];
+        }
+        if (
+          filter?.and?.some(
+            (condition: {
+              property?: string;
+              relation?: { contains?: string };
+            }) =>
+              condition.property === "Parent item" &&
+              condition.relation?.contains === sourcePageId
+          )
+        ) {
+          return [existingPortugueseTranslation];
+        }
+        return [];
+      });
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const { main } = await import("./index");
+      const summary = await main({ pageId: sourcePageId });
+
+      expect(summary.failedTranslations).toBe(0);
+      expect(summary.skippedTranslations).toBe(0);
+      expect(
+        summary.failures.some(
+          (failure) => failure.error === "Missing required Parent item relation"
+        )
+      ).toBe(false);
+
+      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(2);
+      mockCreateNotionPageFromMarkdown.mock.calls.forEach((callArgs) => {
+        expect(callArgs[1]).toBe(sourcePageId);
+      });
+
+      const lookedUpBySourceId = mockFetchNotionData.mock.calls.some(
+        ([filter]) =>
+          filter?.and?.some(
+            (condition: {
+              property?: string;
+              relation?: { contains?: string };
+            }) =>
+              condition.property === "Parent item" &&
+              condition.relation?.contains === sourcePageId
+          )
+      );
+      expect(lookedUpBySourceId).toBe(true);
+
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary.totalEnglishPages).toBe(1);
+    });
+
+    it("prefers real Parent item relation over source page id lookup when parent exists", async () => {
+      const sourcePageId = "2641b08162d580359153cac75e4f09f2";
+      const realParentId = "real-parent-123";
+      const englishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "EN Page With Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 4,
+        parentItem: realParentId,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const correctTranslation = createMockNotionPage({
+        id: "translation-correct-id",
+        title: "PT Correct",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        order: 4,
+        parentItem: realParentId,
+        elementType: "Page",
+        lastEdited: "2026-02-05T00:00:00.000Z",
+      });
+
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [englishPage];
+        }
+        if (
+          filter?.and?.some(
+            (condition: {
+              property?: string;
+              relation?: { contains?: string };
+            }) =>
+              condition.property === "Parent item" &&
+              condition.relation?.contains === realParentId
+          )
+        ) {
+          return [correctTranslation];
+        }
+        return [];
+      });
+
+      const { main } = await import("./index");
+      await main({ pageId: sourcePageId });
+
+      const queriedBySourceId = mockFetchNotionData.mock.calls.some(
+        ([filter]) =>
+          filter?.and?.some(
+            (condition: {
+              property?: string;
+              relation?: { contains?: string };
+            }) =>
+              condition.property === "Parent item" &&
+              condition.relation?.contains === sourcePageId
+          )
+      );
+      expect(queriedBySourceId).toBe(false);
+
+      const queriedByParentRelation = mockFetchNotionData.mock.calls.some(
+        ([filter]) =>
+          filter?.and?.some(
+            (condition: {
+              property?: string;
+              relation?: { contains?: string };
+            }) =>
+              condition.property === "Parent item" &&
+              condition.relation?.contains === realParentId
+          )
+      );
+      expect(queriedByParentRelation).toBe(true);
+      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(0);
     });
   });
 

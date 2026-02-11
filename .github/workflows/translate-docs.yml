@@ -2,6 +2,12 @@ name: Translate Notion Docs
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to run translation updates on"
+        required: true
+        default: "content"
+        type: string
   repository_dispatch:
     types:
       - translate-docs
@@ -14,11 +20,14 @@ concurrency:
 jobs:
   translate-docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'content' }}
     steps:
-      - name: Checkout content branch
+      - name: Checkout target branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: content
+          ref: ${{ env.TARGET_BRANCH }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
@@ -26,23 +35,177 @@ jobs:
       - name: Install dependencies
         run: bun i
 
+      - name: Validate safe test environment
+        run: |
+          # Check if we're in test mode
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Test mode detected - validating target branch..."
+
+            TARGET="${{ env.TARGET_BRANCH }}"
+
+            # Protected branches that should NEVER be used in test mode
+            PROTECTED_BRANCHES="^main$|^master$|^content$"
+
+            # Safe branch patterns for testing
+            SAFE_PATTERNS="^test/|^fix/|^feat/|^chore/|^refactor/"
+
+            # Check if branch is protected
+            if echo "$TARGET" | grep -qE "$PROTECTED_BRANCHES"; then
+              echo "❌ ERROR: Cannot run test workflow on protected branch '$TARGET'"
+              echo "   Protected branches: main, master, content"
+              echo "   Please use a safe test branch pattern (test/*, fix/*, feat/*, chore/*, refactor/*)"
+              exit 1
+            fi
+
+            # Check if branch matches safe patterns or contains "test" (case-insensitive)
+            if echo "$TARGET" | grep -qE "$SAFE_PATTERNS" || echo "$TARGET" | grep -iq "test"; then
+              echo "✅ Safe test branch: $TARGET"
+            else
+              echo "⚠️  Warning: Branch '$TARGET' does not match safe test patterns"
+              echo "   Recommended patterns: test/*, fix/*, feat/*, chore/*, refactor/*, or branches containing 'test'"
+              echo "   Protected branches (main, master, content) are rejected in test mode"
+            fi
+          else
+            echo "✅ Production mode - no test mode validation required"
+          fi
+
+      - name: Validate required secrets
+        run: |
+          missing=0
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "❌ Missing required secret: $name"
+              missing=1
+            fi
+          }
+
+          check_secret "NOTION_API_KEY" "${{ secrets.NOTION_API_KEY }}"
+          # Require either DATA_SOURCE_ID or DATABASE_ID (runtime accepts either)
+          if [ -z "${{ secrets.DATA_SOURCE_ID }}" ] && [ -z "${{ secrets.DATABASE_ID }}" ]; then
+            echo "❌ Missing required secret: at least one of DATA_SOURCE_ID or DATABASE_ID must be set"
+            missing=1
+          fi
+          check_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
+          # OPENAI_MODEL is optional - uses DEFAULT_OPENAI_MODEL fallback if not set
+
+          if [ "$missing" -ne 0 ]; then
+            echo "One or more required secrets are missing."
+            exit 1
+          fi
+
       - name: Notion Translate
-        run: bun notion:translate
+        id: notion_translate
+        run: |
+          # Use test database if test mode is enabled
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Running in test mode with test database"
+            export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
+            export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            export TEST_MODE="true"
+          fi
+
+          bun notion:translate 2>&1 | tee /tmp/translate_output.log
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          TEST_DATA_SOURCE_ID: ${{ secrets.TEST_DATA_SOURCE_ID }}
+          TEST_DATABASE_ID: ${{ secrets.TEST_DATABASE_ID }}
+          TEST_MODE: ${{ secrets.TEST_MODE }}
+
+      - name: Parse translation summary
+        if: always()
+        id: parse_summary
+        run: |
+          # Default values if TRANSLATION_SUMMARY not found
+          export TOTAL_PAGES="0"
+          export PROCESSED_LANGS="0"
+          export NEW_TRANSLATIONS="0"
+          export UPDATED_TRANSLATIONS="0"
+          export SKIPPED_TRANSLATIONS="0"
+          export FAILED_TRANSLATIONS="0"
+          export CODE_JSON_FAILURES="0"
+          export THEME_FAILURES="0"
+          export HAS_FAILURES="false"
+
+          # Extract TRANSLATION_SUMMARY line from output
+          if [ -f /tmp/translate_output.log ]; then
+            SUMMARY_LINE=$(grep "^TRANSLATION_SUMMARY " /tmp/translate_output.log | head -1 || echo "")
+
+            if [ -n "$SUMMARY_LINE" ]; then
+              # Extract JSON portion and parse using GitHub Actions syntax
+              JSON_PART="${SUMMARY_LINE#TRANSLATION_SUMMARY }"
+
+              # Parse JSON values using jq (available on GitHub runners)
+              # Add error handling for malformed JSON
+              TOTAL_PAGES=$(echo "$JSON_PART" | jq -r '.totalEnglishPages // "0"' 2>/dev/null || echo "0")
+              PROCESSED_LANGS=$(echo "$JSON_PART" | jq -r '.processedLanguages // "0"' 2>/dev/null || echo "0")
+              NEW_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.newTranslations // "0"' 2>/dev/null || echo "0")
+              UPDATED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.updatedTranslations // "0"' 2>/dev/null || echo "0")
+              SKIPPED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.skippedTranslations // "0"' 2>/dev/null || echo "0")
+              FAILED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.failedTranslations // "0"' 2>/dev/null || echo "0")
+              CODE_JSON_FAILURES=$(echo "$JSON_PART" | jq -r '.codeJsonFailures // "0"' 2>/dev/null || echo "0")
+              THEME_FAILURES=$(echo "$JSON_PART" | jq -r '.themeFailures // "0"' 2>/dev/null || echo "0")
+
+              # Determine if there were any failures
+              TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+              if [ "$TOTAL_FAILURES" -gt 0 ]; then
+                HAS_FAILURES="true"
+              fi
+            fi
+          fi
+
+          # Set outputs for use in notification step
+          {
+            echo "total_pages=$TOTAL_PAGES"
+            echo "processed_langs=$PROCESSED_LANGS"
+            echo "new_translations=$NEW_TRANSLATIONS"
+            echo "updated_translations=$UPDATED_TRANSLATIONS"
+            echo "skipped_translations=$SKIPPED_TRANSLATIONS"
+            echo "failed_translations=$FAILED_TRANSLATIONS"
+            echo "code_json_failures=$CODE_JSON_FAILURES"
+            echo "theme_failures=$THEME_FAILURES"
+            echo "has_failures=$HAS_FAILURES"
+          } >> "$GITHUB_OUTPUT"
+
+          # Log summary for debugging
+          echo "Translation Summary:"
+          echo "  Total pages: $TOTAL_PAGES"
+          echo "  Processed languages: $PROCESSED_LANGS"
+          echo "  New translations: $NEW_TRANSLATIONS"
+          echo "  Updated translations: $UPDATED_TRANSLATIONS"
+          echo "  Skipped translations: $SKIPPED_TRANSLATIONS"
+          echo "  Failed translations: $FAILED_TRANSLATIONS"
+          echo "  Code.json failures: $CODE_JSON_FAILURES"
+          echo "  Theme failures: $THEME_FAILURES"
+          echo "  Has failures: $HAS_FAILURES"
 
       - name: Update Notion Status → Auto Translation Generated
-        run: bun run notionStatus:translation
+        if: success()
+        run: |
+          # Use test database if test mode is enabled
+          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+            echo "🧪 Running in test mode with test database"
+            export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
+            export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            export TEST_MODE="true"
+          fi
+
+          bun run notionStatus:translation
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          TEST_DATA_SOURCE_ID: ${{ secrets.TEST_DATA_SOURCE_ID }}
+          TEST_DATABASE_ID: ${{ secrets.TEST_DATABASE_ID }}
+          TEST_MODE: ${{ secrets.TEST_MODE }}
 
       - name: Commit translated docs
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -56,8 +219,59 @@ jobs:
           # Commit if there are changes
           git diff --cached --quiet || git commit -m "(translations-update): update with auto-translations"
 
-          # Push to content branch
-          git push origin content
+          # Push to target branch with retry logic
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          PUSH_SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+            CURRENT_ATTEMPT=$((RETRY_COUNT + 1))
+            if PUSH_OUTPUT=$(git push origin "${TARGET_BRANCH}" 2>&1); then
+              PUSH_SUCCESS=true
+              echo "✅ Push succeeded on attempt $CURRENT_ATTEMPT"
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+
+              # Check if error is due to non-fast-forward (push race condition)
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️ Push failed (attempt $RETRY_COUNT/$MAX_RETRIES). Attempting to resolve..."
+                echo "❌ Error output:"
+                echo "$PUSH_OUTPUT"
+
+                # Fetch latest changes from remote
+                echo "Fetching latest changes from origin/${TARGET_BRANCH}..."
+                if git fetch origin "${TARGET_BRANCH}" 2>&1; then
+                  # Attempt rebase with remote changes
+                  echo "Rebasing local changes on top of origin/${TARGET_BRANCH}..."
+                  if git rebase "origin/${TARGET_BRANCH}" 2>&1; then
+                    # Calculate exponential backoff: 2^N seconds (2s, 4s, 8s)
+                    BACKOFF_TIME=$((2 ** RETRY_COUNT))
+                    echo "Waiting ${BACKOFF_TIME}s before retry..."
+                    sleep $BACKOFF_TIME
+                  else
+                    echo "❌ Rebase failed. Aborting rebase..."
+                    git rebase --abort 2>/dev/null || true
+                    echo "❌ Cannot resolve conflicts automatically. Please resolve manually."
+                    exit 1
+                  fi
+                else
+                  echo "❌ Fetch failed. Cannot proceed with retry."
+                  exit 1
+                fi
+              else
+                echo "❌ Push failed after $MAX_RETRIES attempts. Giving up."
+                echo "❌ Error: This may indicate persistent conflicts or network issues."
+                echo "💡 Suggestion: Check recent commits to ${TARGET_BRANCH} and resolve manually."
+                exit 1
+              fi
+            fi
+          done
+
+          # Verify push succeeded before continuing
+          if [ "$PUSH_SUCCESS" = false ]; then
+            echo "❌ Push did not succeed after retries. Exiting with error."
+            exit 1
+          fi
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +288,21 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "*Translation sync*: ${{ job.status }}\nLocales: `i18n` updates committed to `content`"
+                  text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: |
+                    *Translation Results:*
+                    • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
+                    • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
+                    • New translations: ${{ steps.parse_summary.outputs.new_translations }}
+                    • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
+                    • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
+                    ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
+                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: ']')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']")[0] || '' }}
+                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']")[0] || '' }}
+                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']")[0] || '' }}
               - type: "section"
                 text:
                   type: "mrkdwn"
@@ -82,4 +310,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Reminder: Review translations before publishing."
+                  text: "${{ steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success' && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"

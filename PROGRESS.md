@@ -311,6 +311,40 @@
   - Soft-fail: code.json missing/malformed (continue, flag in summary)
 - Next Action: Proceed to Final Verification
 
+### Hard-Fail vs Soft-Fail Policy Compliance Verification (2026-02-10)
+
+**Task**: Confirm hard-fail vs soft-fail behavior matches documented policy in `context/workflows/translation-process.md`
+
+**Status**: PASS - All 13 tests passing
+
+**Evidence**:
+
+| Policy Requirement                                          | Implementation                                                               | Test Coverage     | Status |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------- | ------ |
+| Doc translation fails → non-zero exit                       | `index.ts:793-796` checks `failedTranslations > 0`                           | `test.ts:225-254` | ✅     |
+| No English pages → non-zero exit                            | `index.ts:706-709` throws when pages.length === 0                            | `test.ts:202-223` | ✅     |
+| Theme failures → non-zero exit                              | `index.ts:796` checks `themeFailures > 0`                                    | `test.ts:277-334` | ✅     |
+| code.json translation fails (source exists) → non-zero exit | `index.ts:795` checks `(codeJsonFailures > 0 && !codeJsonSourceFileMissing)` | `test.ts:507-543` | ✅     |
+| code.json missing (ENOENT) → soft-fail                      | `index.ts:739-744` warns, continues, sets `codeJsonSourceFileMissing: true`  | `test.ts:384-426` | ✅     |
+| code.json malformed → soft-fail                             | `index.ts:745-751` warns, continues, sets `codeJsonSourceFileMissing: true`  | `test.ts:428-468` | ✅     |
+| TRANSLATION_SUMMARY always emitted                          | `index.ts:809, 817` logs in try/catch/finally                                | All tests verify  | ✅     |
+
+**Policy Reference**: `context/workflows/translation-process.md:43-63`
+
+- Hard-fail: Exits non-zero when doc translation fails, no pages ready, or theme translation fails
+- Soft-fail: Continues when code.json is missing/malformed (doc translation is primary value)
+- Summary: Always emits `TRANSLATION_SUMMARY` with failure classifications
+
+**Implementation Details**:
+
+- `index.ts:791-796` - Distinguishes `hasActualFailures` from `hasFailures` to exclude soft-fail scenarios from hard exit
+- `index.ts:753-764` - Adds non-critical failure entry for skipped code.json with `isCritical: false`
+- `index.ts:763` - Sets `codeJsonSourceFileMissing` flag to track soft-fail state
+
+**Test Results**: 13/13 passing in `scripts/notion-translate/index.test.ts`
+
+**Next Action**: PRD Batch 5 - Workflow Gating And Branch Dispatch
+
 ---
 
 ## Failure Scenario Classification Log

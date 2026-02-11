@@ -65,9 +65,9 @@
 
 ### Review Gate: Failure Model
 
-- [ ] Confirm failure categories are clear in summary: `failedTranslations`, `codeJsonFailures`, `themeFailures`.
-- [ ] Confirm hard-fail vs soft-fail behavior matches policy.
-- [ ] Log review outcome in `PROGRESS.md`.
+- [x] Confirm failure categories are clear in summary: `failedTranslations`, `codeJsonFailures`, `themeFailures`.
+- [x] Confirm hard-fail vs soft-fail behavior matches policy.
+- [x] Log review outcome in `PROGRESS.md`.
 
 ## Batch 5: Workflow Gating And Branch Dispatch
 

@@ -20,6 +20,13 @@
 pre-commit:
   parallel: true
   commands:
+    # Security: Prevent secrets from being committed
+    gitleaks:
+      run: gitleaks protect --verbose --redact --staged
+      skip:
+        - merge
+        - rebase
+
     eslint:
       glob: "*.{js,ts,jsx,tsx}"
       run: bunx eslint --cache --cache-location ./node_modules/.cache/eslint --max-warnings=0 --fix {staged_files}

@@ -6,7 +6,7 @@ import {
   createErrorResponse,
   type ErrorResponse,
 } from "./response-schemas";
-import { handleCorsPreflightRequest } from "./middleware/cors";
+import { getCorsHeaders, handleCorsPreflightRequest } from "./middleware/cors";
 import { handleHealth } from "./routes/health";
 import { handleDocs } from "./routes/docs";
 import { handleJobTypes } from "./routes/job-types";
@@ -113,6 +113,7 @@ export async function routeRequest(
     status: 404,
     headers: {
       "Content-Type": "application/json",
+      ...getCorsHeaders(requestOrigin),
     },
   });
 }

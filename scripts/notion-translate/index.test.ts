@@ -543,6 +543,60 @@ describe("notion-translate index", () => {
     });
   });
 
+  describe("workflow gating validation", () => {
+    it("validates translation failure causes workflow to skip status-update and commit steps", async () => {
+      // This test validates PRD Batch 5 requirement:
+      // "translation failure causes workflow failure and skips status-update and commit steps"
+      //
+      // The workflow uses `if: success()` conditions on status-update and commit steps,
+      // so when the translate step fails (non-zero exit), those steps won't run.
+      //
+      // This test verifies the translation script fails with non-zero exit on failures.
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Simulate translation failure
+      mockTranslateText.mockRejectedValue(new Error("Translation API error"));
+
+      const { main } = await import("./index");
+
+      // Should throw due to translation failures (non-zero exit)
+      await expect(main()).rejects.toThrow(
+        "Translation workflow completed with failures"
+      );
+
+      const loggedSummary = findSummaryLog(logSpy);
+
+      // Verify failure is recorded in summary
+      expect(loggedSummary).toMatchObject({
+        totalEnglishPages: 1,
+        processedLanguages: 2,
+        failedTranslations: 2, // Both pt and es failed
+        codeJsonFailures: 0,
+        themeFailures: 0,
+      });
+
+      // Verify TRANSLATION_SUMMARY was emitted even on failure
+      expect(loggedSummary.failures).toHaveLength(2);
+
+      // Verify error messages contain the expected error
+      loggedSummary.failures.forEach((failure: { error: string }) => {
+        expect(failure.error).toContain("Translation API error");
+      });
+
+      // Verify fatal error message was logged
+      const lastErrorCall = errorSpy.mock.calls[errorSpy.mock.calls.length - 1];
+      expect(String(lastErrorCall[0])).toContain(
+        "Fatal error during translation process"
+      );
+
+      // Key validation: The translation step exits with failure, which means
+      // the GitHub Actions workflow's `if: success()` conditions on subsequent
+      // steps (status-update, commit) will prevent them from running.
+      // This is verified by the fact that main() throws (non-zero exit code).
+    });
+  });
+
   describe("deterministic file output", () => {
     it("produces identical file paths when running translation twice with no source changes", async () => {
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

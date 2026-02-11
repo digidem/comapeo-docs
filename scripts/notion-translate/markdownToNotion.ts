@@ -496,7 +496,7 @@ function mapCodeLanguage(language: string): NotionCodeLanguage {
 }
 
 interface NotionPageProperties {
-  Title: {
+  [NOTION_PROPERTIES.TITLE]: {
     title: {
       text: {
         content: string;
@@ -608,7 +608,7 @@ export async function createNotionPageFromMarkdown(
         // TODO: should check existing content and compare to maintain fixes from previous revisions
         // Create properties object with proper typing, always include Parent item
         const pageProperties: NotionPageProperties = {
-          Title: {
+          [NOTION_PROPERTIES.TITLE]: {
             title: [
               {
                 text: {
@@ -648,7 +648,7 @@ export async function createNotionPageFromMarkdown(
       } else {
         // Create properties object with proper typing, always include Parent item
         const pageProperties: NotionPageProperties = {
-          Title: {
+          [NOTION_PROPERTIES.TITLE]: {
             title: [
               {
                 text: {

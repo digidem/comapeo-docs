@@ -510,6 +510,32 @@ async function processLanguageTranslations(
     ).title[0].plain_text;
     console.log(chalk.blue(`Processing: ${originalTitle}`));
 
+    // Pre-flight validation: Check for required Parent item relation
+    /* eslint-disable security/detect-object-injection -- PARENT_ITEM_PROPERTY is a constant */
+    const parentRelation = (
+      englishPage.properties[PARENT_ITEM_PROPERTY] as
+        | NotionRelationProperty
+        | undefined
+    )?.relation?.[0]?.id;
+    /* eslint-enable security/detect-object-injection */
+
+    if (!parentRelation) {
+      console.warn(
+        chalk.yellow(
+          `⚠️  Skipping "${originalTitle}" - missing required Parent item relation`
+        )
+      );
+      skippedTranslations++;
+      failures.push({
+        language: config.language,
+        title: originalTitle,
+        pageId: englishPage.id,
+        error: "Missing required Parent item relation",
+        isCritical: false,
+      });
+      continue;
+    }
+
     // Find existing translation
     const translationPage = await findTranslationPage(
       englishPage,
@@ -551,7 +577,7 @@ async function processLanguageTranslations(
   console.log(chalk.green(`\n✅ ${config.language} translation summary:`));
   console.log(chalk.green(`  - New translations: ${newTranslations}`));
   console.log(chalk.green(`  - Updated translations: ${updatedTranslations}`));
-  console.log(chalk.gray(`  - Skipped (up-to-date): ${skippedTranslations}`));
+  console.log(chalk.gray(`  - Skipped: ${skippedTranslations}`));
   console.log(chalk.red(`  - Failed: ${failedTranslations}`));
 
   return {

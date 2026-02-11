@@ -872,4 +872,136 @@ describe("notion-translate index", () => {
       expect(filePath1).toContain("test-page");
     });
   });
+
+  describe("missing parent relation handling", () => {
+    it("gracefully skips pages without Parent item relation and reports as non-critical failure", async () => {
+      // Create a page WITHOUT parent relation
+      const pageWithoutParent = createMockNotionPage({
+        id: "page-no-parent",
+        title: "Page Without Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: undefined, // Missing parent relation
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      // Setup mocks
+      mockFetchNotionData.mockResolvedValueOnce([pageWithoutParent]);
+      mockSortAndExpandNotionData.mockResolvedValueOnce([pageWithoutParent]);
+      mockExtractTranslatableText.mockReturnValue({});
+      mockGetLanguageName.mockReturnValue("Portuguese");
+      mockReadFile.mockRejectedValue(new Error("ENOENT")); // Simulate missing code.json
+      mockReaddir.mockResolvedValue(["pt", "es"]);
+      mockStat.mockImplementation(async (path: string) => ({
+        isDirectory: () => path.includes("pt") || path.includes("es"),
+      }));
+
+      const logSpy = vi.spyOn(console, "log");
+      const warnSpy = vi.spyOn(console, "warn");
+
+      const { main } = await import("./index");
+
+      // Should not throw - pages are skipped gracefully
+      await expect(main()).resolves.not.toThrow();
+
+      // Verify warning was logged
+      const warnCalls = warnSpy.mock.calls
+        .map((args) => args.map(String).join(" "))
+        .join("\n");
+      expect(warnCalls).toContain("Skipping");
+      expect(warnCalls).toContain("missing required Parent item relation");
+
+      // Verify summary shows skipped pages
+      const summary = findSummaryLog(logSpy);
+      expect(summary.skippedTranslations).toBeGreaterThan(0);
+
+      // Verify failure is marked as non-critical
+      expect(summary.failures).toBeDefined();
+      const parentFailures = summary.failures.filter(
+        (f: any) => f.error === "Missing required Parent item relation"
+      );
+      expect(parentFailures.length).toBeGreaterThan(0);
+      expect(parentFailures[0].isCritical).toBe(false);
+
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it("continues processing other pages when some lack parent relations", async () => {
+      // Create multiple pages with mixed parent relations
+      const pageWithParent = createMockNotionPage({
+        id: "page-with-parent",
+        title: "Page With Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: "parent-1",
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      const pageWithoutParent = createMockNotionPage({
+        id: "page-no-parent",
+        title: "Page Without Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 2,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      // Setup mocks
+      mockFetchNotionData.mockResolvedValueOnce([
+        pageWithParent,
+        pageWithoutParent,
+      ]);
+      mockSortAndExpandNotionData.mockResolvedValueOnce([
+        pageWithParent,
+        pageWithoutParent,
+      ]);
+      mockFetchNotionData.mockResolvedValue([]);
+      mockTranslateText.mockResolvedValue({
+        title: "Translated Title",
+        markdown: "# Translated Content",
+      });
+      mockN2m.pageToMarkdown.mockResolvedValue([]);
+      mockN2m.toMarkdownString.mockReturnValue({ parent: "# Test" });
+      mockCreateNotionPageFromMarkdown.mockResolvedValue("new-page-id");
+      mockExtractTranslatableText.mockReturnValue({});
+      mockGetLanguageName.mockReturnValue("Portuguese");
+      mockReadFile.mockRejectedValue(new Error("ENOENT"));
+      mockReaddir.mockResolvedValue(["pt", "es"]);
+      mockStat.mockImplementation(async (path: string) => ({
+        isDirectory: () => path.includes("pt") || path.includes("es"),
+      }));
+
+      const logSpy = vi.spyOn(console, "log");
+
+      const { main } = await import("./index");
+
+      await main();
+
+      const summary = findSummaryLog(logSpy);
+
+      // Verify at least one page was processed successfully
+      expect(
+        summary.newTranslations + summary.updatedTranslations
+      ).toBeGreaterThan(0);
+
+      // Verify the page without parent was skipped (counted in skippedTranslations)
+      expect(summary.skippedTranslations).toBeGreaterThan(0);
+
+      // Verify both outcomes are tracked
+      expect(summary.failures).toBeDefined();
+      const parentFailures = summary.failures.filter(
+        (f: any) => f.error === "Missing required Parent item relation"
+      );
+      expect(parentFailures.length).toBeGreaterThan(0);
+
+      logSpy.mockRestore();
+    });
+  });
 });

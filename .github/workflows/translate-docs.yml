@@ -276,38 +276,39 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Notify Slack
-        if: always()
-        uses: slackapi/slack-github-action@v2.1.1
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            text: "*Translation sync*: ${{ job.status }}"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: |
-                    *Translation Results:*
-                    • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
-                    • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
-                    • New translations: ${{ steps.parse_summary.outputs.new_translations }}
-                    • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
-                    • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
-                    ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
-                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: ']')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']")[0] || '' }}
-                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']")[0] || '' }}
-                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']")[0] || '' }}
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "${{ steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success' && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"
+
+      # - name: Notify Slack
+      #   if: always()
+      #   uses: slackapi/slack-github-action@v2.1.1
+      #   with:
+      #     webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #     webhook-type: incoming-webhook
+      #     payload: |
+      #       text: "*Translation sync*: ${{ job.status }}"
+      #       blocks:
+      #         - type: "section"
+      #           text:
+      #             type: "mrkdwn"
+      #             text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
+      #         - type: "section"
+      #           text:
+      #             type: "mrkdwn"
+      #             text: |
+      #               *Translation Results:*
+      #               • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
+      #               • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
+      #               • New translations: ${{ steps.parse_summary.outputs.new_translations }}
+      #               • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
+      #               • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
+      #               ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
+      #               ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']')[0] || '' }}
+      #               ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']')[0] || '' }}
+      #               ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']')[0] || '' }}
+      #         - type: "section"
+      #           text:
+      #             type: "mrkdwn"
+      #             text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+      #         - type: "section"
+      #           text:
+      #             type: "mrkdwn"
+      #             text: "${{ steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success' && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"

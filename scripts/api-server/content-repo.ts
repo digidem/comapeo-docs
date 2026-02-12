@@ -46,6 +46,7 @@ class ContentRepoError extends Error {
 }
 
 let cachedConfig: ContentRepoConfig | null = null;
+let initPromise: Promise<void> | null = null;
 
 function requireEnv(name: string): string {
   // eslint-disable-next-line security/detect-object-injection
@@ -200,59 +201,70 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 export async function initializeContentRepo(): Promise<void> {
-  const config = getConfig();
-  await mkdir(dirname(config.workdir), { recursive: true });
-
-  const gitDir = resolve(config.workdir, ".git");
-  const hasGitRepo = await pathExists(gitDir);
-
-  if (!hasGitRepo) {
-    if (await pathExists(config.workdir)) {
-      const existingEntries = await readdir(config.workdir);
-      if (existingEntries.length > 0) {
-        throw new ContentRepoError(
-          "WORKDIR exists and is not a git repository",
-          `Cannot clone into non-empty directory: ${config.workdir}`
-        );
-      }
-    }
-
-    await runGit(
-      [
-        "clone",
-        "--branch",
-        config.contentBranch,
-        "--single-branch",
-        "--depth",
-        "1",
-        buildRemoteUrl(config.repoUrl),
-        config.workdir,
-      ],
-      {
-        cwd: dirname(config.workdir),
-        auth: true,
-        errorPrefix: "Failed to clone content branch",
-      }
-    );
+  if (initPromise) {
+    return await initPromise;
   }
 
-  await runGit(["config", "user.name", config.authorName], {
-    cwd: config.workdir,
-    errorPrefix: "Failed to configure git author name",
-  });
+  initPromise = (async () => {
+    const config = getConfig();
+    await mkdir(dirname(config.workdir), { recursive: true });
 
-  await runGit(["config", "user.email", config.authorEmail], {
-    cwd: config.workdir,
-    errorPrefix: "Failed to configure git author email",
-  });
+    const gitDir = resolve(config.workdir, ".git");
+    const hasGitRepo = await pathExists(gitDir);
 
-  await runGit(
-    ["remote", "set-url", "origin", buildRemoteUrl(config.repoUrl)],
-    {
-      cwd: config.workdir,
-      errorPrefix: "Failed to configure git origin",
+    if (!hasGitRepo) {
+      if (await pathExists(config.workdir)) {
+        const existingEntries = await readdir(config.workdir);
+        if (existingEntries.length > 0) {
+          throw new ContentRepoError(
+            "WORKDIR exists and is not a git repository",
+            `Cannot clone into non-empty directory: ${config.workdir}`
+          );
+        }
+      }
+
+      await runGit(
+        [
+          "clone",
+          "--branch",
+          config.contentBranch,
+          "--single-branch",
+          "--depth",
+          "1",
+          buildRemoteUrl(config.repoUrl),
+          config.workdir,
+        ],
+        {
+          cwd: dirname(config.workdir),
+          auth: true,
+          errorPrefix: "Failed to clone content branch",
+        }
+      );
     }
-  );
+
+    await runGit(["config", "user.name", config.authorName], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to configure git author name",
+    });
+
+    await runGit(["config", "user.email", config.authorEmail], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to configure git author email",
+    });
+
+    await runGit(
+      ["remote", "set-url", "origin", buildRemoteUrl(config.repoUrl)],
+      {
+        cwd: config.workdir,
+        errorPrefix: "Failed to configure git origin",
+      }
+    );
+  })().catch((error) => {
+    initPromise = null;
+    throw error;
+  });
+
+  return await initPromise;
 }
 
 async function acquireRepoLock(

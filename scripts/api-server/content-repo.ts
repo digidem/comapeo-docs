@@ -307,6 +307,7 @@ export async function runContentTask(
   taskRunner: (workdir: string) => Promise<string>,
   options: RunContentTaskOptions = {}
 ): Promise<GitTaskResult> {
+  await initializeContentRepo();
   const config = getConfig();
   const lock = await acquireRepoLock(
     resolve(
@@ -316,7 +317,6 @@ export async function runContentTask(
   );
 
   try {
-    await initializeContentRepo();
     assertNotAborted(options.shouldAbort);
 
     await runGit(["fetch", "origin", config.contentBranch], {

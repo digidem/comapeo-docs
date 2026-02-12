@@ -4,7 +4,6 @@
  */
 
 import { spawn, ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
 import type { JobType, GitHubContext } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
 import { createJobLogger } from "./job-persistence";
@@ -288,12 +287,7 @@ export async function executeJob(
   let pendingProcessCompletionError: Error | null = null;
 
   const runJobProcess = async (cwd?: string): Promise<string> => {
-    const processArgs = [...args];
-    if (cwd && processArgs[0]?.startsWith("scripts/")) {
-      processArgs[0] = resolve(process.cwd(), processArgs[0]);
-    }
-
-    childProcess = spawn(jobConfig.script, processArgs, {
+    childProcess = spawn(jobConfig.script, args, {
       cwd,
       env: buildChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],

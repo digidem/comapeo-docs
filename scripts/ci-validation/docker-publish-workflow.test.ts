@@ -99,6 +99,15 @@ describe("Docker Publish Workflow Validation", () => {
       expect(publishStep.run).toContain(
         '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
       );
+      expect(publishStep.env.DOCKERHUB_USERNAME).toBe(
+        "${{ secrets.DOCKERHUB_USERNAME }}"
+      );
+      expect(publishStep.env.DOCKERHUB_TOKEN).toBe(
+        "${{ secrets.DOCKERHUB_TOKEN }}"
+      );
+      expect(publishStep.run).toContain(
+        'if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then'
+      );
     });
 
     it("should not push images for pull requests", () => {

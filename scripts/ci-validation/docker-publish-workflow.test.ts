@@ -188,18 +188,21 @@ describe("Docker Publish Workflow Validation", () => {
     });
   });
 
-  describe("Action Versions Use Version Tags", () => {
-    const expectedVersionedActions = [
-      "actions/checkout",
+  describe("Action Refs Use Appropriate Pinning", () => {
+    const expectedImmutableActions = [
       "docker/setup-qemu-action",
       "docker/setup-buildx-action",
       "docker/login-action",
       "docker/metadata-action",
       "docker/build-push-action",
+    ];
+
+    const expectedVersionedActions = [
+      "actions/checkout",
       "actions/github-script",
     ];
 
-    it("should use version tags for all required actions", () => {
+    it("should use immutable SHAs for Docker actions and version tags for GitHub actions", () => {
       const steps = workflow.jobs.build.steps;
       const actionUses: string[] = [];
 
@@ -212,19 +215,21 @@ describe("Docker Publish Workflow Validation", () => {
 
       for (const action of actionUses) {
         const [actionName, ref] = action.split("@");
-        expect(ref?.startsWith("v")).toBe(true);
-        const versionParts = ref?.slice(1).split(".") ?? [];
-        expect(versionParts.length).toBeGreaterThanOrEqual(1);
-        expect(versionParts.length).toBeLessThanOrEqual(3);
-        for (const part of versionParts) {
-          expect(part).not.toHaveLength(0);
-          expect(Number.isInteger(Number(part))).toBe(true);
+        const isImmutableAction = expectedImmutableActions.some((a) =>
+          actionName.includes(a.split("/")[1])
+        );
+        const isVersionedAction = expectedVersionedActions.some((a) =>
+          actionName.includes(a.split("/")[1])
+        );
+
+        expect(isImmutableAction || isVersionedAction).toBe(true);
+
+        if (isImmutableAction) {
+          expect(ref).toMatch(/^[a-f0-9]{40}$/);
+          continue;
         }
-        expect(
-          expectedVersionedActions.some((a) =>
-            actionName.includes(a.split("/")[1])
-          )
-        ).toBe(true);
+
+        expect(ref?.startsWith("v")).toBe(true);
       }
     });
   });

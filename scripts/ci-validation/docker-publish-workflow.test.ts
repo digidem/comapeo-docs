@@ -83,14 +83,21 @@ describe("Docker Publish Workflow Validation", () => {
   });
 
   describe("Fork PR Security Check", () => {
-    it("should have fork PR security check on PR comment step", () => {
+    it("should gate PR publishing with non-fork repository equality check", () => {
       const prCommentStep = workflow.jobs.build.steps.find(
         (step: any) => step.name === "PR comment with image reference"
       );
 
       expect(prCommentStep).toBeDefined();
-      expect(prCommentStep.if).toContain(
-        "github.event.pull_request.head.repo.full_name == github.repository"
+      const publishStep = workflow.jobs.build.steps.find(
+        (step: any) => step.name === "Determine publish mode"
+      );
+
+      expect(publishStep.run).toContain(
+        "github.event.pull_request.head.repo.full_name"
+      );
+      expect(publishStep.run).toContain(
+        '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
       );
     });
 
@@ -100,7 +107,7 @@ describe("Docker Publish Workflow Validation", () => {
       );
 
       expect(buildStep.with.push).toBe(
-        "${{ github.event_name != 'pull_request' }}"
+        "${{ steps.publish.outputs.push == 'true' }}"
       );
     });
 
@@ -109,7 +116,7 @@ describe("Docker Publish Workflow Validation", () => {
         (step: any) => step.name === "Login to Docker Hub"
       );
 
-      expect(loginStep.if).toBe("github.event_name != 'pull_request'");
+      expect(loginStep.if).toBe("steps.publish.outputs.push == 'true'");
     });
   });
 
@@ -288,21 +295,32 @@ describe("Docker Publish Workflow Validation", () => {
       expect(workflow.jobs.build.permissions.packages).toBe("write");
     });
 
-    it("should guard docker login for non-PR events", () => {
+    it("should guard docker login using publish mode output", () => {
       const loginStep = workflow.jobs.build.steps.find(
         (step: any) => step.name === "Login to Docker Hub"
       );
 
-      expect(loginStep.if).toBe("github.event_name != 'pull_request'");
+      expect(loginStep.if).toBe("steps.publish.outputs.push == 'true'");
     });
 
-    it("should set build push mode from pull request event check", () => {
+    it("should set build push mode from publish mode output", () => {
       const buildStep = workflow.jobs.build.steps.find(
         (step: any) => step.name === "Build and push"
       );
 
       expect(buildStep.with.push).toBe(
-        "${{ github.event_name != 'pull_request' }}"
+        "${{ steps.publish.outputs.push == 'true' }}"
+      );
+    });
+
+    it("should determine push mode with non-fork equality check", () => {
+      const publishStep = workflow.jobs.build.steps.find(
+        (step: any) => step.name === "Determine publish mode"
+      );
+
+      expect(publishStep).toBeDefined();
+      expect(publishStep.run).toContain(
+        '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
       );
     });
 
@@ -311,8 +329,9 @@ describe("Docker Publish Workflow Validation", () => {
         (step: any) => step.name === "PR comment with image reference"
       );
 
-      expect(prCommentStep.if).toBe(
-        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+      expect(prCommentStep.if).toContain("github.event_name == 'pull_request'");
+      expect(prCommentStep.if).toContain(
+        "steps.publish.outputs.push == 'true'"
       );
     });
   });

@@ -131,6 +131,13 @@ describe("Docker Publish Workflow", () => {
       expect(buildx).toBeDefined();
       expect(buildx.uses).toContain("docker/setup-buildx-action@");
     });
+    it("should determine publish mode using non-fork equality check", () => {
+      const publish = steps.find((s: any) => s.id === "publish");
+      expect(publish).toBeDefined();
+      expect(publish.run).toContain(
+        '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
+      );
+    });
 
     it("should login to Docker Hub for non-PR events", () => {
       const login = steps.find((s: any) =>
@@ -138,7 +145,7 @@ describe("Docker Publish Workflow", () => {
       );
       expect(login).toBeDefined();
       expect(login.uses).toContain("docker/login-action@");
-      expect(login.if).toBe("github.event_name != 'pull_request'");
+      expect(login.if).toBe("steps.publish.outputs.push == 'true'");
       expect(login.with.username).toContain("secrets.DOCKERHUB_USERNAME");
       expect(login.with.password).toContain("secrets.DOCKERHUB_TOKEN");
     });
@@ -161,7 +168,7 @@ describe("Docker Publish Workflow", () => {
       expect(build.with.platforms).toContain("linux/amd64");
       expect(build.with.platforms).toContain("linux/arm64");
       expect(build.with.push).toBe(
-        "${{ github.event_name != 'pull_request' }}"
+        "${{ steps.publish.outputs.push == 'true' }}"
       );
       expect(build.with["cache-from"]).toContain("type=gha");
       expect(build.with["cache-to"]).toContain("type=gha,mode=max");
@@ -172,9 +179,8 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("actions/github-script")
       );
       expect(comment).toBeDefined();
-      expect(comment.if).toBe(
-        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
-      );
+      expect(comment.if).toContain("github.event_name == 'pull_request'");
+      expect(comment.if).toContain("steps.publish.outputs.push == 'true'");
       expect(comment.uses).toContain("actions/github-script@");
       expect(comment.with.script).toContain("docker pull");
       expect(comment.with.script).toContain("docker run");
@@ -200,9 +206,9 @@ describe("Docker Publish Workflow", () => {
         (s: any) => s.id === "build"
       );
 
-      expect(loginStep.if).toBe("github.event_name != 'pull_request'");
+      expect(loginStep.if).toBe("steps.publish.outputs.push == 'true'");
       expect(buildStep.with.push).toBe(
-        "${{ github.event_name != 'pull_request' }}"
+        "${{ steps.publish.outputs.push == 'true' }}"
       );
     });
 
@@ -210,9 +216,8 @@ describe("Docker Publish Workflow", () => {
       const commentStep = workflow.jobs.build.steps.find((s: any) =>
         s.uses?.includes("actions/github-script")
       );
-      expect(commentStep.if).toContain(
-        "github.event.pull_request.head.repo.full_name == github.repository"
-      );
+      expect(commentStep.if).toContain("github.event_name == 'pull_request'");
+      expect(commentStep.if).toContain("steps.publish.outputs.push == 'true'");
     });
   });
 

@@ -90,3 +90,6 @@ NEXT_STEPS.md
 
 # Runtime metrics files
 retry-metrics.json
+
+# Claude Code command history
+.claude/command-history.log

@@ -291,10 +291,6 @@ describe("Docker Publish Workflow Validation", () => {
       expect(workflow.env.IMAGE_NAME).toBe("communityfirst/comapeo-docs-api");
     });
 
-    it("should grant packages write permission", () => {
-      expect(workflow.jobs.build.permissions.packages).toBe("write");
-    });
-
     it("should guard docker login using publish mode output", () => {
       const loginStep = workflow.jobs.build.steps.find(
         (step: any) => step.name === "Login to Docker Hub"
@@ -340,7 +336,7 @@ describe("Docker Publish Workflow Validation", () => {
     it("should have proper permissions set", () => {
       const permissions = workflow.jobs.build.permissions;
       expect(permissions.contents).toBe("read");
-      expect(permissions.packages).toBe("write");
+      expect(permissions).not.toHaveProperty("packages");
       expect(permissions["pull-requests"]).toBe("write");
     });
 

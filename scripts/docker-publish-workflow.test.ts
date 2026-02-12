@@ -96,7 +96,7 @@ describe("Docker Publish Workflow", () => {
     it("should have correct permissions", () => {
       const permissions = workflow.jobs.build.permissions;
       expect(permissions.contents).toBe("read");
-      expect(permissions.packages).toBe("write");
+      expect(permissions).not.toHaveProperty("packages");
       expect(permissions["pull-requests"]).toBe("write");
     });
   });

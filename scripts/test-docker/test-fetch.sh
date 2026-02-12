@@ -164,7 +164,7 @@ wait_for_server() {
 
   while [ "$attempts" -lt "$max_attempts" ]; do
     if HEALTH_RESPONSE=$(api_request "GET" "$API_BASE_URL/health"); then
-      if echo "$HEALTH_RESPONSE" | jq -e '.data.status == "healthy"' >/dev/null 2>&1; then
+      if echo "$HEALTH_RESPONSE" | jq -e '.data.status == "ok" or .data.status == "healthy"' >/dev/null 2>&1; then
         echo "$HEALTH_RESPONSE"
         return 0
       fi

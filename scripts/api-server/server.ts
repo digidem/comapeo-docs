@@ -6,7 +6,6 @@ import { serve } from "bun";
 import { getAuth } from "./auth";
 import { getAudit } from "./audit";
 import { handleRequest } from "./request-handler";
-import { initializeContentRepo } from "./content-repo";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
@@ -14,11 +13,6 @@ const HOST = process.env.API_HOST || "localhost";
 // Check if running in test mode
 const isTestMode =
   process.env.NODE_ENV === "test" || process.env.API_PORT === "0";
-
-// Initialize content repository before starting the server
-if (process.env.NODE_ENV !== "test") {
-  await initializeContentRepo();
-}
 
 // Start server
 const server = serve({

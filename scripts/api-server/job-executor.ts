@@ -4,7 +4,8 @@
  */
 
 import { spawn, ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { JobType, GitHubContext } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
 import { createJobLogger } from "./job-persistence";
@@ -116,6 +117,12 @@ const SIGKILL_FAILSAFE_MS = 1000;
  * Maximum allowed timeout override (2 hours) in milliseconds
  */
 const MAX_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours max
+
+const PROJECT_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  ".."
+);
 
 /**
  * Parse and validate JOB_TIMEOUT_MS environment variable override.
@@ -290,7 +297,7 @@ export async function executeJob(
   const runJobProcess = async (cwd?: string): Promise<string> => {
     const processArgs = [...args];
     if (cwd && processArgs[0]?.startsWith("scripts/")) {
-      processArgs[0] = resolve(process.cwd(), processArgs[0]);
+      processArgs[0] = resolve(PROJECT_ROOT, processArgs[0]);
     }
 
     childProcess = spawn(jobConfig.script, processArgs, {

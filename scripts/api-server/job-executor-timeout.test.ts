@@ -21,6 +21,15 @@ vi.mock("node:child_process", () => ({
   ChildProcess: class {},
 }));
 
+// Mock content-repo integration points used by job-executor
+const mockIsContentMutatingJob = vi.fn();
+const mockRunContentTask = vi.fn();
+vi.mock("./content-repo", () => ({
+  isContentMutatingJob: (...args: unknown[]) =>
+    mockIsContentMutatingJob(...args),
+  runContentTask: (...args: unknown[]) => mockRunContentTask(...args),
+}));
+
 // Mock github-status
 vi.mock("./github-status", () => ({
   reportJobCompletion: vi.fn().mockResolvedValue(null),
@@ -152,6 +161,12 @@ describe("job-executor - timeout behavior", () => {
     destroyJobTracker();
     cleanupTestData();
     vi.clearAllMocks();
+    mockIsContentMutatingJob.mockImplementation(
+      (jobType: string) => jobType === "notion:fetch-all"
+    );
+    mockRunContentTask.mockImplementation(
+      async (task: (cwd: string) => unknown) => task(process.cwd())
+    );
     // Clear console.error mock to avoid noise in tests
     vi.spyOn(console, "error").mockImplementation(() => {});
     // Remove any JOB_TIMEOUT_MS env var override
@@ -553,8 +568,12 @@ describe("job-executor - timeout behavior", () => {
       executeJobAsync("notion:fetch-all", jobId, {});
 
       await vi.waitFor(() => {
+        expect(mockRunContentTask).toHaveBeenCalled();
         expect(mockSpawn).toHaveBeenCalled();
       });
+
+      expect(mockIsContentMutatingJob).toHaveBeenCalledWith("notion:fetch-all");
+      expect(mockRunContentTask).toHaveBeenCalledWith(expect.any(Function));
 
       // The default timeout for fetch-all is 60 minutes (3600000ms)
       // Verify it was configured correctly (we can't wait that long in a test)

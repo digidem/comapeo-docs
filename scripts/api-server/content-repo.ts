@@ -267,12 +267,15 @@ export async function initializeContentRepo(): Promise<void> {
   return await initPromise;
 }
 
-async function acquireRepoLock(
-  lockPath: string
+export async function acquireRepoLock(
+  lockPath: string,
+  shouldAbort?: () => boolean
 ): Promise<{ release: () => Promise<void> }> {
   const start = Date.now();
 
   while (true) {
+    assertNotAborted(shouldAbort);
+
     try {
       const lockFile = await open(lockPath, "wx");
       return {
@@ -281,7 +284,16 @@ async function acquireRepoLock(
           await rm(lockPath, { force: true });
         },
       };
-    } catch {
+    } catch (error) {
+      const lockError = error as NodeJS.ErrnoException;
+
+      if (lockError.code !== "EEXIST") {
+        throw new ContentRepoError(
+          `Failed to acquire repository lock: ${lockPath}`,
+          lockError.message
+        );
+      }
+
       if (Date.now() - start > MAX_LOCK_WAIT_MS) {
         throw new ContentRepoError(
           "Timed out waiting for repository lock",
@@ -322,7 +334,8 @@ export async function runContentTask(
     resolve(
       dirname(config.workdir),
       `.${basename(config.workdir)}.content-repo.lock`
-    )
+    ),
+    options.shouldAbort
   );
 
   try {

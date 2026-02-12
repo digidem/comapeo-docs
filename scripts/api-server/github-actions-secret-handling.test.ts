@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { parse as parseYaml } from "yaml";
+import * as yaml from "js-yaml";
 import { server, actualPort } from "./index";
 import { getAuth, ApiKeyAuth } from "./auth";
 import { getJobTracker, destroyJobTracker } from "./job-tracker";
@@ -57,7 +57,7 @@ describe("GitHub Actions Secret Handling", () => {
 
     // Read and parse workflow
     const content = readFileSync(WORKFLOW_PATH, "utf-8");
-    workflow = parseYaml(content);
+    workflow = yaml.load(content);
 
     // Clean up test data
     destroyJobTracker();

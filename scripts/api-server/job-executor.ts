@@ -4,9 +4,11 @@
  */
 
 import { spawn, ChildProcess } from "node:child_process";
-import type { JobType, JobStatus, GitHubContext } from "./job-tracker";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { JobType, GitHubContext } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
-import { createJobLogger, type JobLogger } from "./job-persistence";
+import { createJobLogger } from "./job-persistence";
 import { reportJobCompletion } from "./github-status";
 import { isContentMutatingJob, runContentTask } from "./content-repo";
 
@@ -116,6 +118,12 @@ const SIGKILL_FAILSAFE_MS = 1000;
  */
 const MAX_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours max
 
+const PROJECT_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  ".."
+);
+
 /**
  * Parse and validate JOB_TIMEOUT_MS environment variable override.
  * Returns a finite positive integer, or the fallback value if invalid.
@@ -167,6 +175,14 @@ function parseTimeoutOverride(
 /**
  * Map of job types to their Bun script commands and timeout configuration
  */
+
+function isJobCancelled(jobId: string): boolean {
+  const job = getJobTracker().getJob(jobId);
+  return (
+    job?.status === "failed" && job.result?.error === "Job cancelled by user"
+  );
+}
+
 export const JOB_COMMANDS: Record<
   JobType,
   {
@@ -243,13 +259,7 @@ export async function executeJob(
   context: JobExecutionContext,
   options: JobOptions = {}
 ): Promise<void> {
-  const {
-    jobId,
-    onProgress,
-    onComplete,
-    github,
-    startTime = Date.now(),
-  } = context;
+  const { jobId, onProgress, onComplete } = context;
   const jobTracker = getJobTracker();
   const logger = createJobLogger(jobId);
 
@@ -272,7 +282,6 @@ export async function executeJob(
 
   // Build command arguments
   const args = [...jobConfig.args, ...(jobConfig.buildArgs?.(options) || [])];
-
   logger.info("Executing job", { script: jobConfig.script, args });
 
   let childProcess: ChildProcess | null = null;
@@ -285,8 +294,13 @@ export async function executeJob(
   let rejectProcessCompletion: ((error: Error) => void) | null = null;
   let pendingProcessCompletionError: Error | null = null;
 
-  const executeWithCwd = async (cwd?: string): Promise<void> => {
-    childProcess = spawn(jobConfig.script, args, {
+  const runJobProcess = async (cwd?: string): Promise<string> => {
+    const processArgs = [...args];
+    if (cwd && processArgs[0]?.startsWith("scripts/")) {
+      processArgs[0] = resolve(PROJECT_ROOT, processArgs[0]);
+    }
+
+    childProcess = spawn(jobConfig.script, processArgs, {
       cwd,
       env: buildChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],
@@ -306,9 +320,9 @@ export async function executeJob(
     logger.info("Starting job with timeout", {
       timeoutMs,
       timeoutSeconds: Math.floor(timeoutMs / 1000),
+      cwd,
     });
 
-    // Set up timeout handler
     timeoutHandle = setTimeout(async () => {
       if (!childProcess || childProcess.killed) {
         return;
@@ -321,13 +335,10 @@ export async function executeJob(
         pid: childProcess.pid,
       });
 
-      // Send SIGTERM
       childProcess.kill("SIGTERM");
 
-      // Wait for graceful shutdown, then force kill if needed
       await new Promise<void>((resolve) => {
         setTimeout(() => {
-          // Check if process has actually exited, not just if kill() was called
           if (childProcess && !processExited) {
             logger.error(
               "Job did not terminate after SIGTERM, sending SIGKILL",
@@ -337,8 +348,6 @@ export async function executeJob(
             );
             childProcess.kill("SIGKILL");
 
-            // Hard fail-safe: if process never emits close/error after SIGKILL,
-            // force the job into a failed terminal state.
             failSafeTimer = setTimeout(() => {
               if (!processExited) {
                 const failSafeError = new Error(
@@ -361,13 +370,10 @@ export async function executeJob(
       });
     }, timeoutMs);
 
-    // Collect stdout and stderr
     childProcess.stdout?.on("data", (data: Buffer) => {
       const text = data.toString();
       stdout += text;
       logger.debug("stdout", { output: text.trim() });
-
-      // Parse progress from output (for jobs that output progress)
       parseProgressFromOutput(text, onProgress);
     });
 
@@ -377,7 +383,6 @@ export async function executeJob(
       logger.warn("stderr", { output: text.trim() });
     });
 
-    // Wait for process to complete
     await new Promise<void>((resolve, reject) => {
       let completionSettled = false;
       const resolveOnce = () => {
@@ -430,7 +435,6 @@ export async function executeJob(
       });
     });
 
-    // Clear timeout if job completed before timeout
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
@@ -440,25 +444,38 @@ export async function executeJob(
       failSafeTimer = null;
     }
 
-    // Job completed successfully
-    jobTracker.unregisterProcess(jobId);
-    onComplete(true, { output: stdout });
-    jobTracker.updateJobStatus(jobId, "completed", {
-      success: true,
-      output: stdout,
-    });
+    return stdout;
   };
 
   try {
-    if (isContentMutatingJob(jobType)) {
-      await runContentTask(async (cwd) => {
-        await executeWithCwd(cwd);
-      });
+    const useContentRepoManagement = isContentMutatingJob(jobType);
+
+    let resultData: Record<string, unknown>;
+    if (useContentRepoManagement) {
+      const repoResult = await runContentTask(
+        jobType,
+        jobId,
+        async (workdir) => runJobProcess(workdir),
+        { shouldAbort: () => isJobCancelled(jobId) }
+      );
+      resultData = {
+        output: repoResult.output,
+        noOp: repoResult.noOp,
+        commitSha: repoResult.commitSha,
+      };
     } else {
-      await executeWithCwd();
+      const output = await runJobProcess();
+      resultData = { output };
     }
+
+    jobTracker.unregisterProcess(jobId);
+    onComplete(true, resultData);
+    jobTracker.updateJobStatus(jobId, "completed", {
+      success: true,
+      output: stdout,
+      data: resultData,
+    });
   } catch (error) {
-    // Clear timeout if still active
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
@@ -470,7 +487,14 @@ export async function executeJob(
 
     jobTracker.unregisterProcess(jobId);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorOutput = stderr || errorMessage;
+    const errorDetails =
+      error && typeof error === "object" && "details" in error
+        ? String((error as { details?: unknown }).details ?? "")
+        : "";
+    const combinedError = [errorMessage, errorDetails]
+      .filter(Boolean)
+      .join("\n");
+    const errorOutput = stderr || combinedError || errorMessage;
 
     logger.error("Job failed", { error: errorOutput, timedOut });
     onComplete(false, undefined, errorOutput);

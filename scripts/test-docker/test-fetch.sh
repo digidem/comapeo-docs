@@ -97,6 +97,98 @@ done
 IMAGE_NAME="comapeo-docs-api:test"
 CONTAINER_NAME="comapeo-fetch-test"
 API_BASE_URL="http://localhost:3001"
+API_PORT="3001"
+REPO_ROOT="$(pwd -P)"
+DOCS_DIR="$REPO_ROOT/docs"
+STATIC_IMAGES_DIR="$REPO_ROOT/static/images"
+DOCKER_USER="${TEST_DOCKER_USER:-$(id -u):$(id -g)}"
+
+is_non_negative_integer() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+check_port_available() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    if ss -ltn "( sport = :$port )" | grep -q ":$port"; then
+      echo -e "${YELLOW}Error: port $port is already in use.${NC}"
+      return 1
+    fi
+    return 0
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -iTCP -sTCP:LISTEN -P -n | grep -q ":$port"; then
+      echo -e "${YELLOW}Error: port $port is already in use.${NC}"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local body="${3:-}"
+  local tmp
+  tmp=$(mktemp)
+
+  local status
+  if [ -n "$body" ]; then
+    status=$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "$url" \
+      -H "Content-Type: application/json" \
+      -d "$body")
+  else
+    status=$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "$url")
+  fi
+
+  local response
+  response=$(cat "$tmp")
+  rm -f "$tmp"
+
+  if [[ ! "$status" =~ ^2 ]]; then
+    echo -e "${YELLOW}API request failed: $method $url (HTTP $status)${NC}" >&2
+    echo "$response" >&2
+    return 1
+  fi
+
+  echo "$response"
+}
+
+wait_for_server() {
+  local attempts=0
+  local max_attempts=8
+  local delay=1
+
+  while [ "$attempts" -lt "$max_attempts" ]; do
+    if HEALTH_RESPONSE=$(api_request "GET" "$API_BASE_URL/health"); then
+      if echo "$HEALTH_RESPONSE" | jq -e '.data.status == "ok" or .data.status == "healthy"' >/dev/null 2>&1; then
+        echo "$HEALTH_RESPONSE"
+        return 0
+      fi
+    fi
+
+    attempts=$((attempts + 1))
+    sleep "$delay"
+    if [ "$delay" -lt 8 ]; then
+      delay=$((delay * 2))
+    fi
+  done
+
+  echo -e "${YELLOW}Error: API server did not become healthy in time.${NC}" >&2
+  return 1
+}
+
+cancel_job() {
+  local job_id="$1"
+  if [ -z "$job_id" ] || [ "$job_id" = "null" ]; then
+    return 0
+  fi
+
+  api_request "DELETE" "$API_BASE_URL/jobs/$job_id" >/dev/null || true
+}
 
 # Build job options using jq for reliable JSON construction
 JOB_TYPE="notion:fetch-all"
@@ -138,12 +230,11 @@ get_expected_page_count() {
   if [ "$INCLUDE_REMOVED" = true ]; then
     COUNT_OPTIONS=$(echo "$COUNT_OPTIONS" | jq '. + {"includeRemoved": true}')
   fi
-
   # Create count-pages job
   local COUNT_RESPONSE
-  COUNT_RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
-    -H "Content-Type: application/json" \
-    -d "{\"type\":\"notion:count-pages\",\"options\":$COUNT_OPTIONS}")
+  local COUNT_PAYLOAD
+  COUNT_PAYLOAD=$(jq -cn --argjson options "$COUNT_OPTIONS" '{type:"notion:count-pages", options:$options}')
+  COUNT_RESPONSE=$(api_request "POST" "$API_BASE_URL/jobs" "$COUNT_PAYLOAD") || return 1
 
   local COUNT_JOB_ID
   COUNT_JOB_ID=$(echo "$COUNT_RESPONSE" | jq -r '.data.jobId')
@@ -161,7 +252,7 @@ get_expected_page_count() {
   local COUNT_TIMEOUT=120
   while [ $COUNT_ELAPSED -lt $COUNT_TIMEOUT ]; do
     local COUNT_STATUS
-    COUNT_STATUS=$(curl -s "$API_BASE_URL/jobs/$COUNT_JOB_ID")
+    COUNT_STATUS=$(api_request "GET" "$API_BASE_URL/jobs/$COUNT_JOB_ID") || return 1
     local COUNT_STATE
     COUNT_STATE=$(echo "$COUNT_STATUS" | jq -r '.data.status')
 
@@ -174,11 +265,14 @@ get_expected_page_count() {
 
   # Extract result
   local COUNT_RESULT
-  COUNT_RESULT=$(curl -s "$API_BASE_URL/jobs/$COUNT_JOB_ID")
+  COUNT_RESULT=$(api_request "GET" "$API_BASE_URL/jobs/$COUNT_JOB_ID") || return 1
   local COUNT_STATE
   COUNT_STATE=$(echo "$COUNT_RESULT" | jq -r '.data.status')
 
   if [ "$COUNT_STATE" != "completed" ]; then
+    if [ "$COUNT_STATE" = "pending" ] || [ "$COUNT_STATE" = "running" ]; then
+      cancel_job "$COUNT_JOB_ID"
+    fi
     echo -e "${YELLOW}⚠️  Count job did not complete (status: $COUNT_STATE). Skipping validation.${NC}"
     return 1
   fi
@@ -186,7 +280,7 @@ get_expected_page_count() {
   # The job output contains the JSON from our count script
   # Extract it from the job result's output field (last JSON line)
   local JOB_OUTPUT
-  JOB_OUTPUT=$(echo "$COUNT_RESULT" | jq -r '.data.result.output // empty')
+  JOB_OUTPUT=$(echo "$COUNT_RESULT" | jq -r '.data.result.data.output // .data.result.output // empty')
 
   if [ -z "$JOB_OUTPUT" ]; then
     echo -e "${YELLOW}⚠️  Count job produced no output. Skipping validation.${NC}"
@@ -195,7 +289,7 @@ get_expected_page_count() {
 
   # Parse the last JSON line from the output (our script's stdout)
   local COUNT_JSON
-  COUNT_JSON=$(echo "$JOB_OUTPUT" | grep -E '^\{' | tail -1)
+  COUNT_JSON=$(echo "$JOB_OUTPUT" | jq -Rs 'split("\n") | map(select(length > 0) | try fromjson catch empty) | map(select(type=="object" and has("total"))) | last // empty')
 
   if [ -z "$COUNT_JSON" ]; then
     echo -e "${YELLOW}⚠️  Could not parse count result from job output. Skipping validation.${NC}"
@@ -236,7 +330,7 @@ validate_page_count() {
   # of the same unique pages, so we compare against English count only.
   local ACTUAL=0
   if [ -d "docs" ]; then
-    ACTUAL=$(find docs -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    ACTUAL=$(find "docs" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
   fi
 
   echo ""
@@ -261,7 +355,12 @@ validate_page_count() {
   # For --max-pages N, expected count is min(N, comparison_value)
   if [ "$FETCH_ALL" = false ] && [ -n "$COMPARISON_VALUE" ]; then
     local EFFECTIVE_EXPECTED
-    if [ "$MAX_PAGES" -lt "$COMPARISON_VALUE" ] 2>/dev/null; then
+    if ! is_non_negative_integer "$MAX_PAGES" || ! is_non_negative_integer "$COMPARISON_VALUE"; then
+      echo -e "${YELLOW}  ❌ FAIL: Non-numeric value in page-count comparison${NC}"
+      return 1
+    fi
+
+    if [ "$MAX_PAGES" -lt "$COMPARISON_VALUE" ]; then
       EFFECTIVE_EXPECTED="$MAX_PAGES"
       echo "  (--max-pages $MAX_PAGES limits expected to $EFFECTIVE_EXPECTED)"
     else
@@ -314,39 +413,48 @@ echo ""
 
 # Build Docker image
 echo -e "${BLUE}🔨 Building Docker image...${NC}"
-docker build -t "$IMAGE_NAME" -f Dockerfile --target runner . -q
+if ! docker build -t "$IMAGE_NAME" -f Dockerfile --target runner . -q; then
+  echo -e "${YELLOW}Docker build failed.${NC}"
+  exit 1
+fi
 
 # Start container
 echo -e "${BLUE}🚀 Starting API server...${NC}"
 
+if ! check_port_available "$API_PORT"; then
+  exit 1
+fi
+
 # Create directories for volume mounts
-# Docker container runs as root to avoid permission issues with volume-mounted directories
-mkdir -p docs static/images
+if ! mkdir -p "$DOCS_DIR" "$STATIC_IMAGES_DIR"; then
+  echo -e "${YELLOW}Failed to create output directories.${NC}"
+  exit 1
+fi
 
 # Run with volume mounts to save generated files to host
-# - $(pwd)/docs:/app/docs - saves generated markdown to host
-# - $(pwd)/static/images:/app/static/images - saves downloaded images to host
-docker run --rm -d --user root -p 3001:3001 \
+# - $DOCS_DIR:/app/docs - saves generated markdown to host
+# - $STATIC_IMAGES_DIR:/app/static/images - saves downloaded images to host
+docker run --rm -d --user "$DOCKER_USER" -p "$API_PORT:3001" \
   --name "$CONTAINER_NAME" \
   --env-file .env \
   -e API_HOST=0.0.0.0 \
   -e API_PORT=3001 \
   -e DEFAULT_DOCS_PAGE=introduction \
-  -v "$(pwd)/docs:/app/docs" \
-  -v "$(pwd)/static/images:/app/static/images" \
+  -v "$DOCS_DIR:/app/docs" \
+  -v "$STATIC_IMAGES_DIR:/app/static/images" \
   "$IMAGE_NAME"
 
 echo -e "${BLUE}⏳ Waiting for server...${NC}"
-sleep 3
+HEALTH=$(wait_for_server)
 
 # Health check
 echo -e "${BLUE}✅ Health check:${NC}"
-HEALTH=$(curl -s "$API_BASE_URL/health")
 echo "$HEALTH" | jq '.data.status, .data.auth'
 
 # List job types
 echo -e "${BLUE}✅ Available job types:${NC}"
-curl -s "$API_BASE_URL/jobs/types" | jq '.data.types[].id'
+JOB_TYPES=$(api_request "GET" "$API_BASE_URL/jobs/types")
+echo "$JOB_TYPES" | jq '.data.types[].id'
 
 # Get expected page count (before fetch)
 if get_expected_page_count; then
@@ -357,9 +465,8 @@ fi
 
 # Create job
 echo -e "${BLUE}📝 Creating job ($JOB_TYPE):${NC}"
-RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
-  -H "Content-Type: application/json" \
-  -d "{\"type\":\"$JOB_TYPE\",\"options\":$JOB_OPTIONS}")
+JOB_PAYLOAD=$(jq -cn --arg jobType "$JOB_TYPE" --argjson options "$JOB_OPTIONS" '{type:$jobType, options:$options}')
+RESPONSE=$(api_request "POST" "$API_BASE_URL/jobs" "$JOB_PAYLOAD")
 
 JOB_ID=$(echo "$RESPONSE" | jq -r '.data.jobId')
 echo "Job created: $JOB_ID"
@@ -374,7 +481,7 @@ else
 fi
 ELAPSED=0
 while [ $ELAPSED -lt $TIMEOUT ]; do
-  STATUS=$(curl -s "$API_BASE_URL/jobs/$JOB_ID")
+  STATUS=$(api_request "GET" "$API_BASE_URL/jobs/$JOB_ID")
   STATE=$(echo "$STATUS" | jq -r '.data.status')
   PROGRESS=$(echo "$STATUS" | jq -r '.data.progress // empty')
 
@@ -393,9 +500,14 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
   ELAPSED=$((ELAPSED + 2))
 done
 
+if [ "$ELAPSED" -ge "$TIMEOUT" ] && [ "$STATE" = "running" -o "$STATE" = "pending" ]; then
+  echo -e "${YELLOW}Timeout reached; cancelling job $JOB_ID...${NC}"
+  cancel_job "$JOB_ID"
+fi
+
 # Final status
 echo -e "${BLUE}✅ Final job status:${NC}"
-FINAL_STATUS=$(curl -s "$API_BASE_URL/jobs/$JOB_ID")
+FINAL_STATUS=$(api_request "GET" "$API_BASE_URL/jobs/$JOB_ID")
 echo "$FINAL_STATUS" | jq '.data | {status, result}'
 
 # Extract final state for validation
@@ -424,25 +536,25 @@ fi
 
 # List all jobs
 echo -e "${BLUE}✅ All jobs:${NC}"
-curl -s "$API_BASE_URL/jobs" | jq '.data | {count, items: [.items[] | {id, type, status}]}'
+api_request "GET" "$API_BASE_URL/jobs" | jq '.data | {count, items: [.items[] | {id, type, status}]}'
 
 echo -e "${GREEN}✅ Test complete!${NC}"
 
 # Show generated files
 echo -e "${BLUE}📁 Generated files:${NC}"
 if [ -d "docs" ]; then
-  DOC_COUNT=$(find docs -name "*.md" 2>/dev/null | wc -l)
+  DOC_COUNT=$(find "docs" -name "*.md" 2>/dev/null | wc -l)
   echo "  - docs/: $DOC_COUNT markdown files"
   if [ "$DOC_COUNT" -gt 0 ]; then
     echo "    Sample files:"
-    find docs -name "*.md" 2>/dev/null | head -5 | sed 's|^|    |'
+    find "docs" -name "*.md" 2>/dev/null | head -5 | sed 's|^|    |'
   fi
 else
   echo "  - docs/: (empty or not created)"
 fi
 
 if [ -d "static/images" ]; then
-  IMG_COUNT=$(find static/images -type f 2>/dev/null | wc -l)
+  IMG_COUNT=$(find "static/images" -type f 2>/dev/null | wc -l)
   echo "  - static/images/: $IMG_COUNT image files"
 else
   echo "  - static/images/: (empty or not created)"

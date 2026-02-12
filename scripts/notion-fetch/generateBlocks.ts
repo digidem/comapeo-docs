@@ -288,6 +288,33 @@ interface PageProcessingResult {
   containsS3: boolean;
 }
 
+function createFailedPageProcessingResult(
+  task: PageTask,
+  error: unknown
+): PageProcessingResult {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  console.error(
+    chalk.red(
+      `Unexpected failure before page processing could complete for ${task.page.id}: ${errorMessage}`
+    )
+  );
+
+  return {
+    success: false,
+    totalSaved: 0,
+    emojiCount: 0,
+    pageTitle: task.pageTitle,
+    pageId: task.page.id,
+    lastEdited: task.page.last_edited_time,
+    outputPath: task.filePath,
+    blockFetches: 0,
+    blockCacheHits: 0,
+    markdownFetches: 0,
+    markdownCacheHits: 0,
+    containsS3: true,
+  };
+}
+
 /**
  * Process a single page task. This function is designed to be called in parallel.
  * All dependencies are passed in via the task object to avoid shared state issues.
@@ -998,7 +1025,13 @@ export async function generateBlocks(
 
       const pageResults = await processBatch(
         pageTasks,
-        async (task) => processSinglePage(task),
+        async (task) => {
+          try {
+            return await processSinglePage(task);
+          } catch (error) {
+            return createFailedPageProcessingResult(task, error);
+          }
+        },
         {
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md

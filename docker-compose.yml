@@ -38,6 +38,19 @@ services:
       DATABASE_ID: ${DATABASE_ID}
       DATA_SOURCE_ID: ${DATA_SOURCE_ID}
 
+      # Content repository configuration (required for mutating jobs)
+      # Required for: notion:fetch, notion:fetch-all, notion:translate
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL}
+
+      # Content repository behavior (optional)
+      GITHUB_CONTENT_BRANCH: ${GITHUB_CONTENT_BRANCH:-content}
+      WORKDIR: ${WORKDIR:-/workspace/repo}
+      COMMIT_MESSAGE_PREFIX: ${COMMIT_MESSAGE_PREFIX:-content-bot:}
+      ALLOW_EMPTY_COMMITS: ${ALLOW_EMPTY_COMMITS:-false}
+
       # OpenAI Configuration (required for translation jobs)
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}

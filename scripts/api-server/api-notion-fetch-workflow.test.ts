@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { parse as parseYaml } from "yaml";
+import * as yaml from "js-yaml";
 
 const WORKFLOW_PATH = resolve(
   process.cwd(),
@@ -32,7 +32,7 @@ describe("API Notion Fetch Workflow", () => {
 
     // Read and parse workflow
     const content = readFileSync(WORKFLOW_PATH, "utf-8");
-    workflow = parseYaml(content);
+    workflow = yaml.load(content);
   });
 
   describe("Workflow Structure", () => {
@@ -263,13 +263,13 @@ describe("API Notion Fetch Workflow", () => {
   });
 
   describe("Security and Best Practices", () => {
-    it("should use GitHub Actions checkout@v4", () => {
+    it("should use GitHub Actions checkout@v6", () => {
       const job = workflow.jobs["fetch-via-api"];
       const checkoutStep = job.steps.find((s: any) =>
         s.uses?.startsWith("actions/checkout")
       );
       expect(checkoutStep).toBeDefined();
-      expect(checkoutStep.uses).toBe("actions/checkout@v4");
+      expect(checkoutStep.uses).toBe("actions/checkout@v6");
     });
 
     it("should use API key authentication", () => {

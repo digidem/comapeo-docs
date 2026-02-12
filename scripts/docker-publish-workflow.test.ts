@@ -134,6 +134,15 @@ describe("Docker Publish Workflow", () => {
     it("should determine publish mode using non-fork equality check", () => {
       const publish = steps.find((s: any) => s.id === "publish");
       expect(publish).toBeDefined();
+      expect(publish.env.DOCKERHUB_USERNAME).toBe(
+        "${{ secrets.DOCKERHUB_USERNAME }}"
+      );
+      expect(publish.env.DOCKERHUB_TOKEN).toBe(
+        "${{ secrets.DOCKERHUB_TOKEN }}"
+      );
+      expect(publish.run).toContain(
+        'if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then'
+      );
       expect(publish.run).toContain(
         '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
       );

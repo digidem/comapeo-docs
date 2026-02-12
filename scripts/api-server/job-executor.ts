@@ -168,6 +168,14 @@ function parseTimeoutOverride(
 /**
  * Map of job types to their Bun script commands and timeout configuration
  */
+
+function isJobCancelled(jobId: string): boolean {
+  const job = getJobTracker().getJob(jobId);
+  return (
+    job?.status === "failed" && job.result?.error === "Job cancelled by user"
+  );
+}
+
 export const JOB_COMMANDS: Record<
   JobType,
   {
@@ -437,8 +445,11 @@ export async function executeJob(
 
     let resultData: Record<string, unknown>;
     if (useContentRepoManagement) {
-      const repoResult = await runContentTask(jobType, jobId, async (workdir) =>
-        runJobProcess(workdir)
+      const repoResult = await runContentTask(
+        jobType,
+        jobId,
+        async (workdir) => runJobProcess(workdir),
+        { shouldAbort: () => isJobCancelled(jobId) }
       );
       resultData = {
         output: repoResult.output,

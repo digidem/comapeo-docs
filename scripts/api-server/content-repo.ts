@@ -8,7 +8,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
@@ -291,23 +291,41 @@ export interface GitTaskResult {
   commitSha?: string;
 }
 
+interface RunContentTaskOptions {
+  shouldAbort?: () => boolean;
+}
+
+function assertNotAborted(shouldAbort?: () => boolean): void {
+  if (shouldAbort?.()) {
+    throw new ContentRepoError("Job cancelled by user");
+  }
+}
+
 export async function runContentTask(
   taskName: string,
   requestId: string,
-  taskRunner: (workdir: string) => Promise<string>
+  taskRunner: (workdir: string) => Promise<string>,
+  options: RunContentTaskOptions = {}
 ): Promise<GitTaskResult> {
-  await initializeContentRepo();
   const config = getConfig();
   const lock = await acquireRepoLock(
-    resolve(config.workdir, ".git", "content-repo.lock")
+    resolve(
+      dirname(config.workdir),
+      `.${basename(config.workdir)}.content-repo.lock`
+    )
   );
 
   try {
+    await initializeContentRepo();
+    assertNotAborted(options.shouldAbort);
+
     await runGit(["fetch", "origin", config.contentBranch], {
       cwd: config.workdir,
       auth: true,
       errorPrefix: "Failed to sync repository from origin",
     });
+
+    assertNotAborted(options.shouldAbort);
 
     await runGit(
       [
@@ -327,12 +345,18 @@ export async function runContentTask(
       errorPrefix: "Failed to reset local repository",
     });
 
+    assertNotAborted(options.shouldAbort);
+
     await runGit(["clean", "-fd"], {
       cwd: config.workdir,
       errorPrefix: "Failed to clean local repository",
     });
 
+    assertNotAborted(options.shouldAbort);
+
     const output = await taskRunner(config.workdir);
+
+    assertNotAborted(options.shouldAbort);
 
     const status = await runGit(["status", "--porcelain"], {
       cwd: config.workdir,
@@ -360,6 +384,8 @@ export async function runContentTask(
       cwd: config.workdir,
       errorPrefix: "Failed to commit content changes",
     });
+
+    assertNotAborted(options.shouldAbort);
 
     await runGit(["push", "origin", config.contentBranch], {
       cwd: config.workdir,

@@ -47,7 +47,7 @@ services:
 
       # Content repository behavior (optional)
       GITHUB_CONTENT_BRANCH: ${GITHUB_CONTENT_BRANCH:-content}
-      WORKDIR: ${WORKDIR:-/workspace/repo}
+      WORKDIR: ${WORKDIR:-/app/workspace/repo}
       COMMIT_MESSAGE_PREFIX: ${COMMIT_MESSAGE_PREFIX:-content-bot:}
       ALLOW_EMPTY_COMMITS: ${ALLOW_EMPTY_COMMITS:-false}
 
@@ -72,13 +72,12 @@ services:
       - ${DOCKER_VOLUME_NAME:-comapeo-job-data}:/tmp
 
     # Resource limits (configurable via environment)
+    # Note: CPU limits disabled due to NanoCPUs compatibility issues
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_CPU_LIMIT:-1}"
           memory: "${DOCKER_MEMORY_LIMIT:-512M}"
         reservations:
-          cpus: "${DOCKER_CPU_RESERVATION:-0.25}"
           memory: "${DOCKER_MEMORY_RESERVATION:-128M}"
 
     # Restart policy (configurable)

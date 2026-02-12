@@ -304,6 +304,8 @@ export async function runContentTask(
   options: RunContentTaskOptions = {}
 ): Promise<GitTaskResult> {
   const config = getConfig();
+  await mkdir(dirname(config.workdir), { recursive: true });
+
   const lock = await acquireRepoLock(
     resolve(
       dirname(config.workdir),

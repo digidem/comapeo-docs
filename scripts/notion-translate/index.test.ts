@@ -15,6 +15,7 @@ const mockAccess = vi.fn();
 const mockReaddir = vi.fn();
 const mockStat = vi.fn();
 const mockBlocksChildrenList = vi.fn();
+const mockPagesRetrieve = vi.fn();
 
 const mockN2m = {
   pageToMarkdown: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("../notionClient", () => ({
   n2m: mockN2m,
   enhancedNotion: {
     blocksChildrenList: mockBlocksChildrenList,
+    pagesRetrieve: mockPagesRetrieve,
   },
 }));
 
@@ -1361,6 +1363,224 @@ describe("notion-translate index", () => {
       expect(parentFailures.length).toBeGreaterThan(0);
 
       logSpy.mockRestore();
+    });
+  });
+
+  describe("sibling translation lookup", () => {
+    it("finds translation sibling by traversing parent block hierarchy", async () => {
+      const englishPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "English Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: undefined, // No parent relation
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      // Add parent block hierarchy info
+      (englishPage as any).parent = {
+        type: "page_id",
+        page_id: "2621b08162d580beba78f50c3947b85e",
+      };
+
+      const portugueseSibling = createMockNotionPage({
+        id: "2641b08162d5813a9fcecb1deca11158",
+        title: "Portuguese Page",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-01-01T00:00:00.000Z",
+      });
+
+      // Mock blocksChildrenList to return sibling pages
+      mockBlocksChildrenList.mockResolvedValue({
+        results: [
+          {
+            id: englishPage.id,
+            type: "child_page",
+            object: "page",
+          },
+          {
+            id: portugueseSibling.id,
+            type: "child_page",
+            object: "page",
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      });
+
+      // Mock pagesRetrieve to return full page objects with properties
+      mockPagesRetrieve.mockImplementation(
+        async ({ page_id }: { page_id: string }) => {
+          if (page_id === portugueseSibling.id) {
+            return portugueseSibling;
+          }
+          return englishPage;
+        }
+      );
+
+      const { findSiblingTranslations } = await import("./index");
+      const result = await findSiblingTranslations(englishPage, "Portuguese");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe(portugueseSibling.id);
+      expect(mockBlocksChildrenList).toHaveBeenCalledWith({
+        block_id: "2621b08162d580beba78f50c3947b85e",
+      });
+      expect(mockPagesRetrieve).toHaveBeenCalledWith({
+        page_id: portugueseSibling.id,
+      });
+    });
+
+    it("returns null when no parent block exists", async () => {
+      const englishPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "English Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      // No parent block hierarchy info
+      (englishPage as any).parent = undefined;
+
+      const { findSiblingTranslations } = await import("./index");
+      const result = await findSiblingTranslations(englishPage, "Portuguese");
+
+      expect(result).toBeNull();
+      expect(mockBlocksChildrenList).not.toHaveBeenCalled();
+    });
+
+    it("returns null when no language match found among siblings", async () => {
+      const englishPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "English Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      (englishPage as any).parent = {
+        type: "page_id",
+        page_id: "2621b08162d580beba78f50c3947b85e",
+      };
+
+      const spanishPage = createMockNotionPage({
+        id: "spanish-page-id",
+        title: "Spanish Page",
+        status: "Auto Translation Generated",
+        language: "Spanish",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-01-01T00:00:00.000Z",
+      });
+
+      mockBlocksChildrenList.mockResolvedValue({
+        results: [
+          {
+            id: englishPage.id,
+            type: "child_page",
+            object: "page",
+          },
+          {
+            id: spanishPage.id,
+            type: "child_page",
+            object: "page",
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      });
+
+      mockPagesRetrieve.mockImplementation(
+        async ({ page_id }: { page_id: string }) => {
+          if (page_id === spanishPage.id) {
+            return spanishPage;
+          }
+          return englishPage;
+        }
+      );
+
+      const { findSiblingTranslations } = await import("./index");
+      const result = await findSiblingTranslations(englishPage, "Portuguese");
+
+      expect(result).toBeNull();
+    });
+
+    it("filters by language and returns first matching sibling", async () => {
+      const englishPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "English Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      (englishPage as any).parent = {
+        type: "page_id",
+        page_id: "2621b08162d580beba78f50c3947b85e",
+      };
+
+      const portugueseSibling = createMockNotionPage({
+        id: "pt-sibling-id",
+        title: "PT Sibling",
+        status: "Auto Translation Generated",
+        language: "Portuguese",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-01-01T00:00:00.000Z",
+      });
+
+      const spanishSibling = createMockNotionPage({
+        id: "es-sibling-id",
+        title: "ES Sibling",
+        status: "Auto Translation Generated",
+        language: "Spanish",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-01-01T00:00:00.000Z",
+      });
+
+      mockBlocksChildrenList.mockResolvedValue({
+        results: [
+          { id: englishPage.id, type: "child_page", object: "page" },
+          { id: portugueseSibling.id, type: "child_page", object: "page" },
+          { id: spanishSibling.id, type: "child_page", object: "page" },
+        ],
+        has_more: false,
+        next_cursor: null,
+      });
+
+      mockPagesRetrieve.mockImplementation(
+        async ({ page_id }: { page_id: string }) => {
+          if (page_id === portugueseSibling.id) return portugueseSibling;
+          if (page_id === spanishSibling.id) return spanishSibling;
+          return englishPage;
+        }
+      );
+
+      const { findSiblingTranslations } = await import("./index");
+
+      // Test Portuguese lookup
+      const ptResult = await findSiblingTranslations(englishPage, "Portuguese");
+      expect(ptResult?.id).toBe(portugueseSibling.id);
+
+      // Test Spanish lookup
+      const esResult = await findSiblingTranslations(englishPage, "Spanish");
+      expect(esResult?.id).toBe(spanishSibling.id);
     });
   });
 });

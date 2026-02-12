@@ -33,6 +33,63 @@ import {
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
 
+/**
+ * Finds sibling translation pages by traversing the parent block hierarchy
+ * @param englishPage The English page to find siblings for
+ * @param targetLanguage The target language name (e.g., "Portuguese", "Spanish")
+ * @returns The sibling translation page if found, null otherwise
+ */
+export async function findSiblingTranslations(
+  englishPage: NotionPage,
+  targetLanguage: string
+): Promise<NotionPage | null> {
+  // 1. Get parent block ID from page.parent (API hierarchy, not relation property)
+  const parentBlockId =
+    (englishPage as any).parent?.block_id ??
+    (englishPage as any).parent?.page_id ??
+    (englishPage as any).parent?.database_id;
+
+  if (!parentBlockId) {
+    return null;
+  }
+
+  // 2. Query parent's children using blocks.children.list with pagination
+  const { enhancedNotion } = await import("../notionClient.js");
+  let nextCursor: string | null = null;
+
+  do {
+    const childrenResponse = await enhancedNotion.blocksChildrenList({
+      block_id: parentBlockId,
+      start_cursor: nextCursor || undefined,
+    });
+
+    // 3. Filter children that are pages (not blocks) with matching language
+    const pageChildren = childrenResponse.results.filter(
+      (child: any) => child.type === "child_page" || child.object === "page"
+    );
+
+    for (const childRef of pageChildren) {
+      // Need to fetch full page to check language property
+      const childPage = (await enhancedNotion.pagesRetrieve({
+        page_id: childRef.id,
+      })) as NotionPage;
+
+      const childLanguage = (
+        childPage.properties?.[NOTION_PROPERTIES.LANGUAGE] as
+          | NotionSelectProperty
+          | undefined
+      )?.select?.name;
+      if (childLanguage === targetLanguage) {
+        return childPage;
+      }
+    }
+
+    nextCursor = childrenResponse.next_cursor;
+  } while (nextCursor);
+
+  return null;
+}
+
 // Type helpers for Notion properties
 type NotionTitleProperty = { title: Array<{ plain_text: string }> };
 type NotionSelectProperty = { select: { name: string } | null };
@@ -276,8 +333,15 @@ export async function findTranslationPage(
       return idMatched;
     }
 
-    if (!getParentRelationId(englishPage) && !options.sourcePageId) {
-      return null;
+    // Sibling lookup: try finding translation via parent block hierarchy
+    if (!getParentRelationId(englishPage)) {
+      const sibling = await findSiblingTranslations(
+        englishPage,
+        targetLanguage
+      );
+      if (sibling) {
+        return sibling;
+      }
     }
     return null;
   } catch (error) {

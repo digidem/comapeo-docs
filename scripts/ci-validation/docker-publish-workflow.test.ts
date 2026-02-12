@@ -287,8 +287,8 @@ describe("Docker Publish Workflow Validation", () => {
   });
 
   describe("Strict Policy Assertions", () => {
-    it("should set IMAGE_NAME to github.repository", () => {
-      expect(workflow.env.IMAGE_NAME).toBe("${{ github.repository }}");
+    it("should set IMAGE_NAME to the API image repository", () => {
+      expect(workflow.env.IMAGE_NAME).toBe("communityfirst/comapeo-docs-api");
     });
 
     it("should grant packages write permission", () => {

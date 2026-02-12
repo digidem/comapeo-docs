@@ -79,8 +79,8 @@ describe("Docker Publish Workflow", () => {
       expect(workflow.env.REGISTRY).toBe("docker.io");
     });
 
-    it("should set IMAGE_NAME from repository", () => {
-      expect(workflow.env.IMAGE_NAME).toBe("${{ github.repository }}");
+    it("should set IMAGE_NAME to the API image repository", () => {
+      expect(workflow.env.IMAGE_NAME).toBe("communityfirst/comapeo-docs-api");
     });
   });
 

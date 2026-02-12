@@ -2,7 +2,7 @@
  * Server startup and shutdown logic
  */
 // eslint-disable-next-line import/no-unresolved
-import { serve, type Server } from "bun";
+import { serve } from "bun";
 import { getAuth } from "./auth";
 import { getAudit } from "./audit";
 import { handleRequest } from "./request-handler";

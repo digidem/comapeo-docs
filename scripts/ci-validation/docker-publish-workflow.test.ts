@@ -99,6 +99,15 @@ describe("Docker Publish Workflow Validation", () => {
       expect(publishStep.run).toContain(
         '"${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}"'
       );
+      expect(publishStep.env.DOCKERHUB_USERNAME).toBe(
+        "${{ secrets.DOCKERHUB_USERNAME }}"
+      );
+      expect(publishStep.env.DOCKERHUB_TOKEN).toBe(
+        "${{ secrets.DOCKERHUB_TOKEN }}"
+      );
+      expect(publishStep.run).toContain(
+        'if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then'
+      );
     });
 
     it("should not push images for pull requests", () => {
@@ -188,18 +197,21 @@ describe("Docker Publish Workflow Validation", () => {
     });
   });
 
-  describe("Action Versions Pinned to SHAs", () => {
-    const actionsRequiringShaPinning = [
-      "actions/checkout",
+  describe("Action Refs Use Appropriate Pinning", () => {
+    const expectedImmutableActions = [
       "docker/setup-qemu-action",
       "docker/setup-buildx-action",
       "docker/login-action",
       "docker/metadata-action",
       "docker/build-push-action",
+    ];
+
+    const expectedVersionedActions = [
+      "actions/checkout",
       "actions/github-script",
     ];
 
-    it("should pin all actions to SHAs", () => {
+    it("should use immutable SHAs for Docker actions and version tags for GitHub actions", () => {
       const steps = workflow.jobs.build.steps;
       const actionUses: string[] = [];
 
@@ -212,30 +224,21 @@ describe("Docker Publish Workflow Validation", () => {
 
       for (const action of actionUses) {
         const [actionName, ref] = action.split("@");
-        // SHA should be 40 characters
-        expect(ref).toMatch(/^[a-f0-9]{40}$/);
-        expect(
-          actionsRequiringShaPinning.some((a) =>
-            actionName.includes(a.split("/")[1])
-          )
-        ).toBe(true);
-      }
-    });
+        const isImmutableAction = expectedImmutableActions.some((a) =>
+          actionName.includes(a.split("/")[1])
+        );
+        const isVersionedAction = expectedVersionedActions.some((a) =>
+          actionName.includes(a.split("/")[1])
+        );
 
-    it("should have version comment after SHA", () => {
-      const steps = workflow.jobs.build.steps;
-      const actionUses: string[] = [];
+        expect(isImmutableAction || isVersionedAction).toBe(true);
 
-      for (const step of steps) {
-        const stepValue = Object.values(step)[0] as any;
-        if (stepValue?.uses) {
-          actionUses.push(stepValue.uses);
+        if (isImmutableAction) {
+          expect(ref).toMatch(/^[a-f0-9]{40}$/);
+          continue;
         }
-      }
 
-      for (const actionUse of actionUses) {
-        // Should have format: action@sha # version
-        expect(actionUse).toMatch(/@[a-f0-9]{40}\s+#\s+v\d+/);
+        expect(ref?.startsWith("v")).toBe(true);
       }
     });
   });

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { parseDocument } from "yaml";
+import * as yaml from "js-yaml";
 
 describe("Docker Publish Workflow", () => {
   const workflowPath = resolve(
@@ -13,7 +13,7 @@ describe("Docker Publish Workflow", () => {
 
   beforeAll(() => {
     workflowContent = readFileSync(workflowPath, "utf-8");
-    workflow = parseDocument(workflowContent).toJS();
+    workflow = yaml.load(workflowContent);
   });
 
   describe("Workflow Structure", () => {
@@ -80,7 +80,7 @@ describe("Docker Publish Workflow", () => {
     });
 
     it("should set IMAGE_NAME from repository", () => {
-      expect(workflow.env.IMAGE_NAME).toContain("github.repository");
+      expect(workflow.env.IMAGE_NAME).toBe("${{ github.repository }}");
     });
   });
 
@@ -138,7 +138,7 @@ describe("Docker Publish Workflow", () => {
       );
       expect(login).toBeDefined();
       expect(login.uses).toContain("docker/login-action@");
-      expect(login.if).toContain("github.event_name != 'pull_request'");
+      expect(login.if).toBe("github.event_name != 'pull_request'");
       expect(login.with.username).toContain("secrets.DOCKERHUB_USERNAME");
       expect(login.with.password).toContain("secrets.DOCKERHUB_TOKEN");
     });
@@ -160,7 +160,9 @@ describe("Docker Publish Workflow", () => {
       expect(build.uses).toContain("docker/build-push-action@");
       expect(build.with.platforms).toContain("linux/amd64");
       expect(build.with.platforms).toContain("linux/arm64");
-      expect(build.with.push).toContain("github.event_name != 'pull_request'");
+      expect(build.with.push).toBe(
+        "${{ github.event_name != 'pull_request' }}"
+      );
       expect(build.with["cache-from"]).toContain("type=gha");
       expect(build.with["cache-to"]).toContain("type=gha,mode=max");
     });
@@ -170,9 +172,8 @@ describe("Docker Publish Workflow", () => {
         s.uses?.includes("actions/github-script")
       );
       expect(comment).toBeDefined();
-      expect(comment.if).toContain("github.event_name == 'pull_request'");
-      expect(comment.if).toContain(
-        "github.event.pull_request.head.repo.full_name == github.repository"
+      expect(comment.if).toBe(
+        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
       );
       expect(comment.uses).toContain("actions/github-script@");
       expect(comment.with.script).toContain("docker pull");
@@ -199,8 +200,10 @@ describe("Docker Publish Workflow", () => {
         (s: any) => s.id === "build"
       );
 
-      expect(loginStep.if).toContain("!= 'pull_request'");
-      expect(buildStep.with.push).toContain("!= 'pull_request'");
+      expect(loginStep.if).toBe("github.event_name != 'pull_request'");
+      expect(buildStep.with.push).toBe(
+        "${{ github.event_name != 'pull_request' }}"
+      );
     });
 
     it("should only comment on non-fork PRs", () => {

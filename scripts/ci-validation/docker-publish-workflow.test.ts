@@ -279,6 +279,44 @@ describe("Docker Publish Workflow Validation", () => {
     });
   });
 
+  describe("Strict Policy Assertions", () => {
+    it("should set IMAGE_NAME to github.repository", () => {
+      expect(workflow.env.IMAGE_NAME).toBe("${{ github.repository }}");
+    });
+
+    it("should grant packages write permission", () => {
+      expect(workflow.jobs.build.permissions.packages).toBe("write");
+    });
+
+    it("should guard docker login for non-PR events", () => {
+      const loginStep = workflow.jobs.build.steps.find(
+        (step: any) => step.name === "Login to Docker Hub"
+      );
+
+      expect(loginStep.if).toBe("github.event_name != 'pull_request'");
+    });
+
+    it("should set build push mode from pull request event check", () => {
+      const buildStep = workflow.jobs.build.steps.find(
+        (step: any) => step.name === "Build and push"
+      );
+
+      expect(buildStep.with.push).toBe(
+        "${{ github.event_name != 'pull_request' }}"
+      );
+    });
+
+    it("should only comment on non-fork pull requests", () => {
+      const prCommentStep = workflow.jobs.build.steps.find(
+        (step: any) => step.name === "PR comment with image reference"
+      );
+
+      expect(prCommentStep.if).toBe(
+        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+      );
+    });
+  });
+
   describe("Additional Workflow Validations", () => {
     it("should have proper permissions set", () => {
       const permissions = workflow.jobs.build.permissions;

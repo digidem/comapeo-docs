@@ -48,6 +48,37 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 - The command **continues** when `code.json` (UI strings) is missing or malformed (soft-fail).
 - Every run emits a machine-readable `TRANSLATION_SUMMARY ...` log line.
 
+**TRANSLATION_SUMMARY schema**:
+
+```typescript
+type TranslationRunSummary = {
+  totalEnglishPages: number; // Total English pages found for translation
+  processedLanguages: number; // Number of target languages processed
+  newTranslations: number; // Newly created translation pages
+  updatedTranslations: number; // Existing pages that were updated
+  skippedTranslations: number; // Pages skipped (already up-to-date)
+  failedTranslations: number; // Failed doc translations
+  codeJsonFailures: number; // Failed code.json (UI string) translations
+  codeJsonSourceFileMissing: boolean; // Source code.json was missing/malformed (soft-fail)
+  themeFailures: number; // Failed theme (navbar/footer) translations
+  failures: TranslationFailure[]; // Detailed failure entries
+};
+
+type TranslationFailure = {
+  language: string; // Target language (e.g., "pt-BR", "es")
+  title: string; // Page title or file that failed
+  pageId?: string; // Notion page ID if applicable
+  error: string; // Error message
+  isCritical: boolean; // Whether failure prevents further processing
+};
+```
+
+**Example output**:
+
+```
+TRANSLATION_SUMMARY {"totalEnglishPages":42,"processedLanguages":2,"newTranslations":5,"updatedTranslations":12,"skippedTranslations":23,"failedTranslations":1,"codeJsonFailures":0,"codeJsonSourceFileMissing":false,"themeFailures":0,"failures":[...]}
+```
+
 ### Soft-fail policy for code.json
 
 **Rationale**: Doc translation is the primary value, while `code.json` (UI strings) and theme translations are secondary. Hard-failing on secondary values would block all primary work.

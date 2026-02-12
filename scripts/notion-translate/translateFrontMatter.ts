@@ -4,7 +4,12 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
+import {
+  DEFAULT_OPENAI_MODEL,
+  getModelParams,
+  TRANSLATION_MAX_RETRIES,
+  TRANSLATION_RETRY_BASE_DELAY_MS,
+} from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -15,8 +20,8 @@ const openai = new OpenAI({
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 750;
+const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
+const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant

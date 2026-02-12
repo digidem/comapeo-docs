@@ -120,6 +120,10 @@ export const ENGLISH_MODIFICATION_ERROR =
 export const ENGLISH_DIR_SAVE_ERROR =
   "Safety check failed: Cannot save translated content to English docs directory";
 
+// Translation retry configuration
+export const TRANSLATION_MAX_RETRIES = 3;
+export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
+
 // Test environment configuration
 export const SAFE_BRANCH_PATTERNS = [
   "test/*",

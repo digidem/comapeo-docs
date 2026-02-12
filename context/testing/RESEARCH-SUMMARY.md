@@ -13,20 +13,14 @@
 
 ## Key Deliverables Created
 
-### 1. **CONTEXT Artifact** (Agent Handoff Document)
-
-- **Path:** `.claude/agents/context/2025-12-04T00-00-00-best-practices-researcher-CONTEXT.md`
-- **Purpose:** For downstream agents (issue-spec-generator, implementation-planner)
-- **Contains:** Comprehensive findings, trade-offs, implementation guidance
-
-### 2. **Full Best Practices Guide**
+### 1. **Full Best Practices Guide**
 
 - **Path:** `context/testing/vitest-mocking-best-practices.md`
 - **Purpose:** Complete reference with real-world examples
 - **Length:** ~800 lines covering all patterns
 - **Includes:** Core concepts, module mocking, axios, promises, casting, anti-patterns
 
-### 3. **Quick Reference**
+### 2. **Quick Reference**
 
 - **Path:** `context/testing/vitest-mocking-quick-reference.md`
 - **Purpose:** Fast lookup during development
@@ -105,7 +99,7 @@ All patterns documented are production-ready and tested across the ecosystem.
 ## Resources
 
 - **Full Documentation:** See `vitest-mocking-best-practices.md` (22KB, ~800 lines)
-- **Project Context:** See `.claude/agents/context/2025-12-04T00-00-00-best-practices-researcher-CONTEXT.md`
+- **Project Context:** See `RESEARCH-SUMMARY.md` and `INDEX.md` in this directory
 - **Official Docs:** https://vitest.dev/guide/mocking
 - **Real Examples:** Comapeo-docs test files in `scripts/notion-fetch/` directory
 

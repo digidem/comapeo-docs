@@ -239,17 +239,13 @@ All recommendations in these documents are based on:
 
 ```
 comapeo-docs/
-├── context/
-│   └── testing/
-│       ├── INDEX.md (this file)
-│       ├── RESEARCH-SUMMARY.md
-│       ├── vitest-mocking-quick-reference.md
-│       ├── vitest-mocking-best-practices.md
-│       └── vitest-mocking-architecture.md (planned)
-└── .claude/
-    └── agents/
-        └── context/
-            └── 2025-12-04T00-00-00-best-practices-researcher-CONTEXT.md
+└── context/
+    └── testing/
+        ├── INDEX.md (this file)
+        ├── RESEARCH-SUMMARY.md
+        ├── vitest-mocking-quick-reference.md
+        ├── vitest-mocking-best-practices.md
+        └── vitest-mocking-architecture.md (planned)
 ```
 
 ---

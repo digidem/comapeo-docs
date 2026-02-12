@@ -327,5 +327,5 @@ vi.mocked(enhancedNotion.dataSourcesQuery)
 ## Resources
 
 - Full guide: `vitest-mocking-best-practices.md`
-- Research notes: `.claude/agents/context/2025-12-04T00-00-00-best-practices-researcher-CONTEXT.md`
+- Research notes: `RESEARCH-SUMMARY.md`
 - Official docs: https://vitest.dev/guide/mocking

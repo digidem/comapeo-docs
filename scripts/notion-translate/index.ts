@@ -54,7 +54,6 @@ export async function findSiblingTranslations(
   }
 
   // 2. Query parent's children using blocks.children.list with pagination
-  const { enhancedNotion } = await import("../notionClient.js");
   let nextCursor: string | null = null;
 
   do {

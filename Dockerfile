@@ -29,7 +29,7 @@ ENV NODE_ENV=${NODE_ENV}
 # pngquant: PNG optimization (used by imagemin-pngquant)
 # libjpeg-turbo-progs: JPEG optimization, provides /usr/bin/jpegtran (used by imagemin-jpegtran)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git pngquant libjpeg-turbo-progs && \
+    apt-get install -y --no-install-recommends git ca-certificates pngquant libjpeg-turbo-progs && \
     rm -rf /var/lib/apt/lists/*
 
 # Set proper permissions (oven/bun image already has 'bun' user)

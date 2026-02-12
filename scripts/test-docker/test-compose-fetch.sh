@@ -185,10 +185,18 @@ check_required_env
 trap cleanup EXIT
 
 echo -e "${BLUE}Starting docker compose API service...${NC}"
-docker compose \
-  --project-name "$COMPOSE_PROJECT_NAME" \
-  -f "$COMPOSE_FILE_PATH" \
-  up -d --build "$SERVICE_NAME"
+if [[ -f .env ]]; then
+  docker compose \
+    --env-file .env \
+    --project-name "$COMPOSE_PROJECT_NAME" \
+    -f "$COMPOSE_FILE_PATH" \
+    up -d --build "$SERVICE_NAME"
+else
+  docker compose \
+    --project-name "$COMPOSE_PROJECT_NAME" \
+    -f "$COMPOSE_FILE_PATH" \
+    up -d --build "$SERVICE_NAME"
+fi
 
 echo -e "${BLUE}Waiting for API health...${NC}"
 HEALTH_RESPONSE=$(wait_for_server)
@@ -209,7 +217,7 @@ PAYLOAD=$(jq -cn --arg type "notion:fetch-all" --argjson options "$JOB_OPTIONS" 
 
 echo -e "${BLUE}Creating job...${NC}"
 CREATE_RESPONSE=$(api_request "POST" "$API_BASE_URL/jobs" "$PAYLOAD")
-JOB_ID=$(echo "$CREATE_RESPONSE" | jq -r '.data.id')
+JOB_ID=$(echo "$CREATE_RESPONSE" | jq -r '.data.jobId')
 
 if [[ -z "$JOB_ID" || "$JOB_ID" == "null" ]]; then
   echo -e "${YELLOW}Failed to parse job id from response:${NC}"
@@ -219,7 +227,7 @@ fi
 
 echo -e "${GREEN}Job started:${NC} $JOB_ID"
 
-MAX_POLLS=180
+MAX_POLLS=1800
 POLL_INTERVAL=2
 poll=0
 

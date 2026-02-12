@@ -8,6 +8,7 @@ import type { JobType, JobStatus, GitHubContext } from "./job-tracker";
 import { getJobTracker } from "./job-tracker";
 import { createJobLogger, type JobLogger } from "./job-persistence";
 import { reportJobCompletion } from "./github-status";
+import { isContentMutatingJob, runContentTask } from "./content-repo";
 
 /**
  * Whitelist of environment variables that child processes are allowed to access.
@@ -284,8 +285,9 @@ export async function executeJob(
   let rejectProcessCompletion: ((error: Error) => void) | null = null;
   let pendingProcessCompletionError: Error | null = null;
 
-  try {
+  const executeWithCwd = async (cwd?: string): Promise<void> => {
     childProcess = spawn(jobConfig.script, args, {
+      cwd,
       env: buildChildEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -445,6 +447,16 @@ export async function executeJob(
       success: true,
       output: stdout,
     });
+  };
+
+  try {
+    if (isContentMutatingJob(jobType)) {
+      await runContentTask(async (cwd) => {
+        await executeWithCwd(cwd);
+      });
+    } else {
+      await executeWithCwd();
+    }
   } catch (error) {
     // Clear timeout if still active
     if (timeoutHandle) {

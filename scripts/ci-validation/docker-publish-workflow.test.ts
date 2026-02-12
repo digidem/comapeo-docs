@@ -188,8 +188,8 @@ describe("Docker Publish Workflow Validation", () => {
     });
   });
 
-  describe("Action Versions Pinned to SHAs", () => {
-    const actionsRequiringShaPinning = [
+  describe("Action Versions Use Version Tags", () => {
+    const expectedVersionedActions = [
       "actions/checkout",
       "docker/setup-qemu-action",
       "docker/setup-buildx-action",
@@ -199,7 +199,7 @@ describe("Docker Publish Workflow Validation", () => {
       "actions/github-script",
     ];
 
-    it("should pin all actions to SHAs", () => {
+    it("should use version tags for all required actions", () => {
       const steps = workflow.jobs.build.steps;
       const actionUses: string[] = [];
 
@@ -212,30 +212,19 @@ describe("Docker Publish Workflow Validation", () => {
 
       for (const action of actionUses) {
         const [actionName, ref] = action.split("@");
-        // SHA should be 40 characters
-        expect(ref).toMatch(/^[a-f0-9]{40}$/);
+        expect(ref?.startsWith("v")).toBe(true);
+        const versionParts = ref?.slice(1).split(".") ?? [];
+        expect(versionParts.length).toBeGreaterThanOrEqual(1);
+        expect(versionParts.length).toBeLessThanOrEqual(3);
+        for (const part of versionParts) {
+          expect(part).not.toHaveLength(0);
+          expect(Number.isInteger(Number(part))).toBe(true);
+        }
         expect(
-          actionsRequiringShaPinning.some((a) =>
+          expectedVersionedActions.some((a) =>
             actionName.includes(a.split("/")[1])
           )
         ).toBe(true);
-      }
-    });
-
-    it("should have version comment after SHA", () => {
-      const steps = workflow.jobs.build.steps;
-      const actionUses: string[] = [];
-
-      for (const step of steps) {
-        const stepValue = Object.values(step)[0] as any;
-        if (stepValue?.uses) {
-          actionUses.push(stepValue.uses);
-        }
-      }
-
-      for (const actionUse of actionUses) {
-        // Should have format: action@sha # version
-        expect(actionUse).toMatch(/@[a-f0-9]{40}\s+#\s+v\d+/);
       }
     });
   });

@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 const DEFAULT_CONTENT_BRANCH = "content";
-const DEFAULT_WORKDIR = "/workspace/repo";
+const DEFAULT_WORKDIR = "/app";
 const DEFAULT_COMMIT_MESSAGE_PREFIX = "content-bot:";
 const DEFAULT_ALLOW_EMPTY_COMMITS = false;
 const LOCK_RETRY_MS = 200;
@@ -240,6 +240,14 @@ export async function initializeContentRepo(): Promise<void> {
           errorPrefix: "Failed to clone content branch",
         }
       );
+
+      // Ensure content output directories exist in the workdir.
+      // notion-fetch writes to these via CONTENT_PATH/IMAGES_PATH/I18N_PATH env vars.
+      await mkdir(resolve(config.workdir, "docs"), { recursive: true });
+      await mkdir(resolve(config.workdir, "static", "images"), {
+        recursive: true,
+      });
+      await mkdir(resolve(config.workdir, "i18n"), { recursive: true });
     }
 
     await runGit(["config", "user.name", config.authorName], {

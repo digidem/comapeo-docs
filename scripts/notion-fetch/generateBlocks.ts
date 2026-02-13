@@ -102,8 +102,10 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
   children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
 };
 
-const CONTENT_PATH = path.join(__dirname, "../../docs");
-const IMAGES_PATH = path.join(__dirname, "../../static/images/");
+const CONTENT_PATH =
+  process.env.CONTENT_PATH || path.join(__dirname, "../../docs");
+const IMAGES_PATH =
+  process.env.IMAGES_PATH || path.join(__dirname, "../../static/images/");
 const locales = config.i18n.locales;
 
 // Global retry metrics tracking across all pages in a batch

@@ -58,6 +58,11 @@ services:
       # Documentation Configuration
       DEFAULT_DOCS_PAGE: ${DEFAULT_DOCS_PAGE:-introduction}
 
+      # Content output paths (override for Docker volume persistence)
+      CONTENT_PATH: ${CONTENT_PATH:-/app/workspace/repo/docs}
+      IMAGES_PATH: ${IMAGES_PATH:-/app/workspace/repo/static/images}
+      I18N_PATH: ${I18N_PATH:-/app/workspace/repo/i18n}
+
       # Image Processing Configuration
       ENABLE_RETRY_IMAGE_PROCESSING: ${ENABLE_RETRY_IMAGE_PROCESSING:-true}
       MAX_IMAGE_RETRIES: ${MAX_IMAGE_RETRIES:-3}
@@ -69,7 +74,7 @@ services:
     # Volume mounts for persistent data
     volumes:
       # Mount job persistence directory
-      - ${DOCKER_VOLUME_NAME:-comapeo-job-data}:/tmp
+      - ${DOCKER_VOLUME_NAME:-comapeo-job-data}:/app/workspace
 
     # Resource limits (configurable via environment)
     # Note: CPU limits disabled due to NanoCPUs compatibility issues

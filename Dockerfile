@@ -25,11 +25,12 @@ FROM base AS runner
 ARG NODE_ENV
 ENV NODE_ENV=${NODE_ENV}
 
-# Install system dependencies for image processing
+# Install system dependencies for image processing and privilege escalation
 # pngquant: PNG optimization (used by imagemin-pngquant)
 # libjpeg-turbo-progs: JPEG optimization, provides /usr/bin/jpegtran (used by imagemin-jpegtran)
+# gosu: run commands as root while preserving the USER setting
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git ca-certificates pngquant libjpeg-turbo-progs && \
+    apt-get install -y --no-install-recommends git ca-certificates pngquant libjpeg-turbo-progs gosu && \
     rm -rf /var/lib/apt/lists/*
 
 # Set proper permissions (oven/bun image already has 'bun' user)
@@ -58,8 +59,12 @@ COPY --chown=bun:bun tsconfig.json ./
 # Copy client modules needed by docusaurus.config.ts
 COPY --chown=bun:bun src/client ./src/client
 
-# Switch to non-root user
-USER bun
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Expose API port (configurable via docker-compose)
 EXPOSE 3001

@@ -6,6 +6,13 @@
 
 set -euo pipefail
 
+# Load .env file if it exists
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[0;33m'
 readonly BLUE='\033[0;34m'
@@ -22,6 +29,12 @@ API_BASE_URL="http://localhost:${API_PORT}"
 COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-docker-compose.yml}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-comapeo-docs-compose-test}"
 SERVICE_NAME="api"
+
+# Cleanup any existing test containers on the same port
+if docker ps --format '{{.Names}}' | grep -q "^comapeo-api-server$"; then
+  echo -e "${YELLOW}Cleaning up existing container on port ${API_PORT}...${NC}"
+  docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE_PATH" down --remove-orphans 2>/dev/null || true
+fi
 
 usage() {
   cat <<USAGE
@@ -137,7 +150,8 @@ wait_for_server() {
   local delay=1
 
   while [[ "$attempts" -lt "$max_attempts" ]]; do
-    if HEALTH_RESPONSE=$(api_request "GET" "$API_BASE_URL/health"); then
+    # Use curl directly with timeout to avoid noisy error output during startup
+    if HEALTH_RESPONSE=$(curl -sS --connect-timeout 2 --max-time 5 "$API_BASE_URL/health" 2>/dev/null); then
       if echo "$HEALTH_RESPONSE" | jq -e '.data.status == "ok" or .data.status == "healthy"' >/dev/null 2>&1; then
         echo "$HEALTH_RESPONSE"
         return 0

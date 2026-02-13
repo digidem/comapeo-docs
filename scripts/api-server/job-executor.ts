@@ -287,6 +287,7 @@ export async function executeJob(
   let childProcess: ChildProcess | null = null;
   let stdout = "";
   let stderr = "";
+  let lastExitCode: number | null = null;
   let timeoutHandle: NodeJS.Timeout | null = null;
   let failSafeTimer: NodeJS.Timeout | null = null;
   let timedOut = false;
@@ -403,6 +404,7 @@ export async function executeJob(
 
       childProcess?.on("close", (code) => {
         processExited = true;
+        lastExitCode = code;
         if (failSafeTimer) {
           clearTimeout(failSafeTimer);
           failSafeTimer = null;
@@ -494,9 +496,14 @@ export async function executeJob(
     const combinedError = [errorMessage, errorDetails]
       .filter(Boolean)
       .join("\n");
-    const errorOutput = stderr || combinedError || errorMessage;
+    // Only include stderr in error output if the process exited with non-zero code
+    // stderr often contains normal output (e.g., Node.js console.log goes to stderr)
+    const errorOutput =
+      lastExitCode !== null && lastExitCode !== 0
+        ? stderr || combinedError || errorMessage
+        : combinedError || errorMessage;
 
-    logger.error("Job failed", { error: errorOutput, timedOut });
+    logger.error("Job failed", { error: errorOutput, timedOut, lastExitCode });
     onComplete(false, undefined, errorOutput);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,

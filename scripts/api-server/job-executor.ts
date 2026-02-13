@@ -496,12 +496,7 @@ export async function executeJob(
     const combinedError = [errorMessage, errorDetails]
       .filter(Boolean)
       .join("\n");
-    // Only include stderr in error output if the process exited with non-zero code
-    // stderr often contains normal output (e.g., Node.js console.log goes to stderr)
-    const errorOutput =
-      lastExitCode !== null && lastExitCode !== 0
-        ? stderr || combinedError || errorMessage
-        : combinedError || errorMessage;
+    const errorOutput = stderr || combinedError || errorMessage;
 
     logger.error("Job failed", { error: errorOutput, timedOut, lastExitCode });
     onComplete(false, undefined, errorOutput);

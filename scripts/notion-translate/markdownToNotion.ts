@@ -19,6 +19,28 @@ import {
 const EMPTY_TRANSLATED_CONTENT_ERROR =
   "Translated content is empty - cannot create page. Please check if the English source has content.";
 
+// Type definition for page results from dataSources.query
+interface NotionPageResult {
+  id: string;
+  properties?: {
+    [key: string]: {
+      select?: { name: string } | null;
+      [key: string]: unknown;
+    };
+  };
+}
+
+/**
+ * Safely extracts the language property from a Notion page result
+ */
+function getLanguageFromPage(page: unknown): string | undefined {
+  if (!page || typeof page !== "object") return undefined;
+  const p = page as NotionPageResult;
+  const langProp = p.properties?.[NOTION_PROPERTIES.LANGUAGE];
+  if (!langProp || typeof langProp !== "object") return undefined;
+  return langProp.select?.name;
+}
+
 // Define types for markdown nodes
 interface HeadingNode {
   type: "heading";
@@ -603,9 +625,7 @@ export async function createNotionPageFromMarkdown(
         const nonEnglishResults = language
           ? response.results
           : response.results.filter((page) => {
-              const pageLanguage = (page as any).properties?.[
-                NOTION_PROPERTIES.LANGUAGE
-              ]?.select?.name;
+              const pageLanguage = getLanguageFromPage(page);
               return pageLanguage !== MAIN_LANGUAGE;
             });
 

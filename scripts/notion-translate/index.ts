@@ -33,6 +33,58 @@ import {
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
 
+// Type helpers for Notion properties
+type NotionTitleProperty = { title: Array<{ plain_text: string }> };
+type NotionSelectProperty = {
+  type?: "select";
+  select: { name: string } | null;
+};
+type NotionNumberProperty = { number: number };
+type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
+type NotionRelationProperty = { relation: Array<{ id: string }> };
+
+// Type for Notion page parent (API hierarchy structure)
+interface NotionPageParent {
+  type?: "database_id" | "page_id" | "block_id" | "workspace";
+  database_id?: string;
+  page_id?: string;
+  block_id?: string;
+}
+
+// Type guard for NotionSelectProperty
+function isSelectProperty(prop: unknown): prop is NotionSelectProperty {
+  return (
+    prop !== null &&
+    typeof prop === "object" &&
+    "select" in prop &&
+    (prop as NotionSelectProperty).select !== undefined
+  );
+}
+
+// Type guard for child page blocks
+interface ChildPageBlock {
+  id: string;
+  type?: string;
+  object?: string;
+}
+
+function isChildPageBlock(block: unknown): block is ChildPageBlock {
+  if (!block || typeof block !== "object") return false;
+  const b = block as Record<string, unknown>;
+  return (
+    typeof b.id === "string" && (b.type === "child_page" || b.object === "page")
+  );
+}
+
+/**
+ * Extracts the parent block ID from a Notion page's parent property
+ */
+function getParentBlockIdFromPage(page: NotionPage): string | null {
+  const parent = (page as NotionPage & { parent?: NotionPageParent }).parent;
+  if (!parent) return null;
+  return parent.block_id ?? parent.page_id ?? parent.database_id ?? null;
+}
+
 /**
  * Finds sibling translation pages by traversing the parent block hierarchy
  * @param englishPage The English page to find siblings for
@@ -44,10 +96,7 @@ export async function findSiblingTranslations(
   targetLanguage: string
 ): Promise<NotionPage | null> {
   // 1. Get parent block ID from page.parent (API hierarchy, not relation property)
-  const parentBlockId =
-    (englishPage as any).parent?.block_id ??
-    (englishPage as any).parent?.page_id ??
-    (englishPage as any).parent?.database_id;
+  const parentBlockId = getParentBlockIdFromPage(englishPage);
 
   if (!parentBlockId) {
     return null;
@@ -63,9 +112,7 @@ export async function findSiblingTranslations(
     });
 
     // 3. Filter children that are pages (not blocks) with matching language
-    const pageChildren = childrenResponse.results.filter(
-      (child: any) => child.type === "child_page" || child.object === "page"
-    );
+    const pageChildren = childrenResponse.results.filter(isChildPageBlock);
 
     for (const childRef of pageChildren) {
       // Need to fetch full page to check language property
@@ -73,11 +120,10 @@ export async function findSiblingTranslations(
         page_id: childRef.id,
       })) as NotionPage;
 
-      const childLanguage = (
-        childPage.properties?.[NOTION_PROPERTIES.LANGUAGE] as
-          | NotionSelectProperty
-          | undefined
-      )?.select?.name;
+      const langProp = childPage.properties?.[NOTION_PROPERTIES.LANGUAGE];
+      const childLanguage = isSelectProperty(langProp)
+        ? langProp.select?.name
+        : undefined;
       if (childLanguage === targetLanguage) {
         return childPage;
       }
@@ -88,13 +134,6 @@ export async function findSiblingTranslations(
 
   return null;
 }
-
-// Type helpers for Notion properties
-type NotionTitleProperty = { title: Array<{ plain_text: string }> };
-type NotionSelectProperty = { select: { name: string } | null };
-type NotionNumberProperty = { number: number };
-type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
-type NotionRelationProperty = { relation: Array<{ id: string }> };
 type TranslationFailure = {
   language: string;
   title: string;
@@ -164,6 +203,30 @@ const normalizePageId = (pageId: string): string =>
 
 const isValidNotionPageId = (pageId: string): boolean =>
   /^[0-9a-f]{32}$/i.test(pageId);
+
+// Summary file path for CI parsing (avoids brittle log grep)
+const SUMMARY_FILE_PATH = "translation-summary.json";
+
+/**
+ * Writes the translation summary to a JSON file for reliable CI parsing.
+ * This avoids brittle log parsing with grep/jq in workflows.
+ */
+async function writeSummaryFile(summary: TranslationRunSummary): Promise<void> {
+  try {
+    await fs.writeFile(
+      SUMMARY_FILE_PATH,
+      JSON.stringify(summary, null, 2),
+      "utf8"
+    );
+    console.log(
+      chalk.blue(`📄 Summary written to ${SUMMARY_FILE_PATH} for CI parsing`)
+    );
+  } catch (error) {
+    // Non-fatal: log but don't throw to preserve backward compatibility
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(chalk.yellow(`⚠ Failed to write summary file: ${message}`));
+  }
+}
 
 // Load environment variables from .env file
 dotenv.config();
@@ -493,6 +556,9 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  * @param config The translation configuration
  * @returns The path to the saved file
  */
+// Maximum slug length to prevent path length issues on Windows/CI (MAX_PATH = 260)
+const MAX_SLUG_LENGTH = 50;
+
 export async function saveTranslatedContentToDisk(
   englishPage: NotionPage,
   translatedContent: string,
@@ -503,10 +569,12 @@ export async function saveTranslatedContentToDisk(
     const title = getTitle(englishPage);
 
     // Build deterministic filename from stable page ID to keep reruns idempotent.
+    // Truncate slug to avoid path length limits on Windows/CI environments
     const baseSlug = title
       .toLowerCase()
       .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
+      .replace(/[^a-z0-9-]/g, "")
+      .substring(0, MAX_SLUG_LENGTH);
     const stablePageId = englishPage.id.toLowerCase().replace(/[^a-z0-9]/g, "");
     const deterministicBase = baseSlug || "untitled";
     const deterministicName = `${deterministicBase}-${stablePageId}`;
@@ -1168,6 +1236,9 @@ export async function main(options: CliOptions = {}) {
         `\n✅ Translation workflow completed successfully: ${summary.newTranslations + summary.updatedTranslations} translated, ${summary.skippedTranslations} skipped`
       )
     );
+    // Write summary to file for reliable CI parsing (avoids brittle log grep)
+    await writeSummaryFile(summary);
+    // Keep console output for backward compatibility
     console.log(`TRANSLATION_SUMMARY ${JSON.stringify(summary)}`);
     return summary;
   } catch (error) {
@@ -1176,6 +1247,9 @@ export async function main(options: CliOptions = {}) {
       chalk.bold.red("\n❌ Fatal error during translation process:"),
       message
     );
+    // Write summary to file even on failure for CI parsing
+    await writeSummaryFile(summary);
+    // Keep console output for backward compatibility
     console.log(`TRANSLATION_SUMMARY ${JSON.stringify(summary)}`);
     throw error;
   } finally {

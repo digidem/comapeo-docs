@@ -139,7 +139,7 @@ jobs:
         if: always()
         id: parse_summary
         run: |
-          # Default values if TRANSLATION_SUMMARY not found
+          # Default values if summary not found
           export TOTAL_PAGES="0"
           export PROCESSED_LANGS="0"
           export NEW_TRANSLATIONS="0"
@@ -150,8 +150,27 @@ jobs:
           export THEME_FAILURES="0"
           export HAS_FAILURES="false"
 
-          # Extract TRANSLATION_SUMMARY line from output
-          if [ -f /tmp/translate_output.log ]; then
+          # Prefer JSON file (more reliable than log parsing)
+          # Fall back to log parsing for backward compatibility
+          if [ -f translation-summary.json ]; then
+            echo "Using translation-summary.json for summary parsing"
+            TOTAL_PAGES=$(jq -r '.totalEnglishPages // 0' translation-summary.json)
+            PROCESSED_LANGS=$(jq -r '.processedLanguages // 0' translation-summary.json)
+            NEW_TRANSLATIONS=$(jq -r '.newTranslations // 0' translation-summary.json)
+            UPDATED_TRANSLATIONS=$(jq -r '.updatedTranslations // 0' translation-summary.json)
+            SKIPPED_TRANSLATIONS=$(jq -r '.skippedTranslations // 0' translation-summary.json)
+            FAILED_TRANSLATIONS=$(jq -r '.failedTranslations // 0' translation-summary.json)
+            CODE_JSON_FAILURES=$(jq -r '.codeJsonFailures // 0' translation-summary.json)
+            THEME_FAILURES=$(jq -r '.themeFailures // 0' translation-summary.json)
+
+            # Determine if there were any failures
+            TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+            if [ "$TOTAL_FAILURES" -gt 0 ]; then
+              HAS_FAILURES="true"
+            fi
+          elif [ -f /tmp/translate_output.log ]; then
+            # Fallback: extract TRANSLATION_SUMMARY line from output (legacy)
+            echo "Falling back to log parsing for summary"
             SUMMARY_LINE=$(grep "^TRANSLATION_SUMMARY " /tmp/translate_output.log | head -1 || echo "")
 
             if [ -n "$SUMMARY_LINE" ]; then

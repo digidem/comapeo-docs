@@ -347,4 +347,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "${{ (steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success') && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"
+                  text: "${{ ((steps.parse_summary.outputs.has_failures == 'true') || (job.status != 'success')) && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"

@@ -5,56 +5,147 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 ## Translation Architecture
 
 ### Source Language
+
 - **English**: Primary content creation
 - **Location**: Main Notion pages
 - **Status Flow**: Creation → Development → Ready for translation
 
 ### Target Languages
+
 - **Spanish**: `es` locale, 31.3% coverage
-- **Portuguese**: `pt` locale, 34.7% coverage  
+- **Portuguese**: `pt` locale, 34.7% coverage
 - **Output**: `i18n/{lang}/docusaurus-plugin-content-docs/current/`
 
 ## Translation Workflow
 
 ### 1. Content Preparation
+
 **Trigger**: English content reaches "Ready for translation" status
 
 **Requirements**:
+
 - Source content finalized and reviewed
 - All images and media included
 - Technical accuracy validated
 - Content structure complete
 
 ### 2. Translation Generation
+
 **Command**: `bun run notion:translate`
 
 **Process**:
+
 1. **Create Translation Pages**: Generate Spanish/Portuguese pages in Notion
 2. **Update Code Strings**: Translate UI strings in `i18n/*/code.json`
 3. **Translate Navigation**: Update navbar/footer strings from `docusaurus.config.ts`
 4. **Generate Markdown**: Save translated content to locale directories
 
+**Fail-safe contract**:
+
+- The command exits non-zero when any doc/content translation fails.
+- The command exits non-zero when no English pages are in `Ready for translation`.
+- The command exits non-zero when any theme (navbar/footer) translation fails.
+- The command **continues** when `code.json` (UI strings) is missing or malformed (soft-fail).
+- Every run emits a machine-readable `TRANSLATION_SUMMARY ...` log line.
+
+**TRANSLATION_SUMMARY schema**:
+
+```typescript
+type TranslationRunSummary = {
+  totalEnglishPages: number; // Total English pages found for translation
+  processedLanguages: number; // Number of target languages processed
+  newTranslations: number; // Newly created translation pages
+  updatedTranslations: number; // Existing pages that were updated
+  skippedTranslations: number; // Pages skipped (already up-to-date)
+  failedTranslations: number; // Failed doc translations
+  codeJsonFailures: number; // Failed code.json (UI string) translations
+  codeJsonSourceFileMissing: boolean; // Source code.json was missing/malformed (soft-fail)
+  themeFailures: number; // Failed theme (navbar/footer) translations
+  failures: TranslationFailure[]; // Detailed failure entries
+};
+
+type TranslationFailure = {
+  language: string; // Target language (e.g., "pt-BR", "es")
+  title: string; // Page title or file that failed
+  pageId?: string; // Notion page ID if applicable
+  error: string; // Error message
+  isCritical: boolean; // Whether failure prevents further processing
+};
+```
+
+**Example output**:
+
+```
+TRANSLATION_SUMMARY {"totalEnglishPages":42,"processedLanguages":2,"newTranslations":5,"updatedTranslations":12,"skippedTranslations":23,"failedTranslations":1,"codeJsonFailures":0,"codeJsonSourceFileMissing":false,"themeFailures":0,"failures":[...]}
+```
+
+### Soft-fail policy for code.json
+
+**Rationale**: Doc translation is the primary value, while `code.json` (UI strings) and theme translations are secondary. Hard-failing on secondary values would block all primary work.
+
+**Behavior**:
+
+- If `i18n/en/code.json` is missing or contains invalid JSON:
+  - A warning is logged to the console
+  - A non-critical failure entry is added to the summary
+  - Doc translation continues normally
+  - The summary's `codeJsonFailures` count is incremented
+  - The command exit status reflects the overall result (including doc failures)
+
+**Example output**:
+
+```
+⚠ English code.json not found. Skipping UI string translation (continuing with doc translation).
+```
+
+**Summary categorization**:
+
+```json
+{
+  "failures": [
+    {
+      "language": "en",
+      "title": "code.json (source file)",
+      "error": "Source file not found - UI string translation skipped",
+      "isCritical": false
+    }
+  ],
+  "codeJsonFailures": 1
+}
+```
+
 ### 3. Auto Translation Complete
+
 **Status**: Pages set to "Auto translation generated"
 
 **Process**:
-1. Automated workflow updates Notion status from "Ready for translation"
+
+1. Automated workflow updates Notion status from "Ready for translation" only after a successful translation run
 2. Translation pages ready for human review
 3. Run via `bun run notionStatus:translation` or GitHub Action
 
+**Workflow dispatch**:
+
+- `.github/workflows/translate-docs.yml` accepts `target_branch` input.
+- Status update and commit steps are gated by `if: success()`.
+
 ### 4. Translation Review
+
 **Status**: Human review of auto-translated content
 
 **Process**:
+
 1. Review automated translations for accuracy
 2. Cultural adaptation and localization
 3. Technical term consistency
 4. Regional considerations
 
 ### 5. Publication
+
 **Status**: "Ready to publish" in translation pages
 
 **Process**:
+
 1. Include in `notion:fetch-all` processing
 2. Generate localized site structure
 3. Deploy with main content updates
@@ -62,6 +153,7 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 ## Technical Implementation
 
 ### Docusaurus i18n Structure
+
 ```
 i18n/
 ├── es/
@@ -69,37 +161,122 @@ i18n/
 │   └── docusaurus-plugin-content-docs/
 │       └── current/                 # Spanish content
 └── pt/
-    ├── code.json                    # UI strings  
+    ├── code.json                    # UI strings
     └── docusaurus-plugin-content-docs/
         └── current/                 # Portuguese content
 ```
 
 ### Translation Configuration
+
 From `scripts/constants.ts`:
+
 ```typescript
 export const LANGUAGES: TranslationConfig[] = [
   {
     language: "pt-BR",
-    notionLangCode: "Portuguese", 
-    outputDir: "./i18n/pt/docusaurus-plugin-content-docs/current"
+    notionLangCode: "Portuguese",
+    outputDir: "./i18n/pt/docusaurus-plugin-content-docs/current",
   },
   {
     language: "es",
     notionLangCode: "Spanish",
-    outputDir: "./i18n/es/docusaurus-plugin-content-docs/current"  
-  }
+    outputDir: "./i18n/es/docusaurus-plugin-content-docs/current",
+  },
 ];
 ```
+
+### Environment Variables
+
+- Required for translation workflow: `NOTION_API_KEY`, `OPENAI_API_KEY`, and `DATA_SOURCE_ID`.
+- Backward compatibility: `DATABASE_ID` is still accepted as a fallback where needed.
+- In GitHub Actions, keep `DATA_SOURCE_ID` and `DATABASE_ID` aligned until full migration completes.
+
+#### DATA_SOURCE_ID Migration Policy
+
+**Status**: Standardization in progress
+
+**Background**: Notion API v5 (version `2025-09-03`) introduced `data_sources` as a new concept. Databases are now called "data sources" and may have different IDs than the legacy `DATABASE_ID`.
+
+**Current Standard** (as of 2026-02):
+
+1. **Primary Variable**: `DATA_SOURCE_ID` is the required variable for all new code
+2. **Fallback Support**: `DATABASE_ID` is accepted for backward compatibility
+3. **Validation**: Scripts warn when `DATA_SOURCE_ID` is not set
+4. **Runtime Behavior**: Code uses `DATA_SOURCE_ID || DATABASE_ID` pattern
+
+**Migration Steps**:
+
+1. **Discover your DATA_SOURCE_ID**:
+
+   ```bash
+   bun scripts/migration/discoverDataSource.ts
+   ```
+
+2. **Update your `.env` file**:
+
+   ```bash
+   # Add the discovered DATA_SOURCE_ID
+   DATA_SOURCE_ID=your_discovered_data_source_id_here
+
+   # Keep DATABASE_ID for now (will be deprecated in future)
+   DATABASE_ID=your_existing_database_id_here
+   ```
+
+3. **Update GitHub Secrets**:
+   - Go to repository Settings → Secrets and variables → Actions
+   - Add `DATA_SOURCE_ID` with the discovered value
+   - Keep `DATABASE_ID` secret until full migration completes
+
+4. **Verify the migration**:
+
+   ```bash
+   # Test locally
+   bun run notion:translate
+
+   # Test via workflow (use dry-run label first)
+   gh workflow run translate-docs.yml
+   ```
+
+**Deprecation Timeline**:
+
+- **Current Phase** (2026-02): Migration and discovery phase
+  - Both `DATA_SOURCE_ID` and `DATABASE_ID` accepted
+  - Scripts prefer `DATA_SOURCE_ID` with fallback to `DATABASE_ID`
+  - Warnings logged when `DATA_SOURCE_ID` is missing
+
+- **Next Phase** (TBD): Hard requirement phase
+  - `DATA_SOURCE_ID` becomes required
+  - `DATABASE_ID` fallback removed
+  - Migration deadline communicated in advance
+
+- **Final Phase** (TBD): Deprecation phase
+  - `DATABASE_ID` fully removed from codebase
+  - All references updated to `DATA_SOURCE_ID`
+
+**Compatibility Notes**:
+
+- In Notion API v5, `DATABASE_ID` and `DATA_SOURCE_ID` may be **different values**
+- Always run the discovery script to find the correct `DATA_SOURCE_ID`
+- Do not assume `DATA_SOURCE_ID === DATABASE_ID`
+- The fallback pattern (`DATA_SOURCE_ID || DATABASE_ID`) ensures smooth migration
+
+**See Also**:
+
+- Migration script: `scripts/migration/discoverDataSource.ts`
+- Notion Client implementation: `scripts/notionClient.ts` (lines 437-455)
+- Translation workflow: `.github/workflows/translate-docs.yml`
 
 ## Content Synchronization
 
 ### Shared Metadata
+
 - Navigation structure maintained across languages
 - Image paths consistent (`/images/...`)
 - Frontmatter structure preserved
 - Cross-references maintained
 
 ### Language-Specific Content
+
 - Translated text content
 - Localized examples
 - Cultural adaptations
@@ -108,26 +285,30 @@ export const LANGUAGES: TranslationConfig[] = [
 ## Quality Assurance
 
 ### Automated Checks
+
 - Translation completeness validation
 - Link integrity verification
 - Image reference consistency
 - Frontmatter accuracy
 
 ### Manual Review
+
 - Technical accuracy
-- Cultural appropriateness  
+- Cultural appropriateness
 - Terminology consistency
 - Reading experience
 
 ## Translation Guidelines
 
 ### Spanish (es)
+
 - Neutral Spanish for broad accessibility
 - Technical terms in Spanish when available
 - CoMapeo brand name unchanged
 - Regional examples where appropriate
 
 ### Portuguese (pt)
+
 - Brazilian Portuguese standard
 - Technical terms in Portuguese when clear
 - CoMapeo brand name unchanged
@@ -136,17 +317,21 @@ export const LANGUAGES: TranslationConfig[] = [
 ## Development Integration
 
 ### Component Translation
+
 Use `@docusaurus/Translate` for UI components:
+
 ```tsx
-import Translate from '@docusaurus/Translate';
+import Translate from "@docusaurus/Translate";
 
 <Translate id="homepage.tagline">
   Collaborative mapping for territory defense
-</Translate>
+</Translate>;
 ```
 
 ### Translation Strings
+
 Update `i18n/*/code.json` with UI translations:
+
 ```json
 {
   "homepage.tagline": "Mapeo colaborativo para la defensa del territorio"

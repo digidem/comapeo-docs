@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- Notion API responses require dynamic property access */
 import { NOTION_PROPERTIES } from "../constants";
 import config from "../../docusaurus.config";
 
@@ -164,4 +165,134 @@ export const createStandalonePageGroup = (page: Record<string, any>) => {
       [locale]: page,
     } as Record<string, Record<string, any>>,
   };
+};
+
+/**
+ * Result of checking translation siblings
+ */
+export interface TranslationSiblingsResult {
+  /** All available translation locales for this page */
+  availableLocales: string[];
+  /** Missing translation locales (es, pt) */
+  missingLocales: string[];
+  /** Whether all translations (es, pt) exist */
+  hasAllTranslations: boolean;
+  /** The grouped page content */
+  groupedPage: ReturnType<typeof groupPagesByLang>;
+}
+
+/**
+ * Supported translation locales (excluding English which is the source)
+ */
+const TRANSLATION_LOCALES = ["es", "pt"];
+
+/**
+ * Check if translation siblings exist for Spanish and Portuguese
+ *
+ * This function checks if a page has translation siblings for Spanish (es) and
+ * Portuguese (pt). It returns information about which translations exist and
+ * which are missing.
+ *
+ * @param pages - All pages to search through for related sub-items
+ * @param page - The page to check for translation siblings
+ * @returns Translation siblings check result
+ *
+ * @example
+ * ```ts
+ * const result = ensureTranslationSiblings(allPages, englishPage);
+ * if (!result.hasAllTranslations) {
+ *   console.log("Missing translations:", result.missingLocales);
+ * }
+ * ```
+ */
+export const ensureTranslationSiblings = (
+  pages: Array<Record<string, any>>,
+  page: Record<string, any>
+): TranslationSiblingsResult => {
+  const grouped = groupPagesByLang(pages, page);
+  const availableLocales = Object.keys(grouped.content);
+
+  const missingLocales = TRANSLATION_LOCALES.filter(
+    (locale) => !availableLocales.includes(locale)
+  );
+
+  return {
+    availableLocales,
+    missingLocales,
+    hasAllTranslations: missingLocales.length === 0,
+    groupedPage: grouped,
+  };
+};
+
+/**
+ * Get all translation locales for a page
+ *
+ * Returns an array of locale codes that have content for the given page,
+ * including English and any available translations.
+ *
+ * @param pages - All pages to search through for related sub-items
+ * @param page - The page to get translation locales for
+ * @returns Array of available locale codes
+ *
+ * @example
+ * ```ts
+ * const locales = getTranslationLocales(allPages, englishPage);
+ * // Returns: ["en", "es", "pt"] if all translations exist
+ * // Returns: ["en", "es"] if Portuguese is missing
+ * ```
+ */
+export const getTranslationLocales = (
+  pages: Array<Record<string, any>>,
+  page: Record<string, any>
+): string[] => {
+  const grouped = groupPagesByLang(pages, page);
+  return Object.keys(grouped.content);
+};
+
+/**
+ * Check if a specific translation locale exists for a page
+ *
+ * @param pages - All pages to search through for related sub-items
+ * @param page - The page to check
+ * @param locale - The locale to check for (e.g., "es", "pt")
+ * @returns true if the translation exists
+ *
+ * @example
+ * ```ts
+ * const hasSpanish = hasTranslation(allPages, englishPage, "es");
+ * const hasPortuguese = hasTranslation(allPages, englishPage, "pt");
+ * ```
+ */
+export const hasTranslation = (
+  pages: Array<Record<string, any>>,
+  page: Record<string, any>,
+  locale: string
+): boolean => {
+  const locales = getTranslationLocales(pages, page);
+  return locales.includes(locale);
+};
+
+/**
+ * Get missing translation locales for a page
+ *
+ * Returns an array of locale codes that are missing translations for the
+ * given page. Only checks for Spanish (es) and Portuguese (pt).
+ *
+ * @param pages - All pages to search through for related sub-items
+ * @param page - The page to check for missing translations
+ * @returns Array of missing locale codes
+ *
+ * @example
+ * ```ts
+ * const missing = getMissingTranslations(allPages, englishPage);
+ * // Returns: ["pt"] if Portuguese is missing
+ * // Returns: [] if all translations exist
+ * ```
+ */
+export const getMissingTranslations = (
+  pages: Array<Record<string, any>>,
+  page: Record<string, any>
+): string[] => {
+  const result = ensureTranslationSiblings(pages, page);
+  return result.missingLocales;
 };

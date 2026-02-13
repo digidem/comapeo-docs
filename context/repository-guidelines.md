@@ -54,5 +54,5 @@
 
 ## Security & Configuration
 
-- Copy `.env.example` to `.env`. Required: `NOTION_API_KEY`, `DATABASE_ID`, `DEFAULT_DOCS_PAGE`.
+- Copy `.env.example` to `.env`. Required: `NOTION_API_KEY`, `OPENAI_API_KEY`, `DATA_SOURCE_ID` (preferred), `DATABASE_ID` (fallback compatibility), `DEFAULT_DOCS_PAGE`.
 - Do not commit secrets. For deploy-related secrets, use CI environment variables.

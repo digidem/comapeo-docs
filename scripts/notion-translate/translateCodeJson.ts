@@ -4,10 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import {
-  DEFAULT_OPENAI_MODEL,
-  DEFAULT_OPENAI_TEMPERATURE,
-} from "../constants.js";
+import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
 
 // Load environment variables
 dotenv.config();
@@ -21,9 +18,9 @@ const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 
 // JSON Translation prompt template
 const JSON_TRANSLATION_PROMPT = `
-You are a JSON translation assistant. Your task is to translate only the "message" values in the provided JSON object from English to {targetLanguage}.
+You are a JSON translation assistant. Your task is to translate only "message" values in the provided JSON object from English to {targetLanguage}.
 
-- Do NOT translate any keys or the values of "description" fields.
+- Do NOT translate any keys or values of "description" fields.
 - Preserve the original JSON structure, formatting, and all non-"message" values.
 - Output must be valid, parseable JSON.
 - Do not include any explanations, markdown, code blocks, or extra text—return only the translated JSON object.
@@ -62,16 +59,16 @@ export async function translateJson(
     `Translating to ${targetLanguage}${
       retryCount > 0 ? ` (Attempt ${retryCount + 1}/${MAX_RETRIES})` : ""
     }...`
-  ).start();
+  );
 
   const prompt = JSON_TRANSLATION_PROMPT.replace(
     "{targetLanguage}",
     targetLanguage
   );
 
-  // Zod schema for code.json: require both message and description as strings
-  // Accept objects with at least a "message" string, and optionally a "description" string
-  // The schema must match the code.json format:
+  // JSON schema for code.json translation
+  // Requires both "message" and "description" fields (standard Docusaurus i18n format)
+  // Structure:
   // {
   //   "Some Key": {
   //     "message": "Some message",
@@ -92,6 +89,11 @@ export async function translateJson(
       additionalProperties: false,
     },
   };
+
+  // Get model-specific parameters (handles GPT-5 temperature constraints)
+  // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
+  const modelParams = getModelParams(model, { useReasoningNone: true });
+
   try {
     const response = await openai.chat.completions.create({
       model,
@@ -107,9 +109,15 @@ export async function translateJson(
           strict: true,
         },
       },
-      temperature: DEFAULT_OPENAI_TEMPERATURE,
+      ...modelParams,
     });
-    const translatedJsonObj = JSON.parse(response.choices[0].message.content!);
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("OpenAI returned empty JSON translation response");
+    }
+
+    const translatedJsonObj = JSON.parse(content);
     // Remove debug log for production
     const translatedJsonString = JSON.stringify(translatedJsonObj, null, 2);
 
@@ -118,20 +126,23 @@ export async function translateJson(
     );
     return translatedJsonString;
   } catch (error) {
+    const message = (error as Error).message || String(error);
     spinner.fail(
-      chalk.red(
-        `Translation failed for ${targetLanguage}: ${(error as Error).message || error}`
-      )
+      chalk.red(`Translation failed for ${targetLanguage}: ${message}`)
     );
     if (retryCount < MAX_RETRIES - 1) {
+      const baseDelayMs = 750 * 2 ** retryCount;
+      const jitterMs = Math.floor(Math.random() * 250);
+      const retryDelayMs = baseDelayMs + jitterMs;
       spinner.info(
-        chalk.yellow(`Retrying translation for ${targetLanguage}...`)
+        chalk.yellow(
+          `Retrying translation for ${targetLanguage} in ${retryDelayMs}ms...`
+        )
       );
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       return translateJson(jsonContent, targetLanguage, retryCount + 1);
     } else {
-      throw new Error(
-        `Invalid JSON after ${MAX_RETRIES} attempts: ${(error as Error).message || error}`
-      );
+      throw new Error(`Invalid JSON after ${MAX_RETRIES} attempts: ${message}`);
     }
   }
 }
@@ -181,6 +192,7 @@ export function extractTranslatableText(
       nav.items.forEach((item: NavbarItem) => {
         if (item.label) {
           const key = `item.label.${item.label}`;
+          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
           result[key] = {
             message: item.label,
             description: `Navbar item with label ${item.label}`,
@@ -196,6 +208,7 @@ export function extractTranslatableText(
       footer.links.forEach((section: FooterSection) => {
         if (section.title) {
           const titleKey = `links.title.${section.title}`;
+          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
           result[titleKey] = {
             message: section.title,
             description: `Footer section title: ${section.title}`,
@@ -206,6 +219,7 @@ export function extractTranslatableText(
           section.items.forEach((item: FooterLink) => {
             if (item.label) {
               const labelKey = `links.${section.title}.${item.label}`;
+              // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
               result[labelKey] = {
                 message: item.label,
                 description: `Footer link label: ${item.label}`,
@@ -231,7 +245,7 @@ export function extractTranslatableText(
 }
 
 /**
- * Gets the language name from the language code
+ * Gets language name from language code
  * @param langCode The language code (e.g., 'pt', 'es')
  * @returns The language name (e.g., 'Portuguese', 'Spanish')
  */
@@ -316,6 +330,7 @@ export function getLanguageName(langCode: string): string {
     en: "English",
   };
 
+  // eslint-disable-next-line security/detect-object-injection -- dictionary lookup by locale code is expected behavior
   return languageMap[langCode] || langCode;
 }
 
@@ -326,13 +341,13 @@ export async function main() {
   console.log(chalk.blue("🌐 Starting code.json translation process\n"));
 
   try {
-    // Get the i18n directory
+    // Get i18n directory
     const i18nDir = path.join(process.cwd(), "i18n");
 
     // Get all language directories
     const langDirs = await fs.readdir(i18nDir);
 
-    // Get the English code.json as source
+    // Get English code.json as source
     const englishCodeJsonPath = path.join(i18nDir, "en", "code.json");
     let englishCodeJson: string;
 
@@ -341,12 +356,36 @@ export async function main() {
       // Validate JSON
       JSON.parse(englishCodeJson);
     } catch (error) {
-      console.error(
-        chalk.red(
-          `Error reading or parsing English code.json: ${error.message}`
-        )
-      );
-      process.exit(1);
+      const message = error instanceof Error ? error.message : String(error);
+      const isNotFound =
+        error instanceof Error &&
+        ("code" in error
+          ? error.code === "ENOENT"
+          : message.includes("ENOENT"));
+
+      // Check if this is a SyntaxError from JSON.parse (malformed JSON)
+      const isMalformedJson = error instanceof SyntaxError;
+
+      // Only soft-fail for ENOENT (file not found) or SyntaxError (malformed JSON)
+      // Re-throw system errors like EACCES, EIO, etc.
+      if (!isNotFound && !isMalformedJson) {
+        throw error;
+      }
+
+      if (isNotFound) {
+        console.warn(
+          chalk.yellow(
+            "⚠ English code.json not found. Skipping code.json translation."
+          )
+        );
+      } else {
+        console.warn(
+          chalk.yellow(
+            `⚠ English code.json is malformed: ${message}. Skipping code.json translation.`
+          )
+        );
+      }
+      return; // Exit gracefully instead of hard exit
     }
 
     // Process each language directory (except 'en')
@@ -366,7 +405,7 @@ export async function main() {
       );
 
       try {
-        // Translate the English code.json to the target language
+        // Translate English code.json to target language
         const translatedJson = await translateJson(
           englishCodeJson,
           languageName
@@ -395,7 +434,7 @@ export async function main() {
   }
 }
 
-// Run the main function only when executed directly outside of tests
+// Run main function only when executed directly outside of tests
 if (
   process.env.NODE_ENV !== "test" &&
   (import.meta.url.endsWith("translateCodeJson.js") ||

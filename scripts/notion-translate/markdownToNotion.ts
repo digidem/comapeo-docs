@@ -16,6 +16,31 @@ import {
   NOTION_PROPERTIES,
 } from "../constants.js";
 
+const EMPTY_TRANSLATED_CONTENT_ERROR =
+  "Translated content is empty - cannot create page. Please check if the English source has content.";
+
+// Type definition for page results from dataSources.query
+interface NotionPageResult {
+  id: string;
+  properties?: {
+    [key: string]: {
+      select?: { name: string } | null;
+      [key: string]: unknown;
+    };
+  };
+}
+
+/**
+ * Safely extracts the language property from a Notion page result
+ */
+function getLanguageFromPage(page: unknown): string | undefined {
+  if (!page || typeof page !== "object") return undefined;
+  const p = page as NotionPageResult;
+  const langProp = p.properties?.[NOTION_PROPERTIES.LANGUAGE];
+  if (!langProp || typeof langProp !== "object") return undefined;
+  return langProp.select?.name;
+}
+
 // Define types for markdown nodes
 interface HeadingNode {
   type: "heading";
@@ -201,7 +226,7 @@ export async function markdownToNotionBlocks(
           }
 
           // Add each chunk as a separate code block without visible part indicators
-          for (let i = 0; i < codeChunks.length; i++) {
+          for (const [i, codeChunk] of codeChunks.entries()) {
             // For the first chunk, add a paragraph with the language info
             if (i === 0) {
               notionBlocks.push({
@@ -227,7 +252,7 @@ export async function markdownToNotionBlocks(
                   {
                     type: "text",
                     text: {
-                      content: codeChunks[i],
+                      content: codeChunk,
                     },
                     annotations: {
                       code: true,
@@ -472,31 +497,31 @@ export function removeFrontMatter(content: string): string {
  * Maps markdown code language to Notion code block language
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
-  const languageMap: Record<string, NotionCodeLanguage> = {
-    js: "javascript",
-    ts: "typescript",
-    py: "python",
-    rb: "ruby",
-    go: "go",
-    java: "java",
-    php: "php",
-    c: "c",
-    cpp: "c++",
-    cs: "c#",
-    html: "html",
-    css: "css",
-    shell: "shell",
-    bash: "bash",
-    json: "json",
-    yaml: "yaml",
-    md: "markdown",
-  };
+  const languageMap = new Map<string, NotionCodeLanguage>([
+    ["js", "javascript"],
+    ["ts", "typescript"],
+    ["py", "python"],
+    ["rb", "ruby"],
+    ["go", "go"],
+    ["java", "java"],
+    ["php", "php"],
+    ["c", "c"],
+    ["cpp", "c++"],
+    ["cs", "c#"],
+    ["html", "html"],
+    ["css", "css"],
+    ["shell", "shell"],
+    ["bash", "bash"],
+    ["json", "json"],
+    ["yaml", "yaml"],
+    ["md", "markdown"],
+  ]);
 
-  return languageMap[language] || "plain text";
+  return languageMap.get(language) || "plain text";
 }
 
 interface NotionPageProperties {
-  Title: {
+  [NOTION_PROPERTIES.TITLE]: {
     title: {
       text: {
         content: string;
@@ -524,7 +549,8 @@ export async function createNotionPageFromMarkdown(
   markdownPath: string,
   properties: Record<string, unknown> = {},
   isContent: boolean = false,
-  language?: string
+  language?: string,
+  existingPageId?: string
 ): Promise<string> {
   // Maximum number of retries
   let retryCount = 0;
@@ -542,53 +568,20 @@ export async function createNotionPageFromMarkdown(
       // Convert markdown to Notion blocks
       const blocks = await markdownToNotionBlocks(markdownContent);
 
+      if (markdownContent.trim().length === 0) {
+        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+      }
+
+      if (blocks.length === 0) {
+        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+      }
+
       // CRITICAL SAFETY CHECK: Never modify main language pages
       if (language === MAIN_LANGUAGE) {
         throw new Error(ENGLISH_MODIFICATION_ERROR);
       }
 
-      // Check if a page with this title and language already exists
-      const filter = language
-        ? {
-            and: [
-              {
-                property: NOTION_PROPERTIES.TITLE,
-                title: {
-                  equals: title,
-                },
-              },
-              {
-                property: NOTION_PROPERTIES.LANGUAGE,
-                select: {
-                  equals: language,
-                },
-              },
-            ],
-          }
-        : {
-            property: NOTION_PROPERTIES.TITLE,
-            title: {
-              equals: title,
-            },
-          };
-
-      const response = await notion.dataSources.query({
-        // v5 API: use data_source_id instead of database_id
-        data_source_id: databaseId,
-        filter: filter,
-      });
-
-      // If we're not filtering by language, make sure we don't modify English pages
-      const nonEnglishResults = language
-        ? response.results
-        : response.results.filter((page) => {
-            const pageLanguage = (page as any).properties?.[
-              NOTION_PROPERTIES.LANGUAGE
-            ]?.select?.name;
-            return pageLanguage !== MAIN_LANGUAGE;
-          });
-
-      let pageId: string;
+      let pageId: string | null = existingPageId ?? null;
       // Always include Parent item relation in properties for both update and create
       const pageRelation = {
         "Parent item": {
@@ -596,14 +589,57 @@ export async function createNotionPageFromMarkdown(
         },
       };
 
-      if (nonEnglishResults.length > 0) {
+      if (!existingPageId) {
+        // Check if a page with this title and language already exists
+        const filter = language
+          ? {
+              and: [
+                {
+                  property: NOTION_PROPERTIES.TITLE,
+                  title: {
+                    equals: title,
+                  },
+                },
+                {
+                  property: NOTION_PROPERTIES.LANGUAGE,
+                  select: {
+                    equals: language,
+                  },
+                },
+              ],
+            }
+          : {
+              property: NOTION_PROPERTIES.TITLE,
+              title: {
+                equals: title,
+              },
+            };
+
+        const response = await notion.dataSources.query({
+          // v5 API: use data_source_id instead of database_id
+          data_source_id: databaseId,
+          filter: filter,
+        });
+
+        // If we're not filtering by language, make sure we don't modify English pages
+        const nonEnglishResults = language
+          ? response.results
+          : response.results.filter((page) => {
+              const pageLanguage = getLanguageFromPage(page);
+              return pageLanguage !== MAIN_LANGUAGE;
+            });
+
+        if (nonEnglishResults.length > 0) {
+          pageId = nonEnglishResults[0].id;
+        }
+      }
+
+      if (pageId) {
         // Update existing page
         // TODO: should check existing content and compare to maintain fixes from previous revisions
-        pageId = nonEnglishResults[0].id;
-
         // Create properties object with proper typing, always include Parent item
         const pageProperties: NotionPageProperties = {
-          Title: {
+          [NOTION_PROPERTIES.TITLE]: {
             title: [
               {
                 text: {
@@ -643,7 +679,7 @@ export async function createNotionPageFromMarkdown(
       } else {
         // Create properties object with proper typing, always include Parent item
         const pageProperties: NotionPageProperties = {
-          Title: {
+          [NOTION_PROPERTIES.TITLE]: {
             title: [
               {
                 text: {
@@ -686,12 +722,19 @@ export async function createNotionPageFromMarkdown(
 
       return pageId;
     } catch (error) {
-      lastError = error;
+      const parsedError =
+        error instanceof Error ? error : new Error(String(error));
+      lastError = parsedError;
+
+      if (parsedError.message === EMPTY_TRANSLATED_CONTENT_ERROR) {
+        throw parsedError;
+      }
+
       retryCount++;
 
       if (retryCount < MAX_RETRIES) {
         console.warn(
-          `Attempt ${retryCount}/${MAX_RETRIES} failed: ${error.message}. Retrying...`
+          `Attempt ${retryCount}/${MAX_RETRIES} failed: ${parsedError.message}. Retrying...`
         );
         // Exponential backoff: wait longer between retries
         await new Promise((resolve) =>
@@ -700,10 +743,10 @@ export async function createNotionPageFromMarkdown(
       } else {
         console.error(
           "Error creating Notion page from markdown after multiple retries:",
-          error
+          parsedError
         );
         throw new Error(
-          `Failed after ${MAX_RETRIES} attempts: ${error.message}`
+          `Failed after ${MAX_RETRIES} attempts: ${parsedError.message}`
         );
       }
     }

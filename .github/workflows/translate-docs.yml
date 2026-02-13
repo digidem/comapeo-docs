@@ -98,11 +98,29 @@ jobs:
       - name: Notion Translate
         id: notion_translate
         run: |
-          # Use test database if test mode is enabled
-          if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
+          # Check if any test mode indicator is set
+          HAS_TEST_MODE="${{ secrets.TEST_MODE }}"
+          HAS_TEST_DATA_SOURCE="${{ secrets.TEST_DATA_SOURCE_ID }}"
+          HAS_TEST_DATABASE="${{ secrets.TEST_DATABASE_ID }}"
+
+          if [ "$HAS_TEST_MODE" = "true" ] || [ -n "$HAS_TEST_DATA_SOURCE" ] || [ -n "$HAS_TEST_DATABASE" ]; then
+            echo "🧪 Test mode detected"
+
+            # Require at least one test ID to be set - fail if test mode is enabled without test IDs
+            if [ -z "$HAS_TEST_DATA_SOURCE" ] && [ -z "$HAS_TEST_DATABASE" ]; then
+              echo "❌ ERROR: Test mode enabled but no test IDs provided"
+              echo "   Set TEST_DATA_SOURCE_ID or TEST_DATABASE_ID to use test mode"
+              exit 1
+            fi
+
             echo "🧪 Running in test mode with test database"
-            export DATA_SOURCE_ID="${{ secrets.TEST_DATA_SOURCE_ID }}"
-            export DATABASE_ID="${{ secrets.TEST_DATABASE_ID }}"
+            # Only override if test secret is non-empty to avoid breaking with empty secrets
+            if [ -n "$HAS_TEST_DATA_SOURCE" ]; then
+              export DATA_SOURCE_ID="$HAS_TEST_DATA_SOURCE"
+            fi
+            if [ -n "$HAS_TEST_DATABASE" ]; then
+              export DATABASE_ID="$HAS_TEST_DATABASE"
+            fi
             export TEST_MODE="true"
           fi
 
@@ -121,7 +139,7 @@ jobs:
         if: always()
         id: parse_summary
         run: |
-          # Default values if TRANSLATION_SUMMARY not found
+          # Default values if summary not found
           export TOTAL_PAGES="0"
           export PROCESSED_LANGS="0"
           export NEW_TRANSLATIONS="0"
@@ -132,8 +150,27 @@ jobs:
           export THEME_FAILURES="0"
           export HAS_FAILURES="false"
 
-          # Extract TRANSLATION_SUMMARY line from output
-          if [ -f /tmp/translate_output.log ]; then
+          # Prefer JSON file (more reliable than log parsing)
+          # Fall back to log parsing for backward compatibility
+          if [ -f translation-summary.json ]; then
+            echo "Using translation-summary.json for summary parsing"
+            TOTAL_PAGES=$(jq -r '.totalEnglishPages // 0' translation-summary.json)
+            PROCESSED_LANGS=$(jq -r '.processedLanguages // 0' translation-summary.json)
+            NEW_TRANSLATIONS=$(jq -r '.newTranslations // 0' translation-summary.json)
+            UPDATED_TRANSLATIONS=$(jq -r '.updatedTranslations // 0' translation-summary.json)
+            SKIPPED_TRANSLATIONS=$(jq -r '.skippedTranslations // 0' translation-summary.json)
+            FAILED_TRANSLATIONS=$(jq -r '.failedTranslations // 0' translation-summary.json)
+            CODE_JSON_FAILURES=$(jq -r '.codeJsonFailures // 0' translation-summary.json)
+            THEME_FAILURES=$(jq -r '.themeFailures // 0' translation-summary.json)
+
+            # Determine if there were any failures
+            TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+            if [ "$TOTAL_FAILURES" -gt 0 ]; then
+              HAS_FAILURES="true"
+            fi
+          elif [ -f /tmp/translate_output.log ]; then
+            # Fallback: extract TRANSLATION_SUMMARY line from output (legacy)
+            echo "Falling back to log parsing for summary"
             SUMMARY_LINE=$(grep "^TRANSLATION_SUMMARY " /tmp/translate_output.log | head -1 || echo "")
 
             if [ -n "$SUMMARY_LINE" ]; then
@@ -152,7 +189,7 @@ jobs:
               THEME_FAILURES=$(echo "$JSON_PART" | jq -r '.themeFailures // "0"' 2>/dev/null || echo "0")
 
               # Determine if there were any failures
-              TOTAL_FAILURES=$$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
+              TOTAL_FAILURES=$((FAILED_TRANSLATIONS + CODE_JSON_FAILURES + THEME_FAILURES))
               if [ "$TOTAL_FAILURES" -gt 0 ]; then
                 HAS_FAILURES="true"
               fi
@@ -185,7 +222,7 @@ jobs:
           echo "  Has failures: $HAS_FAILURES"
 
       - name: Update Notion Status → Auto Translation Generated
-        if: success()
+        if: success() && (steps.parse_summary.outputs.new_translations != '0' || steps.parse_summary.outputs.updated_translations != '0')
         run: |
           # Use test database if test mode is enabled
           if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then
@@ -225,12 +262,12 @@ jobs:
           PUSH_SUCCESS=false
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
-            CURRENT_ATTEMPT=$$((RETRY_COUNT + 1))
+            CURRENT_ATTEMPT=$((RETRY_COUNT + 1))
             if PUSH_OUTPUT=$(git push origin "${TARGET_BRANCH}" 2>&1); then
               PUSH_SUCCESS=true
               echo "✅ Push succeeded on attempt $CURRENT_ATTEMPT"
             else
-              RETRY_COUNT=$$((RETRY_COUNT + 1))
+              RETRY_COUNT=$((RETRY_COUNT + 1))
 
               # Check if error is due to non-fast-forward (push race condition)
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
@@ -245,7 +282,7 @@ jobs:
                   echo "Rebasing local changes on top of origin/${TARGET_BRANCH}..."
                   if git rebase "origin/${TARGET_BRANCH}" 2>&1; then
                     # Calculate exponential backoff: 2^N seconds (2s, 4s, 8s)
-                    BACKOFF_TIME=$$((2 ** RETRY_COUNT))
+                    BACKOFF_TIME=$((2 ** RETRY_COUNT))
                     echo "Waiting ${BACKOFF_TIME}s before retry..."
                     sleep $BACKOFF_TIME
                   else
@@ -276,39 +313,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-      # - name: Notify Slack
-      #   if: always()
-      #   uses: slackapi/slack-github-action@v2.1.1
-      #   with:
-      #     webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-      #     webhook-type: incoming-webhook
-      #     payload: |
-      #       text: "*Translation sync*: ${{ job.status }}"
-      #       blocks:
-      #         - type: "section"
-      #           text:
-      #             type: "mrkdwn"
-      #             text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
-      #         - type: "section"
-      #           text:
-      #             type: "mrkdwn"
-      #             text: |
-      #               *Translation Results:*
-      #               • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
-      #               • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
-      #               • New translations: ${{ steps.parse_summary.outputs.new_translations }}
-      #               • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
-      #               • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
-      #               ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
-      #               ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']')[0] || '' }}
-      #               ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']')[0] || '' }}
-      #               ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']')[0] || '' }}
-      #         - type: "section"
-      #           text:
-      #             type: "mrkdwn"
-      #             text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
-      #         - type: "section"
-      #           text:
-      #             type: "mrkdwn"
-      #             text: "${{ steps.parse_summary.outputs.has_failures == 'true' || job.status != 'success' && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Translation sync*: ${{ job.status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Translation sync*: ${{ job.status == 'success' && fromJSON('["✅"]')[0] || fromJSON('["❌"]')[0] }} *${{ job.status }}*\n_Updated locales committed to `${{ env.TARGET_BRANCH }}`_"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: |
+                    *Translation Results:*
+                    • Pages processed: ${{ steps.parse_summary.outputs.total_pages }}
+                    • Languages: ${{ steps.parse_summary.outputs.processed_langs }}
+                    • New translations: ${{ steps.parse_summary.outputs.new_translations }}
+                    • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
+                    • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
+                    ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
+                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']')[0] || '' }}
+                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']')[0] || '' }}
+                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']')[0] || '' }}
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <https://github.com/${{ github.triggering_actor }}|${{ github.triggering_actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ ((steps.parse_summary.outputs.has_failures == 'true') || (job.status != 'success')) && '⚠️ *Attention required*: Review failures before re-running.' || 'ℹ️ Reminder: Review translations before publishing.' }}"

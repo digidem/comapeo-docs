@@ -1,0 +1,63 @@
+# Gitleaks configuration for CoMapeo Docs
+# https://github.com/gitleaks/gitleaks
+
+title = "gitleaks config for CoMapeo Docs"
+
+# Extend default gitleaks config
+[extend]
+useDefault = true
+
+# Custom rules for this project
+[[rules]]
+id = "notion-api-key"
+description = "Notion API Key"
+regex = '''(?i)ntn_[a-zA-Z0-9]{43,}'''
+tags = ["key", "notion"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{20,}'''
+tags = ["key", "openai"]
+
+[[rules]]
+id = "cloudflare-api-token"
+description = "Cloudflare API Token"
+regex = '''(?i)cloudflare[_-]?(api)?[_-]?token[_-]?[:=]\s*['\"]?([a-zA-Z0-9_-]{40,})['\"]?'''
+tags = ["key", "cloudflare"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey)[_-]?[:=]\s*['\"]?([a-zA-Z0-9_-]{20,})['\"]?'''
+tags = ["key", "generic"]
+[rules.allowlist]
+# Allow .env.example file
+paths = [
+  '''\.env\.example$''',
+]
+
+# Global allowlist
+[allowlist]
+description = "Allowlist for safe files and patterns"
+paths = [
+  '''\.env\.example$''',
+  '''\.gitleaks\.toml$''',
+  '''node_modules/''',
+  '''\.git/''',
+  '''docs/developer-tools/github-setup\.md$''',  # Documentation may contain example patterns
+]
+
+# Stop words that indicate example/placeholder values
+stopwords = [
+  "your_notion_api_key_here",
+  "your_data_source_id_here",
+  "your_database_id_here",
+  "your_openai_api_key_here",
+  "REDACTED",
+  "example",
+  "sample",
+  "placeholder",
+  "fake",
+  "test",
+]

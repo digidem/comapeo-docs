@@ -172,7 +172,8 @@ const __filename = fileURLToPath(import.meta.url);
 
 const __dirname = path.dirname(__filename);
 
-const IMAGES_PATH = path.join(__dirname, "../../static/images/");
+const IMAGES_PATH =
+  process.env.IMAGES_PATH || path.join(__dirname, "../../static/images/");
 
 /**
 

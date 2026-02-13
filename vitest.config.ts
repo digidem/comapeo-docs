@@ -10,12 +10,15 @@ export default defineConfig({
       "**/dist/**",
       "**/build/**",
       "**/.{idea,git,cache,output,temp}/**",
+      // HTTP integration tests require Bun runtime (bun:test), run with: bun test
+      "**/http-integration.test.ts",
     ],
 
     // Environment configuration
     environment: "node",
     globals: true,
     pool: "threads",
+    fileParallelism: false,
     // Setup files for global mocking
     setupFiles: ["./scripts/vitest.setup.ts"],
 

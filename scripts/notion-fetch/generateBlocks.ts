@@ -101,8 +101,10 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
   children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
 };
 
-const CONTENT_PATH = path.join(__dirname, "../../docs");
-const IMAGES_PATH = path.join(__dirname, "../../static/images/");
+const CONTENT_PATH =
+  process.env.CONTENT_PATH || path.join(__dirname, "../../docs");
+const IMAGES_PATH =
+  process.env.IMAGES_PATH || path.join(__dirname, "../../static/images/");
 const locales = config.i18n.locales;
 
 // Global retry metrics tracking across all pages in a batch
@@ -275,6 +277,33 @@ interface PageProcessingResult {
   markdownFetches: number;
   markdownCacheHits: number;
   containsS3: boolean;
+}
+
+function createFailedPageProcessingResult(
+  task: PageTask,
+  error: unknown
+): PageProcessingResult {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  console.error(
+    chalk.red(
+      `Unexpected failure before page processing could complete for ${task.page.id}: ${errorMessage}`
+    )
+  );
+
+  return {
+    success: false,
+    totalSaved: 0,
+    emojiCount: 0,
+    pageTitle: task.pageTitle,
+    pageId: task.page.id,
+    lastEdited: task.page.last_edited_time,
+    outputPath: task.filePath,
+    blockFetches: 0,
+    blockCacheHits: 0,
+    markdownFetches: 0,
+    markdownCacheHits: 0,
+    containsS3: true,
+  };
 }
 
 /**
@@ -978,7 +1007,13 @@ export async function generateBlocks(
 
       const pageResults = await processBatch(
         pageTasks,
-        async (task) => processSinglePage(task),
+        async (task) => {
+          try {
+            return await processSinglePage(task);
+          } catch (error) {
+            return createFailedPageProcessingResult(task, error);
+          }
+        },
         {
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md

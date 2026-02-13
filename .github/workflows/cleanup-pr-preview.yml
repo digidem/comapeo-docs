@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Delete Cloudflare Pages deployment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -28,7 +28,7 @@ jobs:
             core.info('Branch deployment will be automatically cleaned up by Cloudflare Pages retention policy');
 
       - name: Comment on PR about cleanup
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prNumber = context.payload.pull_request.number;

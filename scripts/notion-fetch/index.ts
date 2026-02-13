@@ -34,6 +34,9 @@ const isDirectExec =
 const cliArgs = process.argv.slice(2);
 const perfLogFlag = cliArgs.includes("--perf-log");
 const perfOutputArg = cliArgs.find((arg) => arg.startsWith("--perf-output="));
+const statusFilterArg = cliArgs.find((arg) =>
+  arg.startsWith("--status-filter=")
+);
 
 if (perfLogFlag && !process.env.NOTION_PERF_LOG) {
   process.env.NOTION_PERF_LOG = "1";
@@ -43,6 +46,14 @@ if (perfOutputArg) {
   const [, value] = perfOutputArg.split("=");
   if (value && !process.env.NOTION_PERF_OUTPUT) {
     process.env.NOTION_PERF_OUTPUT = value;
+  }
+}
+
+let statusFilter: string | undefined;
+if (statusFilterArg) {
+  const [, value] = statusFilterArg.split("=");
+  if (value) {
+    statusFilter = value;
   }
 }
 
@@ -74,20 +85,40 @@ async function main(): Promise<number> {
   }
 
   try {
-    const filter = {
-      and: [
-        {
-          property: NOTION_PROPERTIES.STATUS,
-          select: {
-            equals: NOTION_PROPERTIES.READY_TO_PUBLISH,
-          },
-        },
-        {
-          property: "Parent item",
-          relation: { is_empty: true },
-        },
-      ],
-    };
+    // Build filter based on status filter flag
+    const filter = statusFilter
+      ? {
+          and: [
+            {
+              property: NOTION_PROPERTIES.STATUS,
+              select: {
+                equals: statusFilter,
+              },
+            },
+            {
+              property: "Parent item",
+              relation: { is_empty: true },
+            },
+          ],
+        }
+      : {
+          and: [
+            {
+              property: NOTION_PROPERTIES.STATUS,
+              select: {
+                equals: NOTION_PROPERTIES.READY_TO_PUBLISH,
+              },
+            },
+            {
+              property: "Parent item",
+              relation: { is_empty: true },
+            },
+          ],
+        };
+
+    if (statusFilter) {
+      console.log(chalk.blue(`\n🔍 Filtering by status: "${statusFilter}"\n`));
+    }
 
     const { metrics } = await runFetchPipeline({
       filter,

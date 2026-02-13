@@ -3,7 +3,7 @@
     "TITLE": "Content elements",
     "LANGUAGE": "Language",
     "STATUS": "Publish Status",
-    "ORDER": "Order", 
+    "ORDER": "Order",
     "TAGS": "Tags",
     "ELEMENT_TYPE": "Element Type",
     "READY_FOR_TRANSLATION": "Ready for translation",
@@ -13,7 +13,7 @@
     "Content elements": "title",
     "Language": "select",
     "Publish Status": "select",
-    "Element Type": "select", 
+    "Element Type": "select",
     "Order": "number",
     "Tags": "multi_select",
     "Date Published": "date",
@@ -31,8 +31,5 @@
     "Order",
     "Tags"
   ],
-  "requiredProperties": [
-    "Content elements",
-    "Language"
-  ]
+  "requiredProperties": ["Content elements", "Language"]
 }

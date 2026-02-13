@@ -159,7 +159,43 @@
   "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
     "message": "Nova Página"
   },
+  "Elementos de Conteúdo de Teste": {
+    "message": "Elementos de Conteúdo de Teste"
+  },
   "Testing links": {
     "message": "Nova Página"
+  },
+  "Understanding CoMapeo's Core Concepts and Functions": {
+    "message": "Nova Página"
+  },
+  "Installing CoMapeo and Onboarding": {
+    "message": "Nova Página"
+  },
+  "Planning and Preparing for a Project": {
+    "message": "Nova Página"
+  },
+  "Observations and Tracks": {
+    "message": "Novo título da seção"
+  },
+  "Gathering Observations and Tracks": {
+    "message": "Coletando Observações"
+  },
+  "Data Privacy and Security": {
+    "message": "Novo título da seção"
+  },
+  "Managing Data Privacy and Security": {
+    "message": "Gerenciamento de dados e privacidade"
+  },
+  "Moving Observations and Tracks Outside of CoMapeo": {
+    "message": "Compartilhando observações fora do CoMapeo"
+  },
+  "Developer Tools": {
+    "message": "Ferramentas de desenvolvedor"
+  },
+  "API Reference": {
+    "message": "Referência de API"
+  },
+  "CLI Reference": {
+    "message": "Referência de CLI"
   }
 }

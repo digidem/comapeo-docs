@@ -15,6 +15,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import chalk from "chalk";
+import {
+  FileSystemError,
+  logError,
+  logWarning,
+  logSuccess,
+} from "./shared/errors";
 
 interface OldCacheEntry {
   url: string;
@@ -53,7 +59,14 @@ async function migrateCache(): Promise<void> {
     const content = fs.readFileSync(OLD_CACHE_FILE, "utf-8");
     oldCache = JSON.parse(content);
   } catch (error) {
-    console.error(chalk.red("❌ Failed to read old cache file:"), error);
+    logError(
+      new FileSystemError(
+        `Failed to read old cache file at ${OLD_CACHE_FILE}`,
+        ["Ensure the file exists and is readable", "Check file permissions"],
+        { filePath: OLD_CACHE_FILE }
+      ),
+      "migrateCache"
+    );
     return;
   }
 
@@ -82,9 +95,13 @@ async function migrateCache(): Promise<void> {
       fs.writeFileSync(cachePath, JSON.stringify(entry, null, 2));
       migratedCount++;
     } catch (error) {
-      console.error(
-        chalk.red(`   ❌ Failed to migrate entry for ${url}:`),
-        error
+      logError(
+        new FileSystemError(
+          `Failed to migrate cache entry for URL: ${url}`,
+          ["Check directory write permissions", "Ensure sufficient disk space"],
+          { url, cachePath }
+        ),
+        "migrateCache"
       );
       errorCount++;
     }
@@ -108,12 +125,12 @@ async function migrateCache(): Promise<void> {
   if (deleteOld && errorCount === 0) {
     try {
       fs.unlinkSync(OLD_CACHE_FILE);
-      console.log(
-        chalk.green(`   🗑️  Deleted old cache file: ${OLD_CACHE_FILE}`)
-      );
+      logSuccess(`Deleted old cache file: ${OLD_CACHE_FILE}`, "migrateCache");
     } catch (error) {
-      console.warn(
-        chalk.yellow(`   ⚠️  Could not delete old cache file:`, error)
+      logWarning(
+        `Could not delete old cache file: ${OLD_CACHE_FILE}. ` +
+          "You may need to delete it manually.",
+        "migrateCache"
       );
     }
   } else if (!deleteOld) {
@@ -130,6 +147,9 @@ async function migrateCache(): Promise<void> {
 
 // Run migration
 migrateCache().catch((error) => {
-  console.error(chalk.red("Migration failed:"), error);
+  logError(
+    error,
+    "Migration failed unexpectedly. Check logs above for details."
+  );
   process.exit(1);
 });

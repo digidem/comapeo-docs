@@ -10,7 +10,8 @@ const __dirname = path.dirname(__filename);
 /**
  * Path to the i18n directory
  */
-export const I18N_PATH = path.join(__dirname, "../../i18n/");
+export const I18N_PATH =
+  process.env.I18N_PATH || path.join(__dirname, "../../i18n/");
 
 /**
  * Get the path to the i18n directory for a specific locale

@@ -2,7 +2,7 @@
 
 ---
 
-## 1. Performance: Sibling Lookup API Inefficiency
+## 1. Performance: Sibling Lookup API Inefficiency (PENDING)
 **Location:** `scripts/notion-translate/index.ts` -> `findSiblingTranslations()`
 
 ### The Finding
@@ -30,75 +30,31 @@ const response = await notion.dataSources.query({
 
 ---
 
-## 2. Type Safety: Excessive Use of `as any` and `@ts-expect-error`
+## 2. Type Safety: Excessive Use of `as any` and `@ts-expect-error` (RESOLVED)
 **Location:** `scripts/notionClient.ts`, `scripts/notion-translate/markdownToNotion.ts`
 
-### The Finding
-There is a high density of type-casting to `any` and suppression of TypeScript errors when interacting with the Notion SDK. While the Notion SDK types are complex, the current approach bypasses the compiler's ability to catch breaking API changes.
-
-### Potential Impact
-- **Runtime Crashes:** Undetected changes in the Notion API response structure will cause `TypeError: cannot read property X of undefined` at runtime.
-- **Maintenance Debt:** Makes future refactoring dangerous as the "source of truth" for data structures is lost.
-
-### Suggested Solution
-Define strict local interfaces for the specific Notion properties used by the project and use Type Guards.
-
-```typescript
-interface NotionSelectProperty {
-  type: 'select';
-  select: { name: string } | null;
-}
-
-function isSelectProperty(prop: any): prop is NotionSelectProperty {
-  return prop && prop.type === 'select';
-}
-```
+### Status: Resolved in commit d13b6df
+The implementation now includes dedicated interfaces (`NotionPageResult`, `NotionPageParent`, `ChildPageBlock`) and type guards (`isSelectProperty`, `isChildPageBlock`, `getLanguageFromPage`) which significantly reduce reliance on unsafe casts.
 
 ---
 
-## 3. Reliability: Deterministic Filename Length
+## 3. Reliability: Deterministic Filename Length (RESOLVED)
 **Location:** `scripts/notion-translate/index.ts` -> `saveTranslatedContentToDisk()`
 
-### The Finding
-The filename is constructed by combining a slugified title with a 32-character Notion Page ID: `${baseSlug}-${stablePageId}.md`. 
-
-### Potential Impact
-- **Path Length Limits:** On some Windows systems or specific CI environments, the maximum path length (MAX_PATH) is 255 characters. A long title + 32-char ID + deep directory nesting (`i18n/pt/docusaurus-plugin-content-docs/current/...`) can easily exceed this limit, causing file write failures.
-
-### Suggested Solution
-Truncate the `baseSlug` portion to a safe limit (e.g., 50 characters) before appending the ID.
-
-```typescript
-const baseSlug = title.toLowerCase().replace(/\s+/g, "-").substring(0, 50);
-const deterministicName = `${baseSlug}-${stablePageId}`;
-```
+### Status: Resolved in commit d13b6df
+A `MAX_SLUG_LENGTH` constant (50 characters) has been introduced. The `baseSlug` is now truncated before being appended with the stable Page ID, ensuring that total path lengths stay within safe limits for Windows and CI environments.
 
 ---
 
-## 4. CI/CD: Brittle Log Parsing for Summaries
+## 4. CI/CD: Brittle Log Parsing for Summaries (RESOLVED)
 **Location:** `.github/workflows/translate-docs.yml`
 
-### The Finding
-The workflow parses the translation summary by `grep`-ing the stdout of the `bun notion:translate` command.
-
-### Potential Impact
-- **Parsing Failures:** If a debug log or a page title happens to contain the string `TRANSLATION_SUMMARY`, the `grep | head -1` logic will capture the wrong data.
-- **Malformed JSON:** If the console output is truncated or interleaved with other logs, `jq` will fail, breaking the notification step.
-
-### Suggested Solution
-Have the script write the summary to a dedicated JSON file and use that file as the source of truth for the workflow.
-
-```bash
-# In script:
-fs.writeFile('translation-summary.json', JSON.stringify(summary));
-
-# In workflow:
-TOTAL_PAGES=$(jq -r '.totalEnglishPages' translation-summary.json)
-```
+### Status: Resolved in commit d13b6df
+The translation script now writes a `translation-summary.json` file upon completion. The GitHub Actions workflow has been updated to prefer parsing this JSON file using `jq`, with the previous log-parsing logic maintained only as a secondary fallback.
 
 ---
 
-## 5. Integration: Notion v5 API (2025-09-03) Migration
+## 5. Integration: Notion v5 API (2025-09-03) Migration (MONITORING)
 **Location:** `scripts/notionClient.ts`, `.github/workflows/translate-docs.yml`
 
 ### The Finding
@@ -113,9 +69,9 @@ Add a strict validation check at the start of the `main()` function that logs ex
 ---
 
 ## Risk Assessment
-- **Likelihood of Regression:** Low (due to high test coverage).
-- **Production Impact:** Medium (mostly related to API limits or CI failures).
-- **Urgency:** Medium. The architectural improvements are solid; these findings are refinements for long-term stability.
+- **Likelihood of Regression:** Low (addressed by d13b6df improvements).
+- **Production Impact:** Low (previously medium, now mitigated by path length and summary parsing fixes).
+- **Urgency:** Low. Remaining items are optimizations rather than critical fixes.
 
 ## Recommendation
-**Approve with comments.** The PR represents a significant step forward. The issues identified above can be addressed as minor revisions within this PR or as immediate follow-up tasks.
+**Approve.** The changes in commit `d13b6df` directly addressed the most critical concerns regarding reliability and maintainability. The remaining performance optimization for sibling lookup can be handled as a non-blocking technical debt item.

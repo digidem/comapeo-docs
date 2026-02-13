@@ -498,7 +498,12 @@ export async function executeJob(
       .join("\n");
     const errorOutput = stderr || combinedError || errorMessage;
 
-    logger.error("Job failed", { error: errorOutput, timedOut, lastExitCode });
+    logger.error("Job failed", {
+      error: errorOutput,
+      timedOut,
+      lastExitCode,
+      exitCodeKnown: lastExitCode !== null,
+    });
     onComplete(false, undefined, errorOutput);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,

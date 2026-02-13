@@ -33,6 +33,9 @@ import { isContentMutatingJob, runContentTask } from "./content-repo";
  * - PATH: Required for runtime resolution (bun/node executables)
  * - HOME: Required for runtime resolution (user home directory)
  * - BUN_INSTALL: Required for bun runtime to locate installation
+ * - CONTENT_PATH: Override docs output directory (for Docker volume persistence)
+ * - IMAGES_PATH: Override images output directory (for Docker volume persistence)
+ * - I18N_PATH: Override i18n output directory (for Docker volume persistence)
  * - LANG: Locale configuration for text processing
  * - LC_ALL: Locale configuration for collation and character handling
  */
@@ -49,6 +52,10 @@ export const CHILD_ENV_WHITELIST = [
   "DEFAULT_DOCS_PAGE",
   "BASE_URL",
   "NODE_ENV",
+  // Content output paths (override defaults for Docker volume persistence)
+  "CONTENT_PATH",
+  "IMAGES_PATH",
+  "I18N_PATH",
   // Debug and performance telemetry (optional but used by production workflows)
   "DEBUG",
   "NOTION_PERF_LOG",

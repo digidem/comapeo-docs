@@ -1085,6 +1085,18 @@ export function parseCliOptions(args: string[]): CliOptions {
 
 export async function main(options: CliOptions = {}) {
   console.log(chalk.bold.cyan("🚀 Starting Notion translation workflow\n"));
+
+  // Log which ID type is being used (v5 API validation)
+  if (process.env.DATA_SOURCE_ID) {
+    console.log(chalk.blue("ℹ️  Using DATA_SOURCE_ID (Notion API v5)"));
+  } else {
+    console.log(
+      chalk.yellow(
+        "⚠️  Using DATABASE_ID fallback (legacy). Consider setting DATA_SOURCE_ID for Notion API v5."
+      )
+    );
+  }
+
   const failures: TranslationFailure[] = [];
   const summary: TranslationRunSummary = {
     totalEnglishPages: 0,

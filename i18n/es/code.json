@@ -442,7 +442,7 @@
         "message": "Preparación para el uso de "
     },
     "Understanding CoMapeo’s Core Concepts and Functions": {
-        "message": "Nueva Página"
+        "message": "Comprender los conceptos y funciones principales de CoMapeo"
     },
     "Gathering the Right Equipment for CoMapeo": {
         "message": "Reunir el Equipo Adecuado para CoMapeo"
@@ -646,7 +646,7 @@
         "message": "Gestión de datos y privacidad"
     },
     "Exchanging Project Data": {
-        "message": "Tracar Observao…"
+        "message": "Intercambiar Observaciones"
     },
     "Moving Observations & Tracks Outside of CoMapeo": {
         "message": "Compartir observaciones fuera de CoMapeo"
@@ -731,5 +731,8 @@
     },
     "Planning and Preparing for a Project": {
         "message": "Nueva Página"
+    },
+    "Prueba: título de la página en el menú y las migas de pan": {
+        "message": "Prueba: título de la página en el menú y las migas de pan"
     }
 }

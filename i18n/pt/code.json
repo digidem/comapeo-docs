@@ -454,10 +454,10 @@
         "message": "Ferramentas Mapeo"
     },
     "Preparing to Use CoMapeo": {
-        "message": "Preparando para usar do CoMapeo (Mobile)"
+        "message": "Preparação para usar CoMapeo (Mobile)"
     },
     "Understanding CoMapeo’s Core Concepts and Functions": {
-        "message": "Nova Página"
+        "message": "Entendendo os Conceitos e Funções Principais do CoMapeo"
     },
     "Gathering the Right Equipment for CoMapeo": {
         "message": "Reunindo o Equipamento Certo para o CoMapeo"
@@ -661,7 +661,7 @@
         "message": "Gerenciamento de dados e privacidade"
     },
     "Exchanging Project Data": {
-        "message": "Intercambiar Observaciones"
+        "message": "Tracar Observao…"
     },
     "Moving Observations & Tracks Outside of CoMapeo": {
         "message": "Compartilhando observações fora do CoMapeo"
@@ -718,7 +718,7 @@
         "message": "Nova Página"
     },
     "Device Setup and Maintenance for CoMapeo": {
-        "message": "Nova Página"
+        "message": "Configuração e Manutenção do Dispositivo para CoMapeo"
     },
     "Initial Use and CoMapeo Settings": {
         "message": "Nova Página"
@@ -746,5 +746,8 @@
     },
     "Planning and Preparing for a Project": {
         "message": "Nova Página"
+    },
+    "Teste: título da página no menu e nas migalhas de navegação": {
+        "message": "Teste: título da página no menu e nas migalhas de navegação"
     }
 }

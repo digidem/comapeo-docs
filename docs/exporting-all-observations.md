@@ -2,7 +2,7 @@
 id: doc-exporting-all-observations
 title: Exporting all Observations
 sidebar_label: Exporting all Observations
-sidebar_position: 41
+sidebar_position: 72
 pagination_label: Exporting all Observations
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/exporting-all-observations.md
 keywords:
@@ -11,12 +11,12 @@ keywords:
 tags: []
 slug: /exporting-all-observations
 last_update:
-  date: 12/11/2025
+  date: 2/9/2026
   author: Awana Digital
 ---
 
-> 🚧 **Work in progress** - More Content will be added soon
+<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->
 
-
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-
+:::note
+Content placeholder – add blocks in Notion to replace this file.
+:::

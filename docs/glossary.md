@@ -2,7 +2,7 @@
 id: doc-glossary
 title: Glossary
 sidebar_label: Glossary
-sidebar_position: 45
+sidebar_position: 92
 pagination_label: Glossary
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/glossary.md
 keywords:
@@ -11,23 +11,12 @@ keywords:
 tags: []
 slug: /glossary
 last_update:
-  date: 12/11/2025
+  date: 2/9/2026
   author: Awana Digital
 ---
 
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->
 
-
-> 🚧 **Work in progress** - More Content will be added soon
-
-
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-
-
----
-
-
-> ## 🔗 CoMapeo Website  
->   
-> Visit [comapeo.app](http://comapeo.app/) for general information, newsletter signup, and access to blogs about CoMapeo
-
+:::note
+Content placeholder – add blocks in Notion to replace this file.
+:::

@@ -11,15 +11,32 @@ keywords:
 tags: []
 slug: /building-custom-background-maps
 last_update:
-  date: 12/11/2025
+  date: 2/9/2026
   author: Awana Digital
 ---
 
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+:::note 🟢 Process Checklist
+- [ ] Assignment prepared with relevance content references listed above
 
+- [ ] Content drafted
 
-> 🚧 **Work in progress** - More Content will be added soon
+- [ ] Formatting and Icons applied
 
+- [ ] Reviewer checks content for accuracy and edits where needed.
 
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+- [ ] Images  are added where indicated
+
+- [ ] Copy editing complete
+
+- [ ] Translations generated using AI tool
+
+- [ ] Translations validated
+
+- [ ] Formatting in ES page matches EN version
+
+- [ ] Formatting in PT page matches EN version
+
+- [ ] Mark as
+:::
+![](/images/buildingcustombackgr_0.png)
 

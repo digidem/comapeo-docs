@@ -1,15 +1,15 @@
 ---
-id: doc-inviting-collaborators
-title: Inviting Collaborators
-sidebar_label: Inviting Collaborators
-sidebar_position: 56
-pagination_label: Inviting Collaborators
-custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/managing-projects/inviting-collaborators.md
+id: doc-creating-a-new-project
+title: Creating a New Project
+sidebar_label: Creating a New Project
+sidebar_position: 53
+pagination_label: Creating a New Project
+custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/creating-a-new-project.md
 keywords:
   - docs
   - comapeo
 tags: []
-slug: /inviting-collaborators
+slug: /creating-a-new-project
 last_update:
   date: 2/9/2026
   author: Awana Digital
@@ -38,5 +38,5 @@ last_update:
 
 - [ ] Mark as
 :::
-![](/images/invitingcollaborator_0.png)
+![](/images/creatinganewproject_0.png)
 

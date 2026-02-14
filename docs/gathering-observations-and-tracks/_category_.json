@@ -1,12 +1,12 @@
 {
-  "label": "Gathering Observations & Tracks",
-  "position": 15,
+  "label": "Gathering Observations and Tracks",
+  "position": 21,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index"
   },
   "customProps": {
-    "title": "Observations & Tracks"
+    "title": "Observations and Tracks"
   }
 }

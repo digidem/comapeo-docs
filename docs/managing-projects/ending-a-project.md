@@ -1,9 +1,9 @@
 ---
 id: doc-ending-a-project
-title: Completing or Ending a Project
-sidebar_label: Completing or Ending a Project
-sidebar_position: 34
-pagination_label: Completing or Ending a Project
+title: Ending a Project
+sidebar_label: Ending a Project
+sidebar_position: 59
+pagination_label: Ending a Project
 custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/managing-projects/ending-a-project.md
 keywords:
   - docs
@@ -11,12 +11,12 @@ keywords:
 tags: []
 slug: /ending-a-project
 last_update:
-  date: 12/11/2025
+  date: 2/9/2026
   author: Awana Digital
 ---
 
-> 🚧 **Work in progress** - More Content will be added soon
+<!-- Placeholder content generated automatically because the Notion page is missing a Website Block. -->
 
-
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-
+:::note
+Content placeholder – add blocks in Notion to replace this file.
+:::

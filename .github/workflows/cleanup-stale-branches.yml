@@ -1,0 +1,136 @@
+name: Cleanup Stale Branches
+
+on:
+  schedule:
+    # Run every Monday at 10:00 UTC
+    - cron: "0 10 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  # Configuration constants for easy maintenance
+  CUTOFF_DAYS: 90
+  PROTECTED_BRANCHES: "main|content"
+
+jobs:
+  cleanup:
+    name: Delete Stale Branches
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get all history for accurate date calculation
+
+      - name: Get stale branches
+        id: stale
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -e
+
+          # Calculate cutoff timestamp
+          CUTOFF=$(date -d "$CUTOFF_DAYS days ago" +%s)
+
+          echo "Finding branches older than $CUTOFF_DAYS days (before: $(date -d "@$CUTOFF" -Rfc 3339))"
+
+          # Find all remote branches except protected ones and HEAD
+          STALE_BRANCHES=$(
+            git for-each-ref --sort=-committerdate \
+              --format='%(refname:short)|%(committerdate:unix)|%(authorname)' \
+              refs/remotes/origin/ | \
+              awk -F'|' -v cutoff="$CUTOFF" -v protected="$PROTECTED_BRANCHES" '
+                # Skip origin/HEAD
+                $1 !~ /^origin\/HEAD$/ &&
+                # Skip protected branches (main, content, etc.) using env variable
+                $1 ~ "^origin/(" protected ")$" {next}
+                # Check if branch is older than cutoff
+                $2 < cutoff {print $1}
+              ' | sed 's|^origin/||'
+          )
+
+          echo "Found $(echo "$STALE_BRANCHES" | grep -c .) stale branch candidates"
+
+          # Get all open PR branches (with pagination)
+          echo "Fetching open PR branches to preserve..."
+          OPEN_PRS=$(
+            gh pr list --limit 1000 --state open --json headRefName --jq '.[].headRefName'
+          )
+
+          echo "Found $(echo "$OPEN_PRS" | grep -c .) open PR branches to preserve"
+
+          # Filter out branches with open PRs (using exact string matching)
+          final=""
+          for br in $STALE_BRANCHES; do
+            # Use exact match with grep -F and -x (whole line)
+            if echo "$OPEN_PRS" | grep -Fxq "$br"; then
+              echo "  Skipping: $br (has open PR)"
+            else
+              printf -v final '%s\n%s' "$final" "$br"
+            fi
+          done
+
+          # Output to GitHub Actions (handle empty case safely)
+          printf 'branches<<EOF\n%s\nEOF\n' "$final" >> $GITHUB_OUTPUT
+
+      - name: Delete branches
+        id: delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        if: steps.stale.outputs.branches != ''
+        shell: bash
+        run: |
+          BRANCHES_TO_DELETE="${{ steps.stale.outputs.branches }}"
+
+          if [ -z "$BRANCHES_TO_DELETE" ] || [ "$BRANCHES_TO_DELETE" = "EOF" ]; then
+            echo "No branches to delete"
+            echo "deleted_branches=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          deleted=""
+          for br in $BRANCHES_TO_DELETE; do
+            echo "  Deleting: $br"
+            if git push origin --delete "$br" 2>/dev/null; then
+              printf -v deleted '%s\n%s' "$deleted" "$br"
+            else
+              echo "  Failed to delete: $br"
+            fi
+          done
+
+          printf 'deleted_branches<<EOF\n%s\nEOF\n' "$deleted" >> $GITHUB_OUTPUT
+
+      - name: Create cleanup issue (audit trail)
+        if: steps.delete.outputs.deleted_branches != '' && steps.delete.outputs.deleted_branches != 'EOF'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deletedBranches = "${{ steps.delete.outputs.deleted_branches }}".trim().split('\n').filter(b => b);
+
+            if (deletedBranches.length === 0) {
+              console.log('No branches deleted, skipping issue creation');
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🧹 Automated Branch Cleanup Report',
+              body: `## Deleted Stale Branches
+
+              The following branches (>${{ env.CUTOFF_DAYS }} days old, no open PRs) were automatically deleted:
+
+              ${deletedBranches.map(b => `- \`${b}\``).join('\n')}
+
+              ---
+              **Configuration:**
+              - Cutoff: ${{ env.CUTOFF_DAYS }} days
+              - Protected branches: ${{ env.PROTECTED_BRANCHES }}
+
+              *This issue was automatically created by the cleanup-stale-branches workflow*`,
+              labels: ['automation', 'maintenance']
+            });

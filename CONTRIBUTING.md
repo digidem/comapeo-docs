@@ -15,6 +15,21 @@ Thank you for your interest in contributing! This guide explains our two-branch 
 
 We use a **two-branch architecture** to separate code from generated content:
 
+### Branch Lifecycle & Cleanup
+
+**Automatic Cleanup:**
+
+- Merged PR branches are automatically deleted via GitHub settings
+- Stale branches (>90 days old, no open PRs) are cleaned up weekly
+- Branches with open PRs are **never** automatically deleted
+
+**Retention Policy:**
+
+- Active PR branches: Preserved until PR closes/merges
+- Merged PR branches: Deleted immediately on merge
+- Abandoned branches (>90 days): Deleted via scheduled automation
+- Protected branches (main, content): Never deleted
+
 ### `main` branch
 
 **Purpose**: Source code, scripts, and configuration
@@ -416,7 +431,8 @@ Before submitting PR:
 
 ### After PR is Merged
 
-- Feature branch is automatically deleted
+- Feature branch is automatically deleted (via GitHub auto-delete setting)
+- Stale branches (>90 days old, no open PRs) are cleaned up weekly via [automation](.github/workflows/cleanup-stale-branches.yml)
 - Changes deploy to staging automatically
 - Production deployment is manual (maintainers only)
 

@@ -116,21 +116,20 @@ jobs:
               return;
             }
 
+            const branchList = deletedBranches.map(function(b) { return '- `' + b + '`'; }).join('\n');
+            var body = "## Deleted Stale Branches\n\n" +
+              "The following branches (>90 days old, no open PRs) were automatically deleted:\n\n" +
+              branchList + "\n\n" +
+              "---\n" +
+              "**Configuration:**\n" +
+              "- Cutoff: 90 days\n" +
+              "- Protected branches: main|content\n\n" +
+              "*This issue was automatically created by the cleanup-stale-branches workflow*";
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '🧹 Automated Branch Cleanup Report',
-              body: `## Deleted Stale Branches
-
-              The following branches (>${{ env.CUTOFF_DAYS }} days old, no open PRs) were automatically deleted:
-
-              ${deletedBranches.map(b => `- \`${b}\``).join('\n')}
-
-              ---
-              **Configuration:**
-              - Cutoff: ${{ env.CUTOFF_DAYS }} days
-              - Protected branches: ${{ env.PROTECTED_BRANCHES }}
-
-              *This issue was automatically created by the cleanup-stale-branches workflow*`,
-              labels: ['automation', 'maintenance']
+              title: "🧹 Automated Branch Cleanup Report",
+              body: body,
+              labels: ["automation", "maintenance"]
             });

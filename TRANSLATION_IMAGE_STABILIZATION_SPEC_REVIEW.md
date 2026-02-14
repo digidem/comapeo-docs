@@ -27,12 +27,14 @@ The spec says "Last Updated: 2025-01-13" but today is 2026-02-13 - likely a typo
 **Location:** `translateFrontMatter.ts:44,52,63`
 
 The current prompt already tells OpenAI:
+
 > "Any image URL... must be maintained exactly as in the original markdown"
 > "Do not translate or modify any image URLs."
 
 **Problem:** The spec proposes adding a new prompt instruction for `/images/` paths (Phase 2), but this won't fix the core issue. The current instructions tell OpenAI to preserve whatever URL exists - including expiring S3 URLs!
 
 The spec correctly identifies that images need to be processed **before** translation (to convert S3 URLs to `/images/...` paths first). But the Phase 2 prompt enhancement is redundant since:
+
 1. Images are already processed before translation
 2. The prompt already says "don't modify URLs"
 
@@ -43,6 +45,7 @@ The spec correctly identifies that images need to be processed **before** transl
 **Location:** Spec section "Image Source Precedence Rules"
 
 The spec says:
+
 > If localized Notion page exists → use its markdown
 > Otherwise → use EN markdown (default reuse)
 
@@ -63,6 +66,7 @@ There's no logic to check for page and use its markdown instead. The a localized
 `validateAndFixRemainingImages` **does not fail** - it just warns and returns the markdown with remaining S3 URLs.
 
 The spec says (line 180):
+
 > **fail translation for that page** and print diagnostics
 
 But the actual function just logs warnings. This is a mismatch between spec and implementation of the function it's trying to reuse.
@@ -84,16 +88,21 @@ These are minor but could confuse implementers.
 **Location:** Spec section "Implementation Design", item 1
 
 The spec shows:
+
 ```typescript
 function generateSafeSlug(title: string): string {
-  return title.toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .substring(0, MAX_SLUG_LENGTH) || "untitled";
+  return (
+    title
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .substring(0, MAX_SLUG_LENGTH) || "untitled"
+  );
 }
 ```
 
 But the actual implementation at `saveTranslatedContentToDisk:573-580` is more complex:
+
 - Uses page ID for determinism
 - Has different handling for empty slugs
 - Creates `deterministicName` with both slug AND stable page ID
@@ -105,6 +114,7 @@ The spec should either reference the exact existing logic or note that a new hel
 ### 7. Missing consideration: EN-first prerequisite
 
 The spec says translations should reuse EN images "by default (no duplication per language)". This works because:
+
 1. EN images are downloaded to `static/images/` during the fetch phase
 2. `processAndReplaceImages` checks for existing files before downloading
 
@@ -114,15 +124,15 @@ However, there's no guarantee the EN fetch has already run. If someone runs tran
 
 ## Summary
 
-| Issue | Severity |
-|-------|----------|
-| Outdated date | Minor |
-| Redundant Phase 2 prompt enhancement | Low - doesn't hurt but adds confusion |
+| Issue                                           | Severity                                |
+| ----------------------------------------------- | --------------------------------------- |
+| Outdated date                                   | Minor                                   |
+| Redundant Phase 2 prompt enhancement            | Low - doesn't hurt but adds confusion   |
 | Missing localized page markdown selection logic | **High** - core requirement not in code |
-| `validateAndFixRemainingImages` doesn't fail | **High** - spec/impl mismatch |
-| Line number references off | Minor |
-| Simplified slug logic in spec | Medium - could cause bugs |
-| No explicit EN-first prerequisite documented | Low |
+| `validateAndFixRemainingImages` doesn't fail    | **High** - spec/impl mismatch           |
+| Line number references off                      | Minor                                   |
+| Simplified slug logic in spec                   | Medium - could cause bugs               |
+| No explicit EN-first prerequisite documented    | Low                                     |
 
 The core approach (process images before translation) is correct. The main risks are:
 
@@ -156,11 +166,13 @@ The core approach (process images before translation) is correct. The main risks
 The spec doesn't address what happens to image alt text during translation. For example:
 
 **Input:**
+
 ```markdown
 ![Settings screen](/images/settings_0.png)
 ```
 
 **Expected output for PT:**
+
 ```markdown
 ![Tela de configurações](/images/settings_0.png)
 ```
@@ -191,6 +203,7 @@ If Notion pages have featured images or hero images stored in frontmatter with S
 **Location:** `imageReplacer.ts:629`, `imageValidation.ts:68`
 
 When an image fails to download during translation, the current implementation:
+
 1. Creates a fallback comment: `<!-- Failed to download image: {url} -->`
 2. Adds placeholder text: `**[Image N: alt]** *(Image failed to download)*`
 
@@ -205,16 +218,19 @@ When an image fails to download during translation, the current implementation:
 **Location:** `imageProcessing.ts:674-700`
 
 Images are cached by their S3 URL:
+
 ```typescript
 const cachedEntry = imageCache.get(url);
 ```
 
 However, S3 URLs expire after ~1 hour. If the EN fetch runs and caches an image:
+
 - EN fetch gets markdown with S3 URL A
 - Downloads image, saves to `/images/settings_0.png`
 - Caches: URL A → `/images/settings_0.png`
 
 Later when translation runs:
+
 - Translation gets markdown with S3 URL A (still the same URL in Notion's content)
 - Looks up cache with URL A → finds it!
 
@@ -237,6 +253,7 @@ Images are already processed in batches of 5 concurrently (`MAX_CONCURRENT_IMAGE
 **Location:** `imageReplacer.ts:70`
 
 The `ImageReplacementResult` includes `metrics: ImageProcessingMetrics` which tracks:
+
 - Processing time
 - Cache hits
 - Skipped images (small size, already optimized)
@@ -248,6 +265,7 @@ The spec proposes logging `processed=X reused=Y failed=Z` (line 230) - this data
 ### 14. Potential issue: Localized page with NO images vs EN with images
 
 **Scenario:**
+
 - EN page has 3 images
 - Localized Notion page exists but has NO images (translator deleted them)
 - Spec says: "use localized page markdown for images"
@@ -261,6 +279,7 @@ The spec says "If localized Notion page exists → use its markdown" - this impl
 ### 15. Potential issue: Same image URL in both EN and localized
 
 **Scenario:**
+
 - EN page has image A at S3 URL X
 - Localized page has SAME image A (same S3 URL X)
 - Both would download the same image
@@ -274,9 +293,11 @@ The spec says "If localized Notion page exists → use its markdown" - this impl
 **Location:** Spec "Rollback Strategy" section
 
 The rollback strategy says:
+
 > Quick Fix: Temporarily disable image processing in translation by commenting out the integration code
 
 This doesn't address what happens to partially downloaded images if translation fails mid-process. If a translation run fails:
+
 - Some images may have been downloaded to `static/images/`
 - These would be orphaned (not referenced by any final markdown)
 
@@ -289,6 +310,7 @@ The spec should mention whether partial downloads need cleanup.
 **Location:** Spec "Testing Requirements"
 
 The spec doesn't include tests for:
+
 - Cache hits when EN already fetched the image
 - Cache misses when running translation standalone
 - Cache invalidation scenarios
@@ -297,16 +319,16 @@ The spec doesn't include tests for:
 
 ## Summary - Round 2
 
-| Issue | Severity |
-|-------|----------|
-| Alt text translation not explicitly addressed | Low - likely works but unclear |
-| Frontmatter images not handled | Medium - may not be in scope |
-| Fallback creates broken references | **High** - violates "stable paths only" |
-| Cache key expiration concern | Low - likely works, needs verification |
-| Parallel processing already implemented | N/A - good news! |
-| Metrics available but not documented | Low - minor doc gap |
-| Localized page with NO images behavior | Medium - unclear edge case |
-| Rollback doesn't address partial downloads | Low - minor gap |
+| Issue                                         | Severity                                |
+| --------------------------------------------- | --------------------------------------- |
+| Alt text translation not explicitly addressed | Low - likely works but unclear          |
+| Frontmatter images not handled                | Medium - may not be in scope            |
+| Fallback creates broken references            | **High** - violates "stable paths only" |
+| Cache key expiration concern                  | Low - likely works, needs verification  |
+| Parallel processing already implemented       | N/A - good news!                        |
+| Metrics available but not documented          | Low - minor doc gap                     |
+| Localized page with NO images behavior        | Medium - unclear edge case              |
+| Rollback doesn't address partial downloads    | Low - minor gap                         |
 
 ---
 
@@ -336,3 +358,23 @@ The spec's core approach (process images before translation → translate → va
 2. **High:** Missing implementation for localized page markdown selection
 3. **High:** Spec/impl mismatch on validation failure behavior
 4. **Medium:** Unclear edge cases around localized pages with no images
+
+---
+
+## Resolution Status (2026-02-14)
+
+All issues from this review have been addressed in the updated spec:
+
+| Issue                                               | Resolution                                                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Critical: Fallback creates broken references**    | Spec now requires checking `imageResult.stats.totalFailures > 0` and throwing before translation. Fallback placeholders are never accepted. |
+| **High: Missing localized page markdown selection** | Deferred to future enhancement. Initial implementation uses EN page only. Clearly documented in spec.                                       |
+| **High: Spec/impl mismatch on validation**          | Spec now uses `getImageDiagnostics` + custom throw logic instead of `validateAndFixRemainingImages`. Import list corrected.                 |
+| **Medium: Unclear edge cases**                      | Resolved by deferring per-language overrides. No ambiguity in initial scope.                                                                |
+| Outdated date                                       | Fixed to 2026-02-14                                                                                                                         |
+| Redundant Phase 2                                   | Downgraded to P2 (optional, defense in depth)                                                                                               |
+| Wrong function name                                 | Fixed to `processSinglePageTranslation`                                                                                                     |
+| Simplified slug logic                               | Fixed to include page ID suffix                                                                                                             |
+| Metrics property name wrong                         | Removed `reused` from logging (no cache hit metric available)                                                                               |
+| Frontmatter images                                  | Documented as out of scope                                                                                                                  |
+| EN-first prerequisite                               | Added Prerequisites section                                                                                                                 |

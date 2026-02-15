@@ -104,10 +104,10 @@ A: OpenAI translates it. `![Settings screen]` becomes `![Tela de configurações
 
 ## What Files Change
 
-| File                                                            | What We Do                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------- |
-| `scripts/notion-translate/index.ts`                             | Add image processing before translation, add validation after |
-| `scripts/notion-translate/__tests__/imageStabilization.test.ts` | New tests for image stabilization                             |
+| File                                                  | What We Do                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `scripts/notion-translate/index.ts`                   | Add image processing before translation, add validation after |
+| `scripts/notion-translate/imageStabilization.test.ts` | New tests for image stabilization                             |
 
 We reuse existing code from `scripts/notion-fetch/imageReplacer.ts` - no new image downloading logic needed!
 
@@ -139,7 +139,7 @@ We reuse existing code from `scripts/notion-fetch/imageReplacer.ts` - no new ima
 
 - Mock the network (don't actually download images)
 - Mock OpenAI (don't actually call the API)
-- Run tests with: `bunx vitest run scripts/notion-translate/__tests__/imageStabilization.test.ts`
+- Run tests with: `bunx vitest run scripts/notion-translate/imageStabilization.test.ts`
 
 ---
 
@@ -220,7 +220,7 @@ const rawMarkdown = await convertPageToMarkdown(englishPage.id);
 
 // 2. Download images and replace URLs with stable paths
 // Uses existing slug logic from saveTranslatedContentToDisk for consistent filenames
-const safeFilename = generateSafeFilename(title, englishPage.id); // NEW HELPER
+const safeFilename = generateSafeFilename(originalTitle, englishPage.id); // NEW HELPER
 const imageResult = await processAndReplaceImages(rawMarkdown, safeFilename);
 
 // 3. Fail if any images couldn't be downloaded (no broken placeholders!)

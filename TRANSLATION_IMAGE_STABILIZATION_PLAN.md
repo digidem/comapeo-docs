@@ -272,6 +272,8 @@ if (postTranslationDiagnostics.s3Matches > 0) {
 **Action:** CREATE
 **File:** `scripts/notion-translate/imageStabilization.test.ts`
 
+> **Note on invoking `processSinglePageTranslation`:** Since `processSinglePageTranslation` is not exported, tests should invoke it through the exported `translateAllPages()` function or by calling it via a test helper that exports it for testing purposes. The test helper approach is recommended — create a minimal exported wrapper or use the existing integration test patterns from `index.test.ts`.
+
 **Required mocks:**
 
 ```typescript

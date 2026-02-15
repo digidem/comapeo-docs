@@ -717,6 +717,36 @@ export async function generateBlocks(
       }
     }
 
+    // Sort pagesByLang by Order property to ensure correct ordering in ToC
+    // This fixes issues where pages were not in the expected order based on their Order property
+    // eslint-disable-next-line security/detect-object-injection -- data from Notion API
+    pagesByLang.sort((a, b) => {
+      // eslint-disable-next-line security/detect-object-injection -- controlled iteration
+      const firstLangA = Object.keys(a.content)[0];
+      // eslint-disable-next-line security/detect-object-injection -- controlled iteration
+      const firstLangB = Object.keys(b.content)[0];
+      // eslint-disable-next-line security/detect-object-injection -- same object keys
+      const pageA = a.content[firstLangA];
+      // eslint-disable-next-line security/detect-object-injection -- same object keys
+      const pageB = b.content[firstLangB];
+
+      // Fix: Handle 0 and negative values properly by checking for undefined explicitly
+      // "Order" is a Notion property, not user input
+      // eslint-disable-next-line security/detect-object-injection
+      const orderA = pageA?.properties?.["Order"]?.number;
+      // eslint-disable-next-line security/detect-object-injection
+      const orderB = pageB?.properties?.["Order"]?.number;
+
+      // If both have valid order values (including 0 and negatives), use them
+      // If one is missing, push it to the end
+      if (orderA !== undefined && orderB !== undefined) {
+        return orderA - orderB;
+      }
+      if (orderA !== undefined) return -1;
+      if (orderB !== undefined) return 1;
+      return 0;
+    });
+
     const totalPages = pagesByLang.reduce((count, pageGroup) => {
       return count + Object.keys(pageGroup.content).length;
     }, 0);
@@ -846,7 +876,8 @@ export async function generateBlocks(
           }
 
           const orderValue = props?.["Order"]?.number;
-          let sidebarPosition = Number.isFinite(orderValue) ? orderValue : null;
+          // Fix: Use !== undefined check instead of Number.isFinite to properly handle 0 values
+          let sidebarPosition = orderValue !== undefined ? orderValue : null;
           if (sidebarPosition === null && !enableDeletion) {
             sidebarPosition = findExistingSidebarPosition(
               page.id,

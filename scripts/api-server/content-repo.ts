@@ -18,6 +18,7 @@ const DEFAULT_COMMIT_MESSAGE_PREFIX = "content-bot:";
 const DEFAULT_ALLOW_EMPTY_COMMITS = false;
 const LOCK_RETRY_MS = 200;
 const MAX_LOCK_WAIT_MS = 30 * 60 * 1000; // 30 minutes
+const STALE_LOCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 
 export interface ContentRepoConfig {
   repoUrl: string;
@@ -300,6 +301,22 @@ export async function acquireRepoLock(
           `Failed to acquire repository lock: ${lockPath}`,
           lockError.message
         );
+      }
+
+      // Check if lock is stale (older than threshold)
+      try {
+        const lockStat = await stat(lockPath);
+        const lockAge = Date.now() - lockStat.mtimeMs;
+        if (lockAge > STALE_LOCK_THRESHOLD_MS) {
+          console.warn(
+            `Removing stale lock file (age: ${Math.floor(lockAge / 1000)}s): ${lockPath}`
+          );
+          await rm(lockPath, { force: true });
+          continue; // retry immediately
+        }
+      } catch {
+        // Lock file may have been released between our check and stat
+        continue; // retry immediately
       }
 
       if (Date.now() - start > MAX_LOCK_WAIT_MS) {

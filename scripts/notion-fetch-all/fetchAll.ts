@@ -4,6 +4,7 @@ import { GenerateBlocksOptions } from "../notion-fetch/generateBlocks";
 import {
   getStatusFromRawPage,
   selectPagesWithPriority,
+  resolveChildrenByStatus,
 } from "../notionPageUtils";
 
 export interface PageWithStatus {
@@ -104,11 +105,12 @@ export async function fetchAllNotionData(
     generateOptions,
   });
 
-  // Apply defensive filters for both removal and explicit status
+  // Apply filters for removal status only
+  // Note: statusFilter is already handled in the transform function (applyFetchAllTransform)
+  // so we just need to filter out removed pages here
   const defensivelyFiltered = rawData.filter((p) => {
     const status = getStatusFromRawPage(p);
     if (!includeRemoved && status === "Remove") return false;
-    if (statusFilter && status !== statusFilter) return false;
     return true;
   });
 
@@ -155,12 +157,6 @@ function applyFetchAllTransform(
 ) {
   const { statusFilter, maxPages, includeRemoved } = options;
 
-  console.log(`🔍 [DEBUG] applyFetchAllTransform called:`);
-  console.log(`  - Input pages: ${pages.length}`);
-  console.log(`  - maxPages: ${maxPages} (type: ${typeof maxPages})`);
-  console.log(`  - includeRemoved: ${includeRemoved}`);
-  console.log(`  - statusFilter: ${statusFilter || "none"}`);
-
   // Use smart page selection if maxPages is specified
   if (typeof maxPages === "number" && maxPages > 0) {
     console.log(`  ✅ Using smart page selection`);
@@ -173,19 +169,16 @@ function applyFetchAllTransform(
 
   console.log(`  ⚠️  Skipping smart page selection (condition not met)`);
 
-  // Otherwise, apply simple filtering
-  let filtered = pages;
+  // Apply filters for removal status
+  let filtered = pages.filter((p) => {
+    const status = getStatusFromRawPage(p);
+    if (!includeRemoved && status === "Remove") return false;
+    return true;
+  });
 
-  if (!includeRemoved) {
-    filtered = filtered.filter(
-      (page) => getStatusFromRawPage(page) !== "Remove"
-    );
-  }
-
+  // When statusFilter is provided, resolve children from parent pages
   if (statusFilter) {
-    filtered = filtered.filter(
-      (page) => getStatusFromRawPage(page) === statusFilter
-    );
+    filtered = resolveChildrenByStatus(filtered, statusFilter);
   }
 
   return filtered;

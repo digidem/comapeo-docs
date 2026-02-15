@@ -276,12 +276,14 @@ if (imageResult.stats.totalFailures > 0) {
 
 const markdownContent = imageResult.markdown;
 
-// Single diagnostic line per page
-console.log(
-  chalk.blue(
-    `  Images: processed=${imageResult.stats.successfulImages} failed=${imageResult.stats.totalFailures}`
-  )
-);
+// Single diagnostic line per page (only if images were processed)
+if (imageResult.stats.successfulImages > 0) {
+  console.log(
+    chalk.blue(
+      `  Images: processed=${imageResult.stats.successfulImages} failed=${imageResult.stats.totalFailures}`
+    )
+  );
+}
 ```
 
 ### 3. Add Post-Translation Validation
@@ -552,7 +554,7 @@ Update `TRANSLATION_PROMPT` at line ~52 in constraints section:
 | 3.3  | Test `/images/` path preservation           | Same                                                            |
 | 3.4  | Test HTML image tag handling                | Same                                                            |
 | 3.5  | Test idempotency                            | Same                                                            |
-| 3.6  | Test per-language image overrides           | Same                                                            |
+| 3.6  | Test title page bypass                      | Same                                                            |
 | 3.7  | Update existing translation tests if needed | `scripts/notion-translate/index.test.ts`                        |
 
 **Test File Structure:**

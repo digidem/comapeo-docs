@@ -719,22 +719,15 @@ export async function generateBlocks(
 
     // Sort pagesByLang by Order property to ensure correct ordering in ToC
     // This fixes issues where pages were not in the expected order based on their Order property
-    // eslint-disable-next-line security/detect-object-injection -- data from Notion API
     pagesByLang.sort((a, b) => {
-      // eslint-disable-next-line security/detect-object-injection -- controlled iteration
       const firstLangA = Object.keys(a.content)[0];
-      // eslint-disable-next-line security/detect-object-injection -- controlled iteration
       const firstLangB = Object.keys(b.content)[0];
-      // eslint-disable-next-line security/detect-object-injection -- same object keys
       const pageA = a.content[firstLangA];
-      // eslint-disable-next-line security/detect-object-injection -- same object keys
       const pageB = b.content[firstLangB];
 
       // Fix: Handle 0 and negative values properly by checking for undefined explicitly
       // "Order" is a Notion property, not user input
-      // eslint-disable-next-line security/detect-object-injection
       const orderA = pageA?.properties?.["Order"]?.number;
-      // eslint-disable-next-line security/detect-object-injection
       const orderB = pageB?.properties?.["Order"]?.number;
 
       // If both have valid order values (including 0 and negatives), use them

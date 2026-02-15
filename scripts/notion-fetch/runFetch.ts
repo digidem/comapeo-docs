@@ -36,6 +36,7 @@ export async function runContentGeneration({
   try {
     perfTelemetry.phaseStart("generate");
     unregisterGenerateSpinner = trackSpinner(generateSpinner);
+    let lastLoggedProgress = 0;
     const metrics = await generateBlocks(
       safePages,
       (progress) => {
@@ -43,6 +44,17 @@ export async function runContentGeneration({
           generateSpinner.text = chalk.blue(
             `${generateSpinnerText}: ${progress.current}/${progress.total}`
           );
+        }
+        // Output parseable progress for job-executor regex matching
+        // Throttle to every ~10% to avoid flooding stdout on large runs
+        const step = Math.max(1, Math.floor(progress.total / 10));
+        if (
+          progress.current === 1 ||
+          progress.current === progress.total ||
+          progress.current - lastLoggedProgress >= step
+        ) {
+          console.log(`Progress: ${progress.current}/${progress.total}`);
+          lastLoggedProgress = progress.current;
         }
         onProgress?.(progress);
       },
@@ -89,11 +101,6 @@ export interface FetchPipelineResult {
 export async function runFetchPipeline(
   options: FetchPipelineOptions = {}
 ): Promise<FetchPipelineResult> {
-  console.log(`🔍 [DEBUG runFetchPipeline] Starting pipeline with options:`);
-  console.log(`  - shouldGenerate: ${options.shouldGenerate ?? true}`);
-  console.log(`  - transform provided: ${!!options.transform}`);
-  console.log(`  - filter provided: ${!!options.filter}`);
-
   const {
     filter,
     fetchSpinnerText = "Fetching data from Notion",
@@ -103,8 +110,6 @@ export async function runFetchPipeline(
     shouldGenerate = true,
     generateOptions = {},
   } = options;
-
-  console.log(`  - shouldGenerate (after destructure): ${shouldGenerate}`);
 
   const fetchSpinner = SpinnerManager.create(fetchSpinnerText, FETCH_TIMEOUT);
   let unregisterFetchSpinner: (() => void) | undefined;
@@ -120,32 +125,15 @@ export async function runFetchPipeline(
     data = Array.isArray(data) ? data : [];
 
     perfTelemetry.phaseStart("sort-expand");
-    console.log(
-      `🔍 [DEBUG] Before sortAndExpandNotionData, data length: ${data.length}`
-    );
     data = await sortAndExpandNotionData(data);
-    console.log(
-      `🔍 [DEBUG] After sortAndExpandNotionData, data length: ${data.length}`
-    );
     perfTelemetry.phaseEnd("sort-expand");
     data = Array.isArray(data) ? data : [];
-    console.log(`🔍 [DEBUG] After array check, data length: ${data.length}`);
 
     perfTelemetry.phaseStart("transform");
-    console.log(`🔍 [DEBUG runFetchPipeline] Transform phase:`);
-    console.log(`  - transform provided: ${!!transform}`);
-    console.log(`  - data length before transform: ${data.length}`);
     if (transform) {
-      console.log(`  ✅ Calling transform function...`);
       const transformed = await transform(data);
-      console.log(
-        `  ✅ Transform completed, result length: ${Array.isArray(transformed) ? transformed.length : 0}`
-      );
       data = Array.isArray(transformed) ? transformed : [];
-    } else {
-      console.log(`  ⚠️  No transform function provided, skipping`);
     }
-    console.log(`  - data length after transform: ${data.length}`);
     perfTelemetry.phaseEnd("transform");
 
     fetchSpinner.succeed(chalk.green("Data fetched successfully"));

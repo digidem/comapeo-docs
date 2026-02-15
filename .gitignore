@@ -105,6 +105,9 @@ retry-metrics.json
 .beads/
 .junie/
 .ralphy/
+.qoder/
+.rollback-data/
+telemetry-id
 
 # Log and skill files (development artifacts)
 *.log

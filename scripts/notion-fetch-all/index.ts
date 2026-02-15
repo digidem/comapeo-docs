@@ -706,7 +706,9 @@ export { main, parseArgs };
 // Run if executed directly
 const __filename = fileURLToPath(import.meta.url);
 const isDirectExec =
-  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+  process.argv[1] &&
+  (path.resolve(process.argv[1]) === path.resolve(__filename) ||
+    path.resolve(process.argv[1]) === path.dirname(path.resolve(__filename)));
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
   (async () => {

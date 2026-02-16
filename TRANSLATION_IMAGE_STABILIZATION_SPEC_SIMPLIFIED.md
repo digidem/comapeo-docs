@@ -9,6 +9,7 @@
 ## The Problem (Simple Explanation)
 
 **How things work now:**
+
 1. We fetch a page from Notion
 2. Notion gives us images with URLs that expire after 1 hour (like a magic link that stops working)
 3. We translate the text to another language (Spanish, Portuguese, etc.)
@@ -16,6 +17,7 @@
 5. After 1 hour, the images break and show nothing
 
 **How we want it to work:**
+
 1. We fetch a page from Notion
 2. We download the images to our own storage (they stay forever)
 3. We translate the text
@@ -26,11 +28,13 @@
 ## What Changes
 
 ### Before (Current)
+
 ```
 English Notion → Get expiring URL → Translate → Save with expiring URL → Images break after 1 hour
 ```
 
 ### After (New)
+
 ```
 English Notion → Download image → Stable path → Translate → Save with stable path → Images work forever
 ```
@@ -39,41 +43,40 @@ English Notion → Download image → Stable path → Translate → Save with st
 
 ## How It Works (Step by Step)
 
-### Step 1: Choose which page to use for images
+### Step 1: Convert English page to Markdown
 
-**Rule:** Use the translated Notion page if it exists, otherwise use the English page.
+Convert the English Notion page to markdown. The markdown still has expiring URLs at this point.
 
-- If we have a Spanish Notion page with its own screenshots → use those
-- If we don't have a Spanish page → use the English images (they're already downloaded)
+> **Note:** The initial implementation always uses the English page. Per-language image overrides (using localized Notion page images) are a future enhancement.
 
-### Step 2: Convert to Markdown
-
-Convert the chosen Notion page to markdown. The markdown still has expiring URLs at this point.
-
-### Step 3: Download and replace images (NEW!)
+### Step 2: Download and replace images (NEW!)
 
 For each image in the markdown:
+
 1. Is it an expiring URL? → Download the image to our storage
 2. Is it already downloaded? → Skip (use cached version)
 3. Replace the URL with our stable path: `/images/filename.png`
 
+**If any image fails to download → fail the page translation.** No broken placeholder images are accepted.
+
 **Note:** Images download in batches of 5 (parallel) for performance. If EN fetch already ran, translation reuses cached images.
 
-### Step 4: Translate the text
+### Step 3: Translate the text
 
 Send the markdown (now with stable image paths) to OpenAI for translation.
 
 **Important:** We translate AFTER replacing images so OpenAI sees stable paths, not expiring URLs.
 
-### Step 5: Validate (NEW!)
+### Step 4: Validate (NEW!)
 
 After translation, check that:
+
 - No expiring URLs remain
 - Stable paths weren't changed
 
 If any expiring URLs are found → fail the translation (with error message)
 
-### Step 6: Save
+### Step 5: Save
 
 Save the translated markdown with stable image paths to the output folder.
 
@@ -82,25 +85,29 @@ Save the translated markdown with stable image paths to the output folder.
 ## Key Decisions
 
 ### Q: What if a translated page uses a different image than English?
-A: That's okay! If the Spanish page has its own screenshot, we'll download that one instead. Both become stable paths.
+
+A: In the initial implementation, we always use English images. Per-language image overrides are planned as a future enhancement.
 
 ### Q: What if the image download fails?
-A: The translation fails for that page. We don't allow broken images in translated docs.
+
+A: The translation fails for that page. We don't allow broken images in translated docs. The existing image replacer creates placeholder text for failed downloads, but we explicitly check for failures and throw an error before proceeding to translation.
 
 ### Q: Do we download images again for each language?
+
 A: No! Images are cached. If English already downloaded "settings.png", Spanish reuses it.
 
 ### Q: What happens to the alt text?
+
 A: OpenAI translates it. `![Settings screen]` becomes `![Tela de configurações]` in Portuguese.
 
 ---
 
 ## What Files Change
 
-| File | What We Do |
-|------|------------|
-| `scripts/notion-translate/index.ts` | Add image processing before translation, add validation after |
-| `scripts/notion-translate/__tests__/imageStabilization.test.ts` | New tests for image stabilization |
+| File                                                  | What We Do                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `scripts/notion-translate/index.ts`                   | Add image processing before translation, add validation after |
+| `scripts/notion-translate/imageStabilization.test.ts` | New tests for image stabilization                             |
 
 We reuse existing code from `scripts/notion-fetch/imageReplacer.ts` - no new image downloading logic needed!
 
@@ -113,7 +120,7 @@ We reuse existing code from `scripts/notion-fetch/imageReplacer.ts` - no new ima
 - [ ] Images are not duplicated per language
 - [ ] Works with both `![alt](url)` and `<img src="url">` syntax
 - [ ] Re-running translation doesn't change image paths (idempotent)
-- [ ] Localized Notion pages can override with different images
+- [ ] Localized Notion pages can override with different images (future enhancement)
 
 ---
 
@@ -125,20 +132,21 @@ We reuse existing code from `scripts/notion-fetch/imageReplacer.ts` - no new ima
 2. **Path preservation** - `/images/...` paths survive translation unchanged
 3. **Alt text translation** - Image alt text gets translated
 4. **Idempotency** - Re-running produces same paths
-5. **Overrides** - Localized page with different image uses that image
-6. **Fallback** - No localized page = use English images
+5. **Download failure** - Failed image download causes page translation to fail
+6. **Already-stable paths** - Content with `/images/...` paths passes through unchanged
 
 ### How we test:
 
 - Mock the network (don't actually download images)
 - Mock OpenAI (don't actually call the API)
-- Run tests with: `bunx vitest run scripts/notion-translate/__tests__/imageStabilization.test.ts`
+- Run tests with: `bunx vitest run scripts/notion-translate/imageStabilization.test.ts`
 
 ---
 
 ## Rollback
 
 If something goes wrong:
+
 1. Comment out the image processing lines in `processSinglePageTranslation`
 2. Deploy the fix
 3. Re-run translations
@@ -159,10 +167,13 @@ Existing translations are NOT affected - only new runs use this flow.
 ## Important Notes
 
 ### Existing translations are NOT affected
+
 Only NEW translation runs will use this flow. Existing translated docs keep their current URLs.
 
 ### EN fetch recommended first
+
 For best performance, run EN fetch (`bun scripts/notion-fetch`) before translation:
+
 - EN images are downloaded once to `/images/`
 - Translations reuse cached images (no extra downloads)
 
@@ -173,6 +184,7 @@ If you run translation without EN fetch first, images will be downloaded during 
 ## Quick Reference
 
 ### URLs that expire (bad):
+
 - `https://secure.notion-static.com/...`
 - `https://s3.us-west-2.amazonaws.com/secure.notion-static.com/...`
 - `https://prod-files-secure.s3.us-west-2.amazonaws.com/...`
@@ -180,6 +192,7 @@ If you run translation without EN fetch first, images will be downloaded during 
 - Any URL with `X-Amz-` parameters
 
 ### Stable paths (good):
+
 - `/images/anything.png`
 - `/images/folder/filename.jpg`
 
@@ -191,8 +204,8 @@ If you run translation without EN fetch first, images will be downloaded during 
 
 ```typescript
 import {
-  processAndReplaceImages,  // Download images, replace URLs
-  getImageDiagnostics,       // Check for remaining S3 URLs
+  processAndReplaceImages, // Download images, replace URLs
+  getImageDiagnostics, // Check for remaining S3 URLs
 } from "../notion-fetch/imageReplacer.js";
 ```
 
@@ -202,26 +215,35 @@ In `processSinglePageTranslation()` (around line 949):
 
 ```typescript
 // AFTER (new):
-// 1. Choose which page has the images we want
-const imageSourcePageId = translationPage?.id ?? englishPage.id;
-const rawMarkdown = await convertPageToMarkdown(imageSourcePageId);
+// 1. Convert English page to markdown
+const rawMarkdown = await convertPageToMarkdown(englishPage.id);
 
 // 2. Download images and replace URLs with stable paths
 // Uses existing slug logic from saveTranslatedContentToDisk for consistent filenames
-const safeFilename = generateSafeFilename(title);  // NEW HELPER - extract from existing code
-const { markdown: markdownContent } = await processAndReplaceImages(rawMarkdown, safeFilename);
+const safeFilename = generateSafeFilename(originalTitle, englishPage.id); // NEW HELPER
+const imageResult = await processAndReplaceImages(rawMarkdown, safeFilename);
 
-// 3. Translate (now with stable paths)
+// 3. Fail if any images couldn't be downloaded (no broken placeholders!)
+if (imageResult.stats.totalFailures > 0) {
+  throw new Error(
+    `Image stabilization failed for "${title}": ${imageResult.stats.totalFailures} image(s) failed`
+  );
+}
+const markdownContent = imageResult.markdown;
+
+// 4. Translate (now with stable paths)
 const translated = await translateText(markdownContent, title, language);
 
-// 4. Validate - make sure no S3 URLs slipped through
+// 5. Validate - make sure no S3 URLs slipped through
 const diagnostics = getImageDiagnostics(translated.markdown);
 if (diagnostics.s3Matches > 0) {
-  throw new Error(`Found ${diagnostics.s3Matches} expiring URLs in translation`);
+  throw new Error(
+    `Found ${diagnostics.s3Matches} expiring URLs in translation`
+  );
 }
 ```
 
-**New helper needed:** `generateSafeFilename(title)` - Extract the slug logic from `saveTranslatedContentToDisk()` (lines 573-580) to reuse for image filenames.
+**New helper needed:** `generateSafeFilename(title, pageId)` - Extract the slug logic from `saveTranslatedContentToDisk()` (lines 571-580) to reuse for image filenames. Must include the page ID suffix for deterministic, collision-free names.
 
 ---
 

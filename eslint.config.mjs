@@ -32,7 +32,7 @@ const eslintConfig = [
   // Docusaurus specific configurations
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
-    ignores: ["scripts/**"], // Ignore scripts directory for docusaurus rules
+    ignores: ["scripts/**", "api-server/**"], // Ignore scripts and api-server directories for docusaurus rules
     plugins: {
       "@docusaurus": docusaurusPlugin,
       react: pluginReact,
@@ -72,9 +72,9 @@ const eslintConfig = [
     },
   },
 
-  // Scripts specific configurations
+  // Scripts and API server specific configurations
   {
-    files: ["scripts/**/*.{js,mjs,cjs,ts}"],
+    files: ["scripts/**/*.{js,mjs,cjs,ts}", "api-server/**/*.{js,mjs,cjs,ts}"],
     plugins: {
       import: importPlugin,
       promise: promisePlugin,

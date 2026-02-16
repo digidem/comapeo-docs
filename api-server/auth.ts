@@ -6,7 +6,7 @@
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { ValidationError } from "../shared/errors";
+import { ValidationError } from "../scripts/shared/errors";
 
 /**
  * API Key metadata for tracking and audit purposes

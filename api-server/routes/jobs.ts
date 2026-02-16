@@ -6,7 +6,7 @@ import { executeJobAsync } from "../job-executor";
 import {
   ValidationError as BaseValidationError,
   createValidationError,
-} from "../../shared/errors";
+} from "../../scripts/shared/errors";
 import {
   ErrorCode,
   createErrorResponse,

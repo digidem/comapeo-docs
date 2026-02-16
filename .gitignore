@@ -112,4 +112,4 @@ telemetry-id
 # Log and skill files (development artifacts)
 *.log
 *.skill
-scripts/api-server/flaky-test-counts.txt
+api-server/flaky-test-counts.txt

@@ -125,11 +125,7 @@ const SIGKILL_FAILSAFE_MS = 1000;
  */
 const MAX_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours max
 
-const PROJECT_ROOT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  ".."
-);
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Parse and validate JOB_TIMEOUT_MS environment variable override.

@@ -148,3 +148,5 @@ scripts/test-scaffold/
 scripts/test-utils/
 scripts/**/__tests__/
 scripts/**/*.test.ts
+api-server/**/__tests__/
+api-server/**/*.test.ts

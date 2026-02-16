@@ -4,7 +4,10 @@ import path from "path";
 export default defineConfig({
   test: {
     // Test file patterns
-    include: ["scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+    include: [
+      "scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
+      "api-server/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
+    ],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",

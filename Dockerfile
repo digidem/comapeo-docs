@@ -53,6 +53,8 @@ RUN mkdir -p /app/node_modules/pngquant-bin/vendor && \
 COPY --chown=bun:bun package.json bun.lockb* ./
 # Copy entire scripts directory for job execution (all dependencies included)
 COPY --chown=bun:bun scripts ./scripts
+# Copy api-server for the API server
+COPY --chown=bun:bun api-server ./api-server
 # Copy config files needed by scripts
 COPY --chown=bun:bun docusaurus.config.ts ./docusaurus.config.ts
 COPY --chown=bun:bun tsconfig.json ./

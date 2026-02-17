@@ -215,10 +215,12 @@ export function selectPagesWithPriority(
         );
       }
       filtered = filtered.filter((p) => childIds.has(p.id as string));
-    } else if (verbose) {
-      console.log(
-        `  ⚠️ statusFilter "${statusFilter}": no children found, returning parent pages`
-      );
+    } else {
+      if (verbose) {
+        console.log(
+          `  ⚠️ statusFilter "${statusFilter}": no children found, returning parent pages`
+        );
+      }
       filtered = parentPages;
     }
   }

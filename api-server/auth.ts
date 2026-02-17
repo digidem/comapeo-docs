@@ -47,7 +47,7 @@ export interface AuthResult {
 /**
  * API Key Authentication class
  *
- * Manages API key validation using bcrypt hashing.
+ * Manages API key validation using SHA-256 hashing.
  * Keys are loaded from environment variables in format: API_KEY_<name>
  */
 export class ApiKeyAuth {

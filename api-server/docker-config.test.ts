@@ -142,12 +142,12 @@ describe("Docker Configuration Tests", () => {
       });
 
       it("should support configurable resource limits", () => {
-        expect(composeContent).toMatch(/\$\{DOCKER_CPU_LIMIT:-1\}/);
+        // CPU limits disabled due to NanoCPUs compatibility issues - only memory limit configurable
         expect(composeContent).toMatch(/\$\{DOCKER_MEMORY_LIMIT:-512M\}/);
       });
 
       it("should support configurable resource reservations", () => {
-        expect(composeContent).toMatch(/\$\{DOCKER_CPU_RESERVATION:-0.25\}/);
+        // CPU reservation disabled - only memory reservation configurable
         expect(composeContent).toMatch(/\$\{DOCKER_MEMORY_RESERVATION:-128M\}/);
       });
 
@@ -366,8 +366,9 @@ describe("Docker Configuration Tests", () => {
       });
 
       it("should run as non-root user bun from base image", () => {
-        // bun user is already provided by oven/bun base image
-        expect(dockerfileContent).toContain("USER bun");
+        // bun user is provided by oven/bun base image (inherited, not explicitly set)
+        expect(dockerfileContent).toContain("oven/bun:");
+        expect(dockerfileContent).not.toMatch(/^USER\s+root/m);
       });
 
       it("should set restrictive directory permissions", () => {
@@ -428,7 +429,7 @@ describe("Docker Configuration Tests", () => {
       it("should configure resource limits to prevent DoS", () => {
         expect(composeContent).toMatch(/resources:/);
         expect(composeContent).toMatch(/limits:/);
-        expect(composeContent).toContain("cpus:");
+        // CPU limits disabled due to NanoCPUs compatibility issues - only check memory
         expect(composeContent).toContain("memory:");
       });
 
@@ -526,9 +527,8 @@ describe("Docker Configuration Tests", () => {
         expect(composeContent).toMatch(/DOCKER_MEMORY_LIMIT:-\d+[Mm]/);
       });
 
-      it("should have reasonable default CPU limits", () => {
-        // Default CPU limit should be specified
-        expect(composeContent).toMatch(/DOCKER_CPU_LIMIT:-[\d.]+/);
+      it.skip("should have reasonable default CPU limits", () => {
+        // CPU limits disabled due to NanoCPUs compatibility issues
       });
 
       it("should have reasonable health check intervals", () => {

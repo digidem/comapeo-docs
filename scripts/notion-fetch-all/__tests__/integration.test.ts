@@ -14,7 +14,10 @@ import {
   captureConsoleOutput,
 } from "../../test-utils";
 import { runFetchPipeline } from "../../notion-fetch/runFetch";
-import { selectPagesWithPriority } from "../../notionPageUtils";
+import {
+  selectPagesWithPriority,
+  resolveChildrenByStatus,
+} from "../../notionPageUtils";
 import { fetchAllNotionData } from "../fetchAll";
 import { StatusAnalyzer } from "../statusAnalyzer";
 import { PreviewGenerator } from "../previewGenerator";
@@ -50,9 +53,33 @@ vi.mock("../../notion-fetch/runFetch", () => ({
 
 vi.mock("../../notionPageUtils", () => ({
   getStatusFromRawPage: vi.fn((page: any) => {
-    return page?.properties?.["Publish Status"]?.select?.name || "No Status";
+    return page?.properties?.["Status"]?.select?.name || "No Status";
   }),
-  selectPagesWithPriority: vi.fn((pages, maxPages) => pages.slice(0, maxPages)),
+  selectPagesWithPriority: vi.fn((pages, maxPages, opts) => {
+    // When maxPages is specified, filter by status if provided
+    if (typeof maxPages === "number" && maxPages > 0) {
+      const statusFilter = opts?.statusFilter;
+      if (statusFilter) {
+        return pages
+          .filter(
+            (page: any) =>
+              page.properties?.["Status"]?.select?.name === statusFilter
+          )
+          .slice(0, maxPages);
+      }
+      return pages.slice(0, maxPages);
+    }
+    // No maxPages specified - return all pages (status filtering happens elsewhere)
+    return pages;
+  }),
+  resolveChildrenByStatus: vi.fn((pages, status) => {
+    // Simulate the real behavior: find parents with matching status
+    const parentPages = pages.filter(
+      (page: any) => page.properties?.["Status"]?.select?.name === status
+    );
+    // No Sub-item relations in mock data, so return parent pages
+    return parentPages;
+  }),
 }));
 
 vi.mock("../../notionClient", () => ({
@@ -322,18 +349,31 @@ describe("Notion Fetch-All Integration Tests", () => {
         createMockNotionPage({ title: "Page 4", status: "In progress" }),
       ];
 
-      (runFetchPipeline as Mock).mockResolvedValue({
-        data: mockPages,
-      });
+      // Mock runFetchPipeline to call the transform function
+      // This simulates the real behavior where the transform is applied
+      (runFetchPipeline as Mock).mockImplementation(
+        async ({ transform }: any) => {
+          const transformed = transform ? transform(mockPages) : mockPages;
+          return { data: transformed };
+        }
+      );
 
       const fetchResult = await fetchAllNotionData({
         statusFilter: "Ready to publish",
       });
 
-      // Should only include "Ready to publish" pages
+      // Should only include "Ready to publish" pages (2 pages)
+      expect(fetchResult.pages.length).toBe(2);
       expect(
         fetchResult.pages.every((p) => p.status === "Ready to publish")
       ).toBe(true);
+
+      // Verify status filtering was applied via resolveChildrenByStatus
+      // The mock implementation filters to pages matching the status
+      expect(resolveChildrenByStatus).toHaveBeenCalledWith(
+        expect.any(Array),
+        "Ready to publish"
+      );
     });
 
     it("should generate complete comparison report", async () => {

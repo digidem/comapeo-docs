@@ -1,6 +1,8 @@
 # AGENTS.md
 
-Short, high-signal rules for AI agents working in this repo. Keep changes small and focused. For full repository guidelines, see `./context/repository-guidelines.md`.
+Short, high-signal rules for AI agents working in this repo.
+Keep changes small and focused.
+For full repository guidelines, see `./context/repository-guidelines.md`.
 
 ### Do
 
@@ -29,15 +31,12 @@ Short, high-signal rules for AI agents working in this repo. Keep changes small 
 # use the GitHub CLI (`gh`) for PRs, issues, and other GitHub operations
 
 # lint a single file
-
 bunx eslint path/to/file.{ts,tsx,js} --fix
 
 # format a single file
-
 bunx prettier --write path/to/file.{ts,tsx,js,md,mdx}
 
 # unit test a single file (or folder)
-
 bunx vitest run path/to/file.test.ts
 
 # typecheck project (tsc is project-wide)
@@ -84,7 +83,9 @@ The preview workflow automatically chooses the optimal content generation strate
 - Regenerates content from Notion API to validate script changes
 - Default: Fetches 5 pages (provides reliable validation coverage)
 - Takes ~90s
-- Script paths monitored: `scripts/notion-fetch/`, `scripts/notion-fetch-all/`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/notionPageUtils.ts`, `scripts/constants.ts`
+- Script paths monitored:
+  `scripts/notion-fetch/`, `scripts/notion-fetch-all/`, `scripts/fetchNotionData.ts`,
+  `scripts/notionClient.ts`, `scripts/notionPageUtils.ts`, `scripts/constants.ts`
 
 **When Notion fetch scripts are NOT modified:**
 

@@ -20,6 +20,7 @@ Short, high-signal rules for AI agents working in this repo. Keep changes small 
 - do not commit secrets or modify CI without approval
 - do not place images outside `static/images` or hotlink external assets
 - do not commit content files in `./static` and `./docs` folders - these are generated from Notion
+- do not create new files in `./docs/` - this folder is reserved for Notion-generated content only
 
 ### Commands
 

@@ -304,12 +304,32 @@ Some text
       expect(result.stats.totalFailures).toBe(1);
     });
 
-    it("should skip local images", async () => {
-      const markdown = "![alt](/local/image.png)";
+    it("should keep canonical /images paths unchanged", async () => {
+      const { processImageWithFallbacks } = await import("./imageProcessing");
+      const markdown = "![alt](/images/already-local.png)";
       const result = await processAndReplaceImages(markdown, "test-file");
 
-      expect(result.markdown).toContain("Failed image");
-      expect(result.stats.totalFailures).toBe(1);
+      expect(result.markdown).toBe(markdown);
+      expect(result.stats.totalFailures).toBe(0);
+      expect(result.stats.successfulImages).toBe(0);
+      expect(processImageWithFallbacks).not.toHaveBeenCalled();
+    });
+
+    it("should log a single aggregate message for canonical /images paths", async () => {
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const markdown = `
+![one](/images/one.png)
+![two](/images/two.png)
+![three](/images/three.png)
+      `;
+
+      await processAndReplaceImages(markdown, "test-file");
+
+      const canonicalLogs = infoSpy.mock.calls.filter((args) =>
+        String(args[0]).includes("canonical /images/ paths unchanged")
+      );
+      expect(canonicalLogs).toHaveLength(1);
+      expect(canonicalLogs[0][0]).toContain("Kept 3");
     });
 
     it("should process multiple images concurrently", async () => {

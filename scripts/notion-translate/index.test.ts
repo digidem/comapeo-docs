@@ -16,6 +16,9 @@ const mockReaddir = vi.fn();
 const mockStat = vi.fn();
 const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
+const mockProcessAndReplaceImages = vi.fn();
+const mockGetImageDiagnostics = vi.fn();
+const mockValidateAndFixRemainingImages = vi.fn();
 
 const mockN2m = {
   pageToMarkdown: vi.fn(),
@@ -67,6 +70,12 @@ vi.mock("./markdownToNotion", () => ({
   createNotionPageFromMarkdown: mockCreateNotionPageFromMarkdown,
 }));
 
+vi.mock("../notion-fetch/imageReplacer", () => ({
+  processAndReplaceImages: mockProcessAndReplaceImages,
+  getImageDiagnostics: mockGetImageDiagnostics,
+  validateAndFixRemainingImages: mockValidateAndFixRemainingImages,
+}));
+
 function findSummaryLog(logSpy: ReturnType<typeof vi.spyOn>) {
   const summaryLine = logSpy.mock.calls
     .map((args) => args.map(String).join(" "))
@@ -109,6 +118,9 @@ describe("notion-translate index", () => {
     mockBlocksChildrenList.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
+    mockProcessAndReplaceImages.mockReset();
+    mockGetImageDiagnostics.mockReset();
+    mockValidateAndFixRemainingImages.mockReset();
 
     mockFetchNotionData.mockImplementation(async (filter) => {
       if (
@@ -126,6 +138,27 @@ describe("notion-translate index", () => {
     mockN2m.toMarkdownString.mockReturnValue({
       parent: "# Hello\n\nEnglish markdown",
     });
+    mockProcessAndReplaceImages.mockResolvedValue({
+      markdown: "# Hello\n\nEnglish markdown",
+      stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
+      metrics: {
+        totalProcessed: 0,
+        skippedSmallSize: 0,
+        skippedAlreadyOptimized: 0,
+        skippedResize: 0,
+        fullyProcessed: 0,
+      },
+    });
+    mockGetImageDiagnostics.mockReturnValue({
+      totalMatches: 0,
+      markdownMatches: 0,
+      htmlMatches: 0,
+      s3Matches: 0,
+      s3Samples: [],
+    });
+    mockValidateAndFixRemainingImages.mockImplementation(
+      async (content) => content
+    );
     mockBlocksChildrenList.mockResolvedValue({
       results: [
         {
@@ -411,13 +444,10 @@ describe("notion-translate index", () => {
 
       expect(summary.totalEnglishPages).toBe(1);
       expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(2);
-      expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(2);
+      // Markdown conversion is cached per source page and reused across languages.
+      expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(1);
       expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
         1,
-        "2641b08162d580359153cac75e4f09f2"
-      );
-      expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
-        2,
         "2641b08162d580359153cac75e4f09f2"
       );
     });
@@ -613,6 +643,63 @@ describe("notion-translate index", () => {
       themeFailures: 0,
     });
     expect(loggedSummary.failures).toHaveLength(1);
+  });
+
+  it("does not block translation for generic signed amazonaws links outside Notion image URL families", async () => {
+    const genericSignedUrl =
+      "https://s3.amazonaws.com/example-bucket/file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600";
+    mockTranslateText.mockResolvedValue({
+      markdown: `Link: ${genericSignedUrl}`,
+      title: "translated title",
+    });
+    mockGetImageDiagnostics.mockReturnValue({
+      totalMatches: 1,
+      markdownMatches: 1,
+      htmlMatches: 0,
+      s3Matches: 1,
+      s3Samples: [genericSignedUrl],
+    });
+
+    const { main } = await import("./index");
+    const summary = await main();
+
+    expect(summary.failedTranslations).toBe(0);
+    expect(mockValidateAndFixRemainingImages).not.toHaveBeenCalled();
+  });
+
+  it("uses full raw Notion URL match count in blocking errors while capping sample output", async () => {
+    const notionUrls = Array.from(
+      { length: 7 },
+      (_, index) =>
+        `https://prod-files-secure.s3.us-west-2.amazonaws.com/image-${index}.png`
+    );
+    mockTranslateText.mockResolvedValue({
+      markdown: notionUrls.join("\n"),
+      title: "translated title",
+    });
+    mockGetImageDiagnostics.mockReturnValue({
+      totalMatches: 1,
+      markdownMatches: 1,
+      htmlMatches: 0,
+      s3Matches: 1,
+      s3Samples: [notionUrls[0]],
+    });
+    mockValidateAndFixRemainingImages.mockImplementation(
+      async (content) => content
+    );
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { main } = await import("./index");
+
+    await expect(main()).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+
+    const errorLogLines = errorSpy.mock.calls.map((args) => args.join(" "));
+    expect(
+      errorLogLines.some((line) =>
+        line.includes("still contains 7 Notion/S3 URLs")
+      )
+    ).toBe(true);
   });
 
   it("exits with failure on total code/theme translation failures and reports counts", async () => {

@@ -56,6 +56,7 @@ describe("processMarkdownWithRetry", () => {
   let hasS3Urls: Mock;
   let getImageDiagnostics: Mock;
   let processMarkdownWithRetry: any;
+  let processMarkdownSinglePass: any;
 
   beforeEach(async () => {
     restoreEnv = installTestNotionEnv();
@@ -74,9 +75,12 @@ describe("processMarkdownWithRetry", () => {
       const markdownRetryProcessor = await import("../markdownRetryProcessor");
       processMarkdownWithRetry =
         markdownRetryProcessor.processMarkdownWithRetry;
+      processMarkdownSinglePass =
+        markdownRetryProcessor.processMarkdownSinglePass;
     } catch (error) {
       // Should not fail - function should exist in dedicated module
       processMarkdownWithRetry = undefined;
+      processMarkdownSinglePass = undefined;
     }
   });
 
@@ -471,6 +475,106 @@ describe("processMarkdownWithRetry", () => {
 
       expect(result.content).toBeDefined();
       expect(result.totalSaved).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should run image stabilization before callout and emoji transforms in retry flow", async () => {
+      expect(processMarkdownWithRetry).toBeDefined();
+
+      const initialContent = "# Test\n\n![image](/images/test.png)";
+      const pageContext = {
+        pageId: "ordered-retry-page-id",
+        pageTitle: "Ordered Retry Page",
+        safeFilename: "ordered-retry-page",
+      };
+      const rawBlocks = [{ type: "callout", callout: { rich_text: [] } }];
+      const emojiMap = new Map<string, string>([["test-emoji", "😀"]]);
+
+      processAndReplaceImages.mockResolvedValue({
+        markdown: initialContent,
+        stats: { successfulImages: 1, totalFailures: 0, totalSaved: 64 },
+      });
+      validateAndFixRemainingImages.mockResolvedValue(initialContent);
+      hasS3Urls.mockReturnValue(false);
+      getImageDiagnostics.mockReturnValue({
+        totalMatches: 1,
+        markdownMatches: 1,
+        htmlMatches: 0,
+        s3Matches: 0,
+        s3Samples: [],
+      });
+
+      const markdownTransform = await import("../markdownTransform");
+      const processCalloutsInMarkdown =
+        markdownTransform.processCalloutsInMarkdown as Mock;
+
+      const emojiProcessor = await import("../emojiProcessor");
+      const applyEmojiMappings = emojiProcessor.EmojiProcessor
+        .applyEmojiMappings as Mock;
+
+      await processMarkdownWithRetry(
+        initialContent,
+        pageContext,
+        rawBlocks,
+        emojiMap
+      );
+
+      const imageOrder = processAndReplaceImages.mock.invocationCallOrder[0];
+      const calloutOrder =
+        processCalloutsInMarkdown.mock.invocationCallOrder[0];
+      const emojiOrder = applyEmojiMappings.mock.invocationCallOrder[0];
+
+      expect(imageOrder).toBeLessThan(calloutOrder);
+      expect(calloutOrder).toBeLessThan(emojiOrder);
+    });
+
+    it("should run image stabilization before callout and emoji transforms in single-pass flow", async () => {
+      expect(processMarkdownSinglePass).toBeDefined();
+
+      const initialContent = "# Test\n\n![image](/images/test.png)";
+      const pageContext = {
+        pageId: "ordered-single-pass-page-id",
+        pageTitle: "Ordered Single Pass Page",
+        safeFilename: "ordered-single-pass-page",
+      };
+      const rawBlocks = [{ type: "callout", callout: { rich_text: [] } }];
+      const emojiMap = new Map<string, string>([["test-emoji", "😀"]]);
+
+      processAndReplaceImages.mockResolvedValue({
+        markdown: initialContent,
+        stats: { successfulImages: 1, totalFailures: 0, totalSaved: 64 },
+      });
+      validateAndFixRemainingImages.mockResolvedValue(initialContent);
+      hasS3Urls.mockReturnValue(false);
+      getImageDiagnostics.mockReturnValue({
+        totalMatches: 1,
+        markdownMatches: 1,
+        htmlMatches: 0,
+        s3Matches: 0,
+        s3Samples: [],
+      });
+
+      const markdownTransform = await import("../markdownTransform");
+      const processCalloutsInMarkdown =
+        markdownTransform.processCalloutsInMarkdown as Mock;
+
+      const emojiProcessor = await import("../emojiProcessor");
+      const applyEmojiMappings = emojiProcessor.EmojiProcessor
+        .applyEmojiMappings as Mock;
+
+      await processMarkdownSinglePass(
+        initialContent,
+        pageContext,
+        rawBlocks,
+        emojiMap
+      );
+
+      const imageOrder = processAndReplaceImages.mock.invocationCallOrder[0];
+      const calloutOrder =
+        processCalloutsInMarkdown.mock.invocationCallOrder[0];
+      const emojiOrder = applyEmojiMappings.mock.invocationCallOrder[0];
+
+      expect(imageOrder).toBeLessThan(calloutOrder);
+      expect(calloutOrder).toBeLessThan(emojiOrder);
     });
   });
 
@@ -1357,6 +1461,7 @@ describe("processMarkdownWithRetry", () => {
         ];
 
         processAndReplaceImages.mockImplementation(async () => {
+          // eslint-disable-next-line security/detect-object-injection -- attemptCount is loop counter, not user input
           const markdown = results[attemptCount] || results[2];
           attemptCount++;
           return {
@@ -1815,6 +1920,7 @@ describe("processMarkdownWithRetry", () => {
         // All pages should eventually succeed
         results.forEach((result, i) => {
           expect(result.containsS3).toBe(false);
+          // eslint-disable-next-line security/detect-object-injection -- i is forEach index, not user input
           expect(result.retryAttempts).toBe(pages[i].retries);
         });
 
@@ -1900,6 +2006,7 @@ describe("processMarkdownWithRetry", () => {
 
         // Check success/failure as expected
         results.forEach((result, i) => {
+          // eslint-disable-next-line security/detect-object-injection -- i is forEach index, not user input
           if (pages[i].shouldSucceed) {
             expect(result.containsS3).toBe(false);
             expect(result.retryAttempts).toBe(0);
@@ -2161,10 +2268,10 @@ describe("processMarkdownWithRetry", () => {
           .applyEmojiMappings as Mock;
         applyEmojiMappings.mockImplementation(
           (content: string, map: Map<string, string>) => {
-            // Simulate emoji replacement
+            // Simulate emoji replacement using string replaceAll (no regex needed)
             let result = content;
             map.forEach((emoji, key) => {
-              result = result.replace(new RegExp(`:${key}:`, "g"), emoji);
+              result = result.replaceAll(`:${key}:`, emoji);
             });
             return result;
           }

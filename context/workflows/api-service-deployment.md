@@ -561,6 +561,12 @@ Fetches content from Notion via the deployed API service. This workflow requires
 
 - `SLACK_WEBHOOK_URL` - For Slack notifications
 
+**Content Branch Safety Contract (Required):**
+
+- API jobs that write generated docs must sync `content` with `origin/main` before committing generated content.
+- API jobs must only push generated docs/images to `content` and must never push generated content directly to `main`.
+- If sync cannot be completed cleanly, the job must fail and require manual conflict resolution.
+
 #### 2. Sync Notion Docs (`.github/workflows/sync-docs.yml`)
 
 Syncs Notion content to the `content` branch for use in deployments.

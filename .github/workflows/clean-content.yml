@@ -26,6 +26,27 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: content
+          fetch-depth: 0
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync content branch with main
+        run: |
+          set -e
+
+          echo "Fetching latest main branch..."
+          git fetch origin main
+
+          echo "Merging origin/main into content..."
+          if git merge --no-edit origin/main; then
+            echo "content branch synced with main"
+          else
+            echo "Failed to merge main into content. Resolve conflicts manually."
+            exit 1
+          fi
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -49,9 +70,6 @@ jobs:
 
       - name: Commit cleanup results
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           # Stage all changes from the cleanup
           git add .
 

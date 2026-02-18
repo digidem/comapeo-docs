@@ -75,7 +75,7 @@ describe("job-persistence - deterministic behavior", () => {
   });
 
   describe("deterministic job storage", () => {
-    it("should produce identical output for identical save/load cycles", () => {
+    it("should produce identical output for identical save/load cycles", async () => {
       const job: PersistedJob = {
         id: "deterministic-job-1",
         type: "notion:fetch",
@@ -86,10 +86,10 @@ describe("job-persistence - deterministic behavior", () => {
       };
 
       // Save and load multiple times
-      saveJob(job);
+      await saveJob(job);
       const loaded1 = loadJob(job.id);
 
-      saveJob(job); // Save again
+      await saveJob(job); // Save again
       const loaded2 = loadJob(job.id);
 
       // Should be identical
@@ -97,7 +97,7 @@ describe("job-persistence - deterministic behavior", () => {
       expect(loaded1).toEqual(job);
     });
 
-    it("should maintain job order when saving multiple jobs", () => {
+    it("should maintain job order when saving multiple jobs", async () => {
       const jobs: PersistedJob[] = [
         {
           id: "deterministic-job-order-1",
@@ -120,7 +120,9 @@ describe("job-persistence - deterministic behavior", () => {
       ];
 
       // Save all jobs
-      jobs.forEach((job) => saveJob(job));
+      for (const job of jobs) {
+        await saveJob(job);
+      }
 
       // Load all jobs
       const loadedJobs = loadAllJobs();
@@ -135,7 +137,7 @@ describe("job-persistence - deterministic behavior", () => {
       });
     });
 
-    it("should handle multiple rapid updates to same job deterministically", () => {
+    it("should handle multiple rapid updates to same job deterministically", async () => {
       const jobId = "rapid-update-job";
       const updates: PersistedJob[] = [
         {
@@ -172,14 +174,16 @@ describe("job-persistence - deterministic behavior", () => {
       ];
 
       // Apply updates in sequence
-      updates.forEach((job) => saveJob(job));
+      for (const job of updates) {
+        await saveJob(job);
+      }
 
       // Final state should be last update
       const finalJob = loadJob(jobId);
       expect(finalJob).toEqual(updates[updates.length - 1]);
     });
 
-    it("should produce deterministic results for cleanup operations", () => {
+    it("should produce deterministic results for cleanup operations", async () => {
       const now = Date.now();
       const jobs: PersistedJob[] = [
         {
@@ -204,11 +208,13 @@ describe("job-persistence - deterministic behavior", () => {
         },
       ];
 
-      jobs.forEach((job) => saveJob(job));
+      for (const job of jobs) {
+        await saveJob(job);
+      }
 
       // Run cleanup multiple times
-      const removed1 = cleanupOldJobs(24 * 60 * 60 * 1000);
-      const removed2 = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed1 = await cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed2 = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       // Second cleanup should remove nothing (deterministic)
       expect(removed2).toBe(0);
@@ -364,7 +370,7 @@ describe("job-persistence - recoverable behavior", () => {
   });
 
   describe("recovery from corrupted data", () => {
-    it("should recover from malformed JSON in jobs file", () => {
+    it("should recover from malformed JSON in jobs file", async () => {
       // Create corrupted jobs file
       createCorruptedJobsFile("{ invalid json content");
 
@@ -379,7 +385,7 @@ describe("job-persistence - recoverable behavior", () => {
         status: "pending",
         createdAt: new Date().toISOString(),
       };
-      saveJob(newJob);
+      await saveJob(newJob);
 
       const loaded = loadJob("recovery-job");
       expect(loaded).toEqual(newJob);
@@ -396,7 +402,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(Array.isArray(jobs)).toBe(true);
     });
 
-    it("should recover from empty jobs file", () => {
+    it("should recover from empty jobs file", async () => {
       // Create empty jobs file
       createCorruptedJobsFile("");
 
@@ -411,7 +417,7 @@ describe("job-persistence - recoverable behavior", () => {
         status: "pending",
         createdAt: new Date().toISOString(),
       };
-      saveJob(job);
+      await saveJob(job);
 
       expect(loadJob("after-empty")).toBeDefined();
     });
@@ -493,7 +499,7 @@ describe("job-persistence - recoverable behavior", () => {
   });
 
   describe("recovery from missing data directory", () => {
-    it("should create data directory if missing", () => {
+    it("should create data directory if missing", async () => {
       // Ensure directory doesn't exist
       if (existsSync(DATA_DIR)) {
         rmSync(DATA_DIR, { recursive: true, force: true });
@@ -507,7 +513,7 @@ describe("job-persistence - recoverable behavior", () => {
         createdAt: new Date().toISOString(),
       };
 
-      expect(() => saveJob(job)).not.toThrow();
+      await saveJob(job);
       expect(existsSync(DATA_DIR)).toBe(true);
       expect(loadJob("no-dir-job")).toBeDefined();
     });
@@ -573,7 +579,7 @@ describe("job-persistence - recoverable behavior", () => {
   });
 
   describe("recovery from partial operations", () => {
-    it("should handle deletion of non-existent job gracefully", () => {
+    it("should handle deletion of non-existent job gracefully", async () => {
       const job: PersistedJob = {
         id: "real-job",
         type: "notion:fetch",
@@ -581,17 +587,17 @@ describe("job-persistence - recoverable behavior", () => {
         createdAt: new Date().toISOString(),
       };
 
-      saveJob(job);
+      await saveJob(job);
 
       // Delete non-existent job should return false but not crash
-      const deleted = deleteJob("non-existent-job");
+      const deleted = await deleteJob("non-existent-job");
       expect(deleted).toBe(false);
 
       // Real job should still exist
       expect(loadJob("real-job")).toBeDefined();
     });
 
-    it("should recover from partially completed cleanup", () => {
+    it("should recover from partially completed cleanup", async () => {
       const now = Date.now();
       const oldJob: PersistedJob = {
         id: "old-job",
@@ -601,20 +607,20 @@ describe("job-persistence - recoverable behavior", () => {
         completedAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
       };
 
-      saveJob(oldJob);
+      await saveJob(oldJob);
 
       // Run cleanup
-      cleanupOldJobs(24 * 60 * 60 * 1000);
+      await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       // Job should be gone
       expect(loadJob("old-job")).toBeUndefined();
 
       // Running cleanup again should be idempotent
-      const removed = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed = await cleanupOldJobs(24 * 60 * 60 * 1000);
       expect(removed).toBe(0);
     });
 
-    it("should maintain data integrity after concurrent save operations", () => {
+    it("should maintain data integrity after concurrent save operations", async () => {
       // Save multiple jobs rapidly
       const jobs: PersistedJob[] = [];
       for (let i = 0; i < 10; i++) {
@@ -625,7 +631,7 @@ describe("job-persistence - recoverable behavior", () => {
           createdAt: new Date().toISOString(),
         };
         jobs.push(job);
-        saveJob(job);
+        await saveJob(job);
       }
 
       // All jobs should be retrievable
@@ -641,7 +647,7 @@ describe("job-persistence - recoverable behavior", () => {
   });
 
   describe("recovery from edge cases", () => {
-    it("should handle job with all optional fields populated", () => {
+    it("should handle job with all optional fields populated", async () => {
       const fullJob: PersistedJob = {
         id: "full-job",
         type: "notion:fetch-all",
@@ -661,7 +667,7 @@ describe("job-persistence - recoverable behavior", () => {
         },
       };
 
-      saveJob(fullJob);
+      await saveJob(fullJob);
 
       const loaded = loadJob("full-job");
       expect(loaded).toEqual(fullJob);
@@ -669,7 +675,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(loaded?.result?.data).toEqual({ pagesProcessed: 100, errors: 0 });
     });
 
-    it("should handle job with minimal fields", () => {
+    it("should handle job with minimal fields", async () => {
       const minimalJob: PersistedJob = {
         id: "minimal-job",
         type: "notion:fetch",
@@ -677,7 +683,7 @@ describe("job-persistence - recoverable behavior", () => {
         createdAt: new Date().toISOString(),
       };
 
-      saveJob(minimalJob);
+      await saveJob(minimalJob);
 
       const loaded = loadJob("minimal-job");
       expect(loaded).toEqual(minimalJob);
@@ -748,7 +754,7 @@ describe("job-persistence - recoverable behavior", () => {
   });
 
   describe("idempotency and repeatability", () => {
-    it("should handle repeated save operations idempotently", () => {
+    it("should handle repeated save operations idempotently", async () => {
       const job: PersistedJob = {
         id: "idempotent-job",
         type: "notion:fetch",
@@ -757,9 +763,9 @@ describe("job-persistence - recoverable behavior", () => {
       };
 
       // Save same job multiple times
-      saveJob(job);
-      saveJob(job);
-      saveJob(job);
+      await saveJob(job);
+      await saveJob(job);
+      await saveJob(job);
 
       // Should only have one copy
       const allJobs = loadAllJobs();
@@ -790,7 +796,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(logs2).toEqual(logs3);
     });
 
-    it("should handle cleanup as idempotent operation", () => {
+    it("should handle cleanup as idempotent operation", async () => {
       const now = Date.now();
       const oldJob: PersistedJob = {
         id: "old-job",
@@ -800,18 +806,18 @@ describe("job-persistence - recoverable behavior", () => {
         completedAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
       };
 
-      saveJob(oldJob);
+      await saveJob(oldJob);
 
       // First cleanup removes job
-      const removed1 = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed1 = await cleanupOldJobs(24 * 60 * 60 * 1000);
       expect(removed1).toBe(1);
 
       // Second cleanup does nothing
-      const removed2 = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed2 = await cleanupOldJobs(24 * 60 * 60 * 1000);
       expect(removed2).toBe(0);
 
       // Third cleanup still does nothing
-      const removed3 = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed3 = await cleanupOldJobs(24 * 60 * 60 * 1000);
       expect(removed3).toBe(0);
     });
   });

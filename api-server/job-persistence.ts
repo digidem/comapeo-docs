@@ -14,9 +14,9 @@
  *
  * ### Protection Mechanisms
  *
- * 1. **Synchronous Write Lock**: All saveJobs() calls acquire a mutex lock before
- *    reading/modifying/writing the jobs file. Only one write can proceed at a time.
- *    Uses busy-wait approach suitable for short operations in single-process server.
+ * 1. **Async Promise Lock**: All saveJobs() calls acquire a promise-based mutex
+ *    before reading/modifying/writing the jobs file. Only one write can proceed at a
+ *    time. Callers chain onto writeLockPromise so concurrent calls queue up properly.
  *
  * 2. **Atomic File Writes**: Each write uses a two-phase commit:
  *    - Write data to temporary file (jobs.json.tmp)
@@ -28,7 +28,7 @@
  *
  * ### Performance Impact
  *
- * - Lock acquisition is fast (~1ms busy-wait per contention)
+ * - Lock acquisition is fast (no busy-wait; uses Promise chaining)
  * - Serialization only affects concurrent writes to the SAME file
  * - Most operations complete in <10ms
  * - Stress tested with 100 concurrent job completions - all data preserved
@@ -118,11 +118,11 @@ function getMaxStoredJobs(): number {
 }
 
 /**
- * Synchronous lock to serialize file write operations
+ * Promise-based async lock for serializing write operations
+ * Non-blocking alternative to busy-wait
  * Prevents race conditions when multiple jobs complete simultaneously
- * Uses a busy-wait approach suitable for short operations in single-process server
  */
-let writeLock = false;
+let writeLockPromise: Promise<void> = Promise.resolve();
 const MAX_LOCK_WAIT_MS = 5000; // Maximum time to wait for lock
 
 /**
@@ -131,17 +131,21 @@ const MAX_LOCK_WAIT_MS = 5000; // Maximum time to wait for lock
  */
 export function waitForPendingWrites(timeoutMs: number = 1000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    const checkLock = () => {
-      if (!writeLock) {
+    const timeoutHandle = setTimeout(
+      () => reject(new Error("Timeout waiting for pending writes")),
+      timeoutMs
+    );
+    writeLockPromise
+      .then(() => {
+        clearTimeout(timeoutHandle);
         resolve();
-      } else if (Date.now() - startTime > timeoutMs) {
-        reject(new Error("Timeout waiting for pending writes"));
-      } else {
-        setTimeout(checkLock, 10);
-      }
-    };
-    checkLock();
+        return undefined;
+      })
+      .catch(() => {
+        clearTimeout(timeoutHandle);
+        reject(new Error("Write lock failed"));
+        return undefined;
+      });
   });
 }
 
@@ -291,45 +295,42 @@ function loadJobs(): JobStorage {
 }
 
 /**
- * Acquire write lock with timeout
- * Uses busy-wait approach for synchronous locking
+ * Save jobs to file with retry logic for concurrent access
+ * Uses atomic file writes (temp file + rename) to prevent corruption
+ * Protected by a Promise-based mutex to serialize concurrent writes
  */
-function acquireWriteLock(): void {
-  const startTime = Date.now();
-  while (writeLock) {
-    if (Date.now() - startTime > MAX_LOCK_WAIT_MS) {
-      throw new Error("Timeout waiting for write lock");
-    }
-    // Busy wait with tiny delays to reduce CPU usage
-    const delayStart = Date.now();
-    while (Date.now() - delayStart < 1) {
-      // 1ms busy wait
-    }
-  }
-  writeLock = true;
-}
-
-/**
- * Release write lock
- */
-function releaseWriteLock(): void {
-  writeLock = false;
-}
 
 /**
  * Save jobs to file with retry logic for concurrent access
  * Uses atomic file writes (temp file + rename) to prevent corruption
- * Protected by synchronous lock to prevent concurrent writes
+ * Protected by a Promise-based mutex to serialize concurrent writes
+ *
+ * @param modifier - Callback that receives the current storage and modifies it.
+ *                   Read is atomic (happens inside the lock).
  */
-function saveJobs(storage: JobStorage): void {
-  // Acquire lock to serialize writes
-  acquireWriteLock();
+async function saveJobs(
+  modifier: (storage: JobStorage) => void
+): Promise<void> {
+  // Acquire the async lock: chain this write onto the tail of the current
+  // promise so every concurrent caller waits for the previous one to finish.
+  let release!: () => void;
+  const prev = writeLockPromise;
+  writeLockPromise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  // Wait for the previous write to complete before proceeding
+  await prev;
 
   try {
     const maxRetries = 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         ensureDataDir();
+
+        // Read is now inside the lock - prevents race condition
+        const storage = loadJobs();
+        modifier(storage); // Apply modification
+
         const jobsFile = getJobsFile();
         const tempFile = `${jobsFile}.tmp`;
 
@@ -349,36 +350,31 @@ function saveJobs(storage: JobStorage): void {
           attempt < maxRetries - 1
         ) {
           const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
-          const start = Date.now();
-          while (Date.now() - start < delay) {
-            // Busy wait for very short delays
-          }
+          await new Promise<void>((resolve) => setTimeout(resolve, delay));
           continue;
         }
         throw error;
       }
     }
   } finally {
-    // Always release lock, even if write failed
-    releaseWriteLock();
+    // Always release lock, even if write failed, so the next waiter unblocks
+    release();
   }
 }
 
 /**
  * Save a job to persistent storage
  */
-export function saveJob(job: PersistedJob): void {
-  const storage = loadJobs();
-
-  const existingIndex = storage.jobs.findIndex((j) => j.id === job.id);
-  if (existingIndex !== -1) {
-    // eslint-disable-next-line security/detect-object-injection -- existingIndex is from findIndex, not user input
-    storage.jobs[existingIndex] = job;
-  } else {
-    storage.jobs.push(job);
-  }
-
-  saveJobs(storage);
+export async function saveJob(job: PersistedJob): Promise<void> {
+  await saveJobs((storage) => {
+    const existingIndex = storage.jobs.findIndex((j) => j.id === job.id);
+    if (existingIndex !== -1) {
+      // eslint-disable-next-line security/detect-object-injection -- existingIndex is from findIndex, not user input
+      storage.jobs[existingIndex] = job;
+    } else {
+      storage.jobs.push(job);
+    }
+  });
 }
 
 /**
@@ -400,17 +396,17 @@ export function loadAllJobs(): PersistedJob[] {
 /**
  * Delete a job from persistent storage
  */
-export function deleteJob(id: string): boolean {
-  const storage = loadJobs();
-  const index = storage.jobs.findIndex((j) => j.id === id);
+export async function deleteJob(id: string): Promise<boolean> {
+  let found = false;
+  await saveJobs((storage) => {
+    const index = storage.jobs.findIndex((j) => j.id === id);
 
-  if (index === -1) {
-    return false;
-  }
-
-  storage.jobs.splice(index, 1);
-  saveJobs(storage);
-  return true;
+    if (index !== -1) {
+      storage.jobs.splice(index, 1);
+      found = true;
+    }
+  });
+  return found;
 }
 
 /**
@@ -618,64 +614,64 @@ export function getRecentLogs(limit = 100): JobLogEntry[] {
  * Clean up old completed/failed jobs from storage
  * First removes jobs older than maxAge, then enforces max jobs cap
  */
-export function cleanupOldJobs(maxAge = 24 * 60 * 60 * 1000): number {
-  const storage = loadJobs();
-  const now = Date.now();
-  const initialCount = storage.jobs.length;
+export async function cleanupOldJobs(
+  maxAge = 24 * 60 * 60 * 1000
+): Promise<number> {
+  let removedCount = 0;
+  await saveJobs((storage) => {
+    const now = Date.now();
+    const initialCount = storage.jobs.length;
 
-  // Step 1: Remove jobs older than maxAge
-  storage.jobs = storage.jobs.filter((job) => {
-    // Keep pending or running jobs
-    if (job.status === "pending" || job.status === "running") {
+    // Step 1: Remove jobs older than maxAge
+    storage.jobs = storage.jobs.filter((job) => {
+      // Keep pending or running jobs
+      if (job.status === "pending" || job.status === "running") {
+        return true;
+      }
+
+      // Keep recently completed/failed jobs
+      if (job.completedAt) {
+        const completedTime = new Date(job.completedAt).getTime();
+        return now - completedTime < maxAge;
+      }
+
       return true;
+    });
+
+    // Step 2: Enforce max jobs cap if still too many
+    const maxStoredJobs = getMaxStoredJobs();
+    if (storage.jobs.length > maxStoredJobs) {
+      // Sort by completion time (oldest first)
+      // Keep pending/running jobs, remove oldest completed/failed jobs
+      const pendingOrRunning = storage.jobs.filter(
+        (job) => job.status === "pending" || job.status === "running"
+      );
+      const completedOrFailed = storage.jobs
+        .filter((job) => job.status !== "pending" && job.status !== "running")
+        .sort((a, b) => {
+          const timeA = a.completedAt
+            ? new Date(a.completedAt).getTime()
+            : a.createdAt
+              ? new Date(a.createdAt).getTime()
+              : 0;
+          const timeB = b.completedAt
+            ? new Date(b.completedAt).getTime()
+            : b.createdAt
+              ? new Date(b.createdAt).getTime()
+              : 0;
+          return timeB - timeA; // Sort newest first
+        });
+
+      // Keep only the newest jobs up to the limit
+      const slotsAvailable = maxStoredJobs - pendingOrRunning.length;
+      storage.jobs = [
+        ...pendingOrRunning,
+        ...completedOrFailed.slice(0, Math.max(0, slotsAvailable)),
+      ];
     }
 
-    // Keep recently completed/failed jobs
-    if (job.completedAt) {
-      const completedTime = new Date(job.completedAt).getTime();
-      return now - completedTime < maxAge;
-    }
-
-    return true;
+    removedCount = initialCount - storage.jobs.length;
   });
-
-  // Step 2: Enforce max jobs cap if still too many
-  const maxStoredJobs = getMaxStoredJobs();
-  if (storage.jobs.length > maxStoredJobs) {
-    // Sort by completion time (oldest first)
-    // Keep pending/running jobs, remove oldest completed/failed jobs
-    const pendingOrRunning = storage.jobs.filter(
-      (job) => job.status === "pending" || job.status === "running"
-    );
-    const completedOrFailed = storage.jobs
-      .filter((job) => job.status !== "pending" && job.status !== "running")
-      .sort((a, b) => {
-        const timeA = a.completedAt
-          ? new Date(a.completedAt).getTime()
-          : a.createdAt
-            ? new Date(a.createdAt).getTime()
-            : 0;
-        const timeB = b.completedAt
-          ? new Date(b.completedAt).getTime()
-          : b.createdAt
-            ? new Date(b.createdAt).getTime()
-            : 0;
-        return timeB - timeA; // Sort newest first
-      });
-
-    // Keep only the newest jobs up to the limit
-    const slotsAvailable = maxStoredJobs - pendingOrRunning.length;
-    storage.jobs = [
-      ...pendingOrRunning,
-      ...completedOrFailed.slice(0, Math.max(0, slotsAvailable)),
-    ];
-  }
-
-  const removedCount = initialCount - storage.jobs.length;
-
-  if (removedCount > 0) {
-    saveJobs(storage);
-  }
 
   return removedCount;
 }

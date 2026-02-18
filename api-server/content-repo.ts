@@ -407,16 +407,25 @@ export async function runContentTask(
 
     assertNotAborted(options.shouldAbort);
 
-    const status = await runGit(["status", "--porcelain"], {
-      cwd: config.workdir,
-      errorPrefix: "Failed to inspect repository changes",
-    });
+    // Scope the status check to the same paths we will stage, so the no-op
+    // detection is not confused by files written outside the content directories
+    // (e.g. telemetry output files or any other working-tree noise).
+    const status = await runGit(
+      ["status", "--porcelain", "docs", "static/images", "i18n"],
+      {
+        cwd: config.workdir,
+        errorPrefix: "Failed to inspect repository changes",
+      }
+    );
 
     if (!status.stdout.trim() && !config.allowEmptyCommits) {
       return { output, noOp: true };
     }
 
-    await runGit(["add", "-A"], {
+    // Stage only the content output directories that notion-fetch writes to.
+    // Using specific paths instead of "-A" prevents accidentally committing
+    // build artifacts if .gitignore is incomplete.
+    await runGit(["add", "docs", "static/images", "i18n"], {
       cwd: config.workdir,
       errorPrefix: "Failed to stage content changes",
     });

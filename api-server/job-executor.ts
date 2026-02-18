@@ -312,7 +312,20 @@ export async function executeJob(
 
     // Register the process so it can be killed on cancellation
     jobTracker.registerProcess(jobId, {
-      kill: () => childProcess?.kill("SIGTERM"),
+      kill: () => {
+        if (childProcess) {
+          // Direct kill first (also satisfies test mocks)
+          childProcess.kill("SIGTERM");
+          // Also kill entire process group to catch grandchildren
+          if (childProcess.pid) {
+            try {
+              process.kill(-childProcess.pid, "SIGTERM");
+            } catch {
+              // ESRCH = no such process group; direct kill above suffices
+            }
+          }
+        }
+      },
     });
 
     // Determine timeout: use env var override or job-specific timeout
@@ -339,7 +352,18 @@ export async function executeJob(
         pid: childProcess.pid,
       });
 
-      childProcess.kill("SIGTERM");
+      // Kill child directly first
+      if (!childProcess.killed) {
+        childProcess.kill("SIGTERM");
+      }
+      // Also kill entire process group to catch grandchildren
+      if (childProcess?.pid) {
+        try {
+          process.kill(-childProcess.pid, "SIGTERM");
+        } catch {
+          // ESRCH = ok
+        }
+      }
 
       await new Promise<void>((resolve) => {
         setTimeout(() => {
@@ -351,6 +375,13 @@ export async function executeJob(
               }
             );
             childProcess.kill("SIGKILL");
+            if (childProcess.pid) {
+              try {
+                process.kill(-childProcess.pid, "SIGKILL");
+              } catch {
+                // ESRCH = ok
+              }
+            }
 
             failSafeTimer = setTimeout(() => {
               if (!processExited) {

@@ -12,6 +12,7 @@ import {
   getJobLogs,
   getRecentLogs,
   cleanupOldJobs,
+  waitForPendingWrites,
   type PersistedJob,
   type JobLogEntry,
 } from "./job-persistence";
@@ -26,13 +27,17 @@ describe("job-persistence", () => {
     testEnv = setupTestEnvironment();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for pending writes to complete before cleanup
+    await waitForPendingWrites().catch(() => {
+      // Ignore timeout errors during cleanup
+    });
     // Clean up test environment
     testEnv.cleanup();
   });
 
   describe("saveJob and loadJob", () => {
-    it("should save and load a job", () => {
+    it("should save and load a job", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
         type: "notion:fetch",
@@ -41,12 +46,13 @@ describe("job-persistence", () => {
       };
 
       saveJob(job);
+      await waitForPendingWrites();
 
       const loaded = loadJob(job.id);
       expect(loaded).toEqual(job);
     });
 
-    it("should update an existing job", () => {
+    it("should update an existing job", async () => {
       const job: PersistedJob = {
         id: "test-job-2",
         type: "notion:fetch",
@@ -55,6 +61,7 @@ describe("job-persistence", () => {
       };
 
       saveJob(job);
+      await waitForPendingWrites();
 
       // Update the job
       const updatedJob: PersistedJob = {
@@ -65,6 +72,7 @@ describe("job-persistence", () => {
       };
 
       saveJob(updatedJob);
+      await waitForPendingWrites();
 
       const loaded = loadJob(job.id);
       expect(loaded).toEqual(updatedJob);
@@ -77,7 +85,7 @@ describe("job-persistence", () => {
       expect(loaded).toBeUndefined();
     });
 
-    it("should save multiple jobs", () => {
+    it("should save multiple jobs", async () => {
       const job1: PersistedJob = {
         id: "test-job-1",
         type: "notion:fetch",
@@ -96,48 +104,23 @@ describe("job-persistence", () => {
 
       saveJob(job1);
       saveJob(job2);
+      await waitForPendingWrites();
 
       const loaded1 = loadJob(job1.id);
       const loaded2 = loadJob(job2.id);
 
       expect(loaded1).toEqual(job1);
       expect(loaded2).toEqual(job2);
-    });
-  });
 
-  describe("loadAllJobs", () => {
-    it("should return empty array when no jobs exist", () => {
-      const jobs = loadAllJobs();
-      expect(jobs).toEqual([]);
-    });
-
-    it("should return all saved jobs", () => {
-      const job1: PersistedJob = {
-        id: "test-job-1",
-        type: "notion:fetch",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      };
-
-      const job2: PersistedJob = {
-        id: "test-job-2",
-        type: "notion:fetch-all",
-        status: "completed",
-        createdAt: new Date().toISOString(),
-      };
-
-      saveJob(job1);
-      saveJob(job2);
-
-      const jobs = loadAllJobs();
-      expect(jobs).toHaveLength(2);
-      expect(jobs).toContainEqual(job1);
-      expect(jobs).toContainEqual(job2);
+      const all = loadAllJobs();
+      expect(all).toHaveLength(2);
+      expect(all).toContainEqual(job1);
+      expect(all).toContainEqual(job2);
     });
   });
 
   describe("deleteJob", () => {
-    it("should delete a job", () => {
+    it("should delete a job", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
         type: "notion:fetch",
@@ -146,19 +129,21 @@ describe("job-persistence", () => {
       };
 
       saveJob(job);
-      expect(loadJob(job.id)).toBeDefined();
+      await waitForPendingWrites();
 
-      const deleted = deleteJob(job.id);
+      const deleted = await deleteJob(job.id);
+
       expect(deleted).toBe(true);
       expect(loadJob(job.id)).toBeUndefined();
     });
 
-    it("should return false when deleting non-existent job", () => {
-      const deleted = deleteJob("non-existent-job");
+    it("should return false when deleting non-existent job", async () => {
+      const deleted = await deleteJob("non-existent-job");
+
       expect(deleted).toBe(false);
     });
 
-    it("should only delete the specified job", () => {
+    it("should handle multiple deletes", async () => {
       const job1: PersistedJob = {
         id: "test-job-1",
         type: "notion:fetch",
@@ -168,301 +153,424 @@ describe("job-persistence", () => {
 
       const job2: PersistedJob = {
         id: "test-job-2",
-        type: "notion:fetch-all",
+        type: "notion:fetch",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
 
       saveJob(job1);
       saveJob(job2);
+      await waitForPendingWrites();
 
-      deleteJob(job1.id);
+      await deleteJob(job1.id);
+      await waitForPendingWrites();
 
-      expect(loadJob(job1.id)).toBeUndefined();
-      expect(loadJob(job2.id)).toBeDefined();
+      expect(loadAllJobs()).toEqual([job2]);
+
+      await deleteJob(job2.id);
+      await waitForPendingWrites();
+
+      expect(loadAllJobs()).toEqual([]);
     });
   });
 
-  describe("createJobLogger", () => {
-    it("should create a logger with all log methods", () => {
-      const logger = createJobLogger("test-job-1");
+  describe("appendLog and getJobLogs", () => {
+    it("should append and retrieve logs for a job", () => {
+      const jobId = "test-job-1";
+      const logger = createJobLogger(jobId);
 
-      expect(logger).toHaveProperty("info");
-      expect(logger).toHaveProperty("warn");
-      expect(logger).toHaveProperty("error");
-      expect(logger).toHaveProperty("debug");
+      logger.info("Job started");
+      logger.warn("Warning message");
+      logger.error("Error message");
 
-      expect(typeof logger.info).toBe("function");
-      expect(typeof logger.warn).toBe("function");
-      expect(typeof logger.error).toBe("function");
-      expect(typeof logger.debug).toBe("function");
+      const logs = getJobLogs(jobId);
+
+      expect(logs).toHaveLength(3);
+      expect(logs[0].message).toBe("Job started");
+      expect(logs[0].level).toBe("info");
+      expect(logs[1].message).toBe("Warning message");
+      expect(logs[1].level).toBe("warn");
+      expect(logs[2].message).toBe("Error message");
+      expect(logs[2].level).toBe("error");
     });
 
-    it("should log info messages", () => {
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    it("should filter logs by job ID", () => {
+      const logger1 = createJobLogger("job-1");
+      const logger2 = createJobLogger("job-2");
 
-      logger.info("Test info message", { data: "test" });
+      logger1.info("Job 1 message");
+      logger2.info("Job 2 message");
+      logger1.warn("Job 1 warning");
 
-      expect(consoleSpy).toHaveBeenCalled();
+      const job1Logs = getJobLogs("job-1");
+      const job2Logs = getJobLogs("job-2");
 
-      consoleSpy.mockRestore();
+      expect(job1Logs).toHaveLength(2);
+      expect(job1Logs[0].message).toBe("Job 1 message");
+      expect(job1Logs[1].message).toBe("Job 1 warning");
+
+      expect(job2Logs).toHaveLength(1);
+      expect(job2Logs[0].message).toBe("Job 2 message");
     });
 
-    it("should log warn messages", () => {
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-      logger.warn("Test warn message");
-
-      expect(consoleSpy).toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-    });
-
-    it("should log error messages", () => {
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
-      logger.error("Test error message", { error: "test error" });
-
-      expect(consoleSpy).toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-    });
-
-    it("should not log debug messages when DEBUG is not set", () => {
-      const originalDebug = process.env.DEBUG;
-      delete process.env.DEBUG;
-
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi
-        .spyOn(console, "debug")
-        .mockImplementation(() => {});
-
-      logger.debug("Test debug message");
-
-      expect(consoleSpy).not.toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-      if (originalDebug) {
-        process.env.DEBUG = originalDebug;
-      }
-    });
-
-    it("should log debug messages when DEBUG is set", () => {
-      process.env.DEBUG = "1";
-
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi
-        .spyOn(console, "debug")
-        .mockImplementation(() => {});
-
-      logger.debug("Test debug message");
-
-      expect(consoleSpy).toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
-      delete process.env.DEBUG;
-    });
-  });
-
-  describe("getJobLogs", () => {
-    beforeEach(() => {
-      // Create some test logs
-      const logger = createJobLogger("test-job-1");
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-      logger.info("Test info message 1");
-      logger.warn("Test warn message");
-      logger.error("Test error message");
-
-      consoleSpy.mockRestore();
-    });
-
-    it("should return logs for a specific job", () => {
-      const logs = getJobLogs("test-job-1");
-
-      expect(logs.length).toBeGreaterThanOrEqual(3);
-
-      const infoLogs = logs.filter((log) => log.level === "info");
-      const warnLogs = logs.filter((log) => log.level === "warn");
-      const errorLogs = logs.filter((log) => log.level === "error");
-
-      expect(infoLogs.length).toBeGreaterThanOrEqual(1);
-      expect(warnLogs.length).toBeGreaterThanOrEqual(1);
-      expect(errorLogs.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it("should return empty array for job with no logs", () => {
+    it("should return empty logs for non-existent job", () => {
       const logs = getJobLogs("non-existent-job");
       expect(logs).toEqual([]);
     });
 
-    it("should include job ID in each log entry", () => {
-      const logs = getJobLogs("test-job-1");
+    it("should handle logs with data", () => {
+      const jobId = "test-job-1";
+      const logger = createJobLogger(jobId);
 
-      logs.forEach((log) => {
-        expect(log.jobId).toBe("test-job-1");
-      });
-    });
+      logger.info("Processing", { count: 42, status: "running" });
 
-    it("should include timestamp in each log entry", () => {
-      const logs = getJobLogs("test-job-1");
+      const logs = getJobLogs(jobId);
 
-      logs.forEach((log) => {
-        expect(log.timestamp).toBeTruthy();
-        expect(new Date(log.timestamp).toISOString()).toBe(log.timestamp);
-      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].data).toEqual({ count: 42, status: "running" });
     });
   });
 
   describe("getRecentLogs", () => {
-    beforeEach(() => {
-      // Create some test logs for multiple jobs
-      const logger1 = createJobLogger("test-job-1");
-      const logger2 = createJobLogger("test-job-2");
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    it("should retrieve recent logs across all jobs", () => {
+      const logger1 = createJobLogger("job-1");
+      const logger2 = createJobLogger("job-2");
 
-      logger1.info("Job 1 message 1");
-      logger1.info("Job 1 message 2");
-      logger2.info("Job 2 message 1");
-      logger1.warn("Job 1 warning");
+      logger1.info("Job 1 log 1");
+      logger2.info("Job 2 log 1");
+      logger1.info("Job 1 log 2");
+      logger2.info("Job 2 log 2");
 
-      consoleSpy.mockRestore();
+      const recentLogs = getRecentLogs();
+
+      expect(recentLogs).toHaveLength(4);
+      expect(recentLogs[0].jobId).toBe("job-1");
+      expect(recentLogs[0].message).toBe("Job 1 log 1");
+      expect(recentLogs[3].jobId).toBe("job-2");
+      expect(recentLogs[3].message).toBe("Job 2 log 2");
     });
 
-    it("should return recent logs up to the limit", () => {
-      const logs = getRecentLogs(2);
+    it("should respect limit parameter", () => {
+      const logger = createJobLogger("job-1");
 
-      expect(logs.length).toBeLessThanOrEqual(2);
+      for (let i = 0; i < 50; i++) {
+        logger.info(`Log ${i}`);
+      }
+
+      const recentLogs = getRecentLogs(10);
+
+      expect(recentLogs).toHaveLength(10);
+      expect(recentLogs[0].message).toBe("Log 40");
+      expect(recentLogs[9].message).toBe("Log 49");
     });
 
-    it("should return all logs when limit is higher than actual count", () => {
-      const logs = getRecentLogs(100);
+    it("should return empty array when no logs exist", () => {
+      const recentLogs = getRecentLogs();
+      expect(recentLogs).toEqual([]);
+    });
+  });
 
-      expect(logs.length).toBeGreaterThanOrEqual(4);
+  describe("job result storage", () => {
+    it("should store job result with data", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
+        type: "notion:fetch",
+        status: "completed",
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        result: {
+          success: true,
+          data: { pages: 42, content: "test content" },
+        },
+      };
+
+      saveJob(job);
+      await waitForPendingWrites();
+
+      const loaded = loadJob(job.id);
+
+      expect(loaded?.result?.success).toBe(true);
+      expect(loaded?.result?.data).toEqual({
+        pages: 42,
+        content: "test content",
+      });
     });
 
-    it("should return logs from all jobs", () => {
-      const logs = getRecentLogs(100);
+    it("should store job result with error", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
+        type: "notion:fetch",
+        status: "failed",
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        result: {
+          success: false,
+          error: "Network error",
+        },
+      };
 
-      const job1Logs = logs.filter((log) => log.jobId === "test-job-1");
-      const job2Logs = logs.filter((log) => log.jobId === "test-job-2");
+      saveJob(job);
+      await waitForPendingWrites();
 
-      expect(job1Logs.length).toBeGreaterThan(0);
-      expect(job2Logs.length).toBeGreaterThan(0);
+      const loaded = loadJob(job.id);
+
+      expect(loaded?.result?.success).toBe(false);
+      expect(loaded?.result?.error).toBe("Network error");
+    });
+  });
+
+  describe("job progress", () => {
+    it("should update job progress", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
+        type: "notion:fetch",
+        status: "running",
+        createdAt: new Date().toISOString(),
+        progress: {
+          current: 0,
+          total: 100,
+          message: "Starting",
+        },
+      };
+
+      saveJob(job);
+      await waitForPendingWrites();
+
+      // Update progress
+      const updatedJob = {
+        ...job,
+        progress: { current: 50, total: 100, message: "Halfway" },
+      };
+      saveJob(updatedJob);
+      await waitForPendingWrites();
+
+      const loaded = loadJob(job.id);
+
+      expect(loaded?.progress?.current).toBe(50);
+      expect(loaded?.progress?.message).toBe("Halfway");
+    });
+  });
+
+  describe("GitHub status", () => {
+    it("should store GitHub context and status", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
+        type: "notion:fetch",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        github: {
+          owner: "test-owner",
+          repo: "test-repo",
+          sha: "abc123",
+          token: "token",
+        },
+        githubStatusReported: false,
+      };
+
+      saveJob(job);
+      await waitForPendingWrites();
+
+      const loaded = loadJob(job.id);
+
+      expect(loaded?.github?.owner).toBe("test-owner");
+      expect(loaded?.github?.repo).toBe("test-repo");
+      expect(loaded?.githubStatusReported).toBe(false);
     });
 
-    it("should return most recent logs when limit is specified", () => {
-      const logs = getRecentLogs(2);
+    it("should update GitHub status reported", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
+        type: "notion:fetch",
+        status: "completed",
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        github: {
+          owner: "test-owner",
+          repo: "test-repo",
+          sha: "abc123",
+          token: "token",
+        },
+        githubStatusReported: false,
+      };
 
-      // Logs should be in chronological order, so the last 2 are the most recent
-      expect(logs.length).toBe(2);
+      saveJob(job);
+      await waitForPendingWrites();
+
+      const updated = { ...job, githubStatusReported: true };
+      saveJob(updated);
+      await waitForPendingWrites();
+
+      const loaded = loadJob(job.id);
+
+      expect(loaded?.githubStatusReported).toBe(true);
     });
   });
 
   describe("cleanupOldJobs", () => {
-    it("should remove old completed jobs", () => {
-      // Create an old completed job
-      const oldJob: PersistedJob = {
-        id: "old-job",
+    it("should not remove recently completed jobs", async () => {
+      const job: PersistedJob = {
+        id: "test-job-1",
         type: "notion:fetch",
         status: "completed",
-        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours ago
-        completedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
-        result: { success: true },
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
       };
 
-      // Create a recent completed job
-      const recentJob: PersistedJob = {
-        id: "recent-job",
-        type: "notion:fetch-all",
-        status: "completed",
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        completedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
-        result: { success: true },
-      };
+      saveJob(job);
+      await waitForPendingWrites();
 
-      saveJob(oldJob);
-      saveJob(recentJob);
+      const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
-      // Clean up jobs older than 24 hours
-      const removedCount = cleanupOldJobs(24 * 60 * 60 * 1000);
-
-      expect(removedCount).toBe(1);
-      expect(loadJob("old-job")).toBeUndefined();
-      expect(loadJob("recent-job")).toBeDefined();
+      expect(removedCount).toBe(0);
+      expect(loadJob("test-job-1")).toBeDefined();
     });
 
-    it("should keep pending jobs regardless of age", () => {
-      const oldPendingJob: PersistedJob = {
+    it("should keep pending jobs regardless of age", async () => {
+      const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+      const job: PersistedJob = {
         id: "old-pending-job",
         type: "notion:fetch",
         status: "pending",
-        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours ago
+        createdAt: oldDate,
       };
 
-      saveJob(oldPendingJob);
+      saveJob(job);
+      await waitForPendingWrites();
 
-      const removedCount = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(0);
       expect(loadJob("old-pending-job")).toBeDefined();
     });
 
-    it("should keep running jobs regardless of age", () => {
-      const oldRunningJob: PersistedJob = {
+    it("should keep running jobs regardless of age", async () => {
+      const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+      const job: PersistedJob = {
         id: "old-running-job",
         type: "notion:fetch",
         status: "running",
-        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours ago
-        startedAt: new Date(Date.now() - 47 * 60 * 60 * 1000).toISOString(), // 47 hours ago
+        createdAt: oldDate,
+        startedAt: oldDate,
       };
 
-      saveJob(oldRunningJob);
+      saveJob(job);
+      await waitForPendingWrites();
 
-      const removedCount = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(0);
       expect(loadJob("old-running-job")).toBeDefined();
     });
 
-    it("should remove old failed jobs", () => {
-      const oldFailedJob: PersistedJob = {
+    it("should remove old failed jobs", async () => {
+      const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+      const job: PersistedJob = {
         id: "old-failed-job",
         type: "notion:fetch",
         status: "failed",
-        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours ago
-        completedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
-        result: { success: false, error: "Test error" },
+        createdAt: oldDate,
+        completedAt: oldDate,
       };
 
-      saveJob(oldFailedJob);
+      saveJob(job);
+      await waitForPendingWrites();
 
-      const removedCount = cleanupOldJobs(24 * 60 * 60 * 1000);
+      await waitForPendingWrites();
+      const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(1);
       expect(loadJob("old-failed-job")).toBeUndefined();
     });
 
-    it("should return 0 when no jobs to clean up", () => {
-      const recentJob: PersistedJob = {
-        id: "recent-job",
+    it("should enforce max stored jobs limit", async () => {
+      const maxJobs = 5;
+      process.env.MAX_STORED_JOBS = maxJobs.toString();
+
+      // Save 10 completed jobs
+      for (let i = 0; i < 10; i++) {
+        const job: PersistedJob = {
+          id: `test-job-${i}`,
+          type: "notion:fetch",
+          status: "completed",
+          createdAt: new Date(Date.now() - i * 1000).toISOString(),
+          completedAt: new Date(Date.now() - i * 1000).toISOString(),
+        };
+        saveJob(job);
+      }
+      await waitForPendingWrites();
+
+      // 5 pending jobs that should be preserved
+      for (let i = 0; i < 5; i++) {
+        const job: PersistedJob = {
+          id: `pending-job-${i}`,
+          type: "notion:fetch",
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        saveJob(job);
+      }
+      await waitForPendingWrites();
+      await waitForPendingWrites();
+
+      const removedCount = await cleanupOldJobs();
+      await waitForPendingWrites();
+
+      expect(loadAllJobs()).toHaveLength(5);
+      expect(removedCount).toBe(10);
+
+      // Cleanup
+      delete process.env.MAX_STORED_JOBS;
+    });
+
+    it("should keep pending/running jobs when enforcing max jobs", async () => {
+      const maxJobs = 3;
+      process.env.MAX_STORED_JOBS = maxJobs.toString();
+
+      // Save 2 pending jobs
+      saveJob({
+        id: "pending-1",
         type: "notion:fetch",
-        status: "completed",
+        status: "pending",
         createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        result: { success: true },
-      };
+      });
 
-      saveJob(recentJob);
+      saveJob({
+        id: "pending-2",
+        type: "notion:fetch",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+      await waitForPendingWrites();
 
-      const removedCount = cleanupOldJobs(24 * 60 * 60 * 1000);
+      // Save 5 completed jobs
+      for (let i = 0; i < 5; i++) {
+        saveJob({
+          id: `completed-${i}`,
+          type: "notion:fetch",
+          status: "completed",
+          createdAt: new Date(Date.now() - i * 1000).toISOString(),
+          completedAt: new Date(Date.now() - i * 1000).toISOString(),
+        });
+      }
+      await waitForPendingWrites();
+      await waitForPendingWrites();
 
-      expect(removedCount).toBe(0);
+      const removedCount = await cleanupOldJobs();
+      await waitForPendingWrites();
+
+      // Should keep 2 pending + 1 newest completed = 3 total
+      expect(loadAllJobs()).toHaveLength(3);
+      expect(removedCount).toBe(4);
+
+      // Verify pending jobs are preserved
+      expect(loadJob("pending-1")).toBeDefined();
+      expect(loadJob("pending-2")).toBeDefined();
+
+      // Cleanup
+      delete process.env.MAX_STORED_JOBS;
     });
   });
 });

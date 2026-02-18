@@ -3,10 +3,7 @@
  */
 import { getJobTracker } from "../job-tracker";
 import { executeJobAsync } from "../job-executor";
-import {
-  ValidationError as BaseValidationError,
-  createValidationError,
-} from "../../scripts/shared/errors";
+import { ValidationError as BaseValidationError } from "../../scripts/shared/errors";
 import {
   ErrorCode,
   createErrorResponse,
@@ -14,14 +11,13 @@ import {
   type ErrorResponse,
   type ApiResponse,
 } from "../response-schemas";
+import { MAX_REQUEST_SIZE, isValidJobId } from "../validation";
 import {
-  MAX_REQUEST_SIZE,
-  VALID_JOB_TYPES,
-  VALID_JOB_STATUSES,
-  isValidJobType,
-  isValidJobStatus,
-  isValidJobId,
-} from "../validation";
+  createJobRequestSchema,
+  jobsQuerySchema,
+  formatZodError,
+} from "../validation-schemas";
+import type { JobType } from "../job-tracker";
 import { getCorsHeaders } from "../middleware/cors";
 
 // Validation errors - extend the base ValidationError for compatibility
@@ -159,28 +155,28 @@ export async function handleListJobs(
   requestId: string
 ): Promise<Response> {
   const tracker = getJobTracker();
-  const statusFilter = url.searchParams.get("status");
-  const typeFilter = url.searchParams.get("type");
+  const statusParam = url.searchParams.get("status");
+  const typeParam = url.searchParams.get("type");
 
-  // Validate status filter if provided
-  if (statusFilter && !isValidJobStatus(statusFilter)) {
-    return validationErrorResponse(
-      `Invalid status filter: '${statusFilter}'. Valid statuses are: ${VALID_JOB_STATUSES.join(", ")}`,
+  // Validate query parameters using Zod schema
+  const queryValidation = jobsQuerySchema.safeParse({
+    status: statusParam,
+    type: typeParam,
+  });
+
+  if (!queryValidation.success) {
+    const zodError = formatZodError(queryValidation.error, requestId);
+    return errorResponse(
+      zodError.code,
+      zodError.message,
+      400,
       requestId,
-      { filter: statusFilter, validValues: VALID_JOB_STATUSES },
+      zodError.details,
       requestOrigin
     );
   }
 
-  // Validate type filter if provided
-  if (typeFilter && !isValidJobType(typeFilter)) {
-    return validationErrorResponse(
-      `Invalid type filter: '${typeFilter}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
-      requestId,
-      { filter: typeFilter, validValues: VALID_JOB_TYPES },
-      requestOrigin
-    );
-  }
+  const { status: statusFilter, type: typeFilter } = queryValidation.data;
 
   let jobs = tracker.getAllJobs();
 
@@ -223,10 +219,10 @@ export async function handleCreateJob(
   requestOrigin: string | null,
   requestId: string
 ): Promise<Response> {
-  let body: { type: string; options?: unknown };
+  let body: unknown;
 
   try {
-    body = await parseJsonBody<{ type: string; options?: unknown }>(req);
+    body = await parseJsonBody<unknown>(req);
   } catch (error) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(
@@ -246,17 +242,11 @@ export async function handleCreateJob(
     );
   }
 
-  // Validate request body structure
-  if (!body || typeof body !== "object") {
-    return validationErrorResponse(
-      "Request body must be a valid JSON object",
-      requestId,
-      undefined,
-      requestOrigin
-    );
-  }
-
-  if (!body.type || typeof body.type !== "string") {
+  // Pre-check: Zod v4 z.enum() emits invalid_value for both absent and
+  // wrong-value fields, so we must explicitly detect the missing/non-string
+  // case here to preserve the MISSING_REQUIRED_FIELD error code contract.
+  const bodyObj = body as Record<string, unknown>;
+  if (bodyObj.type === undefined || typeof bodyObj.type !== "string") {
     return errorResponse(
       ErrorCode.MISSING_REQUIRED_FIELD,
       "Missing required field: type",
@@ -267,128 +257,35 @@ export async function handleCreateJob(
     );
   }
 
-  if (!isValidJobType(body.type)) {
+  // Validate request body using Zod schema
+  const bodyValidation = createJobRequestSchema.safeParse(body);
+
+  if (!bodyValidation.success) {
+    const zodError = formatZodError(bodyValidation.error, requestId);
     return errorResponse(
-      ErrorCode.INVALID_ENUM_VALUE,
-      `Invalid job type: '${body.type}'. Valid types are: ${VALID_JOB_TYPES.join(", ")}`,
+      zodError.code,
+      zodError.message,
       400,
       requestId,
-      { providedType: body.type, validTypes: VALID_JOB_TYPES },
+      zodError.details,
       requestOrigin
     );
   }
 
-  // Validate options if provided
-  if (body.options !== undefined) {
-    if (typeof body.options !== "object" || body.options === null) {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'options' must be an object",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-    // Check for known option keys and their types
-    const options = body.options as Record<string, unknown>;
-    const knownOptions = [
-      "maxPages",
-      "statusFilter",
-      "force",
-      "dryRun",
-      "includeRemoved",
-    ];
-
-    for (const key of Object.keys(options)) {
-      if (!knownOptions.includes(key)) {
-        return errorResponse(
-          ErrorCode.INVALID_INPUT,
-          `Unknown option: '${key}'. Valid options are: ${knownOptions.join(", ")}`,
-          400,
-          requestId,
-          { option: key, validOptions: knownOptions },
-          requestOrigin
-        );
-      }
-    }
-
-    // Type validation for known options
-    if (
-      options.maxPages !== undefined &&
-      typeof options.maxPages !== "number"
-    ) {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'maxPages' must be a number",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-    if (
-      options.statusFilter !== undefined &&
-      typeof options.statusFilter !== "string"
-    ) {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'statusFilter' must be a string",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-    if (options.force !== undefined && typeof options.force !== "boolean") {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'force' must be a boolean",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-    if (options.dryRun !== undefined && typeof options.dryRun !== "boolean") {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'dryRun' must be a boolean",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-    if (
-      options.includeRemoved !== undefined &&
-      typeof options.includeRemoved !== "boolean"
-    ) {
-      return errorResponse(
-        ErrorCode.INVALID_FORMAT,
-        "Field 'includeRemoved' must be a boolean",
-        400,
-        requestId,
-        undefined,
-        requestOrigin
-      );
-    }
-  }
+  const { type: typeString, options } = bodyValidation.data;
+  // Cast the validated type string to JobType (already validated by Zod)
+  const type = typeString as JobType;
 
   const tracker = getJobTracker();
-  const jobId = tracker.createJob(body.type);
+  const jobId = tracker.createJob(type);
 
   // Execute job asynchronously
-  executeJobAsync(
-    body.type,
-    jobId,
-    (body.options as Record<string, unknown>) || {}
-  );
+  executeJobAsync(type, jobId, options || {});
 
   return successResponse(
     {
       jobId,
-      type: body.type,
+      type,
       status: "pending",
       message: "Job created successfully",
       _links: {

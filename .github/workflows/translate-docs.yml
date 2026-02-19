@@ -337,9 +337,9 @@ jobs:
                     • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
                     • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
                     ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
-                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations }}${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["']')[0] || '' }}
-                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures }}${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["']')[0] || '' }}
-                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures }}${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["']')[0] || '' }}
+                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations != '0' && steps.parse_summary.outputs.failed_translations || '' }}
+                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures != '0' && steps.parse_summary.outputs.code_json_failures || '' }}
+                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures != '0' && steps.parse_summary.outputs.theme_failures || '' }}
               - type: "section"
                 text:
                   type: "mrkdwn"

@@ -18,6 +18,7 @@ import {
 
 const EMPTY_TRANSLATED_CONTENT_ERROR =
   "Translated content is empty - cannot create page. Please check if the English source has content.";
+const MAX_RICH_TEXT_LENGTH = 1900; // Notion API limit is 2000; use 1900 to be safe
 
 // Type definition for page results from dataSources.query
 interface NotionPageResult {
@@ -130,14 +131,7 @@ export async function markdownToNotionBlocks(
 
         notionBlocks.push({
           paragraph: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: paragraphText,
-                },
-              },
-            ],
+            rich_text: splitIntoRichTextItems(paragraphText),
           },
         });
         break;
@@ -156,14 +150,7 @@ export async function markdownToNotionBlocks(
           notionBlocks.push({
             type: blockType,
             [blockType]: {
-              rich_text: [
-                {
-                  type: "text",
-                  text: {
-                    content: item,
-                  },
-                },
-              ],
+              rich_text: splitIntoRichTextItems(item),
             },
           } as unknown as BlockObjectRequest);
         }
@@ -289,14 +276,7 @@ export async function markdownToNotionBlocks(
 
         notionBlocks.push({
           quote: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: quoteText,
-                },
-              },
-            ],
+            rich_text: splitIntoRichTextItems(quoteText),
           },
         });
         break;
@@ -379,6 +359,39 @@ function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
 }
 
 /**
+ * Splits a long string into an array of rich_text items, each within Notion's
+ * 2000-character limit. Splits at word boundaries when possible.
+ */
+function splitIntoRichTextItems(
+  text: string
+): Array<{ type: "text"; text: { content: string } }> {
+  if (text.length <= MAX_RICH_TEXT_LENGTH) {
+    return [{ type: "text", text: { content: text } }];
+  }
+
+  const items: Array<{ type: "text"; text: { content: string } }> = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    let splitIndex = Math.min(remaining.length, MAX_RICH_TEXT_LENGTH);
+    if (remaining.length > MAX_RICH_TEXT_LENGTH) {
+      // Prefer splitting at a word boundary
+      const spaceIndex = remaining.lastIndexOf(" ", MAX_RICH_TEXT_LENGTH);
+      if (spaceIndex > 0) {
+        splitIndex = spaceIndex + 1;
+      }
+    }
+    items.push({
+      type: "text",
+      text: { content: remaining.substring(0, splitIndex) },
+    });
+    remaining = remaining.substring(splitIndex);
+  }
+
+  return items;
+}
+
+/**
  * Creates a heading block with the specified level
  */
 function createHeadingBlock(
@@ -393,14 +406,7 @@ function createHeadingBlock(
   return {
     type: headingType,
     [headingType]: {
-      rich_text: [
-        {
-          type: "text",
-          text: {
-            content: text,
-          },
-        },
-      ],
+      rich_text: splitIntoRichTextItems(text),
     },
   } as unknown as BlockObjectRequest;
 }

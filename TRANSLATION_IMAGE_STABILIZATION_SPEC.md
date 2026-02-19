@@ -391,12 +391,7 @@ Create `scripts/notion-translate/__tests__/imageStabilization.test.ts`:
    - Test re-running doesn't cause churn
    - Already-processed content should remain unchanged
 
-5. **Per-Language Image Overrides**
-   - Test: EN markdown references image A, localized markdown references image B (Notion URL)
-   - Result: uses image B rewritten to `/images/...`
-   - Confirm EN fallback remains unchanged when no override exists
-
-6. **Image Download Failure Handling**
+5. **Image Download Failure Handling**
    - Test that `totalFailures > 0` causes translation to fail (throws)
    - Verify no placeholder fallbacks are accepted in translation context
    - Confirm error message includes page title and failure count
@@ -585,14 +580,6 @@ describe("Translation Image Stabilization", () => {
 
   describe("Idempotency", () => {
     it("should not modify already-processed content", ...);
-  });
-
-  describe("Per-Language Image Overrides", () => {
-    it("should use localized image when override exists", ...);
-    // EN references imageA, localized references imageB (Notion URL)
-    // Result: imageB rewritten to /images/...
-
-    it("should fallback to EN image when no override exists", ...);
   });
 });
 ```

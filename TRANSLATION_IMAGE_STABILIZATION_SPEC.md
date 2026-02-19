@@ -441,8 +441,10 @@ From issue #137:
 - [ ] After running `bun scripts/notion-translate`, translated markdown contains **zero** URLs matching:
   - `secure.notion-static.com`
   - `notion-static.com`
-  - `amazonaws.com`
-  - `X-Amz-` params
+  - Notion-family S3 URLs:
+    - `prod-files-secure.s3.*.amazonaws.com` (Notion's secure files bucket)
+    - `s3.*.amazonaws.com/secure.notion-static.com` (Notion's static content)
+  - Signed AWS URLs with `X-Amz-*` params (any amazonaws.com domain)
   - `www.notion.so/image/`
 - [ ] Images in translated pages reference `/images/<filename>` and resolve at build time
 - [ ] Images are not duplicated per language (translations reuse shared `/images` assets)

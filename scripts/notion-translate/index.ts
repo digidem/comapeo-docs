@@ -1080,19 +1080,23 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
+    // Helper to detect S3 URLs in content
+    const detectNotionS3Urls = (content: string) => {
+      const diagnostics = getImageDiagnostics(content);
+      const rawMatches = collectRawNotionS3Matches(content);
+      const notionSamples = diagnostics.s3Samples.filter(
+        isNotionImageUrlFamily
+      );
+      const urls = Array.from(
+        new Set([...notionSamples, ...rawMatches.samples])
+      ).slice(0, 5);
+      const count = Math.max(rawMatches.count, notionSamples.length);
+      return { urls, count };
+    };
+
     // Post-translation validation: ensure no S3 URLs survive translation
-    let postTranslationDiagnostics = getImageDiagnostics(translatedContent);
-    let rawNotionS3Matches = collectRawNotionS3Matches(translatedContent);
-    let notionDiagnosticSamples = postTranslationDiagnostics.s3Samples.filter(
-      isNotionImageUrlFamily
-    );
-    let detectedS3Urls = Array.from(
-      new Set([...notionDiagnosticSamples, ...rawNotionS3Matches.samples])
-    ).slice(0, 5);
-    let totalS3Matches = Math.max(
-      rawNotionS3Matches.count,
-      notionDiagnosticSamples.length
-    );
+    let { urls: detectedS3Urls, count: totalS3Matches } =
+      detectNotionS3Urls(translatedContent);
 
     // Safety net: attempt a final image-fix pass for markdown/image-based S3 URLs.
     if (totalS3Matches > 0) {
@@ -1100,18 +1104,8 @@ async function processSinglePageTranslation({
         translatedContent,
         safeFilename
       );
-      postTranslationDiagnostics = getImageDiagnostics(translatedContent);
-      rawNotionS3Matches = collectRawNotionS3Matches(translatedContent);
-      notionDiagnosticSamples = postTranslationDiagnostics.s3Samples.filter(
-        isNotionImageUrlFamily
-      );
-      detectedS3Urls = Array.from(
-        new Set([...notionDiagnosticSamples, ...rawNotionS3Matches.samples])
-      ).slice(0, 5);
-      totalS3Matches = Math.max(
-        rawNotionS3Matches.count,
-        notionDiagnosticSamples.length
-      );
+      ({ urls: detectedS3Urls, count: totalS3Matches } =
+        detectNotionS3Urls(translatedContent));
     }
 
     if (totalS3Matches > 0) {

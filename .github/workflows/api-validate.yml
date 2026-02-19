@@ -17,7 +17,7 @@ jobs:
       API_HOST: "127.0.0.1"
       API_PORT: "3001"
       API_BASE_URL: "http://127.0.0.1:3001"
-      API_KEY_CI: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
+      API_KEY_CI: ${{ secrets.API_KEY_GITHUB_ACTIONS || 'ci-fallback-api-key-1234567890abcdef' }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       DATABASE_ID: ${{ secrets.DATABASE_ID }}
       DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
@@ -60,6 +60,7 @@ jobs:
       - name: Run API smoke assertions
         run: |
           set -euo pipefail
+          test -n "${API_KEY_CI}"
 
           # 401 envelope for missing auth on create-job endpoint.
           HTTP_CODE=$(curl -sS -o /tmp/api-validate-unauthorized.json -w "%{http_code}" \
@@ -92,7 +93,9 @@ jobs:
           # Poll the accepted fetch-ready job to terminal state.
           STATUS=""
           for i in $(seq 1 180); do
-            curl -sS "${API_BASE_URL}/jobs/${JOB_ID}" > /tmp/api-validate-job-status.json
+            curl -sS \
+              -H "Authorization: Bearer ${API_KEY_CI}" \
+              "${API_BASE_URL}/jobs/${JOB_ID}" > /tmp/api-validate-job-status.json
             STATUS=$(jq -r '.status' /tmp/api-validate-job-status.json)
             if [ "${STATUS}" = "completed" ] || [ "${STATUS}" = "failed" ]; then
               break

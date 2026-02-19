@@ -3,6 +3,7 @@ import {
   getElementTypeProperty,
   resolvePageTitle,
   resolvePageLocale,
+  getOrderedLocales,
   groupPagesByLang,
   createStandalonePageGroup,
   ensureTranslationSiblings,
@@ -259,6 +260,76 @@ describe("pageGrouping", () => {
   });
 
   describe("groupPagesByLang", () => {
+    it("should order grouped content locales deterministically with EN first", () => {
+      const englishSubpage = {
+        id: "en-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "English Title" }],
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "English" },
+          },
+        },
+      };
+
+      const portugueseSubpage = {
+        id: "pt-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "Titulo em Portugues" }],
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "Portuguese" },
+          },
+        },
+      };
+
+      const spanishSubpage = {
+        id: "es-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "Titulo en Espanol" }],
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "Spanish" },
+          },
+        },
+      };
+
+      const mainPage = {
+        id: "main-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "Main Page" }],
+          },
+          [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+            select: { name: "Page" },
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "English" },
+          },
+          "Sub-item": {
+            relation: [
+              { id: "es-page-1" },
+              { id: "pt-page-1" },
+              { id: "en-page-1" },
+            ],
+          },
+        },
+      };
+
+      const pages = [
+        mainPage,
+        spanishSubpage,
+        portugueseSubpage,
+        englishSubpage,
+      ];
+      const result = groupPagesByLang(pages, mainPage);
+
+      expect(Object.keys(result.content)).toEqual(["en", "pt", "es"]);
+    });
+
     it("should group pages with sub-items by language", () => {
       const englishSubpage = {
         id: "en-page-1",
@@ -398,6 +469,25 @@ describe("pageGrouping", () => {
         const result = groupPagesByLang([], testCase.page);
         expect(result.section).toBe(testCase.expected);
       }
+    });
+  });
+
+  describe("getOrderedLocales", () => {
+    it("should put default locale first and preserve configured locale order", () => {
+      expect(getOrderedLocales(["es", "en", "pt", "es"])).toEqual([
+        "en",
+        "pt",
+        "es",
+      ]);
+    });
+
+    it("should sort unknown locales alphabetically after configured locales", () => {
+      expect(getOrderedLocales(["fr", "es", "de", "en"])).toEqual([
+        "en",
+        "es",
+        "de",
+        "fr",
+      ]);
     });
   });
 

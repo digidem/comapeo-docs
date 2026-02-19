@@ -509,6 +509,82 @@ describe("image stabilization in translation pipeline", () => {
     expect(s3Failure.error).not.toContain(", ");
   });
 
+  it("catches URLs via getImageDiagnostics when raw regex does not match", async () => {
+    const englishPage = createMockNotionPage({
+      id: "diagnostics-only-page",
+      title: "Diagnostics Only",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    const notionProxyUrl =
+      "https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Fxxx%2Fimage.png";
+    mockTranslateText.mockResolvedValue({
+      markdown: `Check this image: ${notionProxyUrl}`,
+      title: "Diagnostics Only",
+    });
+    mockGetImageDiagnostics.mockReturnValue({
+      totalMatches: 1,
+      markdownMatches: 0,
+      htmlMatches: 1,
+      s3Matches: 1,
+      s3Samples: [notionProxyUrl],
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await expect(runTranslation(englishPage)).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+    const summary = findSummaryLog(logSpy);
+    const s3Failure = summary.failures.find((failure: { error: string }) =>
+      /Notion\/S3 URLs/.test(failure.error)
+    );
+
+    expect(s3Failure).toBeDefined();
+    expect(s3Failure.error).toContain("still contains 1 Notion/S3 URLs");
+  });
+
+  it("reports correct count when getImageDiagnostics catches more than raw regex", async () => {
+    const englishPage = createMockNotionPage({
+      id: "diagnostics-count-page",
+      title: "Diagnostics Count",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    mockTranslateText.mockResolvedValue({
+      markdown: `Link: https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/raw.png and https://www.notion.so/image/https%3A%2F%2Fexample.com%2Fproxied.png`,
+      title: "Diagnostics Count",
+    });
+    mockGetImageDiagnostics.mockReturnValue({
+      totalMatches: 2,
+      markdownMatches: 1,
+      htmlMatches: 1,
+      s3Matches: 2,
+      s3Samples: [
+        "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/raw.png",
+        "https://www.notion.so/image/https%3A%2F%2Fexample.com%2Fproxied.png",
+      ],
+    });
+    mockValidateAndFixRemainingImages.mockImplementation(
+      async (content) => content
+    );
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(runTranslation(englishPage)).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+
+    const errorLogLines = errorSpy.mock.calls.map((args) => args.join(" "));
+    expect(
+      errorLogLines.some((line) =>
+        line.includes("still contains 2 Notion/S3 URLs")
+      )
+    ).toBe(true);
+  });
+
   it("does not undercount when diagnostics detects more Notion URLs than regex raw matching", async () => {
     const englishPage = createMockNotionPage({
       id: "detector-count-page",
@@ -634,6 +710,114 @@ describe("image stabilization in translation pipeline", () => {
     const englishPage = createMockNotionPage({
       id: "cache-page-1",
       title: "Cache Test",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+
+    await runTranslation(englishPage);
+
+    expect(mockProcessAndReplaceImages).toHaveBeenCalledTimes(1);
+    expect(mockTranslateText).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches and reuses markdown for pages with no images", async () => {
+    const englishPage = createMockNotionPage({
+      id: "no-images-page",
+      title: "Text Only",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    mockN2m.toMarkdownString.mockReturnValue({
+      parent: "Just plain text content without any images",
+    });
+    mockProcessAndReplaceImages.mockResolvedValue({
+      markdown: "Just plain text content without any images",
+      stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
+      metrics: {
+        totalProcessed: 0,
+        skippedSmallSize: 0,
+        skippedAlreadyOptimized: 0,
+        skippedResize: 0,
+        fullyProcessed: 0,
+      },
+    });
+
+    await runTranslation(englishPage);
+
+    expect(mockProcessAndReplaceImages).toHaveBeenCalledTimes(1);
+    expect(mockTranslateText).toHaveBeenCalledTimes(2);
+    expect(mockTranslateText).toHaveBeenNthCalledWith(
+      1,
+      "Just plain text content without any images",
+      "Text Only",
+      expect.any(String)
+    );
+    expect(mockTranslateText).toHaveBeenNthCalledWith(
+      2,
+      "Just plain text content without any images",
+      "Text Only",
+      expect.any(String)
+    );
+  });
+
+  it("does not share cache between different pages", async () => {
+    const page1 = createMockNotionPage({
+      id: "page-1",
+      title: "First Page",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    const page2 = createMockNotionPage({
+      id: "page-2",
+      title: "Second Page",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    mockN2m.toMarkdownString
+      .mockResolvedValueOnce({ parent: "Content from page 1" })
+      .mockResolvedValueOnce({ parent: "Content from page 2" });
+    mockProcessAndReplaceImages
+      .mockResolvedValueOnce({
+        markdown: "Stabilized page 1",
+        stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
+        metrics: {
+          totalProcessed: 0,
+          skippedSmallSize: 0,
+          skippedAlreadyOptimized: 0,
+          skippedResize: 0,
+          fullyProcessed: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        markdown: "Stabilized page 2",
+        stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
+        metrics: {
+          totalProcessed: 0,
+          skippedSmallSize: 0,
+          skippedAlreadyOptimized: 0,
+          skippedResize: 0,
+          fullyProcessed: 0,
+        },
+      });
+
+    await runTranslation(page1);
+    await runTranslation(page2);
+
+    expect(mockProcessAndReplaceImages).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back correctly when cache is not provided", async () => {
+    const englishPage = createMockNotionPage({
+      id: "fallback-test",
+      title: "Fallback Test",
       status: "Ready for translation",
       language: "English",
       parentItem: "parent-1",

@@ -29,6 +29,11 @@ import {
   NotionPage,
   TranslationConfig,
 } from "../constants.js";
+import {
+  processAndReplaceImages,
+  getImageDiagnostics,
+  validateAndFixRemainingImages,
+} from "../notion-fetch/imageReplacer.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
@@ -558,6 +563,89 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
  */
 // Maximum slug length to prevent path length issues on Windows/CI (MAX_PATH = 260)
 const MAX_SLUG_LENGTH = 50;
+const NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE =
+  "https?:\\/\\/(?:prod-files-secure\\.s3\\.[a-z0-9-]+\\.amazonaws\\.com\\/[^\\s)\"'<>]+|s3\\.[a-z0-9-]+\\.amazonaws\\.com\\/secure\\.notion-static\\.com\\/[^\\s)\"'<>]+|(?:www\\.)?notion\\.so\\/image\\/[^\\s)\"'<>]+)";
+const RAW_NOTION_S3_URL_REGEX = new RegExp(
+  NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
+  "gi"
+);
+const NOTION_IMAGE_URL_FAMILY_REGEX = new RegExp(
+  NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
+  "i"
+);
+
+/**
+ * Generates a deterministic, filesystem-safe filename from a title and page ID.
+ * Reuses the exact slug logic from saveTranslatedContentToDisk() to ensure
+ * image filenames remain consistent with markdown filenames.
+ */
+function generateSafeFilename(title: string, pageId: string): string {
+  const baseSlug = title
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .substring(0, MAX_SLUG_LENGTH);
+  const stablePageId = pageId.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const deterministicBase = baseSlug || "untitled";
+  return `${deterministicBase}-${stablePageId}`;
+}
+
+function collectRawNotionS3Matches(content: string): {
+  count: number;
+  samples: string[];
+} {
+  const matches = content.match(RAW_NOTION_S3_URL_REGEX) ?? [];
+  return {
+    count: matches.length,
+    samples: Array.from(new Set(matches)).slice(0, 5),
+  };
+}
+
+function redactPotentiallySignedUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const hasSensitiveQuery = parsed.search.length > 0;
+    const decodedPath = (() => {
+      try {
+        return decodeURIComponent(parsed.pathname);
+      } catch {
+        return parsed.pathname;
+      }
+    })();
+    const hasEmbeddedSensitiveQuery =
+      /[?&](?:x-amz-[a-z0-9-]+|awsaccesskeyid|signature|expires)=/i.test(
+        decodedPath
+      );
+
+    let safePathname = parsed.pathname;
+    if (hasEmbeddedSensitiveQuery) {
+      // Encoded Notion image URLs can embed signed query params in the path.
+      // Replace the dynamic payload entirely to avoid leaking credentials.
+      safePathname = /^\/image\//i.test(parsed.pathname)
+        ? "/image/<redacted>"
+        : "/<redacted-path>";
+    }
+
+    return `${parsed.origin}${safePathname}${hasSensitiveQuery ? "?<redacted>" : ""}`;
+  } catch {
+    const MAX_DISPLAY_LENGTH = 160;
+    if (url.length <= MAX_DISPLAY_LENGTH) {
+      return url;
+    }
+    return `${url.slice(0, MAX_DISPLAY_LENGTH - 3)}...`;
+  }
+}
+
+function formatRedactedS3Urls(urls: string[]): string {
+  if (urls.length === 0) {
+    return "none";
+  }
+  return urls.map((url) => redactPotentiallySignedUrl(url)).join(", ");
+}
+
+function isNotionImageUrlFamily(url: string): boolean {
+  return NOTION_IMAGE_URL_FAMILY_REGEX.test(url);
+}
 
 export async function saveTranslatedContentToDisk(
   englishPage: NotionPage,
@@ -570,14 +658,7 @@ export async function saveTranslatedContentToDisk(
 
     // Build deterministic filename from stable page ID to keep reruns idempotent.
     // Truncate slug to avoid path length limits on Windows/CI environments
-    const baseSlug = title
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "")
-      .substring(0, MAX_SLUG_LENGTH);
-    const stablePageId = englishPage.id.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const deterministicBase = baseSlug || "untitled";
-    const deterministicName = `${deterministicBase}-${stablePageId}`;
+    const deterministicName = generateSafeFilename(title, englishPage.id);
 
     let filename = `${deterministicName}.md`;
     let outputPath = path.join(config.outputDir, filename);
@@ -792,7 +873,8 @@ async function translateThemeConfig() {
 async function processLanguageTranslations(
   config: TranslationConfig,
   englishPages: NotionPage[],
-  pageId?: string
+  pageId?: string,
+  stabilizedMarkdownCache?: Map<string, string>
 ): Promise<LanguageTranslationSummary> {
   console.log(chalk.yellow(`\nProcessing ${config.language} translations:`));
   if (pageId) {
@@ -885,6 +967,7 @@ async function processLanguageTranslations(
         englishPage,
         config,
         translationPage,
+        stabilizedMarkdownCache,
         relationParentId:
           parentRelation ?? (pageId ? englishPage.id : undefined),
         onNew: () => newTranslations++,
@@ -928,6 +1011,7 @@ async function processSinglePageTranslation({
   englishPage,
   config,
   translationPage,
+  stabilizedMarkdownCache,
   relationParentId,
   onNew,
   onUpdate,
@@ -935,6 +1019,7 @@ async function processSinglePageTranslation({
   englishPage: NotionPage;
   config: TranslationConfig;
   translationPage: NotionPage | null;
+  stabilizedMarkdownCache?: Map<string, string>;
   relationParentId?: string;
   onNew: () => void;
   onUpdate: () => void;
@@ -945,9 +1030,6 @@ async function processSinglePageTranslation({
   const elementType = getElementTypeProperty(englishPage);
   const isTitlePage = elementType?.select?.name?.toLowerCase() === "title";
 
-  // Convert English page to markdown
-  const markdownContent = await convertPageToMarkdown(englishPage.id);
-
   // Translate the content
   let translatedContent: string;
   let translatedTitle: string;
@@ -957,6 +1039,38 @@ async function processSinglePageTranslation({
     translatedContent = `# ${originalTitle}`;
     translatedTitle = originalTitle;
   } else {
+    const safeFilename = generateSafeFilename(originalTitle, englishPage.id);
+    let markdownContent = stabilizedMarkdownCache?.get(englishPage.id);
+    if (markdownContent === undefined) {
+      // Convert English page to markdown only when translation needs full content
+      const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
+
+      // Stabilize images: replace expiring S3 URLs with /images/... paths
+      const imageResult = await processAndReplaceImages(
+        rawMarkdownContent,
+        safeFilename
+      );
+
+      // Fail page if any images failed to download (no broken placeholders)
+      if (imageResult.stats.totalFailures > 0) {
+        throw new Error(
+          `Image stabilization failed for "${originalTitle}": ` +
+            `${imageResult.stats.totalFailures} image(s) failed to download. ` +
+            "Cannot proceed with translation - images would be broken."
+        );
+      }
+
+      markdownContent = imageResult.markdown;
+      stabilizedMarkdownCache?.set(englishPage.id, markdownContent);
+
+      if (imageResult.stats.successfulImages > 0) {
+        console.log(
+          chalk.blue(
+            `  Images: processed=${imageResult.stats.successfulImages} failed=${imageResult.stats.totalFailures}`
+          )
+        );
+      }
+    }
     // For regular pages, translate the full content
     const translated = await translateText(
       markdownContent,
@@ -965,6 +1079,42 @@ async function processSinglePageTranslation({
     );
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
+
+    // Helper to detect S3 URLs in content
+    const detectNotionS3Urls = (content: string) => {
+      const diagnostics = getImageDiagnostics(content);
+      const rawMatches = collectRawNotionS3Matches(content);
+      const notionSamples = diagnostics.s3Samples.filter(
+        isNotionImageUrlFamily
+      );
+      const urls = Array.from(
+        new Set([...notionSamples, ...rawMatches.samples])
+      ).slice(0, 5);
+      const count = Math.max(rawMatches.count, notionSamples.length);
+      return { urls, count };
+    };
+
+    // Post-translation validation: ensure no S3 URLs survive translation
+    let { urls: detectedS3Urls, count: totalS3Matches } =
+      detectNotionS3Urls(translatedContent);
+
+    // Safety net: attempt a final image-fix pass for markdown/image-based S3 URLs.
+    if (totalS3Matches > 0) {
+      translatedContent = await validateAndFixRemainingImages(
+        translatedContent,
+        safeFilename
+      );
+      ({ urls: detectedS3Urls, count: totalS3Matches } =
+        detectNotionS3Urls(translatedContent));
+    }
+
+    if (totalS3Matches > 0) {
+      throw new Error(
+        `Translation for "${originalTitle}" still contains ` +
+          `${totalS3Matches} Notion/S3 URLs.\n` +
+          `Offending URLs (redacted): ${formatRedactedS3Urls(detectedS3Urls)}`
+      );
+    }
   }
 
   // Prepare properties for the translation page
@@ -1211,11 +1361,13 @@ export async function main(options: CliOptions = {}) {
     summary.themeFailures = themeFailures.length;
 
     // Process each language
+    const stabilizedMarkdownCache = new Map<string, string>();
     for (const config of LANGUAGES) {
       const languageSummary = await processLanguageTranslations(
         config,
         englishPages as NotionPage[],
-        normalizedPageId
+        normalizedPageId,
+        stabilizedMarkdownCache
       );
       summary.processedLanguages++;
       summary.newTranslations += languageSummary.newTranslations;

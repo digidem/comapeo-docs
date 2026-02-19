@@ -81,6 +81,10 @@ const DEBUG_S3_IMAGES =
 
 const LARGE_MARKDOWN_THRESHOLD = 700_000;
 
+function isCanonicalLocalImagePath(url: string): boolean {
+  return url.startsWith("/images/");
+}
+
 function debugS3(message: string): void {
   if (DEBUG_S3_IMAGES) {
     console.log(chalk.magenta(`[s3-debug] ${message}`));
@@ -441,8 +445,20 @@ export async function processAndReplaceImages(
     error: string;
     fallbackUsed: true;
   }> = [];
+  let canonicalLocalImagesKept = 0;
 
   for (const match of imageMatches) {
+    const trimmedUrl = match.url.trim();
+    if (isCanonicalLocalImagePath(trimmedUrl)) {
+      canonicalLocalImagesKept++;
+      if (DEBUG_S3_IMAGES) {
+        debugS3(
+          `[${safeFilename}] keeping canonical local image unchanged: ${trimmedUrl}`
+        );
+      }
+      continue;
+    }
+
     const urlValidation = validateAndSanitizeImageUrl(match.url);
 
     // DEBUG: Log validation result for each image
@@ -524,6 +540,14 @@ export async function processAndReplaceImages(
     if (DEBUG_S3_IMAGES) {
       debugS3(`  -> Categorized as VALID for processing`);
     }
+  }
+
+  if (canonicalLocalImagesKept > 0) {
+    console.info(
+      chalk.blue(
+        `ℹ️  Kept ${canonicalLocalImagesKept} canonical /images/ path${canonicalLocalImagesKept === 1 ? "" : "s"} unchanged`
+      )
+    );
   }
 
   // DEBUG: Log categorization summary
@@ -680,9 +704,10 @@ export async function processAndReplaceImages(
 
   // Phase 3: Report results
   const totalImages = imageMatches.length;
+  const remoteImagesProcessed = validImages.length;
   console.info(
     chalk.green(
-      `📸 Processed ${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`
+      `📸 Processed ${remoteImagesProcessed}/${totalImages} images: ${successfulImages} successful, ${totalFailures} failed`
     )
   );
   if (totalFailures > 0) {

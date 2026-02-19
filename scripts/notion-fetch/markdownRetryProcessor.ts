@@ -125,8 +125,8 @@ export interface RetryMetrics {
  * when S3 URLs persist after processing.
  *
  * **Processing Pipeline** (executed on each attempt):
- * 1. Process callouts (convert Notion callouts to Docusaurus admonitions)
- * 2. Process and replace images (fetch S3 images and save locally)
+ * 1. Process and replace images (fetch S3 images and save locally)
+ * 2. Process callouts (convert Notion callouts to Docusaurus admonitions)
  * 3. Apply emoji mappings (replace custom emoji references)
  * 4. Validate and fix remaining images (final S3 URL cleanup)
  *
@@ -200,7 +200,7 @@ export async function processMarkdownWithRetry(
 
   /**
    * Run the full content processing pipeline for one attempt.
-   * Processes callouts → images → emojis → validation in sequence.
+   * Processes images → callouts → emojis → validation in sequence.
    */
   const runFullContentPipeline = async (
     initialContent: string,
@@ -225,12 +225,12 @@ export async function processMarkdownWithRetry(
     let savedDelta = 0;
     let fallbackEmojiCount = 0;
 
-    // DEBUG: Log image count BEFORE callout processing
+    // DEBUG: Log image count BEFORE image processing
     if (DEBUG_S3_IMAGES) {
       const beforeDiagnostics = getImageDiagnostics(workingContent);
       console.log(
         chalk.magenta(
-          `[s3-debug] BEFORE callout processing: ${beforeDiagnostics.totalMatches} images (S3: ${beforeDiagnostics.s3Matches})`
+          `[s3-debug] BEFORE image processing: ${beforeDiagnostics.totalMatches} images (S3: ${beforeDiagnostics.s3Matches})`
         )
       );
 
@@ -245,21 +245,6 @@ export async function processMarkdownWithRetry(
       }
     }
 
-    if (rawBlocks && rawBlocks.length > 0) {
-      workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
-      console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
-    }
-
-    // DEBUG: Log image count AFTER callout processing
-    if (DEBUG_S3_IMAGES) {
-      const afterDiagnostics = getImageDiagnostics(workingContent);
-      console.log(
-        chalk.magenta(
-          `[s3-debug] AFTER callout processing: ${afterDiagnostics.totalMatches} images (S3: ${afterDiagnostics.s3Matches})`
-        )
-      );
-    }
-
     const imageResult = await processAndReplaceImages(
       workingContent,
       attemptLabel
@@ -267,6 +252,11 @@ export async function processMarkdownWithRetry(
     workingContent = imageResult.markdown;
     savedDelta += imageResult.stats.totalSaved;
     warnIfS3("Image processing stage", workingContent);
+
+    if (rawBlocks && rawBlocks.length > 0) {
+      workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
+      console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
+    }
 
     if (emojiMap.size > 0) {
       workingContent = EmojiProcessor.applyEmojiMappings(
@@ -549,8 +539,8 @@ export async function processMarkdownWithRetry(
  * less robust to transient issues like regex bugs or timing problems.
  *
  * **Processing Pipeline** (single pass):
- * 1. Process callouts (convert Notion callouts to Docusaurus admonitions)
- * 2. Process and replace images (fetch S3 images and save locally)
+ * 1. Process and replace images (fetch S3 images and save locally)
+ * 2. Process callouts (convert Notion callouts to Docusaurus admonitions)
  * 3. Apply emoji mappings (replace custom emoji references)
  * 4. Validate and fix remaining images (final S3 URL cleanup)
  *
@@ -606,12 +596,6 @@ export async function processMarkdownSinglePass(
     chalk.gray(`  ℹ️  Using single-pass processing (retry disabled)`)
   );
 
-  // Process callouts
-  if (rawBlocks && rawBlocks.length > 0) {
-    workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
-    console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
-  }
-
   // Process and replace images
   const imageResult = await processAndReplaceImages(
     workingContent,
@@ -619,6 +603,12 @@ export async function processMarkdownSinglePass(
   );
   workingContent = imageResult.markdown;
   totalSaved += imageResult.stats.totalSaved;
+
+  // Process callouts
+  if (rawBlocks && rawBlocks.length > 0) {
+    workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
+    console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
+  }
 
   // Apply emoji mappings
   if (emojiMap.size > 0) {

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { n2m } from "../notionClient";
 import {
   sanitizeMarkdownImages,
   ensureBlankLineAfterStandaloneBold,
@@ -7,6 +8,12 @@ import {
   findMatchingBlockquote,
   processCalloutsInMarkdown,
 } from "./markdownTransform";
+
+vi.mock("../notionClient", () => ({
+  n2m: {
+    toMarkdownString: vi.fn().mockReturnValue({ parent: "" }),
+  },
+}));
 
 describe("markdownTransform", () => {
   describe("sanitizeMarkdownImages", () => {
@@ -406,6 +413,137 @@ describe("markdownTransform", () => {
 
       // Check that some indentation is preserved
       expect(result).toMatch(/^\s+/);
+    });
+
+    it("should process callout with paragraph child", () => {
+      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
+        if (blocks?.[0]?.type === "paragraph") {
+          return { parent: "Child paragraph content" };
+        }
+        return { parent: "" };
+      });
+
+      const parentBlock = {
+        type: "callout",
+        callout: {
+          rich_text: [{ plain_text: "Main callout content" }],
+          icon: { emoji: "💡" },
+          color: "green_background",
+        },
+        children: [
+          {
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ plain_text: "Child paragraph content" }],
+            },
+          },
+        ],
+      } as any;
+
+      const content = "> Main callout content";
+      const result = processCalloutsInMarkdown(content, [parentBlock]);
+
+      expect(result).toContain(":::tip");
+      expect(result).toContain("Child paragraph content");
+    });
+
+    it("should process callout with nested list children", () => {
+      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
+        if (blocks?.[0]?.type === "bulleted_list_item") {
+          return { parent: "- List item 1\n- List item 2\n- List item 3" };
+        }
+        return { parent: "" };
+      });
+
+      const parentBlock = {
+        type: "callout",
+        callout: {
+          rich_text: [{ plain_text: "Important warning" }],
+          color: "yellow_background",
+        },
+        children: [
+          {
+            type: "bulleted_list_item",
+            bulleted_list_item: {
+              rich_text: [{ plain_text: "List item 1" }],
+            },
+          },
+          {
+            type: "bulleted_list_item",
+            bulleted_list_item: {
+              rich_text: [{ plain_text: "List item 2" }],
+            },
+          },
+          {
+            type: "bulleted_list_item",
+            bulleted_list_item: {
+              rich_text: [{ plain_text: "List item 3" }],
+            },
+          },
+        ],
+      } as any;
+
+      const content = "> Important warning";
+      const result = processCalloutsInMarkdown(content, [parentBlock]);
+
+      expect(result).toContain(":::warning");
+      expect(result).toContain("List item 1");
+      expect(result).toContain("List item 2");
+      expect(result).toContain("List item 3");
+    });
+
+    it("should process callout with mixed children", () => {
+      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
+        if (blocks?.[0]?.type === "paragraph") {
+          return {
+            parent:
+              "First paragraph\n\n1. Numbered item 1\n2. Numbered item 2\n\nSecond paragraph",
+          };
+        }
+        return { parent: "" };
+      });
+
+      const parentBlock = {
+        type: "callout",
+        callout: {
+          rich_text: [{ plain_text: "Main content" }],
+          icon: { emoji: "ℹ️" },
+          color: "blue_background",
+        },
+        children: [
+          {
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ plain_text: "First paragraph" }],
+            },
+          },
+          {
+            type: "numbered_list_item",
+            numbered_list_item: {
+              rich_text: [{ plain_text: "Numbered item 1" }],
+            },
+          },
+          {
+            type: "numbered_list_item",
+            numbered_list_item: {
+              rich_text: [{ plain_text: "Numbered item 2" }],
+            },
+          },
+          {
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ plain_text: "Second paragraph" }],
+            },
+          },
+        ],
+      } as any;
+
+      const content = "> Main content";
+      const result = processCalloutsInMarkdown(content, [parentBlock]);
+
+      expect(result).toContain(":::info");
+      expect(result).toContain("First paragraph");
+      expect(result).toContain("Second paragraph");
     });
   });
 });

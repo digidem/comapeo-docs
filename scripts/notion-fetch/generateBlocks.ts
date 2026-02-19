@@ -23,6 +23,7 @@ import {
   resolvePageTitle,
   groupPagesByLang,
   createStandalonePageGroup,
+  getOrderedLocales,
 } from "./pageGrouping";
 import { LRUCache, validateCacheSize } from "./cacheStrategies";
 import { getImageCache, logImageFailure } from "./imageProcessing";
@@ -114,6 +115,14 @@ const retryMetrics: RetryMetrics = {
   averageAttemptsPerPage: 0,
 };
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
+
+const resolveSectionFolderForLocale = (
+  sectionFolders: Record<string, string>,
+  locale: string
+): string | undefined => {
+  // eslint-disable-next-line security/detect-object-injection -- locale keys are controlled by configured locales and DEFAULT_LOCALE fallback
+  return sectionFolders[locale] ?? sectionFolders[DEFAULT_LOCALE];
+};
 
 // I18N_PATH and getI18NPath moved to translationManager.ts
 
@@ -208,7 +217,9 @@ export function findExistingSidebarPosition(
     }
   };
 
+  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
   const cachedPage = metadataCache.pages?.[pageId];
+  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
   const existingCachedPage = existingCache?.pages?.[pageId];
   const existingOutputPaths = existingCachedPage?.outputPaths;
   const cachedOutputPaths = cachedPage?.outputPaths;
@@ -421,6 +432,7 @@ async function processSinglePage(
       );
 
       const sectionFolderForWrite: Record<string, string | undefined> = {};
+      // eslint-disable-next-line security/detect-object-injection -- lang is constrained to locale values from grouped content
       sectionFolderForWrite[lang] = currentSectionFolderForLang;
 
       const finalDiagnostics = getImageDiagnostics(markdownString.parent ?? "");
@@ -551,7 +563,7 @@ export async function generateBlocks(
   let processedPages = 0;
 
   // Variables to track section folders and title metadata
-  let currentSectionFolder = {};
+  let currentSectionFolder: Record<string, string> = {};
   const currentHeading = new Map<string, string>();
 
   // Stats for reporting
@@ -696,6 +708,7 @@ export async function generateBlocks(
     // Phase 1: Process Toggle/Heading sequentially (they modify shared state)
     // and collect Page tasks with their captured context
     for (let i = 0; i < pagesByLang.length; i++) {
+      // eslint-disable-next-line security/detect-object-injection -- i iterates array bounds of pagesByLang
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
       const title = pageByLang.mainTitle;
@@ -710,20 +723,26 @@ export async function generateBlocks(
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-]/g, "");
 
-      for (const lang of Object.keys(pageByLang.content)) {
+      const orderedLocales = getOrderedLocales(Object.keys(pageByLang.content));
+      for (const lang of orderedLocales) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
+        // eslint-disable-next-line security/detect-object-injection -- lang is from ordered locale keys of pageByLang.content
         const page = pageByLang.content[lang];
         const pageTitle = resolvePageTitle(page);
         const safeFallbackId = (page?.id ?? String(i + 1)).slice(0, 8);
         const safeFilename =
           filename || `${FALLBACK_TITLE_PREFIX}-${safeFallbackId}`;
+        const sectionFolderForLang = resolveSectionFolderForLocale(
+          currentSectionFolder,
+          lang
+        );
 
         const fileName = `${safeFilename}.md`;
-        const filePath = currentSectionFolder[lang]
-          ? path.join(PATH, currentSectionFolder[lang], fileName)
+        const filePath = sectionFolderForLang
+          ? path.join(PATH, sectionFolderForLang, fileName)
           : path.join(PATH, fileName);
-        const relativePath = currentSectionFolder[lang]
-          ? `${currentSectionFolder[lang]}/${fileName}`
+        const relativePath = sectionFolderForLang
+          ? `${sectionFolderForLang}/${fileName}`
           : fileName;
 
         // Set translation string for non-English pages
@@ -749,6 +768,7 @@ export async function generateBlocks(
               currentHeading,
               pageSpinner
             );
+            // eslint-disable-next-line security/detect-object-injection -- lang is constrained locale key during sequential toggle processing
             currentSectionFolder[lang] = sectionFolder;
             sectionCount++;
             processedPages++;
@@ -905,7 +925,7 @@ export async function generateBlocks(
                 markdownPrefetchCache,
                 inFlightBlockFetches,
                 inFlightMarkdownFetches,
-                currentSectionFolderForLang: currentSectionFolder[lang],
+                currentSectionFolderForLang: sectionFolderForLang,
               });
             }
           } else if (dryRun) {
@@ -936,7 +956,7 @@ export async function generateBlocks(
               markdownPrefetchCache,
               inFlightBlockFetches,
               inFlightMarkdownFetches,
-              currentSectionFolderForLang: currentSectionFolder[lang],
+              currentSectionFolderForLang: sectionFolderForLang,
             });
           }
 
@@ -1012,6 +1032,7 @@ export async function generateBlocks(
             } else {
               failedCount++;
               // Include page title for better error context
+              // eslint-disable-next-line security/detect-object-injection -- index is produced by iterating settled promise results
               const failedTask = pageTasks[index];
               console.error(
                 chalk.red(

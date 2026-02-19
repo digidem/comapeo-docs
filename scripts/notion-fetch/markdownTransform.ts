@@ -3,11 +3,48 @@ import type {
   CalloutBlockObjectResponse,
   PartialBlockObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints";
+import { n2m } from "../notionClient";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
 
 type CalloutBlockNode = CalloutBlockObjectResponse & {
   children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
 };
+
+const LEADING_LOCALE_SPACE_PATTERN = /^[\s\u00A0\u2007\u202F]+/u;
+const LEADING_LOCALE_SEPARATOR_PATTERN =
+  /^[\s\u00A0\u2007\u202F:;\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]+/u;
+
+function convertBlocksToMarkdown(
+  blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>
+): string {
+  if (!blocks || blocks.length === 0) {
+    return "";
+  }
+  try {
+    const markdown = n2m.toMarkdownString(blocks as any);
+    return markdown.parent || "";
+  } catch {
+    return "";
+  }
+}
+
+function getFirstGrapheme(text: string): string {
+  const SegmenterCtor = (Intl as any)?.Segmenter;
+  if (SegmenterCtor) {
+    const segmenter = new SegmenterCtor(undefined, {
+      granularity: "grapheme",
+    });
+    const segments = segmenter.segment(text);
+    for (const segment of segments) {
+      if (typeof segment?.segment === "string") {
+        return segment.segment;
+      }
+      break;
+    }
+  }
+
+  return Array.from(text)[0] ?? "";
+}
 
 /**
  * Post-process markdown to ensure no broken image references remain
@@ -67,6 +104,7 @@ export function ensureBlankLineAfterStandaloneBold(content: string): string {
   const result: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by lines.length in this loop
     const line = lines[i];
     result.push(line);
 
@@ -91,12 +129,11 @@ export function normalizeForMatch(text: string): string {
   const nfkc =
     typeof text.normalize === "function" ? text.normalize("NFKC") : text;
 
-  let stripped = nfkc;
-  const graphemes = Array.from(stripped);
-  if (graphemes.length > 0 && /\p{Extended_Pictographic}/u.test(graphemes[0])) {
-    // Remove first grapheme safely
-    stripped = graphemes.slice(1).join("");
-    stripped = stripped.replace(/^[\s:;\-–—]+/u, "");
+  let stripped = nfkc.replace(LEADING_LOCALE_SPACE_PATTERN, "");
+  const firstGrapheme = getFirstGrapheme(stripped);
+  if (firstGrapheme && /\p{Extended_Pictographic}/u.test(firstGrapheme)) {
+    stripped = stripped.slice(firstGrapheme.length);
+    stripped = stripped.replace(LEADING_LOCALE_SEPARATOR_PATTERN, "");
   }
 
   return stripped.replace(/\s+/g, " ").trim();
@@ -117,6 +154,7 @@ export function extractTextFromCalloutBlock(block: any): string {
 
   const result: string[] = [];
   for (let i = 0; i < parts.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by parts.length in this loop
     const cur = parts[i];
     if (!cur) continue;
     if (
@@ -145,11 +183,13 @@ export function findMatchingBlockquote(
   const stripQuote = (line: string) => line.replace(/^\s*>+\s?/, "");
 
   for (let i = fromIndex; i < lines.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by lines.length in this loop
     if (!lines[i].trimStart().startsWith(">")) continue;
 
     const blockLines: string[] = [];
     let end = i;
     while (end < lines.length) {
+      // eslint-disable-next-line security/detect-object-injection -- end is bounded by lines.length in this loop
       const l = lines[end];
       if (l.trim() === "") {
         // allow blank lines inside the blockquote region
@@ -224,9 +264,15 @@ export function processCalloutsInMarkdown(
       continue;
     }
 
+    const calloutChildren = (calloutBlock as CalloutBlockNode).children;
+    const childrenMarkdown = calloutChildren
+      ? convertBlocksToMarkdown(calloutChildren)
+      : undefined;
+
     const admonitionMarkdown = convertCalloutToAdmonition(
       calloutBlock,
-      match.contentLines
+      match.contentLines,
+      childrenMarkdown
     );
 
     if (!admonitionMarkdown) {
@@ -238,7 +284,9 @@ export function processCalloutsInMarkdown(
       let fenceDelim: string | null = null;
       let inAdmonition = false;
       for (let i = 0; i <= match.end; i++) {
+        // eslint-disable-next-line security/detect-object-injection -- i is bounded by match.end and lines length from matcher
         const ln = lines[i].trim();
+        // eslint-disable-next-line security/detect-unsafe-regex -- pattern is linear-time for fixed fence delimiters and short markdown lines
         const fenceMatch = ln.match(/^(```+|~~~+)(.*)?$/);
         if (fenceMatch) {
           const delim = fenceMatch[1];

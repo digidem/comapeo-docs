@@ -492,6 +492,61 @@ describe("generateBlocks", () => {
   });
 
   describe("Toggle sections", () => {
+    it("should process toggle locales with EN first and deterministic translation order", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const mainToggle = createMockNotionPage({
+        id: "toggle-main",
+        title: "Section Alpha",
+        elementType: "Toggle",
+        language: "English",
+        subItems: ["toggle-es", "toggle-pt"],
+      });
+      const spanishToggle = createMockNotionPage({
+        id: "toggle-es",
+        title: "Seccion Alfa",
+        elementType: "Toggle",
+        language: "Spanish",
+      });
+      const portugueseToggle = createMockNotionPage({
+        id: "toggle-pt",
+        title: "Secao Alfa",
+        elementType: "Toggle",
+        language: "Portuguese",
+      });
+
+      const progressCallback = vi.fn();
+
+      await generateBlocks(
+        [mainToggle, spanishToggle, portugueseToggle],
+        progressCallback
+      );
+
+      const relevantWrites = mockWriteFileSync.mock.calls
+        .map((call) => call[0] as string)
+        .filter(
+          (filePath) =>
+            filePath.includes("_category_.json") ||
+            filePath.endsWith(`${path.sep}pt${path.sep}code.json`) ||
+            filePath.endsWith(`${path.sep}es${path.sep}code.json`)
+        );
+
+      expect(relevantWrites.length).toBeGreaterThanOrEqual(3);
+      expect(relevantWrites[0]).toContain("_category_.json");
+
+      const ptWriteIndex = relevantWrites.findIndex((filePath) =>
+        filePath.endsWith(`${path.sep}pt${path.sep}code.json`)
+      );
+      const esWriteIndex = relevantWrites.findIndex((filePath) =>
+        filePath.endsWith(`${path.sep}es${path.sep}code.json`)
+      );
+
+      expect(ptWriteIndex).toBeGreaterThan(-1);
+      expect(esWriteIndex).toBeGreaterThan(-1);
+      expect(ptWriteIndex).toBeLessThan(esWriteIndex);
+    });
+
     it("should create section folders for Toggle type pages", async () => {
       const { generateBlocks } = await import("./generateBlocks");
       const mockMkdirSync = fs.mkdirSync as Mock;
@@ -589,6 +644,75 @@ describe("generateBlocks", () => {
   });
 
   describe("Page content generation", () => {
+    it("should place translated pages in the EN section folder when locale toggle context is missing", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const mainToggle = createMockNotionPage({
+        id: "toggle-main",
+        title: "Section Alpha",
+        elementType: "Toggle",
+        language: "English",
+        subItems: ["toggle-es"],
+      });
+      const spanishToggle = createMockNotionPage({
+        id: "toggle-es",
+        title: "Seccion Alfa",
+        elementType: "Toggle",
+        language: "Spanish",
+      });
+
+      const mainPage = createMockNotionPage({
+        id: "page-main",
+        title: "Inside Page",
+        elementType: "Page",
+        language: "English",
+        subItems: ["page-pt", "page-es"],
+      });
+      const portuguesePage = createMockNotionPage({
+        id: "page-pt",
+        title: "Pagina Interna",
+        elementType: "Page",
+        language: "Portuguese",
+      });
+      const spanishPage = createMockNotionPage({
+        id: "page-es",
+        title: "Pagina Interna ES",
+        elementType: "Page",
+        language: "Spanish",
+      });
+
+      const pages = [
+        mainToggle,
+        spanishToggle,
+        mainPage,
+        portuguesePage,
+        spanishPage,
+      ];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "# Inside Page\n\nBody" });
+
+      await generateBlocks(pages, progressCallback);
+
+      const markdownWrites = mockWriteFileSync.mock.calls
+        .map((call) => call[0] as string)
+        .filter((filePath) => filePath.endsWith(".md"));
+
+      const ptMarkdownPath = markdownWrites.find(
+        (filePath) =>
+          filePath.includes(
+            `${path.sep}pt${path.sep}docusaurus-plugin-content-docs${path.sep}current`
+          ) && filePath.endsWith(`${path.sep}inside-page.md`)
+      );
+
+      expect(ptMarkdownPath).toBeDefined();
+      expect(ptMarkdownPath).toContain(
+        `${path.sep}section-alpha${path.sep}inside-page.md`
+      );
+    });
+
     it("should generate proper frontmatter for Page type entries", async () => {
       const { generateBlocks } = await import("./generateBlocks");
       const mockWriteFileSync = fs.writeFileSync as Mock;

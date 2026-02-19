@@ -2,6 +2,7 @@ import type {
   BlockObjectResponse,
   CalloutBlockObjectResponse,
   PartialBlockObjectResponse,
+  RichTextItemResponse,
 } from "@notionhq/client/build/src/api-endpoints";
 import { n2m } from "../notionClient";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
@@ -21,15 +22,74 @@ function convertBlocksToMarkdown(
     return "";
   }
   try {
-    const markdown = n2m.toMarkdownString(blocks as any);
+    const markdown = n2m.toMarkdownString(
+      blocks as Parameters<typeof n2m.toMarkdownString>[0]
+    );
     return markdown.parent || "";
   } catch {
     return "";
   }
 }
 
+// Runtime note: Grapheme segmentation is most accurate with Intl.Segmenter
+// (available in modern Node/Bun runtimes used by this repository).
+function isExtendedPictographic(char: string): boolean {
+  return /\p{Extended_Pictographic}/u.test(char);
+}
+
+function getLeadingEmojiGraphemeFallback(text: string): string {
+  if (!text) {
+    return "";
+  }
+
+  const firstCodePoint = text.codePointAt(0);
+  if (firstCodePoint === undefined) {
+    return "";
+  }
+
+  const firstChar = String.fromCodePoint(firstCodePoint);
+  if (!isExtendedPictographic(firstChar)) {
+    return "";
+  }
+
+  let offset = firstChar.length;
+  while (offset < text.length) {
+    const nextCodePoint = text.codePointAt(offset);
+    if (nextCodePoint === undefined) {
+      break;
+    }
+
+    const nextChar = String.fromCodePoint(nextCodePoint);
+    if (nextCodePoint === 0xfe0f || nextCodePoint === 0xfe0e) {
+      offset += nextChar.length;
+      continue;
+    }
+
+    if (nextCodePoint === 0x200d) {
+      const afterJoiner = offset + nextChar.length;
+      const joinedCodePoint = text.codePointAt(afterJoiner);
+      if (joinedCodePoint === undefined) {
+        break;
+      }
+
+      const joinedChar = String.fromCodePoint(joinedCodePoint);
+      if (!isExtendedPictographic(joinedChar)) {
+        break;
+      }
+
+      offset = afterJoiner + joinedChar.length;
+      continue;
+    }
+
+    break;
+  }
+
+  return text.slice(0, offset);
+}
+
 function getFirstGrapheme(text: string): string {
-  const SegmenterCtor = (Intl as any)?.Segmenter;
+  const SegmenterCtor = (Intl as { Segmenter?: typeof Intl.Segmenter })
+    .Segmenter;
   if (SegmenterCtor) {
     const segmenter = new SegmenterCtor(undefined, {
       granularity: "grapheme",
@@ -41,6 +101,11 @@ function getFirstGrapheme(text: string): string {
       }
       break;
     }
+  }
+
+  const emojiPrefix = getLeadingEmojiGraphemeFallback(text);
+  if (emojiPrefix) {
+    return emojiPrefix;
   }
 
   return Array.from(text)[0] ?? "";
@@ -142,13 +207,43 @@ export function normalizeForMatch(text: string): string {
 /**
  * Extract text content from a callout block for matching
  */
-export function extractTextFromCalloutBlock(block: any): string {
-  const rich = block?.callout?.rich_text;
-  if (!Array.isArray(rich)) return "";
+const isRichTextItemArray = (value: unknown): value is RichTextItemResponse[] =>
+  Array.isArray(value);
 
-  const parts = rich.map((t: any) => {
-    if (typeof t?.plain_text === "string") return t.plain_text;
-    if (t?.type === "text" && t?.text?.content != null) return t.text.content;
+const isCalloutBlockWithRichText = (
+  block: unknown
+): block is Pick<CalloutBlockObjectResponse, "callout"> => {
+  if (!block || typeof block !== "object") {
+    return false;
+  }
+
+  const calloutValue = (block as { callout?: unknown }).callout;
+  if (!calloutValue || typeof calloutValue !== "object") {
+    return false;
+  }
+
+  return isRichTextItemArray(
+    (calloutValue as { rich_text?: unknown }).rich_text
+  );
+};
+
+/**
+ * Extract text content from a callout block for matching
+ */
+export function extractTextFromCalloutBlock(block: unknown): string {
+  if (!isCalloutBlockWithRichText(block)) {
+    return "";
+  }
+
+  const rich = block.callout.rich_text;
+
+  const parts = rich.map((item) => {
+    if (typeof item.plain_text === "string") {
+      return item.plain_text;
+    }
+    if (item.type === "text" && item.text.content != null) {
+      return item.text.content;
+    }
     return "";
   });
 

@@ -28,22 +28,36 @@ interface MarkdownTripletsResult {
 interface ParityIssue {
   key: string;
   locale: (typeof TRANSLATION_LOCALES)[number];
-  type: "empty-translation" | "structure-mismatch" | "missing-translation";
+  type:
+    | "empty-translation"
+    | "structure-mismatch"
+    | "missing-translation"
+    | "frontmatter-mismatch";
 }
 
 const DOCS_ROOT = "docs";
+const DEFAULT_DOCS_PLUGIN_CURRENT_PATH = path.join(
+  "i18n",
+  "{locale}",
+  "docusaurus-plugin-content-docs",
+  "current"
+);
+
+const getLocaleDocsPathTemplate = (): string =>
+  process.env.LOCALE_PARITY_DOCS_PATH_TEMPLATE ??
+  DEFAULT_DOCS_PLUGIN_CURRENT_PATH;
+
 const getLocaleRoot = (mirrorRoot: string, locale: Locale): string => {
   if (locale === "en") {
     return path.join(mirrorRoot, DOCS_ROOT);
   }
 
-  return path.join(
-    mirrorRoot,
-    "i18n",
-    locale,
-    "docusaurus-plugin-content-docs",
-    "current"
+  const docsPathTemplate = getLocaleDocsPathTemplate().replace(
+    "{locale}",
+    locale
   );
+
+  return path.join(mirrorRoot, docsPathTemplate);
 };
 
 const isMissingDirectoryError = (error: unknown): boolean =>
@@ -179,6 +193,18 @@ const buildMarkdownTriplets = async (
 
 const removeFrontmatter = (markdown: string): string =>
   markdown.replace(FRONTMATTER_REGEX, "");
+
+const normalizeFrontmatter = (markdown: string): string => {
+  const frontmatter = markdown.match(FRONTMATTER_REGEX)?.[0];
+  if (!frontmatter) {
+    return "";
+  }
+
+  return frontmatter.replace(/\r?\n/gu, "\n").trim().replace(/\s+/gu, " ");
+};
+
+const shouldValidateFrontmatter = (): boolean =>
+  process.env.LOCALE_PARITY_VALIDATE_FRONTMATTER === "true";
 
 const MEDIA_PATTERNS: RegExp[] = [
   /!\[[^\]]*\]\((?:[^()\\]|\\.)*\)/gu,
@@ -449,6 +475,18 @@ const collectParityIssues = async (
     for (const locale of TRANSLATION_LOCALES) {
       const translatedMarkdown = locale === "pt" ? ptMarkdown : esMarkdown;
 
+      if (
+        shouldValidateFrontmatter() &&
+        normalizeFrontmatter(enMarkdown) !==
+          normalizeFrontmatter(translatedMarkdown)
+      ) {
+        issues.push({
+          key: triplet.key,
+          locale,
+          type: "frontmatter-mismatch",
+        });
+      }
+
       if (!hasNonMediaText(translatedMarkdown)) {
         issues.push({
           key: triplet.key,
@@ -539,6 +577,28 @@ const withTempMirror = async (
     await run(mirrorRoot);
   } finally {
     await fs.rm(mirrorRoot, { recursive: true, force: true });
+  }
+};
+
+const withEnv = async (
+  key: string,
+  value: string,
+  run: () => Promise<void>
+): Promise<void> => {
+  // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+  const previous = process.env[key];
+  // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+  process.env[key] = value;
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) {
+      // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+      delete process.env[key];
+    } else {
+      // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+      process.env[key] = previous;
+    }
   }
 };
 
@@ -895,6 +955,61 @@ Observação.
 
       const issues = await collectParityIssues(mirrorRoot);
       expect(issues).toEqual([]);
+    });
+  });
+
+  it("supports configurable locale docs path templates", async () => {
+    await withEnv(
+      "LOCALE_PARITY_DOCS_PATH_TEMPLATE",
+      path.join("translations", "{locale}", "docs"),
+      async () => {
+        await withTempMirror(async (mirrorRoot) => {
+          await writeMarkdown(
+            path.join(mirrorRoot, "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide", "Guide", "# Guide")
+          );
+          await writeMarkdown(
+            path.join(mirrorRoot, "translations", "pt", "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide-pt", "Guia", "# Guia")
+          );
+          await writeMarkdown(
+            path.join(mirrorRoot, "translations", "es", "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide-es", "Guía", "# Guía")
+          );
+
+          const issues = await collectParityIssues(mirrorRoot);
+          expect(issues).toEqual([]);
+        });
+      }
+    );
+  });
+
+  it("optionally validates frontmatter parity", async () => {
+    await withEnv("LOCALE_PARITY_VALIDATE_FRONTMATTER", "true", async () => {
+      await withTempMirror(async (mirrorRoot) => {
+        await writeTriplet(mirrorRoot, "guides/frontmatter.md", {
+          en: withFrontmatter("doc-frontmatter", "Frontmatter", "# Body"),
+          pt: `---
+id: doc-frontmatter-pt
+title: "Frontmatter PT"
+custom: translated
+---
+
+# Corpo
+`,
+          es: withFrontmatter("doc-frontmatter-es", "Frontmatter", "# Cuerpo"),
+        });
+
+        const issues = await collectParityIssues(mirrorRoot);
+        expect(issues).toContainEqual({
+          key: "guides/frontmatter.md",
+          locale: "pt",
+          type: "frontmatter-mismatch",
+        });
+      });
     });
   });
 

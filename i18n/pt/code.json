@@ -1,192 +1,201 @@
 {
-    "theme.TOC.title": {
-        "message": "Nesta página",
-        "description": "Title for the table of contents section"
-    },
-    "Introduction": {
-        "message": "Introdução"
-    },
-    "Preparing to Use CoMapeo": {
-        "message": "Preparando para usar do CoMapeo (Mobile)"
-    },
-    "Understanding CoMapeo's Core Concepts and Functions": {
-        "message": "Nova Página"
-    },
-    "Getting Started Essentials": {
-        "message": "Novo título da seção"
-    },
-    "Gathering the Right Equipment for CoMapeo": {
-        "message": "Reunindo o Equipamento Certo para o CoMapeo"
-    },
-    "Device Setup and Maintenance for CoMapeo": {
-        "message": "Nova Página"
-    },
-    "Installing CoMapeo & Onboarding": {
-        "message": "Nova Página"
-    },
-    "Initial Use and CoMapeo Settings": {
-        "message": "Nova Página"
-    },
-    "Uninstalling CoMapeo": {
-        "message": "Nova Página"
-    },
-    "Customizing CoMapeo": {
-        "message": "Novo Alternar"
-    },
-    "Organizing Key Materials for Projects": {
-        "message": "Nova Página"
-    },
-    "Building a Custom Categories Set": {
-        "message": "Nova Página"
-    },
-    "Building Custom Background Maps": {
-        "message": "Nova Página"
-    },
-    "Observations & Tracks": {
-        "message": "Novo título da seção"
-    },
-    "Gathering Observations & Tracks": {
-        "message": "Coletando Observações"
-    },
-    "Creating a New Observation": {
-        "message": "Nova Página"
-    },
-    "Creating a New Track": {
-        "message": "Nova Página"
-    },
-    "Reviewing Observations": {
-        "message": "Revisando Observações"
-    },
-    "Exploring the Observations List": {
-        "message": "Nova Página"
-    },
-    "Reviewing an Observation": {
-        "message": "Nova Página"
-    },
-    "Editing Observations": {
-        "message": "Nova Página"
-    },
-    "Data Privacy & Security": {
-        "message": "Novo título da seção"
-    },
-    "Encryption and Security": {
-        "message": "Nova Página"
-    },
-    "Managing Data Privacy & Security": {
-        "message": "Gerenciamento de dados e privacidade"
-    },
-    "Using an App Passcode for Security": {
-        "message": "Nova Página"
-    },
-    "Adjusting Data Sharing and Privacy": {
-        "message": "Nova Página"
-    },
-    "Mapping with Collaborators": {
-        "message": "Nova Página"
-    },
-    "Managing Projects": {
-        "message": "Gerenciando Projetos"
-    },
-    "Understanding Projects": {
-        "message": "Nova Página"
-    },
-    "Creating a New Project": {
-        "message": "Nova Página"
-    },
-    "Changing Categories Set": {
-        "message": "Nova Página"
-    },
-    "Managing a Team": {
-        "message": "Nova Página"
-    },
-    "Inviting Collaborators": {
-        "message": "Nova Página"
-    },
-    "Ending a Project": {
-        "message": "Nova Página"
-    },
-    "Exchanging Project Data": {
-        "message": "Troca de Dados do Projeto"
-    },
-    "Understanding How Exchange Works": {
-        "message": "Nova Página A"
-    },
-    "Using Exchange Offline": {
-        "message": "Nova Página"
-    },
-    "Using a Remote Archive": {
-        "message": "Nova Página"
-    },
-    "Moving Observations & Tracks Outside of CoMapeo": {
-        "message": "Compartilhando observações fora do CoMapeo"
-    },
-    "Sharing a Single Observation and Metadata": {
-        "message": "Nova Página"
-    },
-    "Exporting all Observations": {
-        "message": "Nova Página"
-    },
-    "Using Observations outside of CoMapeo": {
-        "message": "Nova Página"
-    },
-    "Miscellaneous": {
-        "message": "Variado"
-    },
-    "FAQ": {
-        "message": "Perguntas frequentes"
-    },
-    "Glossary": {
-        "message": "Glossário"
-    },
-    "Troubleshooting": {
-        "message": "Resolução de Problemas"
-    },
-    "Common Solutions": {
-        "message": "Nova Página"
-    },
-    "Troubleshooting: Setup and Customization": {
-        "message": "Nova Página"
-    },
-    "Troubleshooting:  Observations and Tracks": {
-        "message": "Nova Página"
-    },
-    "Troubleshooting: Data Privacy and Security": {
-        "message": "Nova Página"
-    },
-    "Troubleshooting: Mapping with Collaborators": {
-        "message": "Nova Página"
-    },
-    "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
-        "message": "Nova Página"
-    },
-    "Testing links": {
-        "message": "Nova Página"
-    },
-    "Configuração e Manutenção do Dispositivo para CoMapeo": {
-        "message": "Configuração e Manutenção do Dispositivo para CoMapeo"
-    },
-    "Nova Página": {
-        "message": "Nova Página"
-    },
-    "Reunindo o equipamento certo para o CoMapeo": {
-        "message": "Reunindo o equipamento certo para o CoMapeo"
-    },
-    "Uso inicial e configurações do CoMapeo": {
-        "message": "Uso inicial e configurações do CoMapeo"
-    },
-    "Instalando o CoMapeo e Fazendo o Onboarding": {
-        "message": "Instalando o CoMapeo e Fazendo o Onboarding"
-    },
-    "Desinstalando o CoMapeo": {
-        "message": "Desinstalando o CoMapeo"
-    },
-    "Novo Alternar\n": {
-        "message": "Novo Alternar\n"
-    },
-    "Novo título da seção": {
-        "message": "Novo título da seção"
-    },
-    "Planejamento e Preparação para um Projeto": {
-        "message": "Planejamento e Preparação para um Projeto"
-    }
+  "theme.TOC.title": {
+    "message": "Nesta página",
+    "description": "Title for the table of contents section"
+  },
+  "Introduction": {
+    "message": "Introdução"
+  },
+  "Preparing to Use CoMapeo": {
+    "message": "Preparando para usar do CoMapeo (Mobile)"
+  },
+  "Understanding CoMapeo's Core Concepts and Functions": {
+    "message": "Nova Página"
+  },
+  "Getting Started Essentials": {
+    "message": "Novo título da seção"
+  },
+  "Gathering the Right Equipment for CoMapeo": {
+    "message": "Reunindo o Equipamento Certo para o CoMapeo"
+  },
+  "Device Setup and Maintenance for CoMapeo": {
+    "message": "Nova Página"
+  },
+  "Installing CoMapeo & Onboarding": {
+    "message": "Nova Página"
+  },
+  "Initial Use and CoMapeo Settings": {
+    "message": "Nova Página"
+  },
+  "Uninstalling CoMapeo": {
+    "message": "Nova Página"
+  },
+  "Customizing CoMapeo": {
+    "message": "Novo Alternar"
+  },
+  "Organizing Key Materials for Projects": {
+    "message": "Nova Página"
+  },
+  "Building a Custom Categories Set": {
+    "message": "Nova Página"
+  },
+  "Building Custom Background Maps": {
+    "message": "Nova Página"
+  },
+  "Observations & Tracks": {
+    "message": "Novo título da seção"
+  },
+  "Gathering Observations & Tracks": {
+    "message": "Coletando Observações"
+  },
+  "Creating a New Observation": {
+    "message": "Nova Página"
+  },
+  "Creating a New Track": {
+    "message": "Nova Página"
+  },
+  "Reviewing Observations": {
+    "message": "Revisando Observações"
+  },
+  "Exploring the Observations List": {
+    "message": "Nova Página"
+  },
+  "Reviewing an Observation": {
+    "message": "Nova Página"
+  },
+  "Editing Observations": {
+    "message": "Nova Página"
+  },
+  "Data Privacy & Security": {
+    "message": "Novo título da seção"
+  },
+  "Encryption and Security": {
+    "message": "Nova Página"
+  },
+  "Managing Data Privacy & Security": {
+    "message": "Gerenciamento de dados e privacidade"
+  },
+  "Using an App Passcode for Security": {
+    "message": "Nova Página"
+  },
+  "Adjusting Data Sharing and Privacy": {
+    "message": "Nova Página"
+  },
+  "Mapping with Collaborators": {
+    "message": "Nova Página"
+  },
+  "Managing Projects": {
+    "message": "Gerenciando Projetos"
+  },
+  "Understanding Projects": {
+    "message": "Nova Página"
+  },
+  "Creating a New Project": {
+    "message": "Nova Página"
+  },
+  "Changing Categories Set": {
+    "message": "Nova Página"
+  },
+  "Managing a Team": {
+    "message": "Nova Página"
+  },
+  "Inviting Collaborators": {
+    "message": "Nova Página"
+  },
+  "Ending a Project": {
+    "message": "Nova Página"
+  },
+  "Exchanging Project Data": {
+    "message": "Troca de Dados do Projeto"
+  },
+  "Understanding How Exchange Works": {
+    "message": "Nova Página A"
+  },
+  "Using Exchange Offline": {
+    "message": "Nova Página"
+  },
+  "Using a Remote Archive": {
+    "message": "Nova Página"
+  },
+  "Moving Observations & Tracks Outside of CoMapeo": {
+    "message": "Compartilhando observações fora do CoMapeo"
+  },
+  "Sharing a Single Observation and Metadata": {
+    "message": "Nova Página"
+  },
+  "Exporting all Observations": {
+    "message": "Nova Página"
+  },
+  "Using Observations outside of CoMapeo": {
+    "message": "Nova Página"
+  },
+  "Miscellaneous": {
+    "message": "Variado"
+  },
+  "FAQ": {
+    "message": "Perguntas frequentes"
+  },
+  "Glossary": {
+    "message": "Glossário"
+  },
+  "Troubleshooting": {
+    "message": "Resolução de Problemas"
+  },
+  "Common Solutions": {
+    "message": "Nova Página"
+  },
+  "Troubleshooting: Setup and Customization": {
+    "message": "Nova Página"
+  },
+  "Troubleshooting:  Observations and Tracks": {
+    "message": "Nova Página"
+  },
+  "Troubleshooting: Data Privacy and Security": {
+    "message": "Nova Página"
+  },
+  "Troubleshooting: Mapping with Collaborators": {
+    "message": "Nova Página"
+  },
+  "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
+    "message": "Nova Página"
+  },
+  "Testing links": {
+    "message": "Nova Página"
+  },
+  "Nova Página": {
+    "message": "Nova Página"
+  },
+  "Uso inicial e configurações do CoMapeo": {
+    "message": "Uso inicial e configurações do CoMapeo"
+  },
+  "Instalando o CoMapeo e Fazendo o Onboarding": {
+    "message": "Instalando o CoMapeo e Fazendo o Onboarding"
+  },
+  "Desinstalando o CoMapeo": {
+    "message": "Desinstalando o CoMapeo"
+  },
+  "Novo título da seção": {
+    "message": "Novo título da seção"
+  },
+  "Planejamento e Preparação para um Projeto": {
+    "message": "Planejamento e Preparação para um Projeto"
+  },
+  "Desinstalar CoMapeo": {
+    "message": "Desinstalar CoMapeo"
+  },
+  "Instalación de CoMapeo e incorporación": {
+    "message": "Instalación de CoMapeo e incorporación"
+  },
+  "Nueva Página": {
+    "message": "Nueva Página"
+  },
+  "Nueva Palanca": {
+    "message": "Nueva Palanca"
+  },
+  "Nuevo título de sección": {
+    "message": "Nuevo título de sección"
+  },
+  "Uso inicial y configuración de CoMapeo": {
+    "message": "Uso inicial y configuración de CoMapeo"
+  }
 }

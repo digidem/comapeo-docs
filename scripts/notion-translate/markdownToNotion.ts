@@ -645,6 +645,23 @@ function processListNode(
             } as unknown as BlockObjectRequest);
             createdListItemBlock = true;
           } else if (itemChildNode.type === "list") {
+            if (!createdListItemBlock) {
+              notionBlocks.push({
+                type: blockType,
+                [blockType]: {
+                  rich_text: [
+                    {
+                      type: "text",
+                      text: {
+                        content: " ",
+                      },
+                    },
+                  ],
+                },
+              } as unknown as BlockObjectRequest);
+              createdListItemBlock = true;
+            }
+
             processListNode(
               itemChildNode as unknown as ListNode,
               notionBlocks,

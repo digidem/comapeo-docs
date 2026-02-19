@@ -345,6 +345,42 @@ describe("calloutProcessor", () => {
       expect(result.content).toBe("Important! Keep backups before updating");
     });
 
+    it("should not strip accented letters after icon when no separator exists", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "🔔é importante",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "🔔é importante",
+            href: null,
+          },
+        ],
+        icon: {
+          type: "emoji" as const,
+          emoji: "🔔",
+        },
+        color: "yellow_background" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["🔔é importante"],
+      });
+
+      expect(result.title).toBe("🔔");
+      expect(result.content).toBe("🔔é importante");
+    });
+
     it("should preserve punctuation-prefixed terms after icon stripping", () => {
       const calloutProperties = {
         rich_text: [

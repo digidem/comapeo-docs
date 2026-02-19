@@ -553,6 +553,23 @@ title: Metadata only
   });
 
   describe("nested list support", () => {
+    it("emits empty parent list item before nested children", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `1.
+   - child`;
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      expect(blocks).toHaveLength(2);
+      expect("numbered_list_item" in blocks[0]).toBe(true);
+      expect("bulleted_list_item" in blocks[1]).toBe(true);
+
+      const parent = blocks[0] as {
+        numbered_list_item: { rich_text: Array<{ text: { content: string } }> };
+      };
+      expect(parent.numbered_list_item.rich_text[0].text.content).toBe(" ");
+    });
+
     it("preserves nested list structure", async () => {
       const { markdownToNotionBlocks } = await import("./markdownToNotion");
 

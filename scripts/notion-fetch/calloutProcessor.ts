@@ -60,9 +60,9 @@ interface ProcessCalloutOptions {
 
 const LOCALE_SPACE_CLASS = "[\\s\\u00A0\\u2007\\u202F]";
 const ICON_SEPARATOR_CLASS =
-  "[:;!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]";
+  "[:;!?¡¿\\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]";
 const TITLE_SEPARATOR_CLASS =
-  "[:!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789]";
+  "[:!?¡¿\\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789]";
 const PLAIN_TITLE_SEPARATOR_CLASS = "[:¡¿\uFF1A\uFE55\uA789]";
 
 /**

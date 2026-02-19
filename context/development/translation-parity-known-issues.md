@@ -49,6 +49,8 @@ This document tracks translation parity and markdown→Notion pipeline issues id
 27. Setext-heading detection is now restricted to paragraph-like candidates, avoiding false `h2` tokens for list-item + thematic-break patterns.
 28. Plain callout title parsing now keeps `!`/`?` as content punctuation (not title delimiters), preventing false title extraction in emphatic sentences.
 29. LESS code fences now map to Notion `less` language instead of `java/c/c++/c#`.
+30. Callout separator regex classes now escape ASCII hyphen correctly in `RegExp` constructor strings, preventing accidental Unicode range matching that could drop accented letters.
+31. Nested-list-only parent items in markdown are now emitted before child list blocks, preserving source list semantics in Notion block order.
 
 ## Verification Commands
 

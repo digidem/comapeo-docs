@@ -20,6 +20,34 @@ The following critical P0 issues were fixed and verified:
 
 ## Known Issues (Deferred)
 
+## Implementation Audit (Post-fix Review)
+
+This section reflects the current implementation status after the latest parity and callout fixes landed.
+
+### Resolved in implementation ✅
+
+- **#1 Setext-style headings not detected** → Fixed in tokenizer (`h1`/`h2` setext detection).
+- **#2 Nested list detection missing in harness** → Fixed via list-depth-aware list tokens (`ul:<depth>`, `ol:<depth>`).
+- **#3 Indented code blocks not detected** → Fixed with explicit indented code tokenization (`code-indented`).
+- **#5 Media removal patterns incomplete** → Partially fixed (reference-style image syntax covered).
+- **#6 Table alignment markers treated as rows** → Fixed by filtering alignment rows from table content tokens.
+- **#7 Locale-sensitive sorting** → Fixed via explicit `localeCompare(..., "en")`.
+- **#15 Structure parity false positives** → Improved with `LOCALE_PARITY_STRICTNESS=relaxed` mode (strict remains default).
+- **#18 Icon stripping without separator can remove intentional content** → Fixed with conservative fallback stripping behavior and regression test (`👁️is`).
+- **#19 Frontmatter regex in parity harness is not CRLF-safe** → Fixed with `\r?\n` frontmatter matching.
+
+### Still open / partially addressed ⚠️
+
+- **#4 Admonition content detection incomplete** → Partially improved (admonition boundaries are tokenized), but the harness still does not compare admonition blocks as first-class scoped units with dedicated diagnostics.
+- **#5 Media removal patterns incomplete** → Multi-line/complex HTML media variants remain limited and should be hardened further if false positives appear.
+- **#8 / #9 / #12 / #14 / #16 / #17** → Not addressed in this implementation pass (still valid follow-up work).
+
+### Additional issues noticed during review
+
+1. **Single-line table regex safety waiver**: We currently rely on an ESLint security suppression for the table-alignment regex. This is acceptable given bounded line input but should be replaced with a parser-safe helper if policy tightens.
+2. **Strictness mode discoverability**: `LOCALE_PARITY_STRICTNESS` is env-driven but not documented in workflow docs yet; this can create confusion in CI/editorial usage.
+3. **Admonition mismatch diagnostics**: Parity failures still surface as generic `structure-mismatch` without token diff context, which slows down debugging for translators.
+
 ## Relevance Verification and Merge-Readiness Plan
 
 Reviewed against current implementation to identify what is still relevant for a "perfect" translation parity PR. Decisions below bias toward fixing even minor correctness and determinism gaps.

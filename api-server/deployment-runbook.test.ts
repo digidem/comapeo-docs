@@ -129,7 +129,6 @@ describe("API Service Deployment Runbook", () => {
     });
 
     it("should list required GitHub secrets", () => {
-      expect(content).toContain("API_ENDPOINT");
       expect(content).toContain("API_KEY_GITHUB_ACTIONS");
       expect(content).toContain("NOTION_API_KEY");
       expect(content).toContain("OPENAI_API_KEY");
@@ -158,16 +157,14 @@ describe("API Service Deployment Runbook", () => {
       expect(content).toContain("## Step 5.2: Available GitHub Workflows");
     });
 
-    it("should document Notion Fetch via API workflow with job types", () => {
-      expect(content).toContain("Notion Fetch via API");
-      expect(content).toContain("api-notion-fetch.yml");
-      expect(content).toContain("notion:fetch-all");
-      expect(content).toContain("notion:fetch");
-      expect(content).toContain("notion:translate");
-      expect(content).toContain("notion:status-translation");
-      expect(content).toContain("notion:status-draft");
-      expect(content).toContain("notion:status-publish");
-      expect(content).toContain("notion:status-publish-production");
+    it("should document API Validate workflow and API-native fetch runtime", () => {
+      expect(content).toContain("API Validate");
+      expect(content).toContain("api-validate.yml");
+      expect(content).toContain("fetch-ready");
+      expect(content).toContain("fetch-all");
+      expect(content).toContain("Branch safety");
+      expect(content).toContain("Status safety");
+      expect(content).toContain("Known limitation");
     });
 
     it("should document Sync Notion Docs workflow", () => {
@@ -205,7 +202,7 @@ describe("API Service Deployment Runbook", () => {
     });
 
     it("should explain how to trigger the workflow", () => {
-      expect(content).toContain("Test GitHub Workflow");
+      expect(content).toContain("Validate CI + Run VPS Smoke");
       expect(content).toContain("Run workflow");
     });
 
@@ -220,7 +217,7 @@ describe("API Service Deployment Runbook", () => {
       expect(content).toMatch(/\*\*Common Issues:\*\*/);
       expect(content).toMatch(/CLOUDFLARE.*will cause deployment failures/);
       expect(content).toMatch(/SLACK_WEBHOOK_URL.*notification failures/);
-      expect(content).toMatch(/API_ENDPOINT.*prevent workflow communication/);
+      expect(content).toMatch(/API_KEY_GITHUB_ACTIONS.*401/);
     });
   });
 
@@ -245,7 +242,6 @@ describe("API Service Deployment Runbook", () => {
 
     it("should include GitHub secrets verification in checklist", () => {
       expect(content).toContain("All required GitHub secrets are configured");
-      expect(content).toContain("API_ENDPOINT");
       expect(content).toContain("API_KEY_GITHUB_ACTIONS");
       expect(content).toContain("NOTION_API_KEY");
       expect(content).toContain("DATABASE_ID");

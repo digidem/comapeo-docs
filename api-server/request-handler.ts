@@ -7,6 +7,7 @@ import { getCorsHeaders } from "./middleware/cors";
 import {
   ErrorCode,
   generateRequestId,
+  createPreJobErrorEnvelope,
   createErrorResponse,
   type ErrorResponse,
 } from "./response-schemas";
@@ -53,6 +54,20 @@ export async function handleRequest(req: Request): Promise<Response> {
         req,
         authResult as { success: false; error?: string }
       );
+      if (path === "/jobs" && req.method === "POST") {
+        const envelope = createPreJobErrorEnvelope(
+          "UNAUTHORIZED",
+          authResult.error || "Authentication failed"
+        );
+        return new Response(JSON.stringify(envelope, null, 2), {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+            ...getCorsHeaders(requestOrigin),
+            "X-Request-ID": requestId,
+          },
+        });
+      }
       const error: ErrorResponse = createErrorResponse(
         ErrorCode.UNAUTHORIZED,
         authResult.error || "Authentication failed",

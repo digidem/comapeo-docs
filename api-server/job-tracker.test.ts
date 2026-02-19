@@ -9,6 +9,7 @@ import {
   type JobType,
   type JobStatus,
 } from "./job-tracker";
+import { waitForPendingWrites } from "./job-persistence";
 import { setupTestEnvironment } from "./test-helpers";
 
 // Run tests sequentially to avoid file system race conditions
@@ -231,7 +232,7 @@ describe("JobTracker", () => {
   });
 
   describe("cleanupOldJobs", () => {
-    it("should persist jobs across tracker instances", () => {
+    it("should persist jobs across tracker instances", async () => {
       const tracker = getJobTracker();
       const jobId1 = tracker.createJob("notion:fetch");
       const jobId2 = tracker.createJob("notion:fetch-all");
@@ -239,6 +240,7 @@ describe("JobTracker", () => {
       // Mark jobs as completed
       tracker.updateJobStatus(jobId1, "completed", { success: true });
       tracker.updateJobStatus(jobId2, "completed", { success: true });
+      await waitForPendingWrites(2000);
 
       // Destroy and create a new tracker instance
       destroyJobTracker();

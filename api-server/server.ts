@@ -6,6 +6,8 @@ import { serve } from "bun";
 import { getAuth } from "./auth";
 import { getAudit } from "./audit";
 import { handleRequest } from "./request-handler";
+import { resetFetchJobLock } from "./fetch-job-lock";
+import { isContentRepoWorkingTreeDirty } from "./content-repo";
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";
@@ -23,6 +25,9 @@ const server = serve({
 
 // Get the actual port (needed for tests where port is 0)
 const actualPort = isTestMode ? (server as { port?: number }).port : PORT;
+
+// Clear in-memory fetch lock state on startup.
+resetFetchJobLock();
 
 // Log startup information (skip in test mode)
 if (!isTestMode) {
@@ -73,7 +78,7 @@ if (!isTestMode) {
     console.log(`    ${authExample}`);
   }
   console.log("    -H 'Content-Type: application/json' \\");
-  console.log('    -d \'{"type": "notion:fetch-all"}\'');
+  console.log('    -d \'{"type": "fetch-all"}\'');
 
   console.log("\nExample: Cancel a job");
   console.log(`  curl -X DELETE http://${HOST}:${PORT}/jobs/{jobId} \\`);
@@ -86,6 +91,22 @@ if (!isTestMode) {
   if (authExample) {
     console.log(`    -H "${authExample.replace(" \\", "")}"`);
   }
+
+  void (async () => {
+    try {
+      const dirty = await isContentRepoWorkingTreeDirty();
+      if (dirty) {
+        console.warn(
+          "⚠️  Content repo working tree is dirty at startup. Use force=true for the next fetch job if cleanup is expected."
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `⚠️  Unable to inspect content repo working tree at startup: ${message}`
+      );
+    }
+  })();
 }
 
 // Handle graceful shutdown (only in non-test mode)

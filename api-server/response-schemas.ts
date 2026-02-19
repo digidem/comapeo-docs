@@ -44,6 +44,52 @@ export enum ErrorCode {
   JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED",
 }
 
+export type PreJobErrorCode =
+  | "UNAUTHORIZED"
+  | "INVALID_REQUEST"
+  | "CONFLICT"
+  | "UNKNOWN";
+
+export type FetchJobErrorCode =
+  | "DIRTY_WORKING_TREE"
+  | "MERGE_CONFLICT"
+  | "PUSH_FAILED"
+  | "NOTION_QUERY_FAILED"
+  | "CONTENT_GENERATION_FAILED"
+  | "NOTION_STATUS_PARTIAL"
+  | "BRANCH_MISSING"
+  | "JOB_TIMEOUT"
+  | "UNKNOWN";
+
+export interface PreJobErrorEnvelope {
+  status: "failed";
+  error: {
+    code: PreJobErrorCode;
+    message: string;
+  };
+}
+
+export interface FetchJobWarning {
+  type: string;
+  pageId?: string;
+  message: string;
+}
+
+export interface FetchJobError {
+  code: FetchJobErrorCode;
+  message: string;
+}
+
+export function createPreJobErrorEnvelope(
+  code: PreJobErrorCode,
+  message: string
+): PreJobErrorEnvelope {
+  return {
+    status: "failed",
+    error: { code, message },
+  };
+}
+
 /**
  * Standard error response structure
  */

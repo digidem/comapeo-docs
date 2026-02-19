@@ -69,6 +69,11 @@ export const jobIdSchema = z
  * - Derived from JOB_COMMANDS keys (single source of truth)
  */
 export const jobTypeSchema = z.enum(VALID_JOB_TYPES as [string, ...string[]]);
+export const createJobFetchTypeSchema = z.enum(["fetch-ready", "fetch-all"]);
+export const createJobTypeSchema = z.union([
+  jobTypeSchema,
+  createJobFetchTypeSchema,
+]);
 
 /**
  * Job status validation schema
@@ -92,14 +97,14 @@ export const jobOptionsSchema = z
     maxPages: z
       .number()
       .int("maxPages must be an integer")
-      .positive("maxPages must be greater than 0")
+      .min(0, "maxPages must be greater than or equal to 0")
       .optional(),
     statusFilter: z.string().min(1, "statusFilter cannot be empty").optional(),
     force: z.boolean().optional(),
     dryRun: z.boolean().optional(),
     includeRemoved: z.boolean().optional(),
   })
-  .strict();
+  .strip();
 
 /**
  * Request body validation schema for POST /jobs
@@ -107,7 +112,7 @@ export const jobOptionsSchema = z
  * - options is optional and must match jobOptionsSchema
  */
 export const createJobRequestSchema = z.object({
-  type: jobTypeSchema,
+  type: createJobTypeSchema,
   options: jobOptionsSchema.optional(),
 });
 
@@ -122,7 +127,7 @@ export const createJobRequestSchema = z.object({
  */
 export const jobsQuerySchema = z.object({
   status: jobStatusSchema.optional(),
-  type: jobTypeSchema.optional(),
+  type: createJobTypeSchema.optional(),
 });
 
 // =============================================================================
@@ -153,7 +158,7 @@ export const jobResultSchema = z.object({
  */
 export const jobSchema = z.object({
   id: z.string(),
-  type: jobTypeSchema,
+  type: createJobTypeSchema,
   status: jobStatusSchema,
   createdAt: z.string().datetime(),
   startedAt: z.string().datetime().nullable(),
@@ -175,13 +180,7 @@ export const jobsListResponseSchema = z.object({
  */
 export const createJobResponseSchema = z.object({
   jobId: z.string(),
-  type: jobTypeSchema,
   status: z.literal("pending"),
-  message: z.string(),
-  _links: z.object({
-    self: z.string(),
-    status: z.string(),
-  }),
 });
 
 /**
@@ -232,6 +231,7 @@ export const healthAuthInfoSchema = z.object({
  */
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
+  version: z.string(),
   timestamp: z.string().datetime(),
   uptime: z.number(),
   auth: healthAuthInfoSchema.optional(),

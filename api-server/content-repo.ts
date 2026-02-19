@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import {
   chmod,
+  cp,
   mkdir,
   open,
   readdir,
@@ -19,6 +20,15 @@ const DEFAULT_ALLOW_EMPTY_COMMITS = false;
 const LOCK_RETRY_MS = 200;
 const MAX_LOCK_WAIT_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_LOCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+const GENERATED_PATH_SPECS = ["docs/", "i18n/", "static/images/"] as const;
+
+type ContentRepoErrorCode =
+  | "DIRTY_WORKING_TREE"
+  | "MERGE_CONFLICT"
+  | "PUSH_FAILED"
+  | "CONTENT_GENERATION_FAILED"
+  | "BRANCH_MISSING"
+  | "JOB_TIMEOUT";
 
 export interface ContentRepoConfig {
   repoUrl: string;
@@ -36,10 +46,11 @@ interface CommandResult {
   stderr: string;
 }
 
-class ContentRepoError extends Error {
+export class ContentRepoError extends Error {
   constructor(
     message: string,
-    readonly details?: string
+    readonly details?: string,
+    readonly code?: ContentRepoErrorCode
   ) {
     super(message);
     this.name = "ContentRepoError";
@@ -198,6 +209,379 @@ async function pathExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function isContentRepoWorkingTreeDirty(): Promise<boolean> {
+  const config = getConfig();
+  const gitDir = resolve(config.workdir, ".git");
+  if (!(await pathExists(gitDir))) {
+    return false;
+  }
+
+  const status = await runGit(["status", "--porcelain"], {
+    cwd: config.workdir,
+    errorPrefix: "Failed to inspect repository status",
+  });
+
+  return status.stdout.trim().length > 0;
+}
+
+function isGitExitCode(error: unknown, code: number): boolean {
+  if (!(error instanceof ContentRepoError)) {
+    return false;
+  }
+  return error.message.includes(`exit code ${code}`);
+}
+
+async function restoreAndCleanGeneratedPaths(workdir: string): Promise<void> {
+  try {
+    await runGit(
+      [
+        "restore",
+        "--source=HEAD",
+        "--staged",
+        "--worktree",
+        ...GENERATED_PATH_SPECS,
+      ],
+      {
+        cwd: workdir,
+        errorPrefix: "Failed to restore generated paths",
+      }
+    );
+  } catch {
+    // Best effort to restore tracked generated files.
+  }
+
+  try {
+    await runGit(["clean", "-fd", ...GENERATED_PATH_SPECS], {
+      cwd: workdir,
+      errorPrefix: "Failed to clean generated paths",
+    });
+  } catch {
+    // Best effort to clean untracked generated files.
+  }
+}
+
+async function ensureRemoteContentBranchExists(workdir: string): Promise<void> {
+  try {
+    await runGit(["rev-parse", "--verify", "refs/remotes/origin/content"], {
+      cwd: workdir,
+      errorPrefix: "origin/content branch not found",
+    });
+  } catch {
+    throw new ContentRepoError(
+      "origin/content branch does not exist. Bootstrap it manually: `git push origin main:content`",
+      undefined,
+      "BRANCH_MISSING"
+    );
+  }
+}
+
+async function deleteGeneratedPathsForFullSync(workdir: string): Promise<void> {
+  await rm(resolve(workdir, "docs"), { recursive: true, force: true });
+  await rm(resolve(workdir, "static", "images"), {
+    recursive: true,
+    force: true,
+  });
+
+  const i18nRoot = resolve(workdir, "i18n");
+  if (!(await pathExists(i18nRoot))) {
+    return;
+  }
+
+  const locales = await readdir(i18nRoot);
+  await Promise.all(
+    locales.map(async (locale) => {
+      await rm(resolve(i18nRoot, locale, "docusaurus-plugin-content-docs"), {
+        recursive: true,
+        force: true,
+      });
+    })
+  );
+}
+
+export async function assertCleanWorkingTree(force: boolean): Promise<void> {
+  await initializeContentRepo();
+  const config = getConfig();
+  const status = await runGit(["status", "--porcelain"], {
+    cwd: config.workdir,
+    errorPrefix: "Failed to inspect repository status",
+  });
+  if (!status.stdout.trim()) {
+    return;
+  }
+
+  if (!force) {
+    throw new ContentRepoError(
+      "Working tree is dirty. Re-run with force=true to clean generated paths only.",
+      status.stdout.trim(),
+      "DIRTY_WORKING_TREE"
+    );
+  }
+
+  await restoreAndCleanGeneratedPaths(config.workdir);
+}
+
+export async function prepareContentBranchForFetch(
+  mode: "fetch-ready" | "fetch-all"
+): Promise<{
+  remoteRef: string;
+}> {
+  await initializeContentRepo();
+  const config = getConfig();
+
+  await runGit(["fetch", "origin", "main", "content"], {
+    cwd: config.workdir,
+    auth: true,
+    errorPrefix: "Failed to fetch main/content branches",
+  });
+  await ensureRemoteContentBranchExists(config.workdir);
+
+  await runGit(
+    ["checkout", "-B", config.contentBranch, `origin/${config.contentBranch}`],
+    {
+      cwd: config.workdir,
+      errorPrefix: "Failed to checkout content branch",
+    }
+  );
+
+  const remoteRef = (
+    await runGit(["rev-parse", `origin/${config.contentBranch}`], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to resolve origin/content ref",
+    })
+  ).stdout.trim();
+
+  if (mode === "fetch-all") {
+    await deleteGeneratedPathsForFullSync(config.workdir);
+  }
+
+  try {
+    await runGit(["merge", "origin/main"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to merge origin/main into content",
+    });
+  } catch (error) {
+    try {
+      await runGit(["merge", "--abort"], {
+        cwd: config.workdir,
+        errorPrefix: "Failed to abort merge",
+      });
+    } catch {
+      // no-op
+    }
+    await runGit(
+      [
+        "checkout",
+        "-B",
+        config.contentBranch,
+        `origin/${config.contentBranch}`,
+      ],
+      {
+        cwd: config.workdir,
+        errorPrefix: "Failed to reset content branch after merge conflict",
+      }
+    );
+    throw new ContentRepoError(
+      "Merge conflict while merging origin/main into content",
+      error instanceof Error ? error.message : String(error),
+      "MERGE_CONFLICT"
+    );
+  }
+
+  return { remoteRef };
+}
+
+export async function copyGeneratedContentFromTemp(
+  tempDir: string
+): Promise<void> {
+  const config = getConfig();
+  const targets = [
+    {
+      source: resolve(tempDir, "docs"),
+      destination: resolve(config.workdir, "docs"),
+    },
+    {
+      source: resolve(tempDir, "i18n"),
+      destination: resolve(config.workdir, "i18n"),
+    },
+    {
+      source: resolve(tempDir, "static", "images"),
+      destination: resolve(config.workdir, "static", "images"),
+    },
+  ];
+
+  try {
+    for (const target of targets) {
+      if (!(await pathExists(target.source))) {
+        continue;
+      }
+      await mkdir(dirname(target.destination), { recursive: true });
+      await cp(target.source, target.destination, {
+        recursive: true,
+        force: true,
+      });
+    }
+  } catch (error) {
+    await restoreAndCleanGeneratedPaths(config.workdir);
+    throw new ContentRepoError(
+      "Failed to copy generated content into repository",
+      error instanceof Error ? error.message : String(error),
+      "CONTENT_GENERATION_FAILED"
+    );
+  }
+}
+
+export async function stageGeneratedPaths(): Promise<void> {
+  const config = getConfig();
+  await runGit(["add", ...GENERATED_PATH_SPECS], {
+    cwd: config.workdir,
+    errorPrefix: "Failed to stage generated paths",
+  });
+}
+
+export async function hasStagedGeneratedChanges(): Promise<boolean> {
+  const config = getConfig();
+  try {
+    await runGit(["diff", "--cached", "--quiet"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to inspect staged changes",
+    });
+    return false;
+  } catch (error) {
+    if (isGitExitCode(error, 1)) {
+      return true;
+    }
+    throw error;
+  }
+}
+
+export async function hasHeadAdvancedSince(
+  remoteRef: string
+): Promise<boolean> {
+  const config = getConfig();
+  const head = (
+    await runGit(["rev-parse", "HEAD"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to resolve HEAD",
+    })
+  ).stdout.trim();
+  return head !== remoteRef;
+}
+
+export async function commitGeneratedChanges(message: string): Promise<string> {
+  const config = getConfig();
+  await runGit(["commit", "-m", message], {
+    cwd: config.workdir,
+    errorPrefix: "Failed to commit generated content",
+  });
+  return await getHeadCommitHash();
+}
+
+export async function getHeadCommitHash(): Promise<string> {
+  const config = getConfig();
+  return (
+    await runGit(["rev-parse", "HEAD"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to resolve HEAD commit hash",
+    })
+  ).stdout.trim();
+}
+
+export async function resetToRemoteContentBranch(): Promise<void> {
+  const config = getConfig();
+  await runGit(
+    ["checkout", "-B", config.contentBranch, `origin/${config.contentBranch}`],
+    {
+      cwd: config.workdir,
+      errorPrefix: "Failed to reset local content branch",
+    }
+  );
+  await restoreAndCleanGeneratedPaths(config.workdir);
+}
+
+export async function pushContentBranchWithRetry(): Promise<string> {
+  const config = getConfig();
+
+  const pushOnce = async () => {
+    await runGit(["push", "origin", config.contentBranch], {
+      cwd: config.workdir,
+      auth: true,
+      errorPrefix: "Failed to push content branch",
+    });
+  };
+
+  try {
+    await pushOnce();
+    return await getHeadCommitHash();
+  } catch (pushError) {
+    try {
+      await runGit(["fetch", "origin", "content"], {
+        cwd: config.workdir,
+        auth: true,
+        errorPrefix: "Failed to fetch origin/content before push retry",
+      });
+      await runGit(["merge", "origin/content"], {
+        cwd: config.workdir,
+        errorPrefix: "Failed to merge origin/content before push retry",
+      });
+    } catch (mergeError) {
+      try {
+        await runGit(["merge", "--abort"], {
+          cwd: config.workdir,
+          errorPrefix: "Failed to abort retry merge",
+        });
+      } catch {
+        // no-op
+      }
+      await resetToRemoteContentBranch();
+      throw new ContentRepoError(
+        "Push failed and retry merge failed",
+        mergeError instanceof Error ? mergeError.message : String(mergeError),
+        "PUSH_FAILED"
+      );
+    }
+
+    try {
+      await pushOnce();
+      return await getHeadCommitHash();
+    } catch (retryPushError) {
+      await resetToRemoteContentBranch();
+      throw new ContentRepoError(
+        "Push failed after retry",
+        retryPushError instanceof Error
+          ? retryPushError.message
+          : String(retryPushError),
+        "PUSH_FAILED"
+      );
+    }
+  }
+}
+
+export async function verifyRemoteHeadMatchesLocal(): Promise<void> {
+  const config = getConfig();
+  await runGit(["fetch", "origin", "content"], {
+    cwd: config.workdir,
+    auth: true,
+    errorPrefix: "Failed to fetch origin/content for remote-head verification",
+  });
+
+  const remoteHead = (
+    await runGit(["rev-parse", "origin/content"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to resolve origin/content head",
+    })
+  ).stdout.trim();
+  const localHead = await getHeadCommitHash();
+
+  if (remoteHead !== localHead) {
+    await resetToRemoteContentBranch();
+    throw new ContentRepoError(
+      "origin/content changed before status transition",
+      `origin/content=${remoteHead}, local=${localHead}`,
+      "PUSH_FAILED"
+    );
   }
 }
 
@@ -466,6 +850,8 @@ export async function runContentTask(
 
 export function isContentMutatingJob(jobType: string): boolean {
   return (
+    jobType === "fetch-ready" ||
+    jobType === "fetch-all" ||
     jobType === "notion:fetch" ||
     jobType === "notion:fetch-all" ||
     jobType === "notion:translate"

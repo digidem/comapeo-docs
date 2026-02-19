@@ -6,10 +6,12 @@ import { executeJobAsync } from "../job-executor";
 import { ValidationError as BaseValidationError } from "../../scripts/shared/errors";
 import {
   ErrorCode,
+  createPreJobErrorEnvelope,
   createErrorResponse,
   createApiResponse,
   type ErrorResponse,
   type ApiResponse,
+  type FetchJobWarning,
 } from "../response-schemas";
 import { MAX_REQUEST_SIZE, isValidJobId } from "../validation";
 import {
@@ -19,6 +21,7 @@ import {
 } from "../validation-schemas";
 import type { JobType } from "../job-tracker";
 import { getCorsHeaders } from "../middleware/cors";
+import { isFetchJobLockHeld, tryAcquireFetchJobLock } from "../fetch-job-lock";
 
 // Validation errors - extend the base ValidationError for compatibility
 class ValidationError extends BaseValidationError {
@@ -98,6 +101,22 @@ function validationErrorResponse(
   });
 }
 
+function preJobErrorResponse(
+  code: "UNAUTHORIZED" | "INVALID_REQUEST" | "CONFLICT" | "UNKNOWN",
+  message: string,
+  status: number,
+  requestOrigin: string | null = null
+): Response {
+  const payload = createPreJobErrorEnvelope(code, message);
+  return new Response(JSON.stringify(payload, null, 2), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...getCorsHeaders(requestOrigin),
+    },
+  });
+}
+
 // Standard error response
 function errorResponse(
   code: ErrorCode,
@@ -143,6 +162,24 @@ function successResponse<T>(
       ...getCorsHeaders(requestOrigin),
     },
   });
+}
+
+function plainJsonResponse(
+  data: unknown,
+  status: number,
+  requestOrigin: string | null = null
+): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...getCorsHeaders(requestOrigin),
+    },
+  });
+}
+
+function isFetchJobType(type: JobType): type is "fetch-ready" | "fetch-all" {
+  return type === "fetch-ready" || type === "fetch-all";
 }
 
 /**
@@ -225,19 +262,17 @@ export async function handleCreateJob(
     body = await parseJsonBody<unknown>(req);
   } catch (error) {
     if (error instanceof ValidationError) {
-      return validationErrorResponse(
+      return preJobErrorResponse(
+        "INVALID_REQUEST",
         error.message,
-        requestId,
-        undefined,
+        400,
         requestOrigin
       );
     }
-    return errorResponse(
-      ErrorCode.INTERNAL_ERROR,
+    return preJobErrorResponse(
+      "UNKNOWN",
       "Failed to parse request body",
       500,
-      requestId,
-      undefined,
       requestOrigin
     );
   }
@@ -247,12 +282,10 @@ export async function handleCreateJob(
   // case here to preserve the MISSING_REQUIRED_FIELD error code contract.
   const bodyObj = body as Record<string, unknown>;
   if (bodyObj.type === undefined || typeof bodyObj.type !== "string") {
-    return errorResponse(
-      ErrorCode.MISSING_REQUIRED_FIELD,
+    return preJobErrorResponse(
+      "INVALID_REQUEST",
       "Missing required field: type",
       400,
-      requestId,
-      undefined,
       requestOrigin
     );
   }
@@ -262,12 +295,10 @@ export async function handleCreateJob(
 
   if (!bodyValidation.success) {
     const zodError = formatZodError(bodyValidation.error, requestId);
-    return errorResponse(
-      zodError.code,
+    return preJobErrorResponse(
+      "INVALID_REQUEST",
       zodError.message,
       400,
-      requestId,
-      zodError.details,
       requestOrigin
     );
   }
@@ -277,24 +308,37 @@ export async function handleCreateJob(
   const type = typeString as JobType;
 
   const tracker = getJobTracker();
+  const isFetch = isFetchJobType(type);
+
+  if (isFetch && isFetchJobLockHeld()) {
+    return preJobErrorResponse(
+      "CONFLICT",
+      "Another fetch job is already running",
+      409,
+      requestOrigin
+    );
+  }
+
   const jobId = tracker.createJob(type);
+  if (isFetch && !tryAcquireFetchJobLock(jobId)) {
+    tracker.deleteJob(jobId);
+    return preJobErrorResponse(
+      "CONFLICT",
+      "Another fetch job is already running",
+      409,
+      requestOrigin
+    );
+  }
 
   // Execute job asynchronously
   executeJobAsync(type, jobId, options || {});
 
-  return successResponse(
+  return plainJsonResponse(
     {
       jobId,
-      type,
       status: "pending",
-      message: "Job created successfully",
-      _links: {
-        self: `/jobs/${jobId}`,
-        status: `/jobs/${jobId}`,
-      },
     },
-    requestId,
-    201,
+    202,
     requestOrigin
   );
 }
@@ -334,6 +378,47 @@ export async function handleGetJob(
       { jobId },
       requestOrigin
     );
+  }
+
+  if (isFetchJobType(job.type)) {
+    if (job.status !== "completed" && job.status !== "failed") {
+      return plainJsonResponse(
+        {
+          jobId: job.id,
+          status: job.status,
+        },
+        200,
+        requestOrigin
+      );
+    }
+
+    const terminal = job.terminal ?? {};
+    const response: Record<string, unknown> = {
+      jobId: job.id,
+      status: job.status,
+      pagesProcessed: terminal.pagesProcessed ?? 0,
+      pagesSkipped: terminal.pagesSkipped ?? 0,
+      commitHash: terminal.commitHash ?? null,
+    };
+
+    if (job.type === "fetch-ready") {
+      response.pagesTransitioned = terminal.pagesTransitioned ?? 0;
+      response.failedPageIds = terminal.failedPageIds ?? [];
+      response.warnings = (terminal.warnings ?? []) as FetchJobWarning[];
+    }
+
+    if (terminal.dryRun) {
+      response.dryRun = true;
+    }
+
+    if (job.status === "failed") {
+      response.error = terminal.error ?? {
+        code: "UNKNOWN",
+        message: job.result?.error ?? "Fetch job failed",
+      };
+    }
+
+    return plainJsonResponse(response, 200, requestOrigin);
   }
 
   return successResponse(

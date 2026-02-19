@@ -248,6 +248,49 @@ const isTableAlignmentRow = (line: string): boolean => {
   return /^\|?:?-{3,}:?(?:\|:?-{3,}:?)+\|?$/u.test(compact);
 };
 
+const isListItemLine = (rawLine: string): boolean =>
+  /^\s*(?:[-*+]\s+|\d+\.\s+)/u.test(rawLine);
+
+const isSetextHeadingCandidate = (rawLine: string, line: string): boolean => {
+  if (!line) {
+    return false;
+  }
+
+  if (/^\s{0,3}(?:`{3,}|~{3,})/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^\s{0,3}#{1,6}\s+/u.test(rawLine)) {
+    return false;
+  }
+
+  if (isListItemLine(rawLine)) {
+    return false;
+  }
+
+  if (/^\s*>\s*/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^\s*:::/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^(?:---|\*\*\*|___)$/u.test(line)) {
+    return false;
+  }
+
+  if (/^\|.*\|$/u.test(line)) {
+    return false;
+  }
+
+  if (/^<[^>]+>$/u.test(line)) {
+    return false;
+  }
+
+  return true;
+};
+
 const getListDepth = (rawLine: string): number => {
   const expanded = rawLine.replace(/\t/gu, "    ");
   const indent = expanded.match(/^\s*/u)?.[0].length ?? 0;
@@ -301,8 +344,7 @@ const tokenizeStructure = (markdown: string): string[] => {
     }
 
     const isIndentedCodeLine =
-      /^(?: {4,}|\t)/u.test(rawLine) &&
-      !/^\s{0,3}(?:[-*+]\s+|\d+\.\s+)/u.test(rawLine);
+      /^(?: {4,}|\t)/u.test(rawLine) && !isListItemLine(rawLine);
 
     if (isIndentedCodeLine) {
       if (!inIndentedCode) {
@@ -318,14 +360,14 @@ const tokenizeStructure = (markdown: string): string[] => {
     }
 
     const nextLine = lines[i + 1]?.trim() ?? "";
-    if (line && /^=+$/u.test(nextLine)) {
+    if (isSetextHeadingCandidate(rawLine, line) && /^=+$/u.test(nextLine)) {
       pushToken("h1");
       inParagraph = false;
       i += 1;
       continue;
     }
 
-    if (line && /^-+$/u.test(nextLine)) {
+    if (isSetextHeadingCandidate(rawLine, line) && /^-+$/u.test(nextLine)) {
       pushToken("h2");
       inParagraph = false;
       i += 1;
@@ -1009,6 +1051,57 @@ custom: translated
           locale: "pt",
           type: "frontmatter-mismatch",
         });
+      });
+    });
+  });
+
+  it("does not classify deeply indented list items as indented code", () => {
+    const tokens = tokenizeStructure(`
+- Parent
+    - Deep unordered child
+    1. Deep ordered child
+`);
+
+    expect(tokens).toContain("ul:0");
+    expect(tokens).toContain("ul:2");
+    expect(tokens).toContain("ol:2");
+    expect(tokens).not.toContain("code-indented");
+  });
+
+  it("does not treat list plus thematic break as setext heading", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/list-hr-vs-heading.md", {
+        en: withFrontmatter(
+          "doc-list-hr-vs-heading",
+          "List and HR",
+          `
+- Item
+---
+`
+        ),
+        pt: withFrontmatter(
+          "doc-list-hr-vs-heading-pt",
+          "Lista e linha",
+          `
+Título
+---
+`
+        ),
+        es: withFrontmatter(
+          "doc-list-hr-vs-heading-es",
+          "Lista y línea",
+          `
+- Elemento
+---
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toContainEqual({
+        key: "guides/list-hr-vs-heading.md",
+        locale: "pt",
+        type: "structure-mismatch",
       });
     });
   });

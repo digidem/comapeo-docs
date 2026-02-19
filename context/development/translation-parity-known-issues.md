@@ -45,6 +45,8 @@ This document tracks translation parity and markdown→Notion pipeline issues id
 23. `markdownToNotion` language alias mapping corrected to avoid unsupported Notion language literals (e.g., TOML falls back to `plain text`).
 24. `verify-locale-output` tests now parse typed translation entries to avoid `unknown` property access type errors.
 25. Test environment bootstrap now includes `OPENAI_API_KEY` and `DATA_SOURCE_ID` to keep `notion-translate/index.test.ts` aligned with runtime environment validation.
+26. Indented-code detection now excludes deeply-indented list markers, preventing nested list items from being mis-tokenized as `code-indented`.
+27. Setext-heading detection is now restricted to paragraph-like candidates, avoiding false `h2` tokens for list-item + thematic-break patterns.
 
 ## Verification Commands
 

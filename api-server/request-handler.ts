@@ -29,8 +29,9 @@ export async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    // Check if endpoint is public
-    const isPublic = isPublicEndpoint(path);
+    // Check if endpoint is public or CORS preflight (OPTIONS)
+    // CORS preflight requests must skip auth since browsers don't send credentials
+    const isPublic = isPublicEndpoint(path) || req.method === "OPTIONS";
 
     // Authenticate request (only for protected endpoints)
     const authHeader = req.headers.get("authorization");

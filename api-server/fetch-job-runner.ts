@@ -354,15 +354,20 @@ export async function runFetchJob({
     });
 
     throwIfAborted(signal, timeoutMs);
-    const pages = normalizePages(fetchResult.pages, options.maxPages);
+
+    // Capture transition candidates BEFORE any child replacement or maxPages slicing.
+    // The fetch-ready flow may replace parent pages with their children, but we need
+    // to transition the original "Ready to publish" pages to "Draft published".
     const transitionCandidates =
       type === "fetch-ready"
-        ? pages
+        ? fetchResult.pages
             .filter(
               (page) => page.status === NOTION_PROPERTIES.READY_TO_PUBLISH
             )
             .map((page) => page.id)
         : [];
+
+    const pages = normalizePages(fetchResult.pages, options.maxPages);
     terminal.pagesProcessed = pages.length;
 
     if (pages.length === 0) {

@@ -488,6 +488,7 @@ type NotionCodeLanguage =
  * @returns The markdown content without front-matter
  */
 export function removeFrontMatter(content: string): string {
+  if (typeof content !== "string") return "";
   // Check if content starts with front-matter (---)
   const frontMatterRegex = /^---\n[\s\S]*?\n---\n/m;
   return content.replace(frontMatterRegex, "");
@@ -561,6 +562,12 @@ export async function createNotionPageFromMarkdown(
       let markdownContent = isContent
         ? markdownPath
         : await fs.readFile(markdownPath, "utf8");
+
+      if (typeof markdownContent !== "string") {
+        throw new Error(
+          `Invalid content for page "${title}": expected string, got ${typeof markdownContent}`
+        );
+      }
 
       // Remove front-matter if present
       markdownContent = removeFrontMatter(markdownContent);

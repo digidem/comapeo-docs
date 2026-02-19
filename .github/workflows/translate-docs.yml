@@ -29,6 +29,12 @@ jobs:
         with:
           ref: ${{ env.TARGET_BRANCH }}
 
+      - name: Apply latest scripts from main
+        run: |
+          git fetch origin main --depth=1
+          git checkout origin/main -- scripts/ package.json
+          git restore --staged scripts/ package.json
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
 

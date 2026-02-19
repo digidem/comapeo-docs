@@ -66,30 +66,6 @@ export async function translateJson(
     targetLanguage
   );
 
-  // JSON schema for code.json translation
-  // Requires both "message" and "description" fields (standard Docusaurus i18n format)
-  // Structure:
-  // {
-  //   "Some Key": {
-  //     "message": "Some message",
-  //     "description": "Some description"
-  //   },
-  //   ...
-  // }
-  const CodeJsonSchema = {
-    type: "object",
-    properties: {},
-    additionalProperties: {
-      type: "object",
-      properties: {
-        message: { type: "string" },
-        description: { type: "string" },
-      },
-      required: ["message", "description"],
-      additionalProperties: false,
-    },
-  };
-
   // Get model-specific parameters (handles GPT-5 temperature constraints)
   // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
   const modelParams = getModelParams(model, { useReasoningNone: true });
@@ -101,14 +77,9 @@ export async function translateJson(
         { role: "system", content: prompt },
         { role: "user", content: jsonContent },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "translation",
-          schema: CodeJsonSchema,
-          strict: true,
-        },
-      },
+      // Use json_object format: code.json has dynamic keys so a strict schema
+      // cannot be defined (OpenAI strict mode forbids additionalProperties schemas).
+      response_format: { type: "json_object" },
       ...modelParams,
     });
 

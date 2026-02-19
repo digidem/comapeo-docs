@@ -331,7 +331,7 @@ export async function prepareContentBranchForFetch(
   await initializeContentRepo();
   const config = getConfig();
 
-  await runGit(["fetch", "origin", "main", "content"], {
+  await runGit(["fetch", "origin", "main", config.contentBranch], {
     cwd: config.workdir,
     auth: true,
     errorPrefix: "Failed to fetch main/content branches",

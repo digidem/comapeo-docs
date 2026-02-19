@@ -124,6 +124,34 @@ function throwIfAborted(signal: AbortSignal, timeoutMs: number): void {
   }
 }
 
+/**
+ * Wraps a promise with a timeout that rejects if the promise doesn't settle
+ * within the specified time. This is useful for operations that don't natively
+ * support AbortSignal (like Notion API calls) to ensure they respect job timeouts.
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operation: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs)
+    ),
+  ]).catch((error) => {
+    // Re-throw with context about which operation timed out
+    if (error instanceof ContentRepoError && error.code === "JOB_TIMEOUT") {
+      throw new ContentRepoError(
+        `${operation} timed out after ${timeoutMs}ms`,
+        undefined,
+        "JOB_TIMEOUT"
+      );
+    }
+    throw error;
+  });
+}
+
 async function sleepWithAbort(
   delayMs: number,
   signal: AbortSignal,
@@ -342,16 +370,26 @@ export async function runFetchJob({
     await assertCleanWorkingTree(Boolean(options.force));
 
     throwIfAborted(signal, timeoutMs);
-    const fetchResult = await fetchAllNotionData({
-      includeRemoved: false,
-      statusFilter:
-        type === "fetch-ready" ? NOTION_PROPERTIES.READY_TO_PUBLISH : undefined,
-      maxPages:
-        options.maxPages && options.maxPages > 0 ? options.maxPages : undefined,
-      exportFiles: false,
-      sortBy: "order",
-      sortDirection: "asc",
-    });
+    // Wrap fetchAllNotionData with timeout since it doesn't support AbortSignal
+    // This ensures the Notion API fetch phase respects JOB_TIMEOUT_MS
+    const fetchResult = await withTimeout(
+      fetchAllNotionData({
+        includeRemoved: false,
+        statusFilter:
+          type === "fetch-ready"
+            ? NOTION_PROPERTIES.READY_TO_PUBLISH
+            : undefined,
+        maxPages:
+          options.maxPages && options.maxPages > 0
+            ? options.maxPages
+            : undefined,
+        exportFiles: false,
+        sortBy: "order",
+        sortDirection: "asc",
+      }),
+      timeoutMs,
+      "Notion data fetch"
+    );
 
     throwIfAborted(signal, timeoutMs);
 

@@ -106,9 +106,7 @@ title: Metadata only
           true,
           "es"
         )
-      ).rejects.toThrow(
-        "Translated content is empty - cannot create page. Please check if the English source has content."
-      );
+      ).rejects.toThrow("Translated content is empty");
 
       expect(notion.pages.create).not.toHaveBeenCalled();
       expect(notion.blocks.children.append).not.toHaveBeenCalled();
@@ -149,9 +147,7 @@ title: Metadata only
             true,
             "es"
           )
-        ).rejects.toThrow(
-          "Translated content is empty - cannot create page. Please check if the English source has content."
-        );
+        ).rejects.toThrow("Translated content is empty");
 
         expect(warnSpy).toHaveBeenCalledWith(
           expect.stringContaining("unsupported top-level nodes: definition")
@@ -162,6 +158,76 @@ title: Metadata only
         warnSpy.mockRestore();
       }
     });
+  });
+
+  it("preserves empty list items as whitespace blocks", async () => {
+    const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+    const markdown = "1. First\n2.\n3. Third";
+    const blocks = await markdownToNotionBlocks(markdown);
+
+    const listBlocks = blocks.filter(
+      (block) => "numbered_list_item" in block
+    ) as Array<{
+      numbered_list_item: { rich_text: Array<{ text: { content: string } }> };
+    }>;
+
+    expect(listBlocks).toHaveLength(3);
+    expect(listBlocks[1].numbered_list_item.rich_text[0].text.content).toBe(
+      " "
+    );
+  });
+
+  it("maps additional code language aliases to Notion-supported values", async () => {
+    const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+    const markdown = "```tsx\nconst v = 1;\n```";
+    const blocks = await markdownToNotionBlocks(markdown);
+
+    const codeBlock = blocks.find((block) => "code" in block) as {
+      code: { language: string };
+    };
+
+    expect(codeBlock.code.language).toBe("typescript");
+  });
+
+  it("throws a specific safety error when markdown generates too many blocks", async () => {
+    const { createNotionPageFromMarkdown } = await import("./markdownToNotion");
+
+    const notion = {
+      dataSources: {
+        query: vi.fn().mockResolvedValue({ results: [] }),
+      },
+      pages: {
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      blocks: {
+        children: {
+          append: vi.fn(),
+          list: vi.fn(),
+        },
+        delete: vi.fn(),
+      },
+    };
+
+    const hugeMarkdown = Array.from(
+      { length: 1001 },
+      (_, index) => `- item ${index}`
+    ).join("\n");
+
+    await expect(
+      createNotionPageFromMarkdown(
+        notion as any,
+        "parent-page-id",
+        "database-id",
+        "Huge Page",
+        hugeMarkdown,
+        {},
+        true,
+        "es"
+      )
+    ).rejects.toThrow("Translated content exceeds Notion block safety limit");
   });
 
   describe("markdownToNotionBlocks – Notion 2000-char rich_text limit", () => {

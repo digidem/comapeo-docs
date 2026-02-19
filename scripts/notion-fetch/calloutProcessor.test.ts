@@ -281,6 +281,38 @@ describe("calloutProcessor", () => {
       expect(result.content).toBe("👁️is required");
     });
 
+    it("should preserve content with inverted punctuation", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "Aviso ¿contenido importante",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "Aviso ¿contenido importante",
+            href: null,
+          },
+        ],
+        color: "default" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["Aviso ¿contenido importante"],
+      });
+
+      expect(result.title).toBe("Aviso");
+      expect(result.content).toBe("contenido importante");
+    });
+
     it("should preserve punctuation-prefixed terms after icon stripping", () => {
       const calloutProperties = {
         rich_text: [

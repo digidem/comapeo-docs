@@ -12,7 +12,7 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
 
 const LEADING_LOCALE_SPACE_PATTERN = /^[\s\u00A0\u2007\u202F]+/u;
 const LEADING_LOCALE_SEPARATOR_PATTERN =
-  /^[\s\u00A0\u2007\u202F:;\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]+/u;
+  /^[\s\u00A0\u2007\u202F:;!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]+/u;
 
 function convertBlocksToMarkdown(
   blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>

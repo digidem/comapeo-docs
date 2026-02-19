@@ -235,6 +235,16 @@ const tokenizeStructure = (markdown: string): string[] => {
   let inCodeFence = false;
   let inIndentedCode = false;
   let inParagraph = false;
+  let admonitionDepth = 0;
+
+  const pushToken = (token: string): void => {
+    if (admonitionDepth > 0 && token !== "admonition:end") {
+      tokens.push(`admonition-body:${token}`);
+      return;
+    }
+
+    tokens.push(token);
+  };
 
   for (let i = 0; i < lines.length; i++) {
     // eslint-disable-next-line security/detect-object-injection -- i is bounded by lines.length in this loop
@@ -251,14 +261,14 @@ const tokenizeStructure = (markdown: string): string[] => {
 
     if (inCodeFence) {
       if (line.startsWith("```")) {
-        tokens.push("code-fence:end");
+        pushToken("code-fence:end");
         inCodeFence = false;
       }
       continue;
     }
 
     if (line.startsWith("```")) {
-      tokens.push("code-fence:start");
+      pushToken("code-fence:start");
       inCodeFence = true;
       inParagraph = false;
       continue;
@@ -270,7 +280,7 @@ const tokenizeStructure = (markdown: string): string[] => {
 
     if (isIndentedCodeLine) {
       if (!inIndentedCode) {
-        tokens.push("code-indented");
+        pushToken("code-indented");
         inIndentedCode = true;
       }
       inParagraph = false;
@@ -283,14 +293,14 @@ const tokenizeStructure = (markdown: string): string[] => {
 
     const nextLine = lines[i + 1]?.trim() ?? "";
     if (line && /^=+$/u.test(nextLine)) {
-      tokens.push("h1");
+      pushToken("h1");
       inParagraph = false;
       i += 1;
       continue;
     }
 
     if (line && /^-+$/u.test(nextLine)) {
-      tokens.push("h2");
+      pushToken("h2");
       inParagraph = false;
       i += 1;
       continue;
@@ -298,64 +308,66 @@ const tokenizeStructure = (markdown: string): string[] => {
 
     const headingMatch = line.match(/^(#{1,6})\s+/u);
     if (headingMatch) {
-      tokens.push(`h${headingMatch[1].length}`);
+      pushToken(`h${headingMatch[1].length}`);
       inParagraph = false;
       continue;
     }
 
     const admonitionMatch = line.match(/^:::\s*([a-z0-9-]+)/iu);
     if (admonitionMatch) {
-      tokens.push(`admonition:start:${admonitionMatch[1].toLowerCase()}`);
+      pushToken(`admonition:start:${admonitionMatch[1].toLowerCase()}`);
+      admonitionDepth += 1;
       inParagraph = false;
       continue;
     }
 
     if (line === ":::") {
       tokens.push("admonition:end");
+      admonitionDepth = Math.max(0, admonitionDepth - 1);
       inParagraph = false;
       continue;
     }
 
     if (/^>\s*/u.test(line)) {
-      tokens.push("blockquote");
+      pushToken("blockquote");
       inParagraph = false;
       continue;
     }
 
     if (/^\s*[-*+]\s+/u.test(rawLine)) {
-      tokens.push(`ul:${getListDepth(rawLine)}`);
+      pushToken(`ul:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
 
     if (/^\s*\d+\.\s+/u.test(rawLine)) {
-      tokens.push(`ol:${getListDepth(rawLine)}`);
+      pushToken(`ol:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
 
     if (/^(?:---|\*\*\*|___)$/u.test(line)) {
-      tokens.push("hr");
+      pushToken("hr");
       inParagraph = false;
       continue;
     }
 
     if (/^\|.*\|$/u.test(line)) {
       if (!isTableAlignmentRow(line)) {
-        tokens.push("table-row");
+        pushToken("table-row");
       }
       inParagraph = false;
       continue;
     }
 
     if (/^<[^>]+>$/u.test(line)) {
-      tokens.push("html");
+      pushToken("html");
       inParagraph = false;
       continue;
     }
 
     if (!inParagraph) {
-      tokens.push("paragraph");
+      pushToken("paragraph");
       inParagraph = true;
     }
   }
@@ -375,6 +387,23 @@ const normalizeForRelaxedComparison = (tokens: string[]): string[] => {
     normalized.push(token);
   }
   return normalized;
+};
+
+const getFirstTokenDiff = (
+  sourceTokens: string[],
+  translatedTokens: string[]
+): { index: number; source: string; translated: string } | null => {
+  const maxLen = Math.max(sourceTokens.length, translatedTokens.length);
+  for (let i = 0; i < maxLen; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by maxLen derived from array lengths
+    const source = sourceTokens[i] ?? "<none>";
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by maxLen derived from array lengths
+    const translated = translatedTokens[i] ?? "<none>";
+    if (source !== translated) {
+      return { index: i, source, translated };
+    }
+  }
+  return null;
 };
 
 const structuresMatch = (
@@ -431,6 +460,13 @@ const collectParityIssues = async (
 
       const translatedTokens = tokenizeStructure(translatedMarkdown);
       if (!structuresMatch(sourceTokens, translatedTokens)) {
+        const firstDiff = getFirstTokenDiff(sourceTokens, translatedTokens);
+        if (firstDiff) {
+          console.warn(
+            `Structure mismatch in ${triplet.key} (${locale}) at token index ${firstDiff.index}: source=${firstDiff.source}, translated=${firstDiff.translated}`
+          );
+        }
+
         issues.push({
           key: triplet.key,
           locale,
@@ -796,6 +832,49 @@ Titulo
 
       const issues = await collectParityIssues(mirrorRoot);
       expect(issues).toEqual([]);
+    });
+  });
+
+  it("flags when admonition-contained structure moves outside admonition", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/admonition-scope.md", {
+        en: withFrontmatter(
+          "doc-admonition-scope",
+          "Admonition scope",
+          `
+:::note
+- Keep this list inside
+:::
+`
+        ),
+        pt: withFrontmatter(
+          "doc-admonition-scope-pt",
+          "Escopo de admonition",
+          `
+:::note
+Observação.
+:::
+
+- Lista fora
+`
+        ),
+        es: withFrontmatter(
+          "doc-admonition-scope-es",
+          "Alcance admonición",
+          `
+:::note
+- Mantener esta lista dentro
+:::
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toContainEqual({
+        key: "guides/admonition-scope.md",
+        locale: "pt",
+        type: "structure-mismatch",
+      });
     });
   });
 

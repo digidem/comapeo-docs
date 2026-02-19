@@ -56,10 +56,10 @@ interface ProcessCalloutOptions {
 
 const LOCALE_SPACE_CLASS = "[\\s\\u00A0\\u2007\\u202F]";
 const ICON_SEPARATOR_CLASS =
-  "[:;\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789\\uFF1B\\uFF0C\\u3001\\u3002\\uFF0E\\u00B7\\u2022\\u30FB\\.]";
+  "[:;!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]";
 const TITLE_SEPARATOR_CLASS =
-  "[:\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789]";
-const PLAIN_TITLE_SEPARATOR_CLASS = "[:\\uFF1A\\uFE55\\uA789]";
+  "[:!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789]";
+const PLAIN_TITLE_SEPARATOR_CLASS = "[:!?¡¿\uFF1A\uFE55\uA789]";
 
 /**
  * Extract emoji or icon from Notion callout icon property
@@ -81,8 +81,8 @@ function extractIconText(icon?: CalloutBlockProperties["icon"]): string | null {
  */
 function extractTextFromRichText(richText: RichTextItemResponse[]): string {
   const parts = richText.map((textObj) => {
-    if (typeof (textObj as any).plain_text === "string") {
-      return (textObj as any).plain_text as string;
+    if (typeof textObj.plain_text === "string") {
+      return textObj.plain_text;
     }
     if (textObj.type === "equation") {
       return textObj.equation.expression || "";
@@ -336,7 +336,7 @@ export function calloutToAdmonition(
 export function isCalloutBlock(
   block: PartialBlockObjectResponse | BlockObjectResponse
 ): block is CalloutBlockObjectResponse {
-  return (block as any).type === "callout";
+  return "type" in block && block.type === "callout";
 }
 
 /**
@@ -353,7 +353,11 @@ export function convertCalloutToAdmonition(
 
   // Type assertion since we've confirmed this is a callout block
   const calloutBlock = block as CalloutBlockObjectResponse;
-  const calloutProperties: CalloutBlockProperties = calloutBlock.callout as any;
+  if (!calloutBlock.callout) {
+    return null;
+  }
+
+  const calloutProperties: CalloutBlockProperties = calloutBlock.callout;
 
   if (!calloutProperties) {
     return null;

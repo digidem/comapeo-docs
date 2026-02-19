@@ -23,7 +23,7 @@ function convertBlocksToMarkdown(
   }
   try {
     const markdown = n2m.toMarkdownString(
-      blocks as Parameters<typeof n2m.toMarkdownString>[0]
+      blocks as unknown as Parameters<typeof n2m.toMarkdownString>[0]
     );
     return markdown.parent || "";
   } catch {

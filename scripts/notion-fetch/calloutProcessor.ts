@@ -25,18 +25,22 @@ export type NotionCalloutColor = keyof typeof CALLOUT_COLOR_MAPPING;
 export type DocusaurusAdmonitionType =
   (typeof CALLOUT_COLOR_MAPPING)[NotionCalloutColor];
 
+type NotionCalloutIcon =
+  | { type: "emoji"; emoji?: string }
+  | { type: "external"; external?: { url: string } }
+  | { type: "file"; file?: { url: string } }
+  | {
+      type: "custom_emoji";
+      custom_emoji?: { id?: string; name?: string; url?: string };
+    };
+
 /**
  * Interface for callout block properties
  */
 export interface CalloutBlockProperties {
   rich_text: RichTextItemResponse[];
-  icon?: {
-    type: "emoji" | "external" | "file";
-    emoji?: string;
-    external?: { url: string };
-    file?: { url: string };
-  } | null;
-  color: NotionCalloutColor;
+  icon?: NotionCalloutIcon | null;
+  color: string;
 }
 
 /**
@@ -258,6 +262,14 @@ function extractTitleFromLines(lines: string[]): {
   return { contentLines: lines };
 }
 
+const toAdmonitionType = (color: string): DocusaurusAdmonitionType => {
+  if (color in CALLOUT_COLOR_MAPPING) {
+    return CALLOUT_COLOR_MAPPING[color as NotionCalloutColor];
+  }
+
+  return CALLOUT_COLOR_MAPPING.default;
+};
+
 /**
  * Process a Notion callout block into Docusaurus admonition format
  */
@@ -266,9 +278,7 @@ export function processCalloutBlock(
   options: ProcessCalloutOptions = {}
 ): ProcessedCallout {
   // Map Notion color to Docusaurus admonition type
-  const admonitionType =
-    CALLOUT_COLOR_MAPPING[calloutProperties.color] ||
-    CALLOUT_COLOR_MAPPING.default;
+  const admonitionType = toAdmonitionType(calloutProperties.color);
 
   const fallbackContent = extractTextFromRichText(calloutProperties.rich_text);
   let contentLines = normalizeLines(options.markdownLines, fallbackContent);

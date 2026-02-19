@@ -38,10 +38,18 @@ This document tracks translation parity and markdown→Notion pipeline issues id
 19. Large-page safety guard for block volume added.
 20. Error granularity improved for empty/unsupported/oversized conversion outcomes.
 
+### Additional hardening from merge-readiness audit
+
+21. `calloutProcessor` icon typing broadened to handle `custom_emoji` and non-background color variants safely.
+22. `markdownTransform` markdown conversion cast tightened with explicit `unknown` bridge for `n2m` input compatibility.
+23. `markdownToNotion` language alias mapping corrected to avoid unsupported Notion language literals (e.g., TOML falls back to `plain text`).
+24. `verify-locale-output` tests now parse typed translation entries to avoid `unknown` property access type errors.
+
 ## Verification Commands
 
 - `bunx vitest run scripts/locale-parity.test.ts`
 - `bunx vitest run scripts/notion-fetch/calloutProcessor.test.ts scripts/notion-fetch/markdownTransform.test.ts`
 - `bunx vitest run scripts/notion-translate/markdownToNotion.test.ts`
+- `bun run typecheck --noEmit`
 
 When new issues are found, append them with severity, impact, fix, and verification notes.

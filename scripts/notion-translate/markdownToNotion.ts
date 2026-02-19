@@ -975,7 +975,7 @@ function mapCodeLanguage(language: string): NotionCodeLanguage {
     ["jsonc", "json"],
     ["yaml", "yaml"],
     ["yml", "yaml"],
-    ["toml", "toml"],
+    ["toml", "plain text"],
     ["ini", "java/c/c++/c#"],
     ["xml", "xml"],
     ["html", "html"],

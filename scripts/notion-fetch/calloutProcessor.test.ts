@@ -245,6 +245,42 @@ describe("calloutProcessor", () => {
       );
     });
 
+    it("should preserve content when icon is immediately followed by letters", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "👁️is required",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "👁️is required",
+            href: null,
+          },
+        ],
+        icon: {
+          type: "emoji" as const,
+          emoji: "👁️",
+        },
+        color: "default" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["👁️is required"],
+      });
+
+      expect(result.title).toBe("👁️");
+      expect(result.content).toBe("👁️is required");
+    });
+
     it("should preserve punctuation-prefixed terms after icon stripping", () => {
       const calloutProperties = {
         rich_text: [

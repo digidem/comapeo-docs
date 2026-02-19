@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 const LOCALES = ["en", "pt", "es"] as const;
 const TRANSLATION_LOCALES = ["pt", "es"] as const;
 const MARKDOWN_EXTENSIONS = new Set([".md", ".mdx"]);
-const FRONTMATTER_REGEX = /^---\s*\n[\s\S]*?\n---\s*\n?/u;
+const FRONTMATTER_REGEX = /^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n?/u;
 
 type Locale = (typeof LOCALES)[number];
 
@@ -66,7 +66,7 @@ const listMarkdownFiles = async (rootDir: string): Promise<string[]> => {
       throw error;
     }
 
-    entries.sort((a, b) => a.name.localeCompare(b.name));
+    entries.sort((a, b) => a.name.localeCompare(b.name, "en"));
 
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
@@ -86,7 +86,7 @@ const listMarkdownFiles = async (rootDir: string): Promise<string[]> => {
   };
 
   await walk(rootDir);
-  return files.sort((a, b) => a.localeCompare(b));
+  return files.sort((a, b) => a.localeCompare(b, "en"));
 };
 
 const buildMarkdownTriplets = async (
@@ -163,7 +163,7 @@ const buildMarkdownTriplets = async (
     .filter(
       (relativePath) => ptSet.has(relativePath) && esSet.has(relativePath)
     )
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => a.localeCompare(b, "en"));
 
   const triplets = keys.map((key) => ({
     key,
@@ -182,6 +182,7 @@ const removeFrontmatter = (markdown: string): string =>
 
 const MEDIA_PATTERNS: RegExp[] = [
   /!\[[^\]]*\]\((?:[^()\\]|\\.)*\)/gu,
+  /!\[[^\]]*\]\[[^\]]*\]/gu,
   /<img\b[^>]*\/?>/giu,
   /<source\b[^>]*\/?>/giu,
   /<video\b[^>]*>[\s\S]*?<\/video>/giu,
@@ -210,28 +211,88 @@ const hasNonMediaText = (markdown: string): boolean => {
   return /[\p{L}\p{N}]/u.test(stripped);
 };
 
+const isTableAlignmentRow = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) {
+    return false;
+  }
+
+  const compact = trimmed.replace(/\s+/gu, "");
+  // eslint-disable-next-line security/detect-unsafe-regex -- bounded single-line table separator check for markdown alignment rows
+  return /^\|?:?-{3,}:?(?:\|:?-{3,}:?)+\|?$/u.test(compact);
+};
+
+const getListDepth = (rawLine: string): number => {
+  const expanded = rawLine.replace(/\t/gu, "    ");
+  const indent = expanded.match(/^\s*/u)?.[0].length ?? 0;
+  return Math.floor(indent / 2);
+};
+
 const tokenizeStructure = (markdown: string): string[] => {
   const tokens: string[] = [];
   const content = removeMedia(removeFrontmatter(markdown));
   const lines = content.split(/\r?\n/u);
-  let inCodeBlock = false;
+  let inCodeFence = false;
+  let inIndentedCode = false;
   let inParagraph = false;
 
-  for (const rawLine of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by lines.length in this loop
+    const rawLine = lines[i];
     const line = rawLine.trim();
 
     if (!line) {
-      continue;
-    }
-
-    if (line.startsWith("```")) {
-      tokens.push("code-fence");
-      inCodeBlock = !inCodeBlock;
+      if (inIndentedCode) {
+        continue;
+      }
       inParagraph = false;
       continue;
     }
 
-    if (inCodeBlock) {
+    if (inCodeFence) {
+      if (line.startsWith("```")) {
+        tokens.push("code-fence:end");
+        inCodeFence = false;
+      }
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      tokens.push("code-fence:start");
+      inCodeFence = true;
+      inParagraph = false;
+      continue;
+    }
+
+    const isIndentedCodeLine =
+      /^(?: {4,}|\t)/u.test(rawLine) &&
+      !/^\s{0,3}(?:[-*+]\s+|\d+\.\s+)/u.test(rawLine);
+
+    if (isIndentedCodeLine) {
+      if (!inIndentedCode) {
+        tokens.push("code-indented");
+        inIndentedCode = true;
+      }
+      inParagraph = false;
+      continue;
+    }
+
+    if (inIndentedCode) {
+      inIndentedCode = false;
+    }
+
+    const nextLine = lines[i + 1]?.trim() ?? "";
+    if (line && /^=+$/u.test(nextLine)) {
+      tokens.push("h1");
+      inParagraph = false;
+      i += 1;
+      continue;
+    }
+
+    if (line && /^-+$/u.test(nextLine)) {
+      tokens.push("h2");
+      inParagraph = false;
+      i += 1;
       continue;
     }
 
@@ -244,7 +305,7 @@ const tokenizeStructure = (markdown: string): string[] => {
 
     const admonitionMatch = line.match(/^:::\s*([a-z0-9-]+)/iu);
     if (admonitionMatch) {
-      tokens.push(`admonition:${admonitionMatch[1].toLowerCase()}`);
+      tokens.push(`admonition:start:${admonitionMatch[1].toLowerCase()}`);
       inParagraph = false;
       continue;
     }
@@ -261,14 +322,14 @@ const tokenizeStructure = (markdown: string): string[] => {
       continue;
     }
 
-    if (/^[-*+]\s+/u.test(line)) {
-      tokens.push("ul");
+    if (/^\s*[-*+]\s+/u.test(rawLine)) {
+      tokens.push(`ul:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
 
-    if (/^\d+\.\s+/u.test(line)) {
-      tokens.push("ol");
+    if (/^\s*\d+\.\s+/u.test(rawLine)) {
+      tokens.push(`ol:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
@@ -280,7 +341,9 @@ const tokenizeStructure = (markdown: string): string[] => {
     }
 
     if (/^\|.*\|$/u.test(line)) {
-      tokens.push("table-row");
+      if (!isTableAlignmentRow(line)) {
+        tokens.push("table-row");
+      }
       inParagraph = false;
       continue;
     }
@@ -298,6 +361,35 @@ const tokenizeStructure = (markdown: string): string[] => {
   }
 
   return tokens;
+};
+
+const normalizeForRelaxedComparison = (tokens: string[]): string[] => {
+  const normalized: string[] = [];
+  for (const token of tokens) {
+    if (
+      token === "paragraph" &&
+      normalized[normalized.length - 1] === "paragraph"
+    ) {
+      continue;
+    }
+    normalized.push(token);
+  }
+  return normalized;
+};
+
+const structuresMatch = (
+  sourceTokens: string[],
+  translatedTokens: string[]
+): boolean => {
+  const strictness = process.env.LOCALE_PARITY_STRICTNESS ?? "strict";
+  if (strictness === "relaxed") {
+    return (
+      normalizeForRelaxedComparison(sourceTokens).join("|") ===
+      normalizeForRelaxedComparison(translatedTokens).join("|")
+    );
+  }
+
+  return translatedTokens.join("|") === sourceTokens.join("|");
 };
 
 const collectParityIssues = async (
@@ -338,7 +430,7 @@ const collectParityIssues = async (
       }
 
       const translatedTokens = tokenizeStructure(translatedMarkdown);
-      if (translatedTokens.join("|") !== sourceTokens.join("|")) {
+      if (!structuresMatch(sourceTokens, translatedTokens)) {
         issues.push({
           key: triplet.key,
           locale,
@@ -651,6 +743,75 @@ en dos líneas en español.
 Nota final.
 `
         ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toEqual([]);
+    });
+  });
+
+  it("handles setext headings, nested lists, and indented code parity", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/advanced-structure.md", {
+        en: withFrontmatter(
+          "doc-advanced-structure",
+          "Advanced Structure",
+          `
+Title
+=====
+
+- Parent
+  - Nested
+
+    const x = 1;
+`
+        ),
+        pt: withFrontmatter(
+          "doc-advanced-structure-pt",
+          "Estrutura avançada",
+          `
+Titulo
+======
+
+- Pai
+  - Aninhado
+
+    const y = 2;
+`
+        ),
+        es: withFrontmatter(
+          "doc-advanced-structure-es",
+          "Estructura avanzada",
+          `
+Titulo
+======
+
+- Padre
+  - Anidado
+
+    const z = 3;
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toEqual([]);
+    });
+  });
+
+  it("ignores table alignment-only differences and supports CRLF frontmatter", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      const enContent =
+        '---\r\nid: doc-table\r\ntitle: "Table"\r\n---\r\n\r\n| Name | Value |\r\n| :--- | ---: |\r\n| A | 1 |\r\n';
+      const ptContent =
+        '---\r\nid: doc-table-pt\r\ntitle: "Tabela"\r\n---\r\n\r\n| Nome | Valor |\r\n| --- | --- |\r\n| A | 1 |\r\n';
+      const esContent =
+        '---\r\nid: doc-table-es\r\ntitle: "Tabla"\r\n---\r\n\r\n| Nombre | Valor |\r\n| --- | --- |\r\n| A | 1 |\r\n';
+
+      await writeTriplet(mirrorRoot, "guides/table-crlf.md", {
+        en: enContent,
+        pt: ptContent,
+        es: esContent,
       });
 
       const issues = await collectParityIssues(mirrorRoot);

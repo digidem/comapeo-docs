@@ -179,8 +179,13 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
     return remainder ? [`${leading}${remainder}`, ...rest] : rest;
   }
 
-  // Remove the icon itself even if there is no recognized separator.
-  return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  // Conservative fallback: only strip icon without explicit separator when the
+  // following grapheme is punctuation/symbol, not alphanumeric content.
+  if (/^[\p{P}\p{S}]/u.test(remainder)) {
+    return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  }
+
+  return lines;
 }
 
 function extractTitleFromLines(lines: string[]): {

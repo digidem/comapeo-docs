@@ -20,6 +20,71 @@ The following critical P0 issues were fixed and verified:
 
 ## Known Issues (Deferred)
 
+## Relevance Verification and Merge-Readiness Plan
+
+Reviewed against current implementation to identify what is still relevant for a "perfect" translation parity PR. Decisions below bias toward fixing even minor correctness and determinism gaps.
+
+### Keep and Fix in This PR (high confidence, merge-blocking for perfection)
+
+1. **#1 Setext-style headings not detected** → **Relevant**. The tokenizer currently only detects ATX headings (`#`) and does not recognize setext heading pairs.
+2. **#2 Nested list detection missing in harness** → **Relevant**. List tokenization still ignores indentation depth.
+3. **#3 Indented code blocks not detected** → **Relevant**. Only fenced blocks are tracked.
+4. **#4 Admonition content detection incomplete** → **Relevant**. Only fence markers are tokenized; content shape inside admonitions can drift silently.
+5. **#5 Media removal patterns incomplete** → **Relevant**. Reference-style image patterns are still not covered.
+6. **#6 Table alignment markers treated as rows** → **Relevant**. Alignment separators continue to create noisy parity tokens.
+7. **#7 Locale-sensitive sorting** → **Relevant**. `localeCompare` remains locale-implicit, which can vary by runtime environment.
+8. **#15 Structure parity false positives** → **Relevant**. Current strict token equality can fail valid editorial translation choices.
+9. **#19 Frontmatter regex not CRLF-safe** → **Relevant**. Harness frontmatter regex still only uses LF.
+10. **#18 Icon stripping without separator can remove intentional content** → **Relevant**. Fallback removal behavior still strips icon-adjacent content aggressively.
+
+### Fix in Follow-Up (important, but not required for parity harness correctness)
+
+1. **#8 Code language mapping incomplete** → Relevant but broader surface area; improve via alias table + tests.
+2. **#9 Empty list items skipped** → Relevant for roundtrip fidelity; should be fixed with focused parser behavior tests.
+3. **#14 Aggregate Notion API block limits** → Relevant for very large pages; requires integration-oriented validation.
+4. **#16 Language-specific typography normalization** → Relevant for multilingual robustness; audit punctuation classes comprehensively.
+5. **#17 Error granularity in translation pipeline** → Relevant for operations/debugging quality.
+6. **#12 Type assertion uses `any`** → Relevant as type safety debt; low product risk but worth cleaning.
+
+### Can Be Explicitly De-prioritized (documented rationale)
+
+1. **#10 Hardcoded Docusaurus path** → Keep as known limitation unless repo structure is expected to change soon.
+2. **#11 Frontmatter not validated** → Optional parity mode; useful but not critical for structural parity.
+3. **#13 Fallback grapheme handling on old Node** → Low relevance if supported runtime baseline is modern Node/Bun.
+
+## Implementation Plan to Reach "Perfect" Translation Parity
+
+### Phase 1: Tokenizer correctness hardening (primary merge target)
+
+1. Update `tokenizeStructure` to support setext headings, nested list depth, indented code blocks, and table alignment filtering.
+2. Replace current admonition token handling with block-boundary tracking that captures internal structure tokens deterministically.
+3. Extend media stripping to include reference-style image syntax and multiline-safe HTML handling where needed.
+4. Make sorting deterministic by passing explicit locale in all `localeCompare` calls.
+5. Make `FRONTMATTER_REGEX` CRLF-safe (`\r?\n`).
+
+### Phase 2: Strictness without noisy false positives
+
+1. Introduce a strictness mode for structure parity (default strict in CI, optional relaxed mode for editorial workflows).
+2. In relaxed mode, allow bounded variations (e.g., paragraph splits/merges) while still enforcing headings, lists, code, admonitions, and table structure.
+3. Add clear mismatch diagnostics so failures are actionable (show first token divergence and nearby context).
+
+### Phase 3: Callout/icon safety refinement
+
+1. Adjust `stripIconFromLines` fallback so icon stripping without separator/space is conservative.
+2. Add fixtures for edge cases like `👁️is` to prevent semantic content loss.
+
+### Phase 4: Test expansion and confidence gate
+
+1. Add targeted tests for each fixed issue in `scripts/locale-parity.test.ts` and callout tests where relevant.
+2. Add regression cases for CRLF, setext headings, nested list depth changes, indented code, and table alignment-only formatting changes.
+3. Run targeted lint/format/tests for changed files and include a concise pass/fail matrix in PR notes.
+
+### Suggested Execution Order
+
+1. Ship Phase 1 and Phase 4 tests together.
+2. Ship Phase 3 in the same PR if scope remains small; otherwise, a fast follow-up PR.
+3. Ship Phase 2 strictness toggle as a separate, explicit behavior-change PR.
+
 ### P1 - High Priority
 
 These issues should be addressed in a follow-up release:

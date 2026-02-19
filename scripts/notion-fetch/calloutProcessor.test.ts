@@ -313,6 +313,38 @@ describe("calloutProcessor", () => {
       expect(result.content).toBe("contenido importante");
     });
 
+    it("does not treat exclamation punctuation as plain title separator", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "Important! Keep backups before updating",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "Important! Keep backups before updating",
+            href: null,
+          },
+        ],
+        color: "yellow_background" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["Important! Keep backups before updating"],
+      });
+
+      expect(result.title).toBeUndefined();
+      expect(result.content).toBe("Important! Keep backups before updating");
+    });
+
     it("should preserve punctuation-prefixed terms after icon stripping", () => {
       const calloutProperties = {
         rich_text: [

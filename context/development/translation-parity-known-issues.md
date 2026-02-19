@@ -47,6 +47,8 @@ This document tracks translation parity and markdown→Notion pipeline issues id
 25. Test environment bootstrap now includes `OPENAI_API_KEY` and `DATA_SOURCE_ID` to keep `notion-translate/index.test.ts` aligned with runtime environment validation.
 26. Indented-code detection now excludes deeply-indented list markers, preventing nested list items from being mis-tokenized as `code-indented`.
 27. Setext-heading detection is now restricted to paragraph-like candidates, avoiding false `h2` tokens for list-item + thematic-break patterns.
+28. Plain callout title parsing now keeps `!`/`?` as content punctuation (not title delimiters), preventing false title extraction in emphatic sentences.
+29. LESS code fences now map to Notion `less` language instead of `java/c/c++/c#`.
 
 ## Verification Commands
 

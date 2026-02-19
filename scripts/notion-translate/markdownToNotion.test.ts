@@ -181,14 +181,21 @@ title: Metadata only
   it("maps additional code language aliases to Notion-supported values", async () => {
     const { markdownToNotionBlocks } = await import("./markdownToNotion");
 
-    const markdown = "```tsx\nconst v = 1;\n```";
-    const blocks = await markdownToNotionBlocks(markdown);
-
-    const codeBlock = blocks.find((block) => "code" in block) as {
+    const tsxMarkdown = "```tsx\nconst v = 1;\n```";
+    const tsxBlocks = await markdownToNotionBlocks(tsxMarkdown);
+    const tsxCodeBlock = tsxBlocks.find((block) => "code" in block) as {
       code: { language: string };
     };
 
-    expect(codeBlock.code.language).toBe("typescript");
+    expect(tsxCodeBlock.code.language).toBe("typescript");
+
+    const lessMarkdown = "```less\n@color: #4D926F;\n```";
+    const lessBlocks = await markdownToNotionBlocks(lessMarkdown);
+    const lessCodeBlock = lessBlocks.find((block) => "code" in block) as {
+      code: { language: string };
+    };
+
+    expect(lessCodeBlock.code.language).toBe("less");
   });
 
   it("throws a specific safety error when markdown generates too many blocks", async () => {

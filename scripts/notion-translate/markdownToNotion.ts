@@ -984,7 +984,7 @@ function mapCodeLanguage(language: string): NotionCodeLanguage {
     ["css", "css"],
     ["scss", "scss"],
     ["sass", "sass"],
-    ["less", "java/c/c++/c#"],
+    ["less", "less"],
     ["md", "markdown"],
     ["markdown", "markdown"],
     ["mdx", "markdown"],

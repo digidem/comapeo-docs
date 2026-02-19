@@ -25,18 +25,22 @@ export type NotionCalloutColor = keyof typeof CALLOUT_COLOR_MAPPING;
 export type DocusaurusAdmonitionType =
   (typeof CALLOUT_COLOR_MAPPING)[NotionCalloutColor];
 
+type NotionCalloutIcon =
+  | { type: "emoji"; emoji?: string }
+  | { type: "external"; external?: { url: string } }
+  | { type: "file"; file?: { url: string } }
+  | {
+      type: "custom_emoji";
+      custom_emoji?: { id?: string; name?: string; url?: string };
+    };
+
 /**
  * Interface for callout block properties
  */
 export interface CalloutBlockProperties {
   rich_text: RichTextItemResponse[];
-  icon?: {
-    type: "emoji" | "external" | "file";
-    emoji?: string;
-    external?: { url: string };
-    file?: { url: string };
-  } | null;
-  color: NotionCalloutColor;
+  icon?: NotionCalloutIcon | null;
+  color: string;
 }
 
 /**
@@ -56,10 +60,10 @@ interface ProcessCalloutOptions {
 
 const LOCALE_SPACE_CLASS = "[\\s\\u00A0\\u2007\\u202F]";
 const ICON_SEPARATOR_CLASS =
-  "[:;\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789\\uFF1B\\uFF0C\\u3001\\u3002\\uFF0E\\u00B7\\u2022\\u30FB\\.]";
+  "[:;!?¡¿\\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]";
 const TITLE_SEPARATOR_CLASS =
-  "[:\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789]";
-const PLAIN_TITLE_SEPARATOR_CLASS = "[:\\uFF1A\\uFE55\\uA789]";
+  "[:!?¡¿\\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789]";
+const PLAIN_TITLE_SEPARATOR_CLASS = "[:¡¿\uFF1A\uFE55\uA789]";
 
 /**
  * Extract emoji or icon from Notion callout icon property
@@ -81,8 +85,8 @@ function extractIconText(icon?: CalloutBlockProperties["icon"]): string | null {
  */
 function extractTextFromRichText(richText: RichTextItemResponse[]): string {
   const parts = richText.map((textObj) => {
-    if (typeof (textObj as any).plain_text === "string") {
-      return (textObj as any).plain_text as string;
+    if (typeof textObj.plain_text === "string") {
+      return textObj.plain_text;
     }
     if (textObj.type === "equation") {
       return textObj.equation.expression || "";
@@ -179,8 +183,13 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
     return remainder ? [`${leading}${remainder}`, ...rest] : rest;
   }
 
-  // Remove the icon itself even if there is no recognized separator.
-  return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  // Conservative fallback: only strip icon without explicit separator when the
+  // following grapheme is punctuation/symbol, not alphanumeric content.
+  if (/^[\p{P}\p{S}]/u.test(remainder)) {
+    return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  }
+
+  return lines;
 }
 
 function extractTitleFromLines(lines: string[]): {
@@ -253,6 +262,14 @@ function extractTitleFromLines(lines: string[]): {
   return { contentLines: lines };
 }
 
+const toAdmonitionType = (color: string): DocusaurusAdmonitionType => {
+  if (color in CALLOUT_COLOR_MAPPING) {
+    return CALLOUT_COLOR_MAPPING[color as NotionCalloutColor];
+  }
+
+  return CALLOUT_COLOR_MAPPING.default;
+};
+
 /**
  * Process a Notion callout block into Docusaurus admonition format
  */
@@ -261,9 +278,7 @@ export function processCalloutBlock(
   options: ProcessCalloutOptions = {}
 ): ProcessedCallout {
   // Map Notion color to Docusaurus admonition type
-  const admonitionType =
-    CALLOUT_COLOR_MAPPING[calloutProperties.color] ||
-    CALLOUT_COLOR_MAPPING.default;
+  const admonitionType = toAdmonitionType(calloutProperties.color);
 
   const fallbackContent = extractTextFromRichText(calloutProperties.rich_text);
   let contentLines = normalizeLines(options.markdownLines, fallbackContent);
@@ -331,7 +346,7 @@ export function calloutToAdmonition(
 export function isCalloutBlock(
   block: PartialBlockObjectResponse | BlockObjectResponse
 ): block is CalloutBlockObjectResponse {
-  return (block as any).type === "callout";
+  return "type" in block && block.type === "callout";
 }
 
 /**
@@ -348,7 +363,11 @@ export function convertCalloutToAdmonition(
 
   // Type assertion since we've confirmed this is a callout block
   const calloutBlock = block as CalloutBlockObjectResponse;
-  const calloutProperties: CalloutBlockProperties = calloutBlock.callout as any;
+  if (!calloutBlock.callout) {
+    return null;
+  }
+
+  const calloutProperties: CalloutBlockProperties = calloutBlock.callout;
 
   if (!calloutProperties) {
     return null;

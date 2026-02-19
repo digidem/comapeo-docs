@@ -245,6 +245,142 @@ describe("calloutProcessor", () => {
       );
     });
 
+    it("should preserve content when icon is immediately followed by letters", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "👁️is required",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "👁️is required",
+            href: null,
+          },
+        ],
+        icon: {
+          type: "emoji" as const,
+          emoji: "👁️",
+        },
+        color: "default" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["👁️is required"],
+      });
+
+      expect(result.title).toBe("👁️");
+      expect(result.content).toBe("👁️is required");
+    });
+
+    it("should preserve content with inverted punctuation", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "Aviso ¿contenido importante",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "Aviso ¿contenido importante",
+            href: null,
+          },
+        ],
+        color: "default" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["Aviso ¿contenido importante"],
+      });
+
+      expect(result.title).toBe("Aviso");
+      expect(result.content).toBe("contenido importante");
+    });
+
+    it("does not treat exclamation punctuation as plain title separator", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "Important! Keep backups before updating",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "Important! Keep backups before updating",
+            href: null,
+          },
+        ],
+        color: "yellow_background" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["Important! Keep backups before updating"],
+      });
+
+      expect(result.title).toBeUndefined();
+      expect(result.content).toBe("Important! Keep backups before updating");
+    });
+
+    it("should not strip accented letters after icon when no separator exists", () => {
+      const calloutProperties = {
+        rich_text: [
+          {
+            type: "text" as const,
+            text: {
+              content: "🔔é importante",
+              link: null,
+            },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: "default" as const,
+            },
+            plain_text: "🔔é importante",
+            href: null,
+          },
+        ],
+        icon: {
+          type: "emoji" as const,
+          emoji: "🔔",
+        },
+        color: "yellow_background" as const,
+      };
+
+      const result = processCalloutBlock(calloutProperties, {
+        markdownLines: ["🔔é importante"],
+      });
+
+      expect(result.title).toBe("🔔");
+      expect(result.content).toBe("🔔é importante");
+    });
+
     it("should preserve punctuation-prefixed terms after icon stripping", () => {
       const calloutProperties = {
         rich_text: [

@@ -2,6 +2,16 @@ import { describe, it, expect } from "vitest";
 import fs from "fs/promises";
 import path from "path";
 
+interface TranslationEntry {
+  message: string;
+  description?: string;
+}
+
+type TranslationCodeJson = Record<string, TranslationEntry>;
+
+const parseTranslationCodeJson = (content: string): TranslationCodeJson =>
+  JSON.parse(content) as TranslationCodeJson;
+
 /**
  * Verification tests for locale output correctness
  *
@@ -20,7 +30,7 @@ describe("Locale Output Verification", () => {
 
       // Read and parse the file
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       // Verify it has translations
       expect(Object.keys(codeJson).length).toBeGreaterThan(0);
@@ -68,7 +78,7 @@ describe("Locale Output Verification", () => {
     it("does not contain unintended English content in code.json", async () => {
       const codeJsonPath = path.join(i18nDir, "es", "code.json");
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       // Check that common English words are not present in messages
       // (except for proper nouns or technical terms)
@@ -119,7 +129,7 @@ describe("Locale Output Verification", () => {
     it("has valid structure with message and optional description", async () => {
       const codeJsonPath = path.join(i18nDir, "es", "code.json");
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       for (const [key, entry] of Object.entries(codeJson)) {
         // Every entry must have a message
@@ -139,7 +149,7 @@ describe("Locale Output Verification", () => {
       const codeJsonPath = path.join(i18nDir, "pt", "code.json");
 
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       expect(Object.keys(codeJson).length).toBeGreaterThan(0);
 
@@ -169,7 +179,7 @@ describe("Locale Output Verification", () => {
     it("does not contain unintended English content in code.json", async () => {
       const codeJsonPath = path.join(i18nDir, "pt", "code.json");
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       const englishOnlyPatterns = [
         /\bthe\b/i,
@@ -216,7 +226,7 @@ describe("Locale Output Verification", () => {
     it("has valid structure with message and optional description", async () => {
       const codeJsonPath = path.join(i18nDir, "pt", "code.json");
       const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = JSON.parse(content);
+      const codeJson = parseTranslationCodeJson(content);
 
       for (const [key, entry] of Object.entries(codeJson)) {
         expect(entry).toHaveProperty("message");
@@ -237,8 +247,8 @@ describe("Locale Output Verification", () => {
       const esContent = await fs.readFile(esCodeJsonPath, "utf8");
       const ptContent = await fs.readFile(ptCodeJsonPath, "utf8");
 
-      const esCodeJson = JSON.parse(esContent);
-      const ptCodeJson = JSON.parse(ptContent);
+      const esCodeJson = parseTranslationCodeJson(esContent);
+      const ptCodeJson = parseTranslationCodeJson(ptContent);
 
       const esKeys = Object.keys(esCodeJson).sort();
       const ptKeys = Object.keys(ptCodeJson).sort();

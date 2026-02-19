@@ -15,8 +15,10 @@ import {
   NOTION_PROPERTIES,
 } from "../constants.js";
 
-const EMPTY_TRANSLATED_CONTENT_ERROR =
-  "Translated content is empty - cannot create page. Please check if the English source has content.";
+const EMPTY_TRANSLATED_CONTENT_PREFIX = "Translated content is empty";
+const TOO_MANY_BLOCKS_ERROR_PREFIX =
+  "Translated content exceeds Notion block safety limit";
+const MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT = 1000;
 const MAX_RICH_TEXT_LENGTH = 1900; // Notion API limit is 2000; use 1900 to be safe
 
 // Type definition for page results from dataSources.query
@@ -613,6 +615,9 @@ function processListNode(
 
     if (childNode.type === "listItem") {
       const itemChildren = childNode.children;
+      const blockType = isOrdered ? "numbered_list_item" : "bulleted_list_item";
+      let createdListItemBlock = false;
+
       if (Array.isArray(itemChildren)) {
         for (const itemChild of itemChildren) {
           const itemChildNode = itemChild as unknown as Record<string, unknown>;
@@ -620,18 +625,43 @@ function processListNode(
           if (itemChildNode.type === "paragraph") {
             const paragraphRichText = getRichTextFromNode(itemChildNode);
             const text = flattenRichText(paragraphRichText);
-            if (text.trim().length > 0) {
-              const blockType = isOrdered
-                ? "numbered_list_item"
-                : "bulleted_list_item";
+            const richTextItems =
+              text.trim().length > 0
+                ? splitRichTextIntoItems(paragraphRichText)
+                : [
+                    {
+                      type: "text",
+                      text: {
+                        content: " ",
+                      },
+                    },
+                  ];
+
+            notionBlocks.push({
+              type: blockType,
+              [blockType]: {
+                rich_text: richTextItems,
+              },
+            } as unknown as BlockObjectRequest);
+            createdListItemBlock = true;
+          } else if (itemChildNode.type === "list") {
+            if (!createdListItemBlock) {
               notionBlocks.push({
                 type: blockType,
                 [blockType]: {
-                  rich_text: splitRichTextIntoItems(paragraphRichText),
+                  rich_text: [
+                    {
+                      type: "text",
+                      text: {
+                        content: " ",
+                      },
+                    },
+                  ],
                 },
               } as unknown as BlockObjectRequest);
+              createdListItemBlock = true;
             }
-          } else if (itemChildNode.type === "list") {
+
             processListNode(
               itemChildNode as unknown as ListNode,
               notionBlocks,
@@ -639,6 +669,22 @@ function processListNode(
             );
           }
         }
+      }
+
+      if (!createdListItemBlock) {
+        notionBlocks.push({
+          type: blockType,
+          [blockType]: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: " ",
+                },
+              },
+            ],
+          },
+        } as unknown as BlockObjectRequest);
       }
     }
   }
@@ -893,27 +939,91 @@ export function removeFrontMatter(content: string): string {
  * Maps markdown code language to Notion code block language
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
+  const normalizedLanguage = language.trim().toLowerCase();
+
   const languageMap = new Map<string, NotionCodeLanguage>([
     ["js", "javascript"],
+    ["javascript", "javascript"],
+    ["node", "javascript"],
+    ["mjs", "javascript"],
+    ["cjs", "javascript"],
     ["ts", "typescript"],
+    ["tsx", "typescript"],
+    ["typescript", "typescript"],
     ["py", "python"],
+    ["python", "python"],
     ["rb", "ruby"],
+    ["ruby", "ruby"],
     ["go", "go"],
+    ["golang", "go"],
     ["java", "java"],
+    ["kt", "kotlin"],
+    ["kts", "kotlin"],
+    ["kotlin", "kotlin"],
     ["php", "php"],
     ["c", "c"],
+    ["h", "c"],
     ["cpp", "c++"],
+    ["cc", "c++"],
+    ["cxx", "c++"],
+    ["hpp", "c++"],
     ["cs", "c#"],
-    ["html", "html"],
-    ["css", "css"],
+    ["csharp", "c#"],
+    ["fs", "f#"],
+    ["fsharp", "f#"],
+    ["rs", "rust"],
+    ["rust", "rust"],
+    ["swift", "swift"],
+    ["scala", "scala"],
+    ["r", "r"],
+    ["rscript", "r"],
+    ["sh", "shell"],
     ["shell", "shell"],
+    ["zsh", "shell"],
+    ["fish", "shell"],
     ["bash", "bash"],
+    ["powershell", "powershell"],
+    ["ps1", "powershell"],
+    ["sql", "sql"],
+    ["graphql", "graphql"],
+    ["gql", "graphql"],
     ["json", "json"],
+    ["json5", "json"],
+    ["jsonc", "json"],
     ["yaml", "yaml"],
+    ["yml", "yaml"],
+    ["toml", "plain text"],
+    ["ini", "java/c/c++/c#"],
+    ["xml", "xml"],
+    ["html", "html"],
+    ["xhtml", "html"],
+    ["svg", "html"],
+    ["css", "css"],
+    ["scss", "scss"],
+    ["sass", "sass"],
+    ["less", "less"],
     ["md", "markdown"],
+    ["markdown", "markdown"],
+    ["mdx", "markdown"],
+    ["docker", "docker"],
+    ["dockerfile", "docker"],
+    ["make", "makefile"],
+    ["makefile", "makefile"],
+    ["proto", "protobuf"],
+    ["protobuf", "protobuf"],
+    ["lua", "lua"],
+    ["perl", "perl"],
+    ["objective-c", "objective-c"],
+    ["objc", "objective-c"],
+    ["matlab", "matlab"],
+    ["mermaid", "mermaid"],
+    ["plain", "plain text"],
+    ["plaintext", "plain text"],
+    ["text", "plain text"],
+    ["txt", "plain text"],
   ]);
 
-  return languageMap.get(language) || "plain text";
+  return languageMap.get(normalizedLanguage) || "plain text";
 }
 
 interface NotionPageProperties {
@@ -968,7 +1078,9 @@ export async function createNotionPageFromMarkdown(
         convertMarkdownToNotionBlocks(markdownContent);
 
       if (diagnostics.trimmedContentLength === 0) {
-        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+        throw new Error(
+          `${EMPTY_TRANSLATED_CONTENT_PREFIX}: page "${title}" has no non-frontmatter content.`
+        );
       }
 
       if (blocks.length === 0) {
@@ -981,7 +1093,15 @@ export async function createNotionPageFromMarkdown(
             diagnostics.fallbackBlocksCreated
           }).`
         );
-        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+        throw new Error(
+          `${EMPTY_TRANSLATED_CONTENT_PREFIX}: page "${title}" produced no supported Notion blocks.`
+        );
+      }
+
+      if (blocks.length > MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT) {
+        throw new Error(
+          `${TOO_MANY_BLOCKS_ERROR_PREFIX}: page "${title}" generated ${blocks.length} blocks (limit ${MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT}).`
+        );
       }
 
       // CRITICAL SAFETY CHECK: Never modify main language pages
@@ -1134,7 +1254,10 @@ export async function createNotionPageFromMarkdown(
         error instanceof Error ? error : new Error(String(error));
       lastError = parsedError;
 
-      if (parsedError.message === EMPTY_TRANSLATED_CONTENT_ERROR) {
+      if (
+        parsedError.message.startsWith(EMPTY_TRANSLATED_CONTENT_PREFIX) ||
+        parsedError.message.startsWith(TOO_MANY_BLOCKS_ERROR_PREFIX)
+      ) {
         throw parsedError;
       }
 

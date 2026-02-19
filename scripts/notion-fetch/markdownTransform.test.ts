@@ -159,6 +159,17 @@ describe("markdownTransform", () => {
       expect(normalizeForMatch("📄; Document")).toBe("Document");
     });
 
+    it("should remove leading zwj emoji when Segmenter is unavailable", () => {
+      const originalSegmenter = Intl.Segmenter;
+      vi.stubGlobal("Intl", { ...Intl, Segmenter: undefined });
+
+      try {
+        expect(normalizeForMatch("👨‍👩‍👧‍👦: Document")).toBe("Document");
+      } finally {
+        vi.stubGlobal("Intl", { ...Intl, Segmenter: originalSegmenter });
+      }
+    });
+
     it("should handle text without emoji", () => {
       expect(normalizeForMatch("Regular Text")).toBe("Regular Text");
     });
@@ -227,6 +238,11 @@ describe("markdownTransform", () => {
         },
       };
       expect(extractTextFromCalloutBlock(block)).toBe("");
+    });
+
+    it("should return empty string for non-callout values", () => {
+      expect(extractTextFromCalloutBlock(null)).toBe("");
+      expect(extractTextFromCalloutBlock({ callout: null })).toBe("");
     });
 
     it("should handle empty rich_text array", () => {

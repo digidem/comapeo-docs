@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 const LOCALES = ["en", "pt", "es"] as const;
 const TRANSLATION_LOCALES = ["pt", "es"] as const;
 const MARKDOWN_EXTENSIONS = new Set([".md", ".mdx"]);
-const FRONTMATTER_REGEX = /^---\s*\n[\s\S]*?\n---\s*\n?/u;
+const FRONTMATTER_REGEX = /^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n?/u;
 
 type Locale = (typeof LOCALES)[number];
 
@@ -28,22 +28,36 @@ interface MarkdownTripletsResult {
 interface ParityIssue {
   key: string;
   locale: (typeof TRANSLATION_LOCALES)[number];
-  type: "empty-translation" | "structure-mismatch" | "missing-translation";
+  type:
+    | "empty-translation"
+    | "structure-mismatch"
+    | "missing-translation"
+    | "frontmatter-mismatch";
 }
 
 const DOCS_ROOT = "docs";
+const DEFAULT_DOCS_PLUGIN_CURRENT_PATH = path.join(
+  "i18n",
+  "{locale}",
+  "docusaurus-plugin-content-docs",
+  "current"
+);
+
+const getLocaleDocsPathTemplate = (): string =>
+  process.env.LOCALE_PARITY_DOCS_PATH_TEMPLATE ??
+  DEFAULT_DOCS_PLUGIN_CURRENT_PATH;
+
 const getLocaleRoot = (mirrorRoot: string, locale: Locale): string => {
   if (locale === "en") {
     return path.join(mirrorRoot, DOCS_ROOT);
   }
 
-  return path.join(
-    mirrorRoot,
-    "i18n",
-    locale,
-    "docusaurus-plugin-content-docs",
-    "current"
+  const docsPathTemplate = getLocaleDocsPathTemplate().replace(
+    "{locale}",
+    locale
   );
+
+  return path.join(mirrorRoot, docsPathTemplate);
 };
 
 const isMissingDirectoryError = (error: unknown): boolean =>
@@ -66,7 +80,7 @@ const listMarkdownFiles = async (rootDir: string): Promise<string[]> => {
       throw error;
     }
 
-    entries.sort((a, b) => a.name.localeCompare(b.name));
+    entries.sort((a, b) => a.name.localeCompare(b.name, "en"));
 
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
@@ -86,7 +100,7 @@ const listMarkdownFiles = async (rootDir: string): Promise<string[]> => {
   };
 
   await walk(rootDir);
-  return files.sort((a, b) => a.localeCompare(b));
+  return files.sort((a, b) => a.localeCompare(b, "en"));
 };
 
 const buildMarkdownTriplets = async (
@@ -163,7 +177,7 @@ const buildMarkdownTriplets = async (
     .filter(
       (relativePath) => ptSet.has(relativePath) && esSet.has(relativePath)
     )
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => a.localeCompare(b, "en"));
 
   const triplets = keys.map((key) => ({
     key,
@@ -180,8 +194,21 @@ const buildMarkdownTriplets = async (
 const removeFrontmatter = (markdown: string): string =>
   markdown.replace(FRONTMATTER_REGEX, "");
 
+const normalizeFrontmatter = (markdown: string): string => {
+  const frontmatter = markdown.match(FRONTMATTER_REGEX)?.[0];
+  if (!frontmatter) {
+    return "";
+  }
+
+  return frontmatter.replace(/\r?\n/gu, "\n").trim().replace(/\s+/gu, " ");
+};
+
+const shouldValidateFrontmatter = (): boolean =>
+  process.env.LOCALE_PARITY_VALIDATE_FRONTMATTER === "true";
+
 const MEDIA_PATTERNS: RegExp[] = [
   /!\[[^\]]*\]\((?:[^()\\]|\\.)*\)/gu,
+  /!\[[^\]]*\]\[[^\]]*\]/gu,
   /<img\b[^>]*\/?>/giu,
   /<source\b[^>]*\/?>/giu,
   /<video\b[^>]*>[\s\S]*?<\/video>/giu,
@@ -210,94 +237,256 @@ const hasNonMediaText = (markdown: string): boolean => {
   return /[\p{L}\p{N}]/u.test(stripped);
 };
 
+const isTableAlignmentRow = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) {
+    return false;
+  }
+
+  const compact = trimmed.replace(/\s+/gu, "");
+  // eslint-disable-next-line security/detect-unsafe-regex -- bounded single-line table separator check for markdown alignment rows
+  return /^\|?:?-{3,}:?(?:\|:?-{3,}:?)+\|?$/u.test(compact);
+};
+
+const isListItemLine = (rawLine: string): boolean =>
+  /^\s*(?:[-*+]\s+|\d+\.\s+)/u.test(rawLine);
+
+const isSetextHeadingCandidate = (rawLine: string, line: string): boolean => {
+  if (!line) {
+    return false;
+  }
+
+  if (/^\s{0,3}(?:`{3,}|~{3,})/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^\s{0,3}#{1,6}\s+/u.test(rawLine)) {
+    return false;
+  }
+
+  if (isListItemLine(rawLine)) {
+    return false;
+  }
+
+  if (/^\s*>\s*/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^\s*:::/u.test(rawLine)) {
+    return false;
+  }
+
+  if (/^(?:---|\*\*\*|___)$/u.test(line)) {
+    return false;
+  }
+
+  if (/^\|.*\|$/u.test(line)) {
+    return false;
+  }
+
+  if (/^<[^>]+>$/u.test(line)) {
+    return false;
+  }
+
+  return true;
+};
+
+const getListDepth = (rawLine: string): number => {
+  const expanded = rawLine.replace(/\t/gu, "    ");
+  const indent = expanded.match(/^\s*/u)?.[0].length ?? 0;
+  return Math.floor(indent / 2);
+};
+
 const tokenizeStructure = (markdown: string): string[] => {
   const tokens: string[] = [];
   const content = removeMedia(removeFrontmatter(markdown));
   const lines = content.split(/\r?\n/u);
-  let inCodeBlock = false;
+  let inCodeFence = false;
+  let inIndentedCode = false;
   let inParagraph = false;
+  let admonitionDepth = 0;
 
-  for (const rawLine of lines) {
+  const pushToken = (token: string): void => {
+    if (admonitionDepth > 0 && token !== "admonition:end") {
+      tokens.push(`admonition-body:${token}`);
+      return;
+    }
+
+    tokens.push(token);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by lines.length in this loop
+    const rawLine = lines[i];
     const line = rawLine.trim();
 
     if (!line) {
-      continue;
-    }
-
-    if (line.startsWith("```")) {
-      tokens.push("code-fence");
-      inCodeBlock = !inCodeBlock;
+      if (inIndentedCode) {
+        continue;
+      }
       inParagraph = false;
       continue;
     }
 
-    if (inCodeBlock) {
+    if (inCodeFence) {
+      if (line.startsWith("```")) {
+        pushToken("code-fence:end");
+        inCodeFence = false;
+      }
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      pushToken("code-fence:start");
+      inCodeFence = true;
+      inParagraph = false;
+      continue;
+    }
+
+    const isIndentedCodeLine =
+      /^(?: {4,}|\t)/u.test(rawLine) && !isListItemLine(rawLine);
+
+    if (isIndentedCodeLine) {
+      if (!inIndentedCode) {
+        pushToken("code-indented");
+        inIndentedCode = true;
+      }
+      inParagraph = false;
+      continue;
+    }
+
+    if (inIndentedCode) {
+      inIndentedCode = false;
+    }
+
+    const nextLine = lines[i + 1]?.trim() ?? "";
+    if (isSetextHeadingCandidate(rawLine, line) && /^=+$/u.test(nextLine)) {
+      pushToken("h1");
+      inParagraph = false;
+      i += 1;
+      continue;
+    }
+
+    if (isSetextHeadingCandidate(rawLine, line) && /^-+$/u.test(nextLine)) {
+      pushToken("h2");
+      inParagraph = false;
+      i += 1;
       continue;
     }
 
     const headingMatch = line.match(/^(#{1,6})\s+/u);
     if (headingMatch) {
-      tokens.push(`h${headingMatch[1].length}`);
+      pushToken(`h${headingMatch[1].length}`);
       inParagraph = false;
       continue;
     }
 
     const admonitionMatch = line.match(/^:::\s*([a-z0-9-]+)/iu);
     if (admonitionMatch) {
-      tokens.push(`admonition:${admonitionMatch[1].toLowerCase()}`);
+      pushToken(`admonition:start:${admonitionMatch[1].toLowerCase()}`);
+      admonitionDepth += 1;
       inParagraph = false;
       continue;
     }
 
     if (line === ":::") {
       tokens.push("admonition:end");
+      admonitionDepth = Math.max(0, admonitionDepth - 1);
       inParagraph = false;
       continue;
     }
 
     if (/^>\s*/u.test(line)) {
-      tokens.push("blockquote");
+      pushToken("blockquote");
       inParagraph = false;
       continue;
     }
 
-    if (/^[-*+]\s+/u.test(line)) {
-      tokens.push("ul");
+    if (/^\s*[-*+]\s+/u.test(rawLine)) {
+      pushToken(`ul:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
 
-    if (/^\d+\.\s+/u.test(line)) {
-      tokens.push("ol");
+    if (/^\s*\d+\.\s+/u.test(rawLine)) {
+      pushToken(`ol:${getListDepth(rawLine)}`);
       inParagraph = false;
       continue;
     }
 
     if (/^(?:---|\*\*\*|___)$/u.test(line)) {
-      tokens.push("hr");
+      pushToken("hr");
       inParagraph = false;
       continue;
     }
 
     if (/^\|.*\|$/u.test(line)) {
-      tokens.push("table-row");
+      if (!isTableAlignmentRow(line)) {
+        pushToken("table-row");
+      }
       inParagraph = false;
       continue;
     }
 
     if (/^<[^>]+>$/u.test(line)) {
-      tokens.push("html");
+      pushToken("html");
       inParagraph = false;
       continue;
     }
 
     if (!inParagraph) {
-      tokens.push("paragraph");
+      pushToken("paragraph");
       inParagraph = true;
     }
   }
 
   return tokens;
+};
+
+const normalizeForRelaxedComparison = (tokens: string[]): string[] => {
+  const normalized: string[] = [];
+  for (const token of tokens) {
+    if (
+      token === "paragraph" &&
+      normalized[normalized.length - 1] === "paragraph"
+    ) {
+      continue;
+    }
+    normalized.push(token);
+  }
+  return normalized;
+};
+
+const getFirstTokenDiff = (
+  sourceTokens: string[],
+  translatedTokens: string[]
+): { index: number; source: string; translated: string } | null => {
+  const maxLen = Math.max(sourceTokens.length, translatedTokens.length);
+  for (let i = 0; i < maxLen; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by maxLen derived from array lengths
+    const source = sourceTokens[i] ?? "<none>";
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by maxLen derived from array lengths
+    const translated = translatedTokens[i] ?? "<none>";
+    if (source !== translated) {
+      return { index: i, source, translated };
+    }
+  }
+  return null;
+};
+
+const structuresMatch = (
+  sourceTokens: string[],
+  translatedTokens: string[]
+): boolean => {
+  const strictness = process.env.LOCALE_PARITY_STRICTNESS ?? "strict";
+  if (strictness === "relaxed") {
+    return (
+      normalizeForRelaxedComparison(sourceTokens).join("|") ===
+      normalizeForRelaxedComparison(translatedTokens).join("|")
+    );
+  }
+
+  return translatedTokens.join("|") === sourceTokens.join("|");
 };
 
 const collectParityIssues = async (
@@ -328,6 +517,18 @@ const collectParityIssues = async (
     for (const locale of TRANSLATION_LOCALES) {
       const translatedMarkdown = locale === "pt" ? ptMarkdown : esMarkdown;
 
+      if (
+        shouldValidateFrontmatter() &&
+        normalizeFrontmatter(enMarkdown) !==
+          normalizeFrontmatter(translatedMarkdown)
+      ) {
+        issues.push({
+          key: triplet.key,
+          locale,
+          type: "frontmatter-mismatch",
+        });
+      }
+
       if (!hasNonMediaText(translatedMarkdown)) {
         issues.push({
           key: triplet.key,
@@ -338,7 +539,14 @@ const collectParityIssues = async (
       }
 
       const translatedTokens = tokenizeStructure(translatedMarkdown);
-      if (translatedTokens.join("|") !== sourceTokens.join("|")) {
+      if (!structuresMatch(sourceTokens, translatedTokens)) {
+        const firstDiff = getFirstTokenDiff(sourceTokens, translatedTokens);
+        if (firstDiff) {
+          console.warn(
+            `Structure mismatch in ${triplet.key} (${locale}) at token index ${firstDiff.index}: source=${firstDiff.source}, translated=${firstDiff.translated}`
+          );
+        }
+
         issues.push({
           key: triplet.key,
           locale,
@@ -411,6 +619,28 @@ const withTempMirror = async (
     await run(mirrorRoot);
   } finally {
     await fs.rm(mirrorRoot, { recursive: true, force: true });
+  }
+};
+
+const withEnv = async (
+  key: string,
+  value: string,
+  run: () => Promise<void>
+): Promise<void> => {
+  // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+  const previous = process.env[key];
+  // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+  process.env[key] = value;
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) {
+      // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+      delete process.env[key];
+    } else {
+      // eslint-disable-next-line security/detect-object-injection -- key is controlled by test constants in this harness
+      process.env[key] = previous;
+    }
   }
 };
 
@@ -655,6 +885,224 @@ Nota final.
 
       const issues = await collectParityIssues(mirrorRoot);
       expect(issues).toEqual([]);
+    });
+  });
+
+  it("handles setext headings, nested lists, and indented code parity", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/advanced-structure.md", {
+        en: withFrontmatter(
+          "doc-advanced-structure",
+          "Advanced Structure",
+          `
+Title
+=====
+
+- Parent
+  - Nested
+
+    const x = 1;
+`
+        ),
+        pt: withFrontmatter(
+          "doc-advanced-structure-pt",
+          "Estrutura avançada",
+          `
+Titulo
+======
+
+- Pai
+  - Aninhado
+
+    const y = 2;
+`
+        ),
+        es: withFrontmatter(
+          "doc-advanced-structure-es",
+          "Estructura avanzada",
+          `
+Titulo
+======
+
+- Padre
+  - Anidado
+
+    const z = 3;
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toEqual([]);
+    });
+  });
+
+  it("flags when admonition-contained structure moves outside admonition", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/admonition-scope.md", {
+        en: withFrontmatter(
+          "doc-admonition-scope",
+          "Admonition scope",
+          `
+:::note
+- Keep this list inside
+:::
+`
+        ),
+        pt: withFrontmatter(
+          "doc-admonition-scope-pt",
+          "Escopo de admonition",
+          `
+:::note
+Observação.
+:::
+
+- Lista fora
+`
+        ),
+        es: withFrontmatter(
+          "doc-admonition-scope-es",
+          "Alcance admonición",
+          `
+:::note
+- Mantener esta lista dentro
+:::
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toContainEqual({
+        key: "guides/admonition-scope.md",
+        locale: "pt",
+        type: "structure-mismatch",
+      });
+    });
+  });
+
+  it("ignores table alignment-only differences and supports CRLF frontmatter", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      const enContent =
+        '---\r\nid: doc-table\r\ntitle: "Table"\r\n---\r\n\r\n| Name | Value |\r\n| :--- | ---: |\r\n| A | 1 |\r\n';
+      const ptContent =
+        '---\r\nid: doc-table-pt\r\ntitle: "Tabela"\r\n---\r\n\r\n| Nome | Valor |\r\n| --- | --- |\r\n| A | 1 |\r\n';
+      const esContent =
+        '---\r\nid: doc-table-es\r\ntitle: "Tabla"\r\n---\r\n\r\n| Nombre | Valor |\r\n| --- | --- |\r\n| A | 1 |\r\n';
+
+      await writeTriplet(mirrorRoot, "guides/table-crlf.md", {
+        en: enContent,
+        pt: ptContent,
+        es: esContent,
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toEqual([]);
+    });
+  });
+
+  it("supports configurable locale docs path templates", async () => {
+    await withEnv(
+      "LOCALE_PARITY_DOCS_PATH_TEMPLATE",
+      path.join("translations", "{locale}", "docs"),
+      async () => {
+        await withTempMirror(async (mirrorRoot) => {
+          await writeMarkdown(
+            path.join(mirrorRoot, "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide", "Guide", "# Guide")
+          );
+          await writeMarkdown(
+            path.join(mirrorRoot, "translations", "pt", "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide-pt", "Guia", "# Guia")
+          );
+          await writeMarkdown(
+            path.join(mirrorRoot, "translations", "es", "docs"),
+            "guide.md",
+            withFrontmatter("doc-guide-es", "Guía", "# Guía")
+          );
+
+          const issues = await collectParityIssues(mirrorRoot);
+          expect(issues).toEqual([]);
+        });
+      }
+    );
+  });
+
+  it("optionally validates frontmatter parity", async () => {
+    await withEnv("LOCALE_PARITY_VALIDATE_FRONTMATTER", "true", async () => {
+      await withTempMirror(async (mirrorRoot) => {
+        await writeTriplet(mirrorRoot, "guides/frontmatter.md", {
+          en: withFrontmatter("doc-frontmatter", "Frontmatter", "# Body"),
+          pt: `---
+id: doc-frontmatter-pt
+title: "Frontmatter PT"
+custom: translated
+---
+
+# Corpo
+`,
+          es: withFrontmatter("doc-frontmatter-es", "Frontmatter", "# Cuerpo"),
+        });
+
+        const issues = await collectParityIssues(mirrorRoot);
+        expect(issues).toContainEqual({
+          key: "guides/frontmatter.md",
+          locale: "pt",
+          type: "frontmatter-mismatch",
+        });
+      });
+    });
+  });
+
+  it("does not classify deeply indented list items as indented code", () => {
+    const tokens = tokenizeStructure(`
+- Parent
+    - Deep unordered child
+    1. Deep ordered child
+`);
+
+    expect(tokens).toContain("ul:0");
+    expect(tokens).toContain("ul:2");
+    expect(tokens).toContain("ol:2");
+    expect(tokens).not.toContain("code-indented");
+  });
+
+  it("does not treat list plus thematic break as setext heading", async () => {
+    await withTempMirror(async (mirrorRoot) => {
+      await writeTriplet(mirrorRoot, "guides/list-hr-vs-heading.md", {
+        en: withFrontmatter(
+          "doc-list-hr-vs-heading",
+          "List and HR",
+          `
+- Item
+---
+`
+        ),
+        pt: withFrontmatter(
+          "doc-list-hr-vs-heading-pt",
+          "Lista e linha",
+          `
+Título
+---
+`
+        ),
+        es: withFrontmatter(
+          "doc-list-hr-vs-heading-es",
+          "Lista y línea",
+          `
+- Elemento
+---
+`
+        ),
+      });
+
+      const issues = await collectParityIssues(mirrorRoot);
+      expect(issues).toContainEqual({
+        key: "guides/list-hr-vs-heading.md",
+        locale: "pt",
+        type: "structure-mismatch",
+      });
     });
   });
 

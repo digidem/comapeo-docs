@@ -46,11 +46,20 @@ export interface ProcessedCallout {
   type: DocusaurusAdmonitionType;
   title?: string;
   content: string;
+  children?: string;
 }
 
 interface ProcessCalloutOptions {
   markdownLines?: string[];
+  children?: string;
 }
+
+const LOCALE_SPACE_CLASS = "[\\s\\u00A0\\u2007\\u202F]";
+const ICON_SEPARATOR_CLASS =
+  "[:;\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789\\uFF1B\\uFF0C\\u3001\\u3002\\uFF0E\\u00B7\\u2022\\u30FB\\.]";
+const TITLE_SEPARATOR_CLASS =
+  "[:\\-\\u2013\\u2014\\u2212\\u2011\\u2012\\uFF1A\\uFE55\\uA789]";
+const PLAIN_TITLE_SEPARATOR_CLASS = "[:\\uFF1A\\uFE55\\uA789]";
 
 /**
  * Extract emoji or icon from Notion callout icon property
@@ -85,6 +94,7 @@ function extractTextFromRichText(richText: RichTextItemResponse[]): string {
   });
   const result: string[] = [];
   for (let i = 0; i < parts.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by parts.length in this loop
     const cur = parts[i];
     if (!cur) continue;
     if (
@@ -132,21 +142,44 @@ function stripIconFromLines(lines: string[], icon: string): string[] {
     return lines;
   }
 
-  // Build a safe pattern for the exact icon, followed by optional punctuation and space
-  const escapedIcon = icon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Require either:
-  // - whitespace after icon, or
-  // - optional punctuation then at least one space, to avoid stripping "👁️is"
-  const iconPattern = new RegExp(
-    `^${escapedIcon}(?:\\s+|\\s*[:\\-–—]\\s+)`,
-    "u"
-  );
-
-  if (!iconPattern.test(trimmed)) {
+  if (!trimmed.startsWith(icon)) {
     return lines;
   }
 
-  const remainder = trimmed.replace(iconPattern, "");
+  let remainder = trimmed.slice(icon.length);
+  if (remainder.length === 0) {
+    return rest;
+  }
+
+  const whitespaceAfterIconPattern = new RegExp(`^${LOCALE_SPACE_CLASS}+`, "u");
+  const separatorAfterIconPattern = new RegExp(
+    `^${LOCALE_SPACE_CLASS}*${ICON_SEPARATOR_CLASS}${LOCALE_SPACE_CLASS}+`,
+    "u"
+  );
+  const localeColonNoSpacePattern = new RegExp(
+    `^${LOCALE_SPACE_CLASS}*[\\uFF1A\\uFE55\\uA789]`,
+    "u"
+  );
+
+  const whitespaceMatch = remainder.match(whitespaceAfterIconPattern);
+  if (whitespaceMatch) {
+    remainder = remainder.slice(whitespaceMatch[0].length);
+    return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  }
+
+  const separatorMatch = remainder.match(separatorAfterIconPattern);
+  if (separatorMatch) {
+    remainder = remainder.slice(separatorMatch[0].length);
+    return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  }
+
+  const localeColonNoSpaceMatch = remainder.match(localeColonNoSpacePattern);
+  if (localeColonNoSpaceMatch) {
+    remainder = remainder.slice(localeColonNoSpaceMatch[0].length);
+    return remainder ? [`${leading}${remainder}`, ...rest] : rest;
+  }
+
+  // Remove the icon itself even if there is no recognized separator.
   return remainder ? [`${leading}${remainder}`, ...rest] : rest;
 }
 
@@ -160,13 +193,35 @@ function extractTitleFromLines(lines: string[]): {
   const leading = firstLine.match(/^\s*/)?.[0] ?? "";
   const trimmed = firstLine.trim();
 
-  // Match **Title** optionally followed by a colon and optional same-line content
-  const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*:?\s*(.*)$/u);
+  // Match **Title** with optional locale separator and optional same-line content
+  const boldTitlePattern = new RegExp(
+    `^\\*\\*(.+?)\\*\\*(?:${LOCALE_SPACE_CLASS}*(${TITLE_SEPARATOR_CLASS})${LOCALE_SPACE_CLASS}*)?(.*)$`,
+    "u"
+  );
+  const boldMatch = trimmed.match(boldTitlePattern);
   if (boldMatch) {
     const rawTitle = boldMatch[1].trim();
+    const separator = boldMatch[2];
+    const sameLineRemainder = boldMatch[3]?.trimStart() ?? "";
+    const rawTitleEndsWithSeparator =
+      /[:\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789]+$/u.test(rawTitle);
+    const hasWhitespaceGapAfterBold = /^\*\*.+?\*\*\s+/u.test(trimmed);
+
+    // Conservative: avoid parsing patterns like "**Title**text" as a title.
+    if (
+      !separator &&
+      sameLineRemainder.length > 0 &&
+      !rawTitleEndsWithSeparator &&
+      !hasWhitespaceGapAfterBold
+    ) {
+      return { contentLines: lines };
+    }
+
     // Remove trailing punctuation commonly used in headings
-    const title = rawTitle.replace(/[:\.!?\uFF1A\u3002\uFF01\uFF1F]+$/u, "");
-    const sameLineRemainder = boldMatch[2]?.trimStart() ?? "";
+    const title = rawTitle.replace(
+      /[:\.!?;\uFF1A\uFE55\uA789\u3002\uFF01\uFF1F\uFF1B]+$/u,
+      ""
+    );
     const hasContent = sameLineRemainder.length > 0 || restLines.length > 0;
     if (title && hasContent) {
       const contentLines = sameLineRemainder
@@ -177,8 +232,12 @@ function extractTitleFromLines(lines: string[]): {
   }
 
   // Conservative plain "Title: content" case (short, single-phrase title)
-  // Allow any leading Unicode letter and mixed case, short single-phrase title before colon
-  const colonMatch = trimmed.match(/^([\p{L}][^:\n]{0,49}?)\s*:\s*(.*)$/u);
+  // Allow any leading Unicode letter and mixed case, short single-phrase title before a locale colon.
+  const plainTitlePattern = new RegExp(
+    `^([\\p{L}][^:\\uFF1A\\uFE55\\uA789\\n]{0,49}?)${LOCALE_SPACE_CLASS}*${PLAIN_TITLE_SEPARATOR_CLASS}${LOCALE_SPACE_CLASS}*(.*)$`,
+    "u"
+  );
+  const colonMatch = trimmed.match(plainTitlePattern);
   if (colonMatch) {
     const titleCandidate = colonMatch[1].trim();
     const sameLineRemainder = colonMatch[2]?.trimStart() ?? "";
@@ -241,6 +300,7 @@ export function processCalloutBlock(
     type: admonitionType,
     title: derivedTitle,
     content: finalContent,
+    children: options.children,
   };
 }
 
@@ -250,15 +310,19 @@ export function processCalloutBlock(
 export function calloutToAdmonition(
   processedCallout: ProcessedCallout
 ): string {
-  const { type, title, content } = processedCallout;
+  const { type, title, content, children } = processedCallout;
   const lines = [`:::${type}${title ? ` ${title}` : ""}`];
 
   if (content) {
     lines.push(content);
   }
 
+  if (children) {
+    lines.push(children);
+  }
+
   lines.push(":::");
-  return `${lines.join("\n")}\n`;
+  return lines.join("\n");
 }
 
 /**
@@ -275,7 +339,8 @@ export function isCalloutBlock(
  */
 export function convertCalloutToAdmonition(
   block: PartialBlockObjectResponse | BlockObjectResponse,
-  markdownLines?: string[]
+  markdownLines?: string[],
+  children?: string
 ): string | null {
   if (!isCalloutBlock(block)) {
     return null;
@@ -291,6 +356,7 @@ export function convertCalloutToAdmonition(
 
   const processedCallout = processCalloutBlock(calloutProperties, {
     markdownLines,
+    children,
   });
   return calloutToAdmonition(processedCallout);
 }

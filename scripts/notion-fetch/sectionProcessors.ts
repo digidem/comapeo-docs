@@ -70,37 +70,32 @@ export function processToggleSection(
   fs.mkdirSync(sectionFolderPath, { recursive: true });
   pageSpinner.succeed(chalk.green(`Section folder created: ${sectionFolder}`));
 
-  // Only create _category_.json for English (default locale)
-  if (lang === "en") {
-    const orderValue = page?.properties?.["Order"]?.number;
-    const position = Number.isFinite(orderValue) ? orderValue : i + 1;
-    const categoryContent: CategoryConfig = {
-      label: sectionName,
-      position,
-      collapsible: true,
-      collapsed: true,
-      link: {
-        type: "generated-index",
-      },
-      customProps: { title: null },
-    };
+  const orderValue = page?.properties?.["Order"]?.number;
+  const position = Number.isFinite(orderValue) ? orderValue : i + 1;
+  const categoryContent: CategoryConfig = {
+    label: sectionName,
+    position,
+    collapsible: true,
+    collapsed: true,
+    link: {
+      type: "generated-index",
+    },
+    customProps: { title: null },
+  };
 
-    // Apply pending heading title if exists
-    if (currentHeading.get(lang)) {
-      categoryContent.customProps.title = currentHeading.get(lang)!;
-      currentHeading.set(lang, null);
-    }
-
-    const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
-    fs.writeFileSync(
-      categoryFilePath,
-      JSON.stringify(categoryContent, null, 2),
-      "utf8"
-    );
-    pageSpinner.succeed(
-      chalk.green(`added _category_.json to ${sectionFolder}`)
-    );
+  // Apply pending heading title if exists
+  if (currentHeading.get(lang)) {
+    categoryContent.customProps.title = currentHeading.get(lang)!;
+    currentHeading.set(lang, null);
   }
+
+  const categoryFilePath = path.join(sectionFolderPath, "_category_.json");
+  fs.writeFileSync(
+    categoryFilePath,
+    JSON.stringify(categoryContent, null, 2),
+    "utf8"
+  );
+  pageSpinner.succeed(chalk.green(`added _category_.json to ${sectionFolder}`));
 
   return sectionFolder;
 }

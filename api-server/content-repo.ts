@@ -330,11 +330,19 @@ export async function prepareContentBranchForFetch(
   await initializeContentRepo();
   const config = getConfig();
 
-  await runGit(["fetch", "origin", "main", config.contentBranch], {
-    cwd: config.workdir,
-    auth: true,
-    errorPrefix: "Failed to fetch main/content branches",
-  });
+  await runGit(
+    [
+      "fetch",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+      `+refs/heads/${config.contentBranch}:refs/remotes/origin/${config.contentBranch}`,
+    ],
+    {
+      cwd: config.workdir,
+      auth: true,
+      errorPrefix: "Failed to fetch main/content branches",
+    }
+  );
   await ensureRemoteContentBranchExists(config.workdir);
 
   await runGit(
@@ -379,6 +387,14 @@ export async function prepareContentBranchForFetch(
       cwd: config.workdir,
       errorPrefix:
         "Failed to reset content branch to origin/main during recovery",
+    });
+
+    // Force push the bootstrapped branch so the remote reflects origin/main
+    // This prevents subsequent standard pushes from failing due to unrelated histories
+    await runGit(["push", "origin", config.contentBranch, "--force"], {
+      cwd: config.workdir,
+      auth: true,
+      errorPrefix: "Failed to force push recovered content branch",
     });
   }
 

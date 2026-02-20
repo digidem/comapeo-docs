@@ -197,8 +197,8 @@ export async function handleListJobs(
 
   // Validate query parameters using Zod schema
   const queryValidation = jobsQuerySchema.safeParse({
-    status: statusParam,
-    type: typeParam,
+    status: statusParam ?? undefined,
+    type: typeParam ?? undefined,
   });
 
   if (!queryValidation.success) {

@@ -24,7 +24,6 @@ const GENERATED_PATH_SPECS = ["docs/", "i18n/", "static/images/"] as const;
 
 type ContentRepoErrorCode =
   | "DIRTY_WORKING_TREE"
-  | "MERGE_CONFLICT"
   | "PUSH_FAILED"
   | "CONTENT_GENERATION_FAILED"
   | "BRANCH_MISSING"
@@ -358,36 +357,29 @@ export async function prepareContentBranchForFetch(
   }
 
   try {
-    await runGit(["merge", "origin/main"], {
+    await runGit(["merge", "-X", "theirs", "origin/main"], {
       cwd: config.workdir,
       errorPrefix: "Failed to merge origin/main into content",
     });
   } catch (error) {
+    console.warn(
+      `[ContentRepo] Merge conflict detected while merging origin/main into content. Recovering by resetting content branch to origin/main. Error: ${error instanceof Error ? error.message : String(error)}`
+    );
     try {
       await runGit(["merge", "--abort"], {
         cwd: config.workdir,
         errorPrefix: "Failed to abort merge",
       });
     } catch {
-      // no-op
+      // ignore abort error
     }
-    await runGit(
-      [
-        "checkout",
-        "-B",
-        config.contentBranch,
-        `origin/${config.contentBranch}`,
-      ],
-      {
-        cwd: config.workdir,
-        errorPrefix: "Failed to reset content branch after merge conflict",
-      }
-    );
-    throw new ContentRepoError(
-      "Merge conflict while merging origin/main into content",
-      error instanceof Error ? error.message : String(error),
-      "MERGE_CONFLICT"
-    );
+
+    // Automatically recover by bootstrapping the branch from origin/main
+    await runGit(["reset", "--hard", "origin/main"], {
+      cwd: config.workdir,
+      errorPrefix:
+        "Failed to reset content branch to origin/main during recovery",
+    });
   }
 
   return { remoteRef };

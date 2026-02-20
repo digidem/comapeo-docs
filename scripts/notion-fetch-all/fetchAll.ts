@@ -79,7 +79,9 @@ export async function fetchAllNotionData(
     filter,
     fetchSpinnerText:
       fetchSpinnerText ??
-      "Fetching ALL pages from Notion (excluding removed items by default)...",
+      (statusFilter
+        ? `Fetching database to filter by "${statusFilter}" and resolve children...`
+        : "Fetching ALL pages from Notion (excluding removed items by default)..."),
     generateSpinnerText:
       generateSpinnerText ?? "Exporting pages to markdown files",
     transform: (pages) => {

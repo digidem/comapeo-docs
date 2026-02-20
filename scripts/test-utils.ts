@@ -12,7 +12,9 @@ export function installTestNotionEnv(): () => void {
   const originalEnv = { ...process.env };
 
   process.env.NOTION_API_KEY = "test-api-key";
+  process.env.OPENAI_API_KEY = "test-openai-key";
   process.env.DATABASE_ID = "test-database-id";
+  process.env.DATA_SOURCE_ID = "test-data-source-id";
   process.env.NOTION_DATABASE_ID = "test-database-id";
   process.env.NODE_ENV = "test";
 

@@ -2,7 +2,7 @@ import { Client } from "@notionhq/client";
 import { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
-import { visit } from "unist-util-visit";
+import remarkGfm from "remark-gfm";
 import fs from "fs/promises";
 import ora from "ora";
 import chalk from "chalk";
@@ -16,8 +16,10 @@ import {
   NOTION_PROPERTIES,
 } from "../constants.js";
 
-const EMPTY_TRANSLATED_CONTENT_ERROR =
-  "Translated content is empty - cannot create page. Please check if the English source has content.";
+const EMPTY_TRANSLATED_CONTENT_PREFIX = "Translated content is empty";
+const TOO_MANY_BLOCKS_ERROR_PREFIX =
+  "Translated content exceeds Notion block safety limit";
+const MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT = 1000;
 const MAX_RICH_TEXT_LENGTH = 1900; // Notion API limit is 2000; use 1900 to be safe
 
 // Type definition for page results from dataSources.query
@@ -86,6 +88,36 @@ interface ImageNode {
   alt?: string;
 }
 
+interface TableCellNode {
+  type: "tableCell";
+  children: (TextNode | MarkdownNode)[];
+}
+
+interface TableRowNode {
+  type: "tableRow";
+  children: TableCellNode[];
+}
+
+interface TableNode {
+  type: "table";
+  align?: (string | null)[];
+  children: TableRowNode[];
+}
+
+interface TextNode {
+  type: "text";
+  value: string;
+  bold?: boolean;
+  italic?: boolean;
+  strikethrough?: boolean;
+  underline?: boolean;
+}
+
+interface InlineCodeNode {
+  type: "inlineCode";
+  value: string;
+}
+
 type MarkdownNode =
   | HeadingNode
   | ParagraphNode
@@ -94,7 +126,28 @@ type MarkdownNode =
   | CodeNode
   | BlockquoteNode
   | ThematicBreakNode
-  | ImageNode;
+  | ImageNode
+  | TableNode;
+
+interface UnknownMarkdownNode {
+  type?: unknown;
+  value?: unknown;
+  children?: unknown;
+  [key: string]: unknown;
+}
+
+interface MarkdownConversionDiagnostics {
+  frontMatterRemoved: boolean;
+  trimmedContentLength: number;
+  topLevelNodeTypes: string[];
+  unsupportedTopLevelNodeTypes: string[];
+  fallbackBlocksCreated: number;
+}
+
+interface MarkdownConversionResult {
+  blocks: BlockObjectRequest[];
+  diagnostics: MarkdownConversionDiagnostics;
+}
 
 /**
  * Parses markdown content and converts it to Notion blocks
@@ -104,34 +157,48 @@ type MarkdownNode =
 export async function markdownToNotionBlocks(
   markdownContent: string
 ): Promise<BlockObjectRequest[]> {
-  // Parse the markdown content
-  const processor = unified().use(remarkParse);
-  const ast = processor.parse(markdownContent) as Root;
+  return convertMarkdownToNotionBlocks(markdownContent).blocks;
+}
+
+function convertMarkdownToNotionBlocks(
+  markdownContent: string
+): MarkdownConversionResult {
+  const contentWithoutFrontMatter = removeFrontMatter(markdownContent);
+  const trimmedContentLength = contentWithoutFrontMatter.trim().length;
+
+  // Parse the markdown content (remarkGfm enables table, strikethrough, etc.)
+  const processor = unified().use(remarkParse).use(remarkGfm);
+  const ast = processor.parse(contentWithoutFrontMatter) as Root;
 
   // Array to store the Notion blocks
   const notionBlocks: BlockObjectRequest[] = [];
+  const topLevelNodeTypes: string[] = [];
+  const unsupportedTopLevelNodeTypes: string[] = [];
+  let fallbackBlocksCreated = 0;
 
-  // Process the markdown AST
-  visit(ast, (node) => {
+  for (const node of ast.children) {
+    const nodeType = getNodeType(node);
+    topLevelNodeTypes.push(nodeType);
+
     // Cast node to our custom type
     const typedNode = node as unknown as MarkdownNode;
     switch (typedNode.type) {
       case "heading": {
         const headingNode = typedNode as HeadingNode;
         const headingLevel = headingNode.depth;
-        const headingText = getTextFromNode(headingNode);
+        const headingRichText = getRichTextFromNode(headingNode);
 
-        notionBlocks.push(createHeadingBlock(headingText, headingLevel));
+        notionBlocks.push(createHeadingBlock(headingRichText, headingLevel));
         break;
       }
 
       case "paragraph": {
         const paragraphNode = typedNode as ParagraphNode;
-        const paragraphText = getTextFromNode(paragraphNode);
+        const paragraphRichText = getRichTextFromNode(paragraphNode);
 
         notionBlocks.push({
           paragraph: {
-            rich_text: splitIntoRichTextItems(paragraphText),
+            rich_text: splitRichTextIntoItems(paragraphRichText),
           },
         });
         break;
@@ -139,21 +206,8 @@ export async function markdownToNotionBlocks(
 
       case "list": {
         const listNode = typedNode as ListNode;
-        const listItems = listNode.children.map((item) =>
-          getTextFromNode(item)
-        );
         const isOrdered = listNode.ordered;
-        for (const item of listItems) {
-          const blockType = isOrdered
-            ? "numbered_list_item"
-            : "bulleted_list_item";
-          notionBlocks.push({
-            type: blockType,
-            [blockType]: {
-              rich_text: splitIntoRichTextItems(item),
-            },
-          } as unknown as BlockObjectRequest);
-        }
+        processListNode(listNode, notionBlocks, isOrdered);
         break;
       }
 
@@ -212,59 +266,22 @@ export async function markdownToNotionBlocks(
             remainingCode = remainingCode.substring(splitIndex);
           }
 
-          // Add each chunk as a separate code block without visible part indicators
-          for (const [i, codeChunk] of codeChunks.entries()) {
-            // For the first chunk, add a paragraph with the language info
-            if (i === 0) {
-              notionBlocks.push({
-                type: "paragraph",
-                paragraph: {
-                  rich_text: [
-                    {
-                      type: "text",
-                      text: {
-                        content: `\`\`\`${language}`,
-                      },
-                    },
-                  ],
-                },
-              });
-            }
-
-            // Add the code content as a paragraph with code formatting
+          // Add each chunk as a separate code block
+          for (const codeChunk of codeChunks) {
             notionBlocks.push({
-              type: "paragraph",
-              paragraph: {
+              type: "code",
+              code: {
                 rich_text: [
                   {
                     type: "text",
                     text: {
                       content: codeChunk,
                     },
-                    annotations: {
-                      code: true,
-                    },
                   },
                 ],
+                language: mappedLanguage,
               },
             });
-
-            // For the last chunk, add a closing code fence
-            if (i === codeChunks.length - 1) {
-              notionBlocks.push({
-                type: "paragraph",
-                paragraph: {
-                  rich_text: [
-                    {
-                      type: "text",
-                      text: {
-                        content: "```",
-                      },
-                    },
-                  ],
-                },
-              });
-            }
           }
         }
         break;
@@ -272,11 +289,11 @@ export async function markdownToNotionBlocks(
 
       case "blockquote": {
         const quoteNode = typedNode as BlockquoteNode;
-        const quoteText = getTextFromNode(quoteNode);
+        const quoteRichText = getRichTextFromNode(quoteNode);
 
         notionBlocks.push({
           quote: {
-            rich_text: splitIntoRichTextItems(quoteText),
+            rich_text: splitRichTextIntoItems(quoteRichText),
           },
         });
         break;
@@ -287,6 +304,36 @@ export async function markdownToNotionBlocks(
           type: "divider",
           divider: {},
         });
+        break;
+      }
+
+      case "table": {
+        const tableNode = typedNode as unknown as TableNode;
+        const rows = tableNode.children;
+        if (rows.length === 0) break;
+
+        const tableWidth = rows[0]?.children?.length ?? 0;
+        if (tableWidth === 0) break;
+
+        const tableRows = rows.map((row) => ({
+          type: "table_row" as const,
+          table_row: {
+            cells: row.children.map((cell) => {
+              const cellRichText = getRichTextFromNode(cell);
+              return splitRichTextIntoItems(cellRichText);
+            }),
+          },
+        }));
+
+        notionBlocks.push({
+          type: "table",
+          table: {
+            table_width: tableWidth,
+            has_column_header: rows.length > 1,
+            has_row_header: false,
+            children: tableRows,
+          },
+        } as unknown as BlockObjectRequest);
         break;
       }
 
@@ -312,16 +359,371 @@ export async function markdownToNotionBlocks(
         });
         break;
       }
+      default: {
+        unsupportedTopLevelNodeTypes.push(nodeType);
+        const fallbackText = getFallbackTextFromUnsupportedNode(node);
+        if (fallbackText.length > 0) {
+          notionBlocks.push({
+            paragraph: {
+              rich_text: splitIntoRichTextItems(fallbackText),
+            },
+          });
+          fallbackBlocksCreated++;
+        }
+      }
     }
-  });
+  }
 
-  return notionBlocks;
+  return {
+    blocks: notionBlocks,
+    diagnostics: {
+      frontMatterRemoved: contentWithoutFrontMatter !== markdownContent,
+      trimmedContentLength,
+      topLevelNodeTypes: [...new Set(topLevelNodeTypes)],
+      unsupportedTopLevelNodeTypes: [...new Set(unsupportedTopLevelNodeTypes)],
+      fallbackBlocksCreated,
+    },
+  };
+}
+
+function getNodeType(node: unknown): string {
+  if (!node || typeof node !== "object") {
+    return "unknown";
+  }
+  const typedNode = node as UnknownMarkdownNode;
+  return typeof typedNode.type === "string" ? typedNode.type : "unknown";
+}
+
+function getFallbackTextFromUnsupportedNode(node: unknown): string {
+  if (!node || typeof node !== "object") {
+    return "";
+  }
+
+  const typedNode = node as UnknownMarkdownNode;
+
+  if (
+    typedNode.type === "definition" &&
+    typeof typedNode.url === "string" &&
+    typedNode.url.trim().length > 0
+  ) {
+    const identifier =
+      typeof typedNode.identifier === "string" ? typedNode.identifier : "ref";
+    return `[${identifier}]: ${typedNode.url.trim()}`;
+  }
+
+  const textContent = getTextFromNode(node).trim();
+  if (textContent.length > 0) {
+    return textContent;
+  }
+
+  return "";
 }
 
 // Define a TextNode type for text elements
-interface TextNode {
+interface NotionRichText {
   type: "text";
-  value: string;
+  text: {
+    content: string;
+    link?: { url: string };
+  };
+  annotations?: {
+    bold?: boolean;
+    italic?: boolean;
+    strikethrough?: boolean;
+    underline?: boolean;
+    code?: boolean;
+  };
+}
+
+interface NotionAnnotations {
+  bold: boolean;
+  italic: boolean;
+  strikethrough: boolean;
+  underline: boolean;
+  code: boolean;
+}
+
+function getRichTextFromNode(node: unknown): NotionRichText[] {
+  if (!node || typeof node !== "object") {
+    return [];
+  }
+
+  const typedNode = node as Record<string, unknown>;
+
+  if (typedNode.type === "image") {
+    const altText =
+      typeof typedNode.alt === "string" ? typedNode.alt.trim() : "";
+    const imageUrl =
+      typeof typedNode.url === "string" ? typedNode.url.trim() : "";
+    if (altText.length > 0 || imageUrl.length > 0) {
+      return [
+        { type: "text", text: { content: `[Image: ${altText || imageUrl}]` } },
+      ];
+    }
+    return [];
+  }
+
+  if (typedNode.type === "link") {
+    const linkUrl = typeof typedNode.url === "string" ? typedNode.url : "";
+    const children = typedNode.children;
+    if (Array.isArray(children)) {
+      const childRichTexts: NotionRichText[] = [];
+      for (const child of children) {
+        const childTexts = getRichTextFromNode(child);
+        for (const ct of childTexts) {
+          if (linkUrl && !ct.text.link) {
+            ct.text.link = { url: linkUrl };
+          }
+          childRichTexts.push(ct);
+        }
+      }
+      return childRichTexts;
+    }
+    return linkUrl
+      ? [{ type: "text", text: { content: linkUrl, link: { url: linkUrl } } }]
+      : [];
+  }
+
+  if (typedNode.type === "inlineCode") {
+    const value = typeof typedNode.value === "string" ? typedNode.value : "";
+    return [
+      {
+        type: "text",
+        text: { content: value },
+        annotations: {
+          bold: false,
+          italic: false,
+          strikethrough: false,
+          underline: false,
+          code: true,
+        },
+      },
+    ];
+  }
+
+  if (typedNode.type === "text" && typeof typedNode.value === "string") {
+    const annotations: NotionAnnotations = {
+      bold: typedNode.bold === true,
+      italic: typedNode.italic === true,
+      strikethrough: typedNode.strikethrough === true,
+      underline: typedNode.underline === true,
+      code: false,
+    };
+    const hasAnnotations =
+      annotations.bold ||
+      annotations.italic ||
+      annotations.strikethrough ||
+      annotations.underline;
+    return [
+      {
+        type: "text",
+        text: { content: typedNode.value },
+        ...(hasAnnotations ? { annotations } : {}),
+      },
+    ];
+  }
+
+  if (typedNode.type === "strong" || typedNode.type === "bold") {
+    const children = typedNode.children;
+    if (Array.isArray(children)) {
+      const childRichTexts: NotionRichText[] = [];
+      for (const child of children) {
+        const childTexts = getRichTextFromNode(child);
+        for (const ct of childTexts) {
+          if (!ct.annotations) {
+            ct.annotations = {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+            };
+          }
+          ct.annotations.bold = true;
+          childRichTexts.push(ct);
+        }
+      }
+      return childRichTexts;
+    }
+    return [];
+  }
+
+  if (typedNode.type === "emphasis" || typedNode.type === "italic") {
+    const children = typedNode.children;
+    if (Array.isArray(children)) {
+      const childRichTexts: NotionRichText[] = [];
+      for (const child of children) {
+        const childTexts = getRichTextFromNode(child);
+        for (const ct of childTexts) {
+          if (!ct.annotations) {
+            ct.annotations = {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+            };
+          }
+          ct.annotations.italic = true;
+          childRichTexts.push(ct);
+        }
+      }
+      return childRichTexts;
+    }
+    return [];
+  }
+
+  if (typedNode.type === "delete" || typedNode.type === "strikethrough") {
+    const children = typedNode.children;
+    if (Array.isArray(children)) {
+      const childRichTexts: NotionRichText[] = [];
+      for (const child of children) {
+        const childTexts = getRichTextFromNode(child);
+        for (const ct of childTexts) {
+          if (!ct.annotations) {
+            ct.annotations = {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+            };
+          }
+          ct.annotations.strikethrough = true;
+          childRichTexts.push(ct);
+        }
+      }
+      return childRichTexts;
+    }
+    return [];
+  }
+
+  if (typedNode.type === "underline") {
+    const children = typedNode.children;
+    if (Array.isArray(children)) {
+      const childRichTexts: NotionRichText[] = [];
+      for (const child of children) {
+        const childTexts = getRichTextFromNode(child);
+        for (const ct of childTexts) {
+          if (!ct.annotations) {
+            ct.annotations = {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+            };
+          }
+          ct.annotations.underline = true;
+          childRichTexts.push(ct);
+        }
+      }
+      return childRichTexts;
+    }
+    return [];
+  }
+
+  if (typedNode.children && Array.isArray(typedNode.children)) {
+    const results: NotionRichText[] = [];
+    for (const child of typedNode.children) {
+      results.push(...getRichTextFromNode(child));
+    }
+    return results;
+  }
+
+  return [];
+}
+
+function flattenRichText(richTexts: NotionRichText[]): string {
+  return richTexts.map((rt) => rt.text.content).join("");
+}
+
+function processListNode(
+  listNode: ListNode | ListItemNode,
+  notionBlocks: BlockObjectRequest[],
+  isOrdered: boolean
+): void {
+  const children = listNode.children;
+  if (!Array.isArray(children)) return;
+
+  for (const child of children) {
+    const childNode = child as unknown as Record<string, unknown>;
+
+    if (childNode.type === "listItem") {
+      const itemChildren = childNode.children;
+      const blockType = isOrdered ? "numbered_list_item" : "bulleted_list_item";
+      let createdListItemBlock = false;
+
+      if (Array.isArray(itemChildren)) {
+        for (const itemChild of itemChildren) {
+          const itemChildNode = itemChild as unknown as Record<string, unknown>;
+
+          if (itemChildNode.type === "paragraph") {
+            const paragraphRichText = getRichTextFromNode(itemChildNode);
+            const text = flattenRichText(paragraphRichText);
+            const richTextItems =
+              text.trim().length > 0
+                ? splitRichTextIntoItems(paragraphRichText)
+                : [
+                    {
+                      type: "text",
+                      text: {
+                        content: " ",
+                      },
+                    },
+                  ];
+
+            notionBlocks.push({
+              type: blockType,
+              [blockType]: {
+                rich_text: richTextItems,
+              },
+            } as unknown as BlockObjectRequest);
+            createdListItemBlock = true;
+          } else if (itemChildNode.type === "list") {
+            if (!createdListItemBlock) {
+              notionBlocks.push({
+                type: blockType,
+                [blockType]: {
+                  rich_text: [
+                    {
+                      type: "text",
+                      text: {
+                        content: " ",
+                      },
+                    },
+                  ],
+                },
+              } as unknown as BlockObjectRequest);
+              createdListItemBlock = true;
+            }
+
+            processListNode(
+              itemChildNode as unknown as ListNode,
+              notionBlocks,
+              (itemChildNode as { ordered?: boolean }).ordered || false
+            );
+          }
+        }
+      }
+
+      if (!createdListItemBlock) {
+        notionBlocks.push({
+          type: blockType,
+          [blockType]: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: " ",
+                },
+              },
+            ],
+          },
+        } as unknown as BlockObjectRequest);
+      }
+    }
+  }
 }
 
 /**
@@ -333,6 +735,27 @@ function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
   }
 
   const typedNode = node as Record<string, unknown>;
+
+  if (typedNode.type === "image") {
+    const altText =
+      typeof typedNode.alt === "string" ? typedNode.alt.trim() : "";
+    const imageUrl =
+      typeof typedNode.url === "string" ? typedNode.url.trim() : "";
+    if (altText.length > 0 || imageUrl.length > 0) {
+      return `[Image: ${altText || imageUrl}]`;
+    }
+    return "";
+  }
+
+  if (typedNode.type === "link") {
+    const linkText = Array.isArray(typedNode.children)
+      ? typedNode.children.map((child) => getTextFromNode(child)).join("")
+      : "";
+    if (linkText.trim().length > 0) {
+      return linkText;
+    }
+    return typeof typedNode.url === "string" ? typedNode.url : "";
+  }
 
   if (typedNode.value && typeof typedNode.value === "string") {
     return typedNode.value;
@@ -356,6 +779,53 @@ function getTextFromNode(node: MarkdownNode | TextNode | unknown): string {
   }
 
   return "";
+}
+
+/**
+ * Splits a rich_text array into items that respect Notion's 2000-char limit per item,
+ * while preserving formatting (annotations and links) across splits.
+ */
+function splitRichTextIntoItems(richTexts: NotionRichText[]): NotionRichText[] {
+  if (!richTexts || richTexts.length === 0) {
+    return [];
+  }
+
+  const result: NotionRichText[] = [];
+
+  for (const rt of richTexts) {
+    const content = rt.text.content;
+
+    if (content.length <= MAX_RICH_TEXT_LENGTH) {
+      result.push(rt);
+      continue;
+    }
+
+    let remaining = content;
+    let currentItem: NotionRichText = { ...rt, text: { ...rt.text } };
+
+    while (remaining.length > 0) {
+      let splitIndex = Math.min(remaining.length, MAX_RICH_TEXT_LENGTH);
+      if (remaining.length > MAX_RICH_TEXT_LENGTH) {
+        const spaceIndex = remaining.lastIndexOf(" ", MAX_RICH_TEXT_LENGTH);
+        if (spaceIndex > 0) {
+          splitIndex = spaceIndex + 1;
+        }
+      }
+
+      const chunk = remaining.substring(0, splitIndex);
+      result.push({
+        type: "text",
+        text: { content: chunk, link: currentItem.text.link },
+        annotations: currentItem.annotations
+          ? { ...currentItem.annotations }
+          : undefined,
+      });
+
+      remaining = remaining.substring(splitIndex);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -395,7 +865,7 @@ function splitIntoRichTextItems(
  * Creates a heading block with the specified level
  */
 function createHeadingBlock(
-  text: string,
+  richText: NotionRichText[],
   level: 1 | 2 | 3
 ): BlockObjectRequest {
   const headingType = `heading_${level}` as
@@ -406,7 +876,7 @@ function createHeadingBlock(
   return {
     type: headingType,
     [headingType]: {
-      rich_text: splitIntoRichTextItems(text),
+      rich_text: splitRichTextIntoItems(richText),
     },
   } as unknown as BlockObjectRequest;
 }
@@ -495,36 +965,132 @@ type NotionCodeLanguage =
  */
 export function removeFrontMatter(content: string): string {
   if (typeof content !== "string") return "";
-  // Check if content starts with front-matter (---)
-  const frontMatterRegex = /^---\n[\s\S]*?\n---\n/m;
-  return content.replace(frontMatterRegex, "");
+
+  const normalized = content.startsWith("\uFEFF") ? content.slice(1) : content;
+  if (!normalized.startsWith("---\n") && !normalized.startsWith("---\r\n")) {
+    return content;
+  }
+
+  const lines = normalized.split(/\r?\n/u);
+  if (lines[0] !== "---") {
+    return content;
+  }
+
+  let closingIndex = -1;
+  for (let index = 1; index < lines.length; index++) {
+    // eslint-disable-next-line security/detect-object-injection -- index is loop-bounded by lines.length
+    const line = lines[index];
+    if (line === "---" || line === "...") {
+      closingIndex = index;
+      break;
+    }
+  }
+
+  if (closingIndex === -1) {
+    return content;
+  }
+
+  const frontMatterLines = lines.slice(1, closingIndex);
+  const hasYamlField = frontMatterLines.some((line) =>
+    /^\s*[A-Za-z0-9_"'-]+\s*:/u.test(line)
+  );
+
+  if (!hasYamlField) {
+    return content;
+  }
+
+  return lines.slice(closingIndex + 1).join("\n");
 }
 
 /**
  * Maps markdown code language to Notion code block language
  */
 function mapCodeLanguage(language: string): NotionCodeLanguage {
+  const normalizedLanguage = language.trim().toLowerCase();
+
   const languageMap = new Map<string, NotionCodeLanguage>([
     ["js", "javascript"],
+    ["javascript", "javascript"],
+    ["node", "javascript"],
+    ["mjs", "javascript"],
+    ["cjs", "javascript"],
     ["ts", "typescript"],
+    ["tsx", "typescript"],
+    ["typescript", "typescript"],
     ["py", "python"],
+    ["python", "python"],
     ["rb", "ruby"],
+    ["ruby", "ruby"],
     ["go", "go"],
+    ["golang", "go"],
     ["java", "java"],
+    ["kt", "kotlin"],
+    ["kts", "kotlin"],
+    ["kotlin", "kotlin"],
     ["php", "php"],
     ["c", "c"],
+    ["h", "c"],
     ["cpp", "c++"],
+    ["cc", "c++"],
+    ["cxx", "c++"],
+    ["hpp", "c++"],
     ["cs", "c#"],
-    ["html", "html"],
-    ["css", "css"],
+    ["csharp", "c#"],
+    ["fs", "f#"],
+    ["fsharp", "f#"],
+    ["rs", "rust"],
+    ["rust", "rust"],
+    ["swift", "swift"],
+    ["scala", "scala"],
+    ["r", "r"],
+    ["rscript", "r"],
+    ["sh", "shell"],
     ["shell", "shell"],
+    ["zsh", "shell"],
+    ["fish", "shell"],
     ["bash", "bash"],
+    ["powershell", "powershell"],
+    ["ps1", "powershell"],
+    ["sql", "sql"],
+    ["graphql", "graphql"],
+    ["gql", "graphql"],
     ["json", "json"],
+    ["json5", "json"],
+    ["jsonc", "json"],
     ["yaml", "yaml"],
+    ["yml", "yaml"],
+    ["toml", "plain text"],
+    ["ini", "java/c/c++/c#"],
+    ["xml", "xml"],
+    ["html", "html"],
+    ["xhtml", "html"],
+    ["svg", "html"],
+    ["css", "css"],
+    ["scss", "scss"],
+    ["sass", "sass"],
+    ["less", "less"],
     ["md", "markdown"],
+    ["markdown", "markdown"],
+    ["mdx", "markdown"],
+    ["docker", "docker"],
+    ["dockerfile", "docker"],
+    ["make", "makefile"],
+    ["makefile", "makefile"],
+    ["proto", "protobuf"],
+    ["protobuf", "protobuf"],
+    ["lua", "lua"],
+    ["perl", "perl"],
+    ["objective-c", "objective-c"],
+    ["objc", "objective-c"],
+    ["matlab", "matlab"],
+    ["mermaid", "mermaid"],
+    ["plain", "plain text"],
+    ["plaintext", "plain text"],
+    ["text", "plain text"],
+    ["txt", "plain text"],
   ]);
 
-  return languageMap.get(language) || "plain text";
+  return languageMap.get(normalizedLanguage) || "plain text";
 }
 
 interface NotionPageProperties {
@@ -575,18 +1141,34 @@ export async function createNotionPageFromMarkdown(
         );
       }
 
-      // Remove front-matter if present
-      markdownContent = removeFrontMatter(markdownContent);
+      const { blocks, diagnostics } =
+        convertMarkdownToNotionBlocks(markdownContent);
 
-      // Convert markdown to Notion blocks
-      const blocks = await markdownToNotionBlocks(markdownContent);
-
-      if (markdownContent.trim().length === 0) {
-        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+      if (diagnostics.trimmedContentLength === 0) {
+        throw new Error(
+          `${EMPTY_TRANSLATED_CONTENT_PREFIX}: page "${title}" has no non-frontmatter content.`
+        );
       }
 
       if (blocks.length === 0) {
-        throw new Error(EMPTY_TRANSLATED_CONTENT_ERROR);
+        console.warn(
+          `Markdown conversion produced no Notion blocks for "${title}" (top-level nodes: ${
+            diagnostics.topLevelNodeTypes.join(", ") || "none"
+          }; unsupported top-level nodes: ${
+            diagnostics.unsupportedTopLevelNodeTypes.join(", ") || "none"
+          }; frontmatter removed: ${diagnostics.frontMatterRemoved}; fallback blocks: ${
+            diagnostics.fallbackBlocksCreated
+          }).`
+        );
+        throw new Error(
+          `${EMPTY_TRANSLATED_CONTENT_PREFIX}: page "${title}" produced no supported Notion blocks.`
+        );
+      }
+
+      if (blocks.length > MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT) {
+        throw new Error(
+          `${TOO_MANY_BLOCKS_ERROR_PREFIX}: page "${title}" generated ${blocks.length} blocks (limit ${MAX_NOTION_BLOCKS_PER_PAGE_SAFETY_LIMIT}).`
+        );
       }
 
       // CRITICAL SAFETY CHECK: Never modify main language pages
@@ -682,6 +1264,8 @@ export async function createNotionPageFromMarkdown(
             await notion.blocks.delete({
               block_id: block.id,
             });
+            // Small delay between deletions to avoid hitting Notion rate limits
+            await new Promise((resolve) => setTimeout(resolve, 100));
           } catch (deleteError) {
             console.warn(
               `Warning: Failed to delete block ${block.id}: ${deleteError.message}`
@@ -739,7 +1323,10 @@ export async function createNotionPageFromMarkdown(
         error instanceof Error ? error : new Error(String(error));
       lastError = parsedError;
 
-      if (parsedError.message === EMPTY_TRANSLATED_CONTENT_ERROR) {
+      if (
+        parsedError.message.startsWith(EMPTY_TRANSLATED_CONTENT_PREFIX) ||
+        parsedError.message.startsWith(TOO_MANY_BLOCKS_ERROR_PREFIX)
+      ) {
         throw parsedError;
       }
 

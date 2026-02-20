@@ -150,7 +150,7 @@ describe("sectionProcessors", () => {
       });
     });
 
-    it("should not create _category_.json for non-English locales", () => {
+    it("should create _category_.json for all locales including non-English", () => {
       const page = {
         id: "page-5",
         properties: {
@@ -172,7 +172,11 @@ describe("sectionProcessors", () => {
         mockSpinner
       );
 
-      expect(mockWriteFileSync).not.toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        "/test/path/es/seccion/_category_.json",
+        expect.stringContaining('"label": "Sección"'),
+        "utf8"
+      );
     });
 
     it("should apply pending heading to category customProps", () => {

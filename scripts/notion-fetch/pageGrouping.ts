@@ -11,6 +11,53 @@ const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
   Spanish: "es",
   Portuguese: "pt",
 };
+const LOCALE_PRIORITY = new Map(
+  config.i18n.locales.map((locale, index) => [locale, index])
+);
+
+/**
+ * Sort locales deterministically with default locale first.
+ *
+ * Remaining locales follow configured i18n order, with unknown locales sorted
+ * alphabetically as a stable fallback.
+ */
+export const getOrderedLocales = (locales: string[]): string[] => {
+  const uniqueLocales = [...new Set(locales)];
+
+  return uniqueLocales.sort((a, b) => {
+    if (a === DEFAULT_LOCALE && b !== DEFAULT_LOCALE) {
+      return -1;
+    }
+    if (b === DEFAULT_LOCALE && a !== DEFAULT_LOCALE) {
+      return 1;
+    }
+
+    const aPriority = LOCALE_PRIORITY.get(a);
+    const bPriority = LOCALE_PRIORITY.get(b);
+
+    if (aPriority !== undefined && bPriority !== undefined) {
+      return aPriority - bPriority;
+    }
+    if (aPriority !== undefined) {
+      return -1;
+    }
+    if (bPriority !== undefined) {
+      return 1;
+    }
+
+    return a.localeCompare(b);
+  });
+};
+
+const orderContentByLocale = (
+  content: Record<string, Record<string, any>>
+): Record<string, Record<string, any>> => {
+  const orderedContent: Record<string, Record<string, any>> = {};
+  for (const locale of getOrderedLocales(Object.keys(content))) {
+    orderedContent[locale] = content[locale];
+  }
+  return orderedContent;
+};
 
 /**
  * Get the Element Type property from a page, with fallback to legacy Section property
@@ -137,6 +184,8 @@ export const groupPagesByLang = (
     grouped.content[parentLocale] = page;
   }
 
+  grouped.content = orderContentByLocale(grouped.content);
+
   return grouped;
 };
 
@@ -161,9 +210,9 @@ export const createStandalonePageGroup = (page: Record<string, any>) => {
   return {
     mainTitle: resolvePageTitle(page),
     section: sectionName,
-    content: {
+    content: orderContentByLocale({
       [locale]: page,
-    } as Record<string, Record<string, any>>,
+    }) as Record<string, Record<string, any>>,
   };
 };
 
@@ -210,7 +259,7 @@ export const ensureTranslationSiblings = (
   page: Record<string, any>
 ): TranslationSiblingsResult => {
   const grouped = groupPagesByLang(pages, page);
-  const availableLocales = Object.keys(grouped.content);
+  const availableLocales = getOrderedLocales(Object.keys(grouped.content));
 
   const missingLocales = TRANSLATION_LOCALES.filter(
     (locale) => !availableLocales.includes(locale)
@@ -246,7 +295,7 @@ export const getTranslationLocales = (
   page: Record<string, any>
 ): string[] => {
   const grouped = groupPagesByLang(pages, page);
-  return Object.keys(grouped.content);
+  return getOrderedLocales(Object.keys(grouped.content));
 };
 
 /**

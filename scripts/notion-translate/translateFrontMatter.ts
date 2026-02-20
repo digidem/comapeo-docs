@@ -15,30 +15,15 @@ import {
 // Load environment variables
 dotenv.config({ override: true });
 
-// Initialize OpenAI client - only set baseURL if explicitly configured
+// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+  baseURL: OPENAI_BASE_URL,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
-
-const STRICT_JSON_SCHEMA_MODELS = [
-  // eslint-disable-next-line security/detect-unsafe-regex
-  /^gpt-4o(-\w+)?$/, // gpt-4o, gpt-4o-mini
-  // eslint-disable-next-line security/detect-unsafe-regex
-  /^gpt-4(-\w+)?$/, // gpt-4, gpt-4-turbo
-  // eslint-disable-next-line security/detect-unsafe-regex
-  /^gpt-5(-[\w.]+)?$/, // gpt-5, gpt-5-nano, gpt-5-mini
-];
-
-function supportsStrictJsonSchema(modelName: string): boolean {
-  const normalized = modelName.toLowerCase();
-  return STRICT_JSON_SCHEMA_MODELS.some((pattern) => pattern.test(normalized));
-}
-
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -271,7 +256,7 @@ export async function translateMarkdownFile(
   } catch (error) {
     spinner.fail(
       chalk.red(
-        `Failed to translate ${path.basename(filePath)}: ${getErrorMessage(error)}`
+        `Failed to translate ${path.basename(filePath)}: ${error.message}`
       )
     );
     throw error;
@@ -304,29 +289,6 @@ export async function translateText(
   // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
   const modelParams = getModelParams(model, { useReasoningNone: true });
 
-  // Determine response format based on model
-  // OpenAI models (gpt-4, gpt-4o, gpt-5) support strict JSON schema
-  const isStrictSchemaSupported = supportsStrictJsonSchema(model);
-
-  const responseFormat = isStrictSchemaSupported
-    ? {
-        type: "json_schema" as const,
-        json_schema: {
-          name: "translation",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              markdown: { type: "string" },
-              title: { type: "string" },
-            },
-            required: ["markdown", "title"],
-            additionalProperties: false,
-          },
-        },
-      }
-    : { type: "json_object" as const };
-
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
@@ -335,7 +297,22 @@ export async function translateText(
           { role: "system", content: prompt },
           { role: "user", content: textWithTitle },
         ],
-        response_format: responseFormat,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "translation",
+            schema: {
+              type: "object",
+              properties: {
+                markdown: { type: "string" },
+                title: { type: "string" },
+              },
+              required: ["markdown", "title"],
+              additionalProperties: false,
+            },
+            strict: true,
+          },
+        },
         ...modelParams,
       });
 
@@ -388,9 +365,7 @@ export async function translateString(
     spinner.succeed(chalk.green(`Text translated to ${targetLanguage}`));
     return translatedText.markdown;
   } catch (error) {
-    spinner.fail(
-      chalk.red(`Failed to translate text: ${getErrorMessage(error)}`)
-    );
+    spinner.fail(chalk.red(`Failed to translate text: ${error.message}`));
     throw error;
   }
 }

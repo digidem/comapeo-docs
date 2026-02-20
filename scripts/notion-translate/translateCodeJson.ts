@@ -13,10 +13,10 @@ import {
 // Load environment variables
 dotenv.config({ override: true });
 
-// Initialize OpenAI client - only set baseURL if explicitly configured
+// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+  baseURL: OPENAI_BASE_URL,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;

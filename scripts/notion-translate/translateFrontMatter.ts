@@ -9,14 +9,16 @@ import {
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
+  OPENAI_BASE_URL,
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  baseURL: OPENAI_BASE_URL,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;

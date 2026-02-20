@@ -1,6 +1,11 @@
 /**
  * Constants used across the Notion workflow scripts
  */
+import dotenv from "dotenv";
+
+// Load environment variables and override system variables
+// so local .env values take precedence
+dotenv.config({ override: true });
 
 // Main language configuration
 export const MAIN_LANGUAGE = "English";
@@ -64,6 +69,7 @@ export const WEBP_QUALITY = 80;
 export const PNG_QUALITY_RANGE = [0.6, 0.8];
 
 // OpenAI constants
+export const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
 export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;

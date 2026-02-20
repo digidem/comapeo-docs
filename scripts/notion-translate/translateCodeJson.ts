@@ -4,14 +4,19 @@ import fs from "fs/promises";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
-import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
+import {
+  DEFAULT_OPENAI_MODEL,
+  getModelParams,
+  OPENAI_BASE_URL,
+} from "../constants.js";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  baseURL: OPENAI_BASE_URL,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;

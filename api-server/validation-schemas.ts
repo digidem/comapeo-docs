@@ -9,6 +9,10 @@
  */
 
 import { z } from "zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+
+extendZodWithOpenApi(z);
+
 import type { JobType, JobStatus } from "./job-tracker";
 import { ErrorCode } from "./response-schemas";
 import {

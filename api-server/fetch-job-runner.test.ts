@@ -64,7 +64,6 @@ vi.mock("./content-repo", () => ({
     details?: string;
     code?:
       | "DIRTY_WORKING_TREE"
-      | "MERGE_CONFLICT"
       | "PUSH_FAILED"
       | "CONTENT_GENERATION_FAILED"
       | "BRANCH_MISSING";

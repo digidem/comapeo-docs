@@ -52,7 +52,6 @@ export type PreJobErrorCode =
 
 export type FetchJobErrorCode =
   | "DIRTY_WORKING_TREE"
-  | "MERGE_CONFLICT"
   | "PUSH_FAILED"
   | "NOTION_QUERY_FAILED"
   | "CONTENT_GENERATION_FAILED"

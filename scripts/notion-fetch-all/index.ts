@@ -239,8 +239,9 @@ async function main() {
       statusFilter: options.statusFilter,
       maxPages: options.maxPages,
       exportFiles: options.exportFiles,
-      fetchSpinnerText:
-        "Fetching ALL pages from Notion (excluding removed items by default)...",
+      fetchSpinnerText: options.statusFilter
+        ? `Fetching database to filter by "${options.statusFilter}" and resolve children...`
+        : "Fetching ALL pages from Notion (excluding removed items by default)...",
       generateSpinnerText: "Exporting pages to markdown files",
       progressLogger,
       generateOptions: {

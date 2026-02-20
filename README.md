@@ -18,6 +18,7 @@ This repository uses a **two-branch architecture** to separate code from generat
 - **`content` branch**: Generated documentation from Notion (docs/, i18n/, static/images/ ~29MB)
 
 **Why separate branches?**
+
 - Keeps main branch clean for code review and development
 - Reduces repository clone time for contributors
 - Separates content syncs from code changes
@@ -28,14 +29,17 @@ This repository uses a **two-branch architecture** to separate code from generat
 Before local development, you need content files. Choose one of these methods:
 
 **Option 1: Fetch from content branch** (Recommended - Fast)
+
 ```bash
 git fetch origin content
 git checkout origin/content -- docs/ i18n/ static/images/
 ```
 
 **Option 2: Generate from Notion** (Requires API access)
+
 1. Copy `.env.example` to `.env` and add your Notion API key and Database ID
 2. Fetch content:
+
 ```bash
 bun notion:fetch
 ```
@@ -48,7 +52,7 @@ The `bun notion:fetch` script pulls structured content from Notion and rewrites 
 - **Sub-page grouping**: Parents must link their language variants through the `Sub-item` relation. Each linked child should set `Language` to `English`, `Spanish`, or `Portuguese`. Any other language values are ignored.
 - **Element Type field drives layout**:
   - `Element Type = Page` exports markdown, regenerates frontmatter, rewrites remote images under `static/images/`, and tracks compression savings for the summary.
-  - `Element Type = Toggle` creates a folder (plus `_category_.json` for English) and increments the “section folders” counter.
+  - `Element Type = Toggle` creates a folder (plus `_category_.json` for all locales) and increments the “section folders” counter.
   - `Element Type = Heading` stores the heading for the next `Page` entry’s sidebar metadata and increments the “title sections applied” counter.
 - **Summary counters**: The totals printed at the end reflect the actions above. Zeros mean no matching work occurred (for example, no toggles, no headings, or no images to optimize).
 - **Translations**: When a non-English child page is processed, its title is written to `i18n/<locale>/code.json` using the parent’s English title as the key. Ensure those files exist before running the script.
@@ -68,6 +72,7 @@ bun dev
 This command opens your browser automatically and reflects changes immediately.
 
 **Full local setup from scratch:**
+
 ```bash
 # Clone repository
 git clone https://github.com/digidem/comapeo-docs.git
@@ -99,6 +104,7 @@ The resulting files are placed in the `build` directory for deployment via any s
 #### How Deployment Works
 
 Deployments use a **checkout strategy**:
+
 1. Checkout `main` branch (code and scripts)
 2. Overlay content files from `content` branch (docs, i18n, images)
 3. Build the site with merged content
@@ -221,24 +227,28 @@ The repository includes several automated workflows for content management:
 #### Content Workflows (Push to `content` branch)
 
 **Sync Notion Docs** (`sync-docs.yml`)
+
 - **Trigger**: Manual dispatch or repository dispatch
 - **Purpose**: Fetches content from Notion and commits to `content` branch
 - **Target Branch**: `content`
 - **Environment**: Requires `NOTION_API_KEY` and `DATABASE_ID` secrets
 
 **Translate Docs** (`translate-docs.yml`)
+
 - **Trigger**: Manual dispatch or repository dispatch
 - **Purpose**: Generates translations and commits to `content` branch
 - **Target Branch**: `content`
 - **Environment**: Requires `NOTION_API_KEY`, `DATABASE_ID`, `OPENAI_API_KEY`
 
 **Fetch All Content for Testing** (`notion-fetch-test.yml`)
+
 - **Trigger**: Manual dispatch with optional force mode
 - **Purpose**: Tests complete content fetch from Notion
 - **Target Branch**: `content`
 - **Features**: Retry logic, detailed statistics, content validation
 
 **Clean All Generated Content** (`clean-content.yml`)
+
 - **Trigger**: Manual dispatch with confirmation
 - **Purpose**: Removes all generated content from `content` branch
 - **Target Branch**: `content`
@@ -247,11 +257,13 @@ The repository includes several automated workflows for content management:
 #### Deployment Workflows (Read from both branches)
 
 **Deploy to Staging** (`deploy-staging.yml`)
+
 - **Trigger**: Push to `main`, manual dispatch, or after content sync
 - **Process**: Checkout `main` + overlay `content` → build → deploy to GitHub Pages
 - **URL**: https://digidem.github.io/comapeo-docs
 
 **Deploy to Production** (`deploy-production.yml`)
+
 - **Trigger**: Push to `main` or manual dispatch
 - **Process**: Checkout `main` + overlay `content` → build → deploy to Cloudflare Pages
 - **URL**: https://docs.comapeo.app

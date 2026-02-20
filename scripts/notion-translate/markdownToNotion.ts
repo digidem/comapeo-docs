@@ -395,18 +395,6 @@ interface NotionAnnotations {
   code: boolean;
 }
 
-function createAnnotations(node: Record<string, unknown>): NotionAnnotations {
-  return {
-    bold: node.bold === true,
-    italic: node.italic === true,
-    strikethrough: node.strikethrough === true,
-    underline: node.underline === true,
-    code:
-      node.type === "inlineCode" ||
-      (node.type === "text" && node.value?.toString().includes("`")),
-  };
-}
-
 function getRichTextFromNode(node: unknown): NotionRichText[] {
   if (!node || typeof node !== "object") {
     return [];

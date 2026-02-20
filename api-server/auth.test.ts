@@ -19,6 +19,8 @@ describe("ApiKeyAuth", () => {
     // Clear any existing instance and create fresh one for each test
     ApiKeyAuth["instance"] = undefined;
     auth = new ApiKeyAuth();
+    // Ensure no keys are loaded from environment for consistent testing
+    auth.clearKeys();
   });
 
   afterEach(() => {

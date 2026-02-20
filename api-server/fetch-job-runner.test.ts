@@ -142,6 +142,7 @@ describe("fetch-job-runner", () => {
     mockFetchAllNotionData.mockResolvedValue({
       pages: [],
       rawPages: [],
+      candidateIds: [],
       fetchedCount: 0,
       processedCount: 0,
     });
@@ -170,6 +171,7 @@ describe("fetch-job-runner", () => {
     mockFetchAllNotionData.mockResolvedValue({
       pages: [],
       rawPages: [],
+      candidateIds: [],
       fetchedCount: 0,
       processedCount: 0,
     });
@@ -202,6 +204,7 @@ describe("fetch-job-runner", () => {
         },
       ],
       rawPages: [],
+      candidateIds: ["page-1"],
       fetchedCount: 1,
       processedCount: 1,
     });
@@ -235,6 +238,7 @@ describe("fetch-job-runner", () => {
         },
       ],
       rawPages: [],
+      candidateIds: ["page-1"],
       fetchedCount: 1,
       processedCount: 1,
     });
@@ -268,6 +272,7 @@ describe("fetch-job-runner", () => {
         },
       ],
       rawPages: [],
+      candidateIds: [],
       fetchedCount: 1,
       processedCount: 1,
     });

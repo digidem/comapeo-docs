@@ -323,11 +323,12 @@ describe("API Handler Integration Tests", () => {
 
   describe("Authentication Integration", () => {
     it("should validate API keys correctly", () => {
-      // Set up test API keys
-      process.env.API_KEY_TEST = "test-key-123";
-      process.env.API_KEY_ADMIN = "admin-key-456";
-
       const auth = getAuth();
+      auth.clearKeys();
+
+      // Set up test API keys manually
+      auth.addKey("TEST", "test-key-123", { name: "TEST", active: true });
+      auth.addKey("ADMIN", "admin-key-456", { name: "ADMIN", active: true });
 
       // Check authentication is enabled
       expect(auth.isAuthenticationEnabled()).toBe(true);

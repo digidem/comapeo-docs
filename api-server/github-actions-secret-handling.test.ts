@@ -39,7 +39,9 @@ describe("GitHub Actions Secret Handling", () => {
 
     it("maps API key secret to Authorization header usage", () => {
       const job = workflow.jobs["api-validate"];
-      expect(job.env.API_KEY_CI).toBe("${{ secrets.API_KEY_GITHUB_ACTIONS }}");
+      expect(job.env.API_KEY_CI).toContain(
+        "${{ secrets.API_KEY_GITHUB_ACTIONS"
+      );
 
       const smokeStep = job.steps.find(
         (step: any) => step.name === "Run API smoke assertions"

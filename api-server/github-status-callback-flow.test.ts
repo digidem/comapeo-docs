@@ -14,7 +14,9 @@ import {
   reportJobCompletion,
   GitHubStatusError,
   type GitHubStatusOptions,
+  clearGitHubStatusReported,
 } from "./github-status";
+import { waitForPendingWrites } from "./job-persistence";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -295,6 +297,9 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
       expect(tracker.isGitHubStatusReported(jobId)).toBe(true);
 
+      // Ensure data is persisted before restart
+      await waitForPendingWrites();
+
       // Simulate server restart
       destroyJobTracker();
       const newTracker = getJobTracker();
@@ -322,6 +327,9 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
       // Flag should be false
       expect(tracker.isGitHubStatusReported(jobId)).toBe(false);
+
+      // Ensure data is persisted before restart
+      await waitForPendingWrites();
 
       // Simulate server restart
       destroyJobTracker();

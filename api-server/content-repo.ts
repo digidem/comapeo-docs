@@ -443,10 +443,34 @@ export async function copyGeneratedContentFromTemp(
 
 export async function stageGeneratedPaths(): Promise<void> {
   const config = getConfig();
-  await runGit(["add", ...GENERATED_PATH_SPECS], {
-    cwd: config.workdir,
-    errorPrefix: "Failed to stage generated paths",
-  });
+  const pathsToStage: string[] = [];
+
+  for (const p of GENERATED_PATH_SPECS) {
+    const fullPath = resolve(config.workdir, p);
+    if (await pathExists(fullPath)) {
+      pathsToStage.push(p);
+    } else {
+      // If it doesn't exist on disk, check if it's tracked by git.
+      // If it is tracked, we still need to stage its deletion.
+      try {
+        const { stdout } = await runGit(["ls-files", p], {
+          cwd: config.workdir,
+        });
+        if (stdout.trim().length > 0) {
+          pathsToStage.push(p);
+        }
+      } catch {
+        // ignore errors from ls-files
+      }
+    }
+  }
+
+  if (pathsToStage.length > 0) {
+    await runGit(["add", ...pathsToStage], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to stage generated paths",
+    });
+  }
 }
 
 export async function hasStagedGeneratedChanges(): Promise<boolean> {

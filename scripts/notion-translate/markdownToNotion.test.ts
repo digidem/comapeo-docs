@@ -49,6 +49,44 @@ slug: hidden
       expect(headingText).toBe("Visible heading");
     });
 
+    it("preserves thematic-break markdown that starts with ---", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `---
+
+# Keep this heading`;
+
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      expect(blocks).toHaveLength(2);
+      expect("divider" in blocks[0]).toBe(true);
+      expect("heading_1" in blocks[1]).toBe(true);
+    });
+
+    it("preserves unterminated frontmatter-like content", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `---
+title: Missing closing delimiter
+Body stays intact`;
+
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      expect(blocks).toHaveLength(2);
+      expect("divider" in blocks[0]).toBe(true);
+
+      const paragraphText = (
+        blocks[1] as {
+          paragraph: { rich_text: Array<{ text: { content: string } }> };
+        }
+      ).paragraph.rich_text
+        .map((item) => item.text.content)
+        .join("");
+
+      expect(paragraphText).toContain("title: Missing closing delimiter");
+      expect(paragraphText).toContain("Body stays intact");
+    });
+
     it("falls back to paragraph text for unsupported top-level html nodes", async () => {
       const { markdownToNotionBlocks } = await import("./markdownToNotion");
 

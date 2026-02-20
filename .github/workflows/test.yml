@@ -24,7 +24,16 @@ jobs:
           bun-version: latest
 
       - name: Checkout i18n content from content branch
-        run: git checkout origin/content -- i18n/ || echo "⚠️ content branch unavailable, locale tests will be skipped"
+        id: i18n_content
+        shell: bash
+        run: |
+          if git checkout origin/content -- i18n/; then
+            echo "has_i18n=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Loaded i18n content from origin/content."
+          else
+            echo "has_i18n=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ origin/content checkout failed. Locale-dependent tests will be skipped."
+          fi
 
       - name: Install dependencies
         run: bun install
@@ -33,4 +42,13 @@ jobs:
         run: npm rebuild sharp
 
       - name: Run tests
-        run: bun run test
+        shell: bash
+        run: |
+          if [ "${{ steps.i18n_content.outputs.has_i18n }}" = "true" ]; then
+            echo "✅ Running full test suite (including locale-dependent tests)."
+            bun run test
+          else
+            echo "⚠️ Skipping locale-dependent tests because origin/content checkout failed."
+            echo "Skipped: scripts/locale-parity.test.ts, scripts/verify-locale-output.test.ts"
+            bunx vitest run --pool=threads --exclude scripts/locale-parity.test.ts --exclude scripts/verify-locale-output.test.ts
+          fi

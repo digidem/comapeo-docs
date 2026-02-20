@@ -965,10 +965,41 @@ type NotionCodeLanguage =
  */
 export function removeFrontMatter(content: string): string {
   if (typeof content !== "string") return "";
-  // Remove only leading YAML front-matter.
-  const frontMatterRegex =
-    /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$)/;
-  return content.replace(frontMatterRegex, "");
+
+  const normalized = content.startsWith("\uFEFF") ? content.slice(1) : content;
+  if (!normalized.startsWith("---\n") && !normalized.startsWith("---\r\n")) {
+    return content;
+  }
+
+  const lines = normalized.split(/\r?\n/u);
+  if (lines[0] !== "---") {
+    return content;
+  }
+
+  let closingIndex = -1;
+  for (let index = 1; index < lines.length; index++) {
+    // eslint-disable-next-line security/detect-object-injection -- index is loop-bounded by lines.length
+    const line = lines[index];
+    if (line === "---" || line === "...") {
+      closingIndex = index;
+      break;
+    }
+  }
+
+  if (closingIndex === -1) {
+    return content;
+  }
+
+  const frontMatterLines = lines.slice(1, closingIndex);
+  const hasYamlField = frontMatterLines.some((line) =>
+    /^\s*[A-Za-z0-9_"'-]+\s*:/u.test(line)
+  );
+
+  if (!hasYamlField) {
+    return content;
+  }
+
+  return lines.slice(closingIndex + 1).join("\n");
 }
 
 /**

@@ -24,6 +24,8 @@ type CliOptions = {
   pageId?: string;
 };
 
+const PARENT_ITEM_PROPERTY = "Parent item";
+
 function parseArgs(): CliOptions {
   const args = process.argv.slice(2);
   const options: CliOptions = {};
@@ -90,7 +92,26 @@ function isEnglishPage(page: NotionPage): boolean {
 }
 
 function isChildPage(page: NotionPage): boolean {
-  return getRelationIds(page, "Parent item").length > 0;
+  return getRelationIds(page, PARENT_ITEM_PROPERTY).length > 0;
+}
+
+function hasTargetStatus(page: NotionPage): boolean {
+  return getSelectName(page, NOTION_PROPERTIES.STATUS) === TARGET_STATUS;
+}
+
+export function isEligibleRootPage(
+  page: NotionPage,
+  options: CliOptions = {}
+): boolean {
+  if (!isEnglishPage(page) || isChildPage(page) || !hasTargetStatus(page)) {
+    return false;
+  }
+
+  if (!options.pageId) {
+    return true;
+  }
+
+  return normalizePageId(page.id) === normalizePageId(options.pageId);
 }
 
 function isPageElement(page: NotionPage): boolean {
@@ -161,7 +182,7 @@ function findSiblingByLanguage(
   allPagesById: Map<string, NotionPage>,
   targetLanguage: string
 ): NotionPage | undefined {
-  const parentId = getRelationIds(page, "Parent item")[0];
+  const parentId = getRelationIds(page, PARENT_ITEM_PROPERTY)[0];
   if (!parentId) {
     return undefined;
   }
@@ -170,7 +191,10 @@ function findSiblingByLanguage(
     if (!candidate || candidate.id === page.id) {
       return false;
     }
-    const candidateParentId = getRelationIds(candidate, "Parent item")[0];
+    const candidateParentId = getRelationIds(
+      candidate,
+      PARENT_ITEM_PROPERTY
+    )[0];
     if (candidateParentId !== parentId) {
       return false;
     }
@@ -292,23 +316,13 @@ async function main(): Promise<number> {
   const allPages = (await fetchNotionData(undefined)) as NotionPage[];
   const pageIndex = buildPageIndex(allPages);
 
-  const roots = allPages.filter((page) => {
-    const status = getSelectName(page, NOTION_PROPERTIES.STATUS);
-    const statusMatches = status === TARGET_STATUS;
-    if (!statusMatches) {
-      return false;
-    }
-
-    if (!options.pageId) {
-      return true;
-    }
-
-    return normalizePageId(page.id) === normalizePageId(options.pageId);
-  });
+  const roots = allPages.filter((page) => isEligibleRootPage(page, options));
 
   if (roots.length === 0) {
     console.log(
-      chalk.yellow(`No English pages found with status \"${TARGET_STATUS}\".`)
+      chalk.yellow(
+        `No root English pages found in status \"${TARGET_STATUS}\"${options.pageId ? ` for page ID ${options.pageId}` : ""}.`
+      )
     );
     await gracefulShutdown(0);
     return 0;
@@ -347,7 +361,7 @@ async function main(): Promise<number> {
 
   console.log(
     chalk.green(
-      `Found ${roots.length} parent page(s) in \"${TARGET_STATUS}\" and ${selectedPages.length} child page(s) to fetch.`
+      `Found ${roots.length} root English parent page(s) in \"${TARGET_STATUS}\" and ${selectedPages.length} child page(s) to fetch.`
     )
   );
 
@@ -367,9 +381,13 @@ async function main(): Promise<number> {
   return 0;
 }
 
-initializeGracefulShutdownHandlers();
+if (import.meta.main) {
+  initializeGracefulShutdownHandlers();
 
-await main().catch(async (error) => {
-  console.error(chalk.red("❌ Script failed:"), error);
-  await gracefulShutdown(1);
-});
+  await main().catch(async (error) => {
+    console.error(chalk.red("❌ Script failed:"), error);
+    await gracefulShutdown(1);
+  });
+}
+
+export { main };

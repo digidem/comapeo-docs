@@ -1,11 +1,8 @@
 import {
-  extendZodWithOpenApi,
   OpenAPIRegistry,
   OpenApiGeneratorV3,
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-
-extendZodWithOpenApi(z);
 
 import {
   createJobTypeSchema as createJobSchema,

@@ -8,5 +8,5 @@
     },
     "types": ["bun-types"]
   },
-  "exclude": [".docusaurus", "build", "worktrees"]
+  "exclude": [".docusaurus", "build"]
 }

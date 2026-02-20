@@ -134,11 +134,16 @@ function withTimeout<T>(
   timeoutMs: number,
   operation: string
 ): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+  });
+
   return Promise.race([
-    promise,
-    new Promise<T>((_resolve, reject) =>
-      setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs)
-    ),
+    promise.finally(() => {
+      if (timer) clearTimeout(timer);
+    }),
+    timeoutPromise,
   ]).catch((error) => {
     // Re-throw with context about which operation timed out
     if (error instanceof ContentRepoError && error.code === "JOB_TIMEOUT") {
@@ -397,13 +402,7 @@ export async function runFetchJob({
     // The fetch-ready flow may replace parent pages with their children, but we need
     // to transition the original "Ready to publish" pages to "Draft published".
     const transitionCandidates =
-      type === "fetch-ready"
-        ? fetchResult.pages
-            .filter(
-              (page) => page.status === NOTION_PROPERTIES.READY_TO_PUBLISH
-            )
-            .map((page) => page.id)
-        : [];
+      type === "fetch-ready" ? fetchResult.candidateIds : [];
 
     const pages = normalizePages(fetchResult.pages, options.maxPages);
     terminal.pagesProcessed = pages.length;

@@ -289,6 +289,33 @@ export async function translateText(
   // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
   const modelParams = getModelParams(model, { useReasoningNone: true });
 
+  // Determine response format based on model
+  // OpenAI models (gpt-4, gpt-5) support strict JSON schema
+  // Other models (deepseek, etc.) might only support json_object
+  const isStrictSchemaSupported =
+    model.toLowerCase().includes("gpt") ||
+    model.toLowerCase().includes("o1") ||
+    model.toLowerCase().includes("o3");
+
+  const responseFormat = isStrictSchemaSupported
+    ? {
+        type: "json_schema" as const,
+        json_schema: {
+          name: "translation",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              markdown: { type: "string" },
+              title: { type: "string" },
+            },
+            required: ["markdown", "title"],
+            additionalProperties: false,
+          },
+        },
+      }
+    : { type: "json_object" as const };
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
@@ -297,7 +324,7 @@ export async function translateText(
           { role: "system", content: prompt },
           { role: "user", content: textWithTitle },
         ],
-        response_format: { type: "json_object" },
+        response_format: responseFormat,
         ...modelParams,
       });
 

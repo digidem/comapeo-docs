@@ -514,10 +514,15 @@ export async function processAndReplaceImages(
       continue;
     }
 
-    if (
-      !urlValidation.sanitizedUrl!.startsWith("http") &&
-      !urlValidation.sanitizedUrl!.startsWith("data:")
-    ) {
+    if (urlValidation.sanitizedUrl!.startsWith("data:")) {
+      dataUrlImagesKept++;
+      if (DEBUG_S3_IMAGES) {
+        debugS3(`  -> Categorized as VALID (data URL kept unchanged)`);
+      }
+      continue;
+    }
+
+    if (!urlValidation.sanitizedUrl!.startsWith("http")) {
       console.info(chalk.blue(`ℹ️  Skipping local image: ${match.url}`));
       invalidResults.push({
         success: false,

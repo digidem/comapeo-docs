@@ -1176,6 +1176,22 @@ async function processSinglePageTranslation({
       englishPage.id,
       config.language
     );
+  } else {
+    // Restore regression: title pages previously got a minimal heading block
+    translatedBlocks = [
+      {
+        object: "block",
+        type: "heading_1",
+        heading_1: {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: translatedTitle },
+            },
+          ],
+        },
+      },
+    ];
   }
 
   await createNotionPageWithBlocks(

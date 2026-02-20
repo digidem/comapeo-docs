@@ -297,22 +297,7 @@ export async function translateText(
           { role: "system", content: prompt },
           { role: "user", content: textWithTitle },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "translation",
-            schema: {
-              type: "object",
-              properties: {
-                markdown: { type: "string" },
-                title: { type: "string" },
-              },
-              required: ["markdown", "title"],
-              additionalProperties: false,
-            },
-            strict: true,
-          },
-        },
+        response_format: { type: "json_object" },
         ...modelParams,
       });
 

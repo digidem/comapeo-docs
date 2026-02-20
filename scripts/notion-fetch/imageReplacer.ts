@@ -446,6 +446,7 @@ export async function processAndReplaceImages(
     fallbackUsed: true;
   }> = [];
   let canonicalLocalImagesKept = 0;
+  let dataUrlImagesKept = 0;
 
   for (const match of imageMatches) {
     const trimmedUrl = match.url.trim();
@@ -513,7 +514,10 @@ export async function processAndReplaceImages(
       continue;
     }
 
-    if (!urlValidation.sanitizedUrl!.startsWith("http")) {
+    if (
+      !urlValidation.sanitizedUrl!.startsWith("http") &&
+      !urlValidation.sanitizedUrl!.startsWith("data:")
+    ) {
       console.info(chalk.blue(`ℹ️  Skipping local image: ${match.url}`));
       invalidResults.push({
         success: false,
@@ -546,6 +550,14 @@ export async function processAndReplaceImages(
     console.info(
       chalk.blue(
         `ℹ️  Kept ${canonicalLocalImagesKept} canonical /images/ path${canonicalLocalImagesKept === 1 ? "" : "s"} unchanged`
+      )
+    );
+  }
+
+  if (dataUrlImagesKept > 0) {
+    console.info(
+      chalk.blue(
+        `ℹ️  Kept ${dataUrlImagesKept} data URL image${dataUrlImagesKept === 1 ? "" : "s"} unchanged`
       )
     );
   }

@@ -17,7 +17,10 @@ import {
   extractTranslatableText,
   getLanguageName,
 } from "./translateCodeJson.js";
-import { createNotionPageFromMarkdown } from "./markdownToNotion.js";
+import {
+  createNotionPageWithBlocks,
+  translateNotionBlocksDirectly,
+} from "./translateBlocks.js";
 import {
   fetchNotionData,
   sortAndExpandNotionData,
@@ -1167,14 +1170,21 @@ async function processSinglePageTranslation({
   }
   // Create or update translation page in Notion as a sibling (child of the same parent)
   // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
-  await createNotionPageFromMarkdown(
+  let translatedBlocks: any[] = [];
+  if (!isTitlePage) {
+    translatedBlocks = await translateNotionBlocksDirectly(
+      englishPage.id,
+      config.language
+    );
+  }
+
+  await createNotionPageWithBlocks(
     notion,
     parentInfo,
     DATA_SOURCE_ID || DATABASE_ID, // Primary: DATA_SOURCE_ID, Fallback: DATABASE_ID
     translatedTitle,
-    translatedContent,
+    translatedBlocks,
     properties,
-    true,
     config.notionLangCode,
     translationPage?.id
   );

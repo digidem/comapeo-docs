@@ -455,6 +455,7 @@ export async function stageGeneratedPaths(): Promise<void> {
       try {
         const { stdout } = await runGit(["ls-files", p], {
           cwd: config.workdir,
+          errorPrefix: "Failed to check tracked paths",
         });
         if (stdout.trim().length > 0) {
           pathsToStage.push(p);

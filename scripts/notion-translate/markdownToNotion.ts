@@ -2,6 +2,7 @@ import { Client } from "@notionhq/client";
 import { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
 import fs from "fs/promises";
 import ora from "ora";
 import chalk from "chalk";
@@ -87,6 +88,22 @@ interface ImageNode {
   alt?: string;
 }
 
+interface TableCellNode {
+  type: "tableCell";
+  children: (TextNode | MarkdownNode)[];
+}
+
+interface TableRowNode {
+  type: "tableRow";
+  children: TableCellNode[];
+}
+
+interface TableNode {
+  type: "table";
+  align?: (string | null)[];
+  children: TableRowNode[];
+}
+
 interface TextNode {
   type: "text";
   value: string;
@@ -109,7 +126,8 @@ type MarkdownNode =
   | CodeNode
   | BlockquoteNode
   | ThematicBreakNode
-  | ImageNode;
+  | ImageNode
+  | TableNode;
 
 interface UnknownMarkdownNode {
   type?: unknown;
@@ -148,8 +166,8 @@ function convertMarkdownToNotionBlocks(
   const contentWithoutFrontMatter = removeFrontMatter(markdownContent);
   const trimmedContentLength = contentWithoutFrontMatter.trim().length;
 
-  // Parse the markdown content
-  const processor = unified().use(remarkParse);
+  // Parse the markdown content (remarkGfm enables table, strikethrough, etc.)
+  const processor = unified().use(remarkParse).use(remarkGfm);
   const ast = processor.parse(contentWithoutFrontMatter) as Root;
 
   // Array to store the Notion blocks
@@ -286,6 +304,36 @@ function convertMarkdownToNotionBlocks(
           type: "divider",
           divider: {},
         });
+        break;
+      }
+
+      case "table": {
+        const tableNode = typedNode as unknown as TableNode;
+        const rows = tableNode.children;
+        if (rows.length === 0) break;
+
+        const tableWidth = rows[0]?.children?.length ?? 0;
+        if (tableWidth === 0) break;
+
+        const tableRows = rows.map((row) => ({
+          type: "table_row" as const,
+          table_row: {
+            cells: row.children.map((cell) => {
+              const cellRichText = getRichTextFromNode(cell);
+              return splitRichTextIntoItems(cellRichText);
+            }),
+          },
+        }));
+
+        notionBlocks.push({
+          type: "table",
+          table: {
+            table_width: tableWidth,
+            has_column_header: rows.length > 1,
+            has_row_header: false,
+            children: tableRows,
+          },
+        } as unknown as BlockObjectRequest);
         break;
       }
 
@@ -1185,6 +1233,8 @@ export async function createNotionPageFromMarkdown(
             await notion.blocks.delete({
               block_id: block.id,
             });
+            // Small delay between deletions to avoid hitting Notion rate limits
+            await new Promise((resolve) => setTimeout(resolve, 100));
           } catch (deleteError) {
             console.warn(
               `Warning: Failed to delete block ${block.id}: ${deleteError.message}`

@@ -552,6 +552,85 @@ title: Metadata only
     });
   });
 
+  describe("table support", () => {
+    it("converts a markdown table to a Notion table block", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `| Name | Age |
+| --- | --- |
+| Alice | 30 |
+| Bob | 25 |`;
+
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      expect(blocks).toHaveLength(1);
+      const tableBlock = blocks[0] as {
+        type: string;
+        table: {
+          table_width: number;
+          has_column_header: boolean;
+          has_row_header: boolean;
+          children: Array<{
+            type: string;
+            table_row: { cells: Array<Array<{ text: { content: string } }>> };
+          }>;
+        };
+      };
+
+      expect(tableBlock.type).toBe("table");
+      expect(tableBlock.table.table_width).toBe(2);
+      expect(tableBlock.table.has_column_header).toBe(true);
+      expect(tableBlock.table.has_row_header).toBe(false);
+      expect(tableBlock.table.children).toHaveLength(3);
+      expect(tableBlock.table.children[0].type).toBe("table_row");
+
+      const headerCells = tableBlock.table.children[0].table_row.cells;
+      expect(headerCells[0][0].text.content).toBe("Name");
+      expect(headerCells[1][0].text.content).toBe("Age");
+
+      const row1Cells = tableBlock.table.children[1].table_row.cells;
+      expect(row1Cells[0][0].text.content).toBe("Alice");
+      expect(row1Cells[1][0].text.content).toBe("30");
+    });
+
+    it("converts a single-row table (no header) correctly", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `| Col A | Col B |
+| --- | --- |`;
+
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      expect(blocks).toHaveLength(1);
+      const tableBlock = blocks[0] as {
+        type: string;
+        table: {
+          table_width: number;
+          has_column_header: boolean;
+          children: unknown[];
+        };
+      };
+
+      expect(tableBlock.type).toBe("table");
+      expect(tableBlock.table.table_width).toBe(2);
+      expect(tableBlock.table.children).toHaveLength(1);
+    });
+
+    it("does not fall back to plain text for table nodes", async () => {
+      const { markdownToNotionBlocks } = await import("./markdownToNotion");
+
+      const markdown = `| Header |
+| --- |
+| Cell |`;
+
+      const blocks = await markdownToNotionBlocks(markdown);
+
+      const paragraphBlocks = blocks.filter((b) => "paragraph" in b);
+      expect(paragraphBlocks).toHaveLength(0);
+      expect(blocks.some((b) => "table" in b)).toBe(true);
+    });
+  });
+
   describe("nested list support", () => {
     it("emits empty parent list item before nested children", async () => {
       const { markdownToNotionBlocks } = await import("./markdownToNotion");

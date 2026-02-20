@@ -448,20 +448,20 @@ Navigate to your repository on GitHub and add these secrets:
 | `DATABASE_ID`    | Your database ID    | All Notion-related workflows |
 | `DATA_SOURCE_ID` | Your data source ID | All Notion-related workflows |
 
-#### API Service Secrets (Required for API-based Workflows)
+#### API Service Secrets (Required for API validation/runtime calls)
 
-| Secret Name              | Value                                              | Used By Workflows    |
-| ------------------------ | -------------------------------------------------- | -------------------- |
-| `API_ENDPOINT`           | `https://your-domain.com` (or omit for local mode) | Notion Fetch via API |
-| `API_KEY_GITHUB_ACTIONS` | Value from Step 1.2                                | Notion Fetch via API |
+| Secret Name              | Value                               | Used By Workflows/Callers               |
+| ------------------------ | ----------------------------------- | --------------------------------------- |
+| `API_KEY_GITHUB_ACTIONS` | Value from Step 1.2                 | API Validate workflow, API job callers  |
+| `API_ENDPOINT`           | `https://your-api-host.example.com` | Manual VPS smoke commands and operators |
 
-**Note:** The `API_ENDPOINT` secret should point to your deployed API service URL (e.g., `https://api.example.com`). If omitted, the workflow will run in "local mode" and start the API server locally for testing.
+**Note:** `API_ENDPOINT` is used by manual smoke checks and operator calls against the deployed API service. The CI `API Validate` workflow runs the API locally and does not require `API_ENDPOINT`.
 
 #### Translation Secrets (Required for Translation Workflows)
 
 | Secret Name      | Value               | Used By Workflows       |
 | ---------------- | ------------------- | ----------------------- |
-| `OPENAI_API_KEY` | Your OpenAI API key | Translate, Notion Fetch |
+| `OPENAI_API_KEY` | Your OpenAI API key | Translate, API Validate |
 | `OPENAI_MODEL`   | OpenAI model name   | Translate (optional)    |
 
 **Default for `OPENAI_MODEL`:** `gpt-4o-mini`
@@ -503,7 +503,7 @@ Navigate to your repository on GitHub and add these secrets:
 
 | Workflow               | Required Secrets                                                                              | Optional Secrets                                                     |
 | ---------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Notion Fetch via API   | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | `API_ENDPOINT`, `SLACK_WEBHOOK_URL`                                  |
+| API Validate           | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | None                                                                 |
 | Sync Notion Docs       | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `SLACK_WEBHOOK_URL`                                                  |
 | Translate Notion Docs  | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                           | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
 | Docker Publish         | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                       | `SLACK_WEBHOOK_URL`                                                  |
@@ -520,54 +520,54 @@ This repository includes several GitHub Actions workflows for different purposes
 - **Scheduled (cron)**: Runs on a schedule (e.g., daily at 2 AM UTC)
 - **Repository Dispatch**: Triggered via GitHub API or other workflows
 
-#### 1. Notion Fetch via API (`.github/workflows/api-notion-fetch.yml`)
+#### 1. API Validate (`.github/workflows/api-validate.yml`)
 
-Fetches content from Notion via the deployed API service. This workflow requires the API service to be deployed and accessible.
+Runs an ephemeral local API process in CI and validates the fetch API contract (`401` envelope, lock behavior, polling, and dry-run terminal shape). This workflow does not act as production runtime orchestration.
 
 **Triggers:**
 
 - Manual: Run from Actions tab
-- Scheduled: Daily at 2 AM UTC (automatically)
-- Repository Dispatch: Via GitHub API event `notion-fetch-request`
+- Automatic: On changes to `.github/workflows/api-validate.yml`
 
-**Job Types:**
+**What It Validates:**
 
-- `notion:fetch-all` - Fetch all pages from Notion
-- `notion:fetch` - Fetch single page from Notion
-- `notion:translate` - Translate content to multiple languages
-- `notion:status-translation` - Update Notion status to "Auto Translation Generated"
-- `notion:status-draft` - Update Notion status to "Draft published"
-- `notion:status-publish` - Update Notion status to "Published"
-- `notion:status-publish-production` - Update Notion status to "Published" (production)
-
-**How to Run:**
-
-1. Go to **Actions** tab in your repository
-2. Select **Notion Fetch via API** workflow
-3. Click **Run workflow**
-4. Choose a branch, select `job_type`, and optionally set `max_pages` (for `notion:fetch-all`)
-5. Click **Run workflow**
+- `POST /jobs` without API key returns `401` with the pre-job envelope.
+- Deterministic lock behavior using `CI_FETCH_HOLD_MS=3000`: first request returns `202`, immediate second request returns `409`.
+- Poll cycle reaches a terminal state for the accepted dry-run job.
+- Terminal dry-run response contains `status`, numeric `pagesProcessed`, `dryRun: true`, and `commitHash: null`.
 
 **Required Secrets:**
 
-- `API_ENDPOINT` (or omit to use local mode for testing)
 - `API_KEY_GITHUB_ACTIONS`
 - `NOTION_API_KEY`
 - `DATABASE_ID`
 - `DATA_SOURCE_ID`
 - `OPENAI_API_KEY`
 
-**Optional Secrets:**
+#### 2. API-native Fetch Jobs (deployed service runtime)
 
-- `SLACK_WEBHOOK_URL` - For Slack notifications
+Runtime fetch orchestration now lives in the deployed API service (`POST /jobs` with `type: "fetch-ready"` or `type: "fetch-all"`).
 
-**Content Branch Safety Contract (Required):**
+**Job Types:**
 
-- API jobs that write generated docs must sync `content` with `origin/main` before committing generated content.
-- API jobs must only push generated docs/images to `content` and must never push generated content directly to `main`.
-- If sync cannot be completed cleanly, the job must fail and require manual conflict resolution.
+- `fetch-ready`: fetches pages with status `Ready to publish` and transitions eligible pages to `Draft published` after push safety checks.
+- `fetch-all`: full sync of all pages except `Remove`, including stale generated content deletion, with no Notion status transitions.
 
-#### 2. Sync Notion Docs (`.github/workflows/sync-docs.yml`)
+**Required guarantees:**
+
+- **Branch safety:** every mutating run syncs `content <- main` before pushing generated content.
+- **Status safety (`fetch-ready`):** status transitions occur only after confirming the pushed/no-op state is reflected on `origin/content`.
+- **Concurrency guard:** a single in-memory lock rejects concurrent fetch jobs with `409`.
+
+**Known limitation:**
+
+- `fetch-ready` is incremental and does not prune stale generated artifacts. Use `fetch-all` for periodic full cleanup.
+
+**Operational precondition:**
+
+- Treat `origin/content` as single-writer owned by the API service account. Out-of-band pushes during a job are out of contract.
+
+#### 3. Sync Notion Docs (`.github/workflows/sync-docs.yml`)
 
 Syncs Notion content to the `content` branch for use in deployments.
 
@@ -591,7 +591,7 @@ Syncs Notion content to the `content` branch for use in deployments.
 
 - `SLACK_WEBHOOK_URL` - For Slack notifications
 
-#### 3. Translate Notion Docs (`.github/workflows/translate-docs.yml`)
+#### 4. Translate Notion Docs (`.github/workflows/translate-docs.yml`)
 
 Translates content to multiple languages and updates Notion status.
 
@@ -617,7 +617,7 @@ Translates content to multiple languages and updates Notion status.
 - `OPENAI_MODEL` - Model for translations (default: `gpt-4o-mini`)
 - `SLACK_WEBHOOK_URL` - For Slack notifications
 
-#### 4. Deploy PR Preview (`.github/workflows/deploy-pr-preview.yml`)
+#### 5. Deploy PR Preview (`.github/workflows/deploy-pr-preview.yml`)
 
 Automatically deploys PR previews to Cloudflare Pages when PRs are opened or updated.
 
@@ -654,7 +654,7 @@ Add labels to control how many Notion pages to fetch:
 - `CLOUDFLARE_ACCOUNT_ID` - Required for Cloudflare Pages deployment
 - `SLACK_WEBHOOK_URL` - For Slack notifications
 
-#### 5. Docker Publish (`.github/workflows/docker-publish.yml`)
+#### 6. Docker Publish (`.github/workflows/docker-publish.yml`)
 
 Builds a multi-platform API image and publishes it to Docker Hub.
 
@@ -688,7 +688,7 @@ Builds a multi-platform API image and publishes it to Docker Hub.
 - `docusaurus.config.ts`
 - `src/client/**`
 
-#### 6. Deploy to Production (`.github/workflows/deploy-production.yml`)
+#### 7. Deploy to Production (`.github/workflows/deploy-production.yml`)
 
 Deploys documentation to production on Cloudflare Pages.
 
@@ -726,7 +726,7 @@ Deploys documentation to production on Cloudflare Pages.
 - Production: `https://docs.comapeo.app`
 - Test: `https://{branch_name}.comapeo-docs.pages.dev`
 
-#### 7. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
+#### 8. Deploy to GitHub Pages (`.github/workflows/deploy-staging.yml`)
 
 Deploys documentation to GitHub Pages (staging environment).
 
@@ -734,18 +734,35 @@ Deploys documentation to GitHub Pages (staging environment).
 
 **Staging URL:** Available via GitHub Pages settings
 
-### Step 5.3: Test GitHub Workflow
+### Step 5.3: Validate CI + Run VPS Smoke
 
-After adding secrets, test the API integration:
+After adding secrets, validate CI contract checks and then smoke test the deployed service:
 
 1. Go to **Actions** tab in your repository
-2. Select **Notion Fetch via API** workflow
-3. Click **Run workflow**
-4. Choose a branch and select `notion:fetch-all` as the `job_type`
-5. Set `max_pages` to `5` for testing
-6. Click **Run workflow**
+2. Select **API Validate** workflow
+3. Click **Run workflow** and execute on your target branch
+4. Confirm the workflow passes all smoke assertions (`401`, `202 -> 409`, and terminal dry-run poll)
 
-**Verify**: The workflow should complete successfully and update GitHub status checks.
+Then run a direct smoke test against the deployed API endpoint:
+
+```bash
+export API_ENDPOINT="https://your-api-host.example.com"
+export API_KEY_GITHUB_ACTIONS="your-api-key"
+
+# fetch-ready dry run
+curl -X POST "${API_ENDPOINT}/jobs" \
+  -H "Authorization: Bearer ${API_KEY_GITHUB_ACTIONS}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"fetch-ready","options":{"dryRun":true,"maxPages":1}}'
+
+# fetch-all dry run
+curl -X POST "${API_ENDPOINT}/jobs" \
+  -H "Authorization: Bearer ${API_KEY_GITHUB_ACTIONS}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"fetch-all","options":{"dryRun":true,"maxPages":1}}'
+```
+
+**Verify**: both requests return `202`, each terminal result includes `dryRun: true` and `commitHash: null`, and no unexpected `UNKNOWN` failures appear.
 
 ### Step 5.4: Verify Workflow Secrets
 
@@ -760,7 +777,8 @@ To verify that all required secrets are properly configured:
 
 - Missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` will cause deployment failures
 - Missing `SLACK_WEBHOOK_URL` will cause notification failures (non-critical)
-- Incorrect `API_ENDPOINT` will prevent workflow communication with the API service
+- Invalid `API_KEY_GITHUB_ACTIONS` returns `401` on `POST /jobs`
+- Missing/invalid Notion credentials causes dry-run fetch jobs to fail before terminal assertions
 
 ## Validation Checklist
 
@@ -771,9 +789,9 @@ After completing deployment, verify:
 - [ ] Logs show no errors: `docker compose logs api`
 - [ ] Firewall allows port 3001: `sudo ufw status`
 - [ ] (Optional) Nginx proxy works: `curl https://your-domain.com/health`
-- [ ] (Optional) GitHub workflow completes successfully
+- [ ] `API Validate` workflow completes successfully
+- [ ] VPS dry-run smoke (`fetch-ready` and `fetch-all`) returns terminal `dryRun: true` and `commitHash: null`
 - [ ] (Optional) All required GitHub secrets are configured:
-  - [ ] `API_ENDPOINT` (or omitted for local mode)
   - [ ] `API_KEY_GITHUB_ACTIONS`
   - [ ] `NOTION_API_KEY`
   - [ ] `DATABASE_ID`

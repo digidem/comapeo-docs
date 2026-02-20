@@ -133,6 +133,7 @@ describe("API Documentation Validation", () => {
     it("should match documented structure", () => {
       const healthData = {
         status: "ok",
+        version: "0.1.1-beta",
         timestamp: new Date().toISOString(),
         uptime: 1234.567,
         auth: {
@@ -155,6 +156,7 @@ describe("API Documentation Validation", () => {
     it("should allow auth to be optional", () => {
       const healthData = {
         status: "ok",
+        version: "0.1.1-beta",
         timestamp: new Date().toISOString(),
         uptime: 100,
       };
@@ -262,13 +264,7 @@ describe("API Documentation Validation", () => {
     it("should match documented structure", () => {
       const createJobData = {
         jobId: "job-def456",
-        type: "notion:fetch-all" as const,
         status: "pending" as const,
-        message: "Job created successfully",
-        _links: {
-          self: "/jobs/job-def456",
-          status: "/jobs/job-def456",
-        },
       };
 
       const result = createJobResponseSchema.safeParse(createJobData);
@@ -277,8 +273,6 @@ describe("API Documentation Validation", () => {
       if (result.success) {
         expect(result.data.jobId).toBe("job-def456");
         expect(result.data.status).toBe("pending");
-        expect(result.data._links.self).toBe("/jobs/job-def456");
-        expect(result.data._links.status).toBe("/jobs/job-def456");
       }
     });
   });

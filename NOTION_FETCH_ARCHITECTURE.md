@@ -4,6 +4,20 @@ This document captures the architecture decisions, bug fixes, and lessons learne
 
 ---
 
+## API-Driven Fetching Mechanism
+
+The GitHub Actions based fetching mechanism has been replaced with a more robust API-driven approach. 
+
+### Job State & Recovery
+- The server now explicitly tracks job status via `job.completedAt` and specific error envelopes.
+- In the event of an API server restart while a job is in-flight, the server will transition the orphaned job to a `SERVER_RESTART_ABORT` state upon reboot. This ensures no jobs are silently hung.
+
+### Concurrency
+- The API server handles concurrency limits natively rather than relying on GitHub Actions `concurrency` groups.
+- Multiple fetch jobs can be queued or aborted safely without overlap corruption.
+
+---
+
 ## Implementation Summary
 
 **Completed:** 9 improvement issues + 9 critical bug fixes

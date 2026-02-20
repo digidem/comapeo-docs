@@ -41,6 +41,7 @@ export interface FetchAllOptions {
 export interface FetchAllResult {
   pages: PageWithStatus[];
   rawPages: Array<Record<string, unknown>>;
+  candidateIds: string[];
   metrics?: {
     totalSaved: number;
     sectionCount: number;
@@ -72,6 +73,7 @@ export async function fetchAllNotionData(
   const filter = buildStatusFilter(includeRemoved);
 
   let fetchedCount = 0;
+  let candidateIds: string[] = [];
 
   const { data: rawData = [], metrics } = await runFetchPipeline({
     filter,
@@ -83,6 +85,15 @@ export async function fetchAllNotionData(
     transform: (pages) => {
       try {
         fetchedCount = Array.isArray(pages) ? pages.length : 0;
+
+        // Capture IDs matching statusFilter BEFORE any replacement/slicing occurs.
+        // This ensures parents replaced by children are still transitioned.
+        if (statusFilter) {
+          candidateIds = pages
+            .filter((p) => getStatusFromRawPage(p) === statusFilter)
+            .map((p) => (p as any).id);
+        }
+
         const transformed = applyFetchAllTransform(
           Array.isArray(pages) ? pages : [],
           {
@@ -122,6 +133,7 @@ export async function fetchAllNotionData(
   return {
     pages: sortedPages,
     rawPages: defensivelyFiltered,
+    candidateIds,
     metrics: exportFiles ? metrics : undefined,
     fetchedCount,
     processedCount: sortedPages.length,

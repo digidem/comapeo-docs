@@ -13,7 +13,7 @@ WORKDIR /app
 
 # Install all dependencies needed for production
 FROM base AS deps
-COPY package.json bun.lockb* ./
+COPY package.json bun.lock* ./
 # Use --frozen-lockfile for reproducible builds
 # Skip lifecycle scripts (lefthook prepare) since dev tools aren't installed
 # Install all dependencies (not just production) since notion-fetch needs dotenv
@@ -50,7 +50,7 @@ RUN mkdir -p /app/node_modules/pngquant-bin/vendor && \
     ln -sf /usr/bin/jpegtran /app/node_modules/jpegtran-bin/vendor/jpegtran
 
 # Copy only essential runtime files (exclude dev tools, tests, docs)
-COPY --chown=bun:bun package.json bun.lockb* ./
+COPY --chown=bun:bun package.json bun.lock* ./
 # Copy entire scripts directory for job execution (all dependencies included)
 COPY --chown=bun:bun scripts ./scripts
 # Copy api-server for the API server

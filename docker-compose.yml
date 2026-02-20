@@ -70,6 +70,7 @@ services:
       # API Authentication (optional - server runs without auth if not set)
       # Format: API_KEY_<name>=value
       # Example: API_KEY_DEPLOYMENT=your-secret-key-min-16-chars
+      API_KEY_GITHUB_ACTIONS: ${API_KEY_GITHUB_ACTIONS}
 
     # Volume mounts for persistent data
     volumes:

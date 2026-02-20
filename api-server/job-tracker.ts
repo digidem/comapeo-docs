@@ -5,12 +5,15 @@
 
 import {
   saveJob,
-  loadJob,
   loadAllJobs,
   deleteJob as deletePersistedJob,
+  type PersistedJob,
 } from "./job-persistence";
+import type { FetchJobError, FetchJobWarning } from "./response-schemas";
 
 export type JobType =
+  | "fetch-ready"
+  | "fetch-all"
   | "notion:fetch"
   | "notion:fetch-all"
   | "notion:count-pages"
@@ -48,9 +51,51 @@ export interface Job {
     data?: unknown;
     error?: string;
     output?: string;
+    commitHash?: string | null;
+    failedPageIds?: string[];
+    warnings?: FetchJobWarning[];
+    counters?: {
+      pagesProcessed?: number;
+      pagesSkipped?: number;
+      pagesTransitioned?: number;
+    };
+    errorEnvelope?: FetchJobError;
+  };
+  terminal?: {
+    pagesProcessed?: number;
+    pagesSkipped?: number;
+    pagesTransitioned?: number;
+    commitHash?: string | null;
+    failedPageIds?: string[];
+    warnings?: FetchJobWarning[];
+    dryRun?: boolean;
+    error?: FetchJobError;
   };
   github?: GitHubContext;
   githubStatusReported?: boolean;
+}
+
+function isFetchJobType(
+  jobType: JobType
+): jobType is "fetch-ready" | "fetch-all" {
+  return jobType === "fetch-ready" || jobType === "fetch-all";
+}
+
+function createLostJobTerminal(type: JobType): Job["terminal"] {
+  if (!isFetchJobType(type)) {
+    return undefined;
+  }
+  return {
+    pagesProcessed: 0,
+    pagesSkipped: 0,
+    commitHash: null,
+    failedPageIds: [],
+    warnings: [],
+    error: {
+      code: "SERVER_RESTART_ABORT",
+      message: "Job was in-flight when API server restarted",
+    },
+  };
 }
 
 class JobTracker {
@@ -77,10 +122,12 @@ class JobTracker {
   private loadPersistedJobs(): void {
     const persistedJobs = loadAllJobs();
     for (const persistedJob of persistedJobs) {
+      const wasInFlight =
+        persistedJob.status === "pending" || persistedJob.status === "running";
       const job: Job = {
         id: persistedJob.id,
         type: persistedJob.type as JobType,
-        status: persistedJob.status as JobStatus,
+        status: wasInFlight ? "failed" : (persistedJob.status as JobStatus),
         createdAt: new Date(persistedJob.createdAt),
         startedAt: persistedJob.startedAt
           ? new Date(persistedJob.startedAt)
@@ -89,11 +136,39 @@ class JobTracker {
           ? new Date(persistedJob.completedAt)
           : undefined,
         progress: persistedJob.progress,
-        result: persistedJob.result,
+        result: persistedJob.result as Job["result"],
+        terminal: persistedJob.terminal as Job["terminal"],
         github: persistedJob.github as GitHubContext | undefined,
         githubStatusReported: persistedJob.githubStatusReported,
       };
+
+      if (wasInFlight) {
+        job.completedAt = new Date();
+        job.result = {
+          ...(job.result ?? {}),
+          success: false,
+          error: "Job lost after API server restart",
+          errorEnvelope: {
+            code: "SERVER_RESTART_ABORT",
+            message: "Job was in-flight when API server restarted",
+          },
+        };
+        if (isFetchJobType(job.type)) {
+          job.terminal = {
+            ...createLostJobTerminal(job.type),
+            ...(job.terminal ?? {}),
+            error: {
+              code: "SERVER_RESTART_ABORT",
+              message: "Job was in-flight when API server restarted",
+            },
+          };
+        }
+      }
+
       this.jobs.set(job.id, job);
+      if (wasInFlight) {
+        this.persistJob(job);
+      }
     }
   }
 
@@ -153,6 +228,15 @@ class JobTracker {
       }
     }
 
+    this.persistJob(job);
+  }
+
+  setTerminalState(id: string, terminal: Job["terminal"]): void {
+    const job = this.jobs.get(id);
+    if (!job) {
+      return;
+    }
+    job.terminal = terminal;
     this.persistJob(job);
   }
 
@@ -296,7 +380,7 @@ class JobTracker {
    * Persist a job to storage
    */
   private persistJob(job: Job): void {
-    const persistedJob = {
+    const persistedJob: PersistedJob = {
       id: job.id,
       type: job.type,
       status: job.status,
@@ -305,6 +389,7 @@ class JobTracker {
       completedAt: job.completedAt?.toISOString(),
       progress: job.progress,
       result: job.result,
+      terminal: job.terminal,
       github: job.github,
       githubStatusReported: job.githubStatusReported,
     };

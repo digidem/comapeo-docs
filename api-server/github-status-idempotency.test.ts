@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-// eslint-disable-next-line import/no-unresolved
 import { serve } from "bun";
 import {
   getJobTracker,

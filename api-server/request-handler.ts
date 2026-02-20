@@ -109,10 +109,9 @@ export async function handleRequest(req: Request): Promise<Response> {
     }
     const errorResponse: ErrorResponse = createErrorResponse(
       ErrorCode.INTERNAL_ERROR,
-      "Internal server error",
+      "An unexpected internal error occurred.",
       500,
-      requestId,
-      { error: errorMessage }
+      requestId
     );
     return new Response(JSON.stringify(errorResponse, null, 2), {
       status: 500,

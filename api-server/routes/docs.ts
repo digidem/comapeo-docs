@@ -1,7 +1,7 @@
 /**
  * API documentation endpoint handler
  */
-import { OPENAPI_SPEC } from "../openapi-spec";
+import { generateOpenApiDocument } from "../openapi";
 import { getCorsHeaders } from "../middleware/cors";
 
 /**
@@ -13,7 +13,8 @@ export async function handleDocs(
   requestOrigin: string | null,
   requestId: string
 ): Promise<Response> {
-  return new Response(JSON.stringify(OPENAPI_SPEC, null, 2), {
+  const spec = generateOpenApiDocument();
+  return new Response(JSON.stringify(spec, null, 2), {
     status: 200,
     headers: {
       "Content-Type": "application/json",

@@ -15,7 +15,7 @@ import {
   afterAll,
   beforeEach,
   afterEach,
-} from "bun:test"; // eslint-disable-line import/no-unresolved
+} from "bun:test";
 import { server, actualPort } from "./index";
 import { getJobTracker, destroyJobTracker } from "./job-tracker";
 import { getAuth } from "./auth";

@@ -703,10 +703,12 @@ export async function executeJob(
       timedOut,
       lastExitCode,
     });
-    onComplete(false, undefined, errorOutput);
+    const sanitizedError =
+      "Job execution failed. Please check server logs for details.";
+    onComplete(false, undefined, sanitizedError);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,
-      error: errorOutput,
+      error: sanitizedError,
     });
   } finally {
     if (releaseFetchLockOnExit) {

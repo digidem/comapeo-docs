@@ -85,6 +85,7 @@ const eslintConfig = [
         typescript: true,
         node: true,
       },
+      "import/core-modules": ["bun", "bun:test"],
     },
     rules: {
       ...importPlugin.configs.recommended.rules,

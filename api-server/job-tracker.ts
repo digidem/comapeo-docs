@@ -92,7 +92,7 @@ function createLostJobTerminal(type: JobType): Job["terminal"] {
     failedPageIds: [],
     warnings: [],
     error: {
-      code: "UNKNOWN",
+      code: "SERVER_RESTART_ABORT",
       message: "Job was in-flight when API server restarted",
     },
   };
@@ -149,7 +149,7 @@ class JobTracker {
           success: false,
           error: "Job lost after API server restart",
           errorEnvelope: {
-            code: "UNKNOWN",
+            code: "SERVER_RESTART_ABORT",
             message: "Job was in-flight when API server restarted",
           },
         };
@@ -158,7 +158,7 @@ class JobTracker {
             ...createLostJobTerminal(job.type),
             ...(job.terminal ?? {}),
             error: {
-              code: "UNKNOWN",
+              code: "SERVER_RESTART_ABORT",
               message: "Job was in-flight when API server restarted",
             },
           };

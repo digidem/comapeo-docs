@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { resolve as pathResolve } from "node:path";
 import { NOTION_PROPERTIES } from "../scripts/constants";
 import {
   fetchAllNotionData,
@@ -184,6 +184,49 @@ async function sleepWithAbort(
   });
 }
 
+function isRetryableNotionError(error: any): boolean {
+  if (!error) return false;
+
+  const status = error.status || error.code;
+  if (status === 429 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  if (
+    error.code === "ECONNRESET" ||
+    error.code === "ETIMEDOUT" ||
+    error.message?.includes("network timeout")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+async function withExponentialBackoff<T>(
+  operation: () => Promise<T>,
+  signal: AbortSignal,
+  timeoutMs: number,
+  maxRetries = 3,
+  baseDelayMs = 500
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    throwIfAborted(signal, timeoutMs);
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= maxRetries || !isRetryableNotionError(error)) {
+        throw error;
+      }
+
+      const delayMs = baseDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+      await sleepWithAbort(delayMs, signal, timeoutMs);
+      attempt++;
+    }
+  }
+}
+
 function parseCiFetchHoldMs(value: string | undefined): number {
   if (!value) {
     return 0;
@@ -218,9 +261,9 @@ async function runGenerationScript(
     const child = spawn("bun", args, {
       env: {
         ...childEnv,
-        CONTENT_PATH: resolve(tempDir, "docs"),
-        I18N_PATH: resolve(tempDir, "i18n"),
-        IMAGES_PATH: resolve(tempDir, "static", "images"),
+        CONTENT_PATH: pathResolve(tempDir, "docs"),
+        I18N_PATH: pathResolve(tempDir, "i18n"),
+        IMAGES_PATH: pathResolve(tempDir, "static", "images"),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -254,20 +297,24 @@ async function runGenerationScript(
 
     signal.addEventListener("abort", onAbort, { once: true });
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stdout += text;
-      const match = text.match(/Progress:\s*(\d+)\/(\d+)/i);
-      if (match) {
-        const current = Number.parseInt(match[1], 10);
-        const total = Number.parseInt(match[2], 10);
-        onProgress(current, total, `Processing ${current} of ${total}`);
-      }
-    });
+    if (child.stdout) {
+      child.stdout.on("data", (chunk: Buffer) => {
+        const text = chunk.toString();
+        stdout += text;
+        const match = text.match(/Progress:\s*(\d+)\/(\d+)/i);
+        if (match) {
+          const current = Number.parseInt(match[1], 10);
+          const total = Number.parseInt(match[2], 10);
+          onProgress(current, total, `Processing ${current} of ${total}`);
+        }
+      });
+    }
 
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
+    if (child.stderr) {
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+    }
 
     child.on("error", (error) => {
       settleReject(
@@ -300,10 +347,16 @@ async function runGenerationScript(
   });
 }
 
-async function getPageStatus(pageId: string): Promise<string | null> {
-  const page = (await enhancedNotion.pagesRetrieve({
-    page_id: pageId,
-  })) as {
+async function getPageStatus(
+  pageId: string,
+  signal: AbortSignal,
+  timeoutMs: number
+): Promise<string | null> {
+  const page = (await withExponentialBackoff(
+    () => enhancedNotion.pagesRetrieve({ page_id: pageId }),
+    signal,
+    timeoutMs
+  )) as {
     properties?: Record<string, { select?: { name?: string } | null }>;
   };
 
@@ -316,33 +369,26 @@ async function updatePageStatusWithRetry(
   signal: AbortSignal,
   timeoutMs: number
 ): Promise<boolean> {
-  const maxRetries = 3;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    throwIfAborted(signal, timeoutMs);
-    try {
-      await notion.pages.update({
-        page_id: pageId,
-        properties: {
-          [NOTION_PROPERTIES.STATUS]: {
-            select: {
-              name: DRAFT_PUBLISHED_STATUS,
+  try {
+    await withExponentialBackoff(
+      () =>
+        notion.pages.update({
+          page_id: pageId,
+          properties: {
+            [NOTION_PROPERTIES.STATUS]: {
+              select: {
+                name: DRAFT_PUBLISHED_STATUS,
+              },
             },
           },
-        },
-      });
-      return true;
-    } catch (error) {
-      if (attempt === maxRetries - 1) {
-        return false;
-      }
-      const backoffMs = 250 * Math.pow(2, attempt);
-      await sleepWithAbort(backoffMs, signal, timeoutMs);
-      if (error) {
-        continue;
-      }
-    }
+        }),
+      signal,
+      timeoutMs
+    );
+    return true;
+  } catch (error) {
+    return false;
   }
-  return false;
 }
 
 export async function runFetchJob({
@@ -378,20 +424,25 @@ export async function runFetchJob({
     // Wrap fetchAllNotionData with timeout since it doesn't support AbortSignal
     // This ensures the Notion API fetch phase respects JOB_TIMEOUT_MS
     const fetchResult = await withTimeout(
-      fetchAllNotionData({
-        includeRemoved: false,
-        statusFilter:
-          type === "fetch-ready"
-            ? NOTION_PROPERTIES.READY_TO_PUBLISH
-            : undefined,
-        maxPages:
-          options.maxPages && options.maxPages > 0
-            ? options.maxPages
-            : undefined,
-        exportFiles: false,
-        sortBy: "order",
-        sortDirection: "asc",
-      }),
+      withExponentialBackoff(
+        () =>
+          fetchAllNotionData({
+            includeRemoved: false,
+            statusFilter:
+              type === "fetch-ready"
+                ? NOTION_PROPERTIES.READY_TO_PUBLISH
+                : undefined,
+            maxPages:
+              options.maxPages && options.maxPages > 0
+                ? options.maxPages
+                : undefined,
+            exportFiles: false,
+            sortBy: "order",
+            sortDirection: "asc",
+          }),
+        signal,
+        timeoutMs
+      ),
       timeoutMs,
       "Notion data fetch"
     );
@@ -422,7 +473,7 @@ export async function runFetchJob({
       };
     }
 
-    tempDir = resolve(tmpdir(), `fetch-job-${jobId}`);
+    tempDir = pathResolve(tmpdir(), `fetch-job-${jobId}`);
     await rm(tempDir, { recursive: true, force: true });
     await mkdir(tempDir, { recursive: true });
 
@@ -486,7 +537,7 @@ export async function runFetchJob({
 
       for (const pageId of transitionCandidates) {
         throwIfAborted(signal, timeoutMs);
-        const currentStatus = await getPageStatus(pageId);
+        const currentStatus = await getPageStatus(pageId, signal, timeoutMs);
         if (currentStatus !== NOTION_PROPERTIES.READY_TO_PUBLISH) {
           warnings.push({
             type: "status_changed",

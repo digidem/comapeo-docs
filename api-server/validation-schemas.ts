@@ -24,6 +24,37 @@ import {
 
 export const MIN_API_KEY_LENGTH = 16;
 
+/**
+ * Environment Variables Validation Schema
+ * Ensures required secrets and configuration are present before startup
+ */
+export const envSchema = z.object({
+  NOTION_API_KEY: z
+    .string()
+    .min(1, "NOTION_API_KEY is required for fetching content"),
+  DATABASE_ID: z.string().min(1, "DATABASE_ID is required").optional(),
+  DATA_SOURCE_ID: z.string().min(1, "DATA_SOURCE_ID is required").optional(),
+});
+
+export function validateEnv(): void {
+  // Only validate in production or when explicitly required, skip in test mode
+  // if not testing env explicitly.
+  if (process.env.NODE_ENV === "test" && !process.env.STRICT_ENV_VALIDATION) {
+    return;
+  }
+
+  const result = envSchema.safeParse(process.env);
+  if (!result.success) {
+    console.error(
+      "❌ Environment validation failed. Missing required secrets:"
+    );
+    result.error.issues.forEach((issue) => {
+      console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
+    });
+    process.exit(1);
+  }
+}
+
 // Re-export validation constants for convenience
 // Note: VALID_JOB_TYPES is derived from JOB_COMMANDS keys (single source of truth)
 export {
@@ -313,7 +344,7 @@ export function validateJobId(jobId: unknown): string {
  * @throws {z.ZodError} If validation fails
  */
 export function validateJobType(type: unknown): JobType {
-  return jobTypeSchema.parse(type);
+  return jobTypeSchema.parse(type) as JobType;
 }
 
 /**
@@ -321,7 +352,7 @@ export function validateJobType(type: unknown): JobType {
  * @throws {z.ZodError} If validation fails
  */
 export function validateJobStatus(status: unknown): JobStatus {
-  return jobStatusSchema.parse(status);
+  return jobStatusSchema.parse(status) as JobStatus;
 }
 
 /**

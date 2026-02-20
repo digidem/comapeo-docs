@@ -136,8 +136,8 @@ class JobTracker {
           ? new Date(persistedJob.completedAt)
           : undefined,
         progress: persistedJob.progress,
-        result: persistedJob.result,
-        terminal: persistedJob.terminal,
+        result: persistedJob.result as Job["result"],
+        terminal: persistedJob.terminal as Job["terminal"],
         github: persistedJob.github as GitHubContext | undefined,
         githubStatusReported: persistedJob.githubStatusReported,
       };

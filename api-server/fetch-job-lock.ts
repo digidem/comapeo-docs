@@ -8,16 +8,28 @@ const state: FetchJobLockState = {
   acquiredAt: null,
 };
 
+const DEFAULT_LOCK_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 export function isFetchJobLockHeld(): boolean {
-  return state.jobId !== null;
+  if (state.jobId !== null && state.acquiredAt !== null) {
+    if (Date.now() - state.acquiredAt > DEFAULT_LOCK_TTL_MS) {
+      resetFetchJobLock();
+      return false;
+    }
+    return true;
+  }
+  return false;
 }
 
 export function getFetchJobLockHolder(): string | null {
-  return state.jobId;
+  if (isFetchJobLockHeld()) {
+    return state.jobId;
+  }
+  return null;
 }
 
 export function tryAcquireFetchJobLock(jobId: string): boolean {
-  if (state.jobId !== null) {
+  if (isFetchJobLockHeld()) {
     return false;
   }
 

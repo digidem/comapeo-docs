@@ -8,6 +8,10 @@ import { getAudit } from "./audit";
 import { handleRequest } from "./request-handler";
 import { resetFetchJobLock } from "./fetch-job-lock";
 import { isContentRepoWorkingTreeDirty } from "./content-repo";
+import { validateEnv } from "./validation-schemas";
+
+// Validate required environment variables on startup
+validateEnv();
 
 const PORT = parseInt(process.env.API_PORT || "3001");
 const HOST = process.env.API_HOST || "localhost";

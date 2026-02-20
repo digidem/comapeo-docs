@@ -59,6 +59,7 @@ export type FetchJobErrorCode =
   | "NOTION_STATUS_PARTIAL"
   | "BRANCH_MISSING"
   | "JOB_TIMEOUT"
+  | "SERVER_RESTART_ABORT"
   | "UNKNOWN";
 
 export interface PreJobErrorEnvelope {

@@ -14,7 +14,6 @@ import {
   reportJobCompletion,
   GitHubStatusError,
   type GitHubStatusOptions,
-  clearGitHubStatusReported,
 } from "./github-status";
 import { waitForPendingWrites } from "./job-persistence";
 

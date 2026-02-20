@@ -8,7 +8,7 @@
  * actually affect the Docker image change.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, test } from "vitest";
 
 // Dockerfile COPY instructions (extracted from Dockerfile)
 const DOCKERFILE_COPY_PATTERNS = [

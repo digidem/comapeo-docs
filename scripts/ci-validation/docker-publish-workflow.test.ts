@@ -11,7 +11,7 @@
  * - PR comment style matches deploy-pr-preview.yml
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import * as yaml from "js-yaml";

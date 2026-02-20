@@ -73,6 +73,7 @@ vi.mock("../notion-fetch/imageReplacer", () => ({
   processAndReplaceImages: mockProcessAndReplaceImages,
   getImageDiagnostics: mockGetImageDiagnostics,
   validateAndFixRemainingImages: mockValidateAndFixRemainingImages,
+  extractImageMatches: vi.fn().mockReturnValue([]),
 }));
 
 describe("image stabilization in translation pipeline", () => {

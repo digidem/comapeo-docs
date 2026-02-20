@@ -36,6 +36,7 @@ import {
   processAndReplaceImages,
   getImageDiagnostics,
   validateAndFixRemainingImages,
+  extractImageMatches,
 } from "../notion-fetch/imageReplacer.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
@@ -1172,9 +1173,19 @@ async function processSinglePageTranslation({
   // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
   let translatedBlocks: any[] = [];
   if (!isTitlePage) {
+    const sanitizedPageName = generateSafeFilename(
+      originalTitle,
+      englishPage.id
+    );
+    const markdownContent = stabilizedMarkdownCache?.get(englishPage.id) || "";
+    const orderedImagePaths = extractImageMatches(markdownContent).map(
+      (m) => m.url
+    );
     translatedBlocks = await translateNotionBlocksDirectly(
       englishPage.id,
-      config.language
+      config.language,
+      sanitizedPageName,
+      orderedImagePaths
     );
   } else {
     // Restore regression: title pages previously got a minimal heading block

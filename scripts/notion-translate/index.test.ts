@@ -74,6 +74,7 @@ vi.mock("../notion-fetch/imageReplacer", () => ({
   processAndReplaceImages: mockProcessAndReplaceImages,
   getImageDiagnostics: mockGetImageDiagnostics,
   validateAndFixRemainingImages: mockValidateAndFixRemainingImages,
+  extractImageMatches: vi.fn().mockReturnValue([]),
 }));
 
 function findSummaryLog(logSpy: ReturnType<typeof vi.spyOn>) {

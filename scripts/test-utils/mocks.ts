@@ -128,7 +128,7 @@ export const mockTimers = () => {
  */
 export const mockFetch = () => {
   const mockFetch = vi.fn();
-  global.fetch = mockFetch;
+  global.fetch = mockFetch as unknown as typeof fetch;
 
   return {
     mockResolvedValue: (value: any) => mockFetch.mockResolvedValue(value),

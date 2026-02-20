@@ -220,6 +220,7 @@ describe("Notion API Modules", () => {
         },
         fetchedCount: 0,
         processedCount: 0,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {
@@ -266,6 +267,7 @@ describe("Notion API Modules", () => {
         metrics: undefined,
         fetchedCount: 0,
         processedCount: 0,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {
@@ -382,6 +384,7 @@ describe("Notion API Modules", () => {
         },
         fetchedCount: 10,
         processedCount: 10,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {
@@ -407,6 +410,7 @@ describe("Notion API Modules", () => {
         metrics: undefined,
         fetchedCount: 0,
         processedCount: 0,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {
@@ -559,6 +563,7 @@ describe("Notion API Modules", () => {
         metrics: undefined,
         fetchedCount: 0,
         processedCount: 0,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {
@@ -616,6 +621,7 @@ describe("Notion API Modules", () => {
         metrics: undefined,
         fetchedCount: 0,
         processedCount: 0,
+        candidateIds: [],
       });
 
       const config: NotionApiConfig = {

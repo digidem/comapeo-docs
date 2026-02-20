@@ -108,7 +108,9 @@ describe("notion-count-pages module", () => {
       vi.mocked(getStatusFromRawPage).mockReturnValue("");
 
       // Mock console.log to capture output
-      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
 
       // Mock process.exit to prevent actual exit
       const processExitSpy = vi
@@ -196,7 +198,9 @@ describe("notion-count-pages module", () => {
       vi.mocked(getStatusFromRawPage).mockReturnValue("");
 
       // Mock console.log and process.exit
-      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
       const processExitSpy = vi
         .spyOn(process, "exit")
         .mockImplementation(() => undefined as never);
@@ -276,7 +280,9 @@ describe("notion-count-pages module", () => {
       vi.mocked(getStatusFromRawPage).mockReturnValue("");
 
       // Mock console.log and process.exit
-      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation();
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
       const processExitSpy = vi
         .spyOn(process, "exit")
         .mockImplementation(() => undefined as never);

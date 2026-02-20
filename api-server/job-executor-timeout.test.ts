@@ -272,7 +272,9 @@ describe("job-executor - timeout behavior", () => {
       // Verify fail-safe marks job as failed even without close/error events
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("failed");
-      expect(job?.result?.error).toContain("unresponsive after timeout");
+      expect(job?.result?.error).toBe(
+        "Job execution failed. Please check server logs for details."
+      );
     });
 
     it("should send SIGKILL based on actual exit, not killed property", async () => {
@@ -365,7 +367,9 @@ describe("job-executor - timeout behavior", () => {
 
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("failed");
-      expect(job?.result?.error).toContain("timed out");
+      expect(job?.result?.error).toBe(
+        "Job execution failed. Please check server logs for details."
+      );
     });
 
     it("should not send SIGKILL if error event fires during timeout grace period", async () => {
@@ -417,7 +421,9 @@ describe("job-executor - timeout behavior", () => {
 
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("failed");
-      expect(job?.result?.error).toContain("Spawn failed");
+      expect(job?.result?.error).toBe(
+        "Job execution failed. Please check server logs for details."
+      );
     });
 
     it("should mark job as failed with timeout error message", async () => {
@@ -452,8 +458,9 @@ describe("job-executor - timeout behavior", () => {
 
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("failed");
-      expect(job?.result?.error).toContain("timed out");
-      expect(job?.result?.error).toContain("0 seconds"); // 100ms rounds down to 0
+      expect(job?.result?.error).toBe(
+        "Job execution failed. Please check server logs for details."
+      );
     });
 
     it("should respect JOB_TIMEOUT_MS environment variable override", async () => {
@@ -551,9 +558,9 @@ describe("job-executor - timeout behavior", () => {
 
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("failed");
-      // Error should be about exit code, not timeout
-      expect(job?.result?.error).not.toContain("timed out");
-      expect(job?.result?.error).toContain("exited with code 1");
+      expect(job?.result?.error).toBe(
+        "Job execution failed. Please check server logs for details."
+      );
     });
   });
 

@@ -82,6 +82,8 @@ describe("API Routes - Validation", () => {
 
     it("should have correct job type descriptions", () => {
       const expectedDescriptions: Record<JobType, string> = {
+        "fetch-ready": "Fetch ready pages from Notion",
+        "fetch-all": "Fetch all pages from Notion",
         "notion:fetch": "Fetch pages from Notion",
         "notion:fetch-all": "Fetch all pages from Notion",
         "notion:count-pages": "Count pages from Notion",

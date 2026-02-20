@@ -17,6 +17,10 @@ interface JobTypesData {
 
 // Job type descriptions (derived from VALID_JOB_TYPES single source of truth)
 const JOB_TYPE_DESCRIPTIONS: Record<JobType, string> = {
+  "fetch-ready":
+    'Fetch pages with status "Ready to publish" and transition to "Draft published"',
+  "fetch-all":
+    'Fetch all pages except status "Remove" and sync generated artifacts',
   "notion:fetch": "Fetch pages from Notion",
   "notion:fetch-all": "Fetch all pages from Notion",
   "notion:count-pages": "Count pages in Notion database",

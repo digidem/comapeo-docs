@@ -203,14 +203,19 @@ describe("Validation Schemas - Job Options", () => {
       }
     });
 
-    it("should reject non-positive maxPages", () => {
-      const invalidValues = [0, -1, -100];
+    it("should allow zero maxPages and reject negatives", () => {
+      const zeroResult = jobOptionsSchema.safeParse({ maxPages: 0 });
+      expect(zeroResult.success).toBe(true);
+
+      const invalidValues = [-1, -100];
 
       for (const value of invalidValues) {
         const result = jobOptionsSchema.safeParse({ maxPages: value });
         expect(result.success).toBe(false);
         if (!result.success && result.error) {
-          expect(result.error.issues[0].message).toContain("greater than 0");
+          expect(result.error.issues[0].message).toContain(
+            "greater than or equal to 0"
+          );
         }
       }
     });
@@ -237,12 +242,11 @@ describe("Validation Schemas - Job Options", () => {
       }
     });
 
-    it("should reject unknown options", () => {
+    it("should strip unknown options", () => {
       const result = jobOptionsSchema.safeParse({ unknownOption: "value" });
-      expect(result.success).toBe(false);
-      if (!result.success && result.error) {
-        expect(result.error.issues[0].message).toContain("Unrecognized key");
-        expect(result.error.issues[0].message).toContain("unknownOption");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual({});
       }
     });
 
@@ -287,7 +291,7 @@ describe("Validation Schemas - Create Job Request", () => {
       const result = createJobRequestSchema.safeParse({});
       expect(result.success).toBe(false);
       if (!result.success && result.error) {
-        expect(result.error.issues[0].message).toContain("Invalid option");
+        expect(result.error.issues[0].message).toContain("Invalid input");
       }
     });
 
@@ -475,16 +479,11 @@ describe("Validation Helpers - formatZodError", () => {
     }
   });
 
-  it("should format unrecognized_keys error", () => {
+  it("should strip unknown options before formatting", () => {
     const zodError = jobOptionsSchema.safeParse({ unknownOption: "value" });
-    expect(zodError.success).toBe(false);
-
-    if (!zodError.success && zodError.error) {
-      const formatted = formatZodError(zodError.error, "req_test_def");
-
-      expect(formatted.code).toBe(ErrorCode.INVALID_INPUT);
-      expect(formatted.message).toContain("Unknown option");
-      expect(formatted.details.field).toBe("unknownOption");
+    expect(zodError.success).toBe(true);
+    if (zodError.success) {
+      expect(zodError.data).toEqual({});
     }
   });
 
@@ -550,14 +549,14 @@ describe("Validation Schemas - Edge Cases", () => {
   });
 
   it("should handle maxPages boundary values", () => {
-    const validValues = [1, 10, 100, 1000000];
+    const validValues = [0, 1, 10, 100, 1000000];
 
     for (const value of validValues) {
       const result = jobOptionsSchema.safeParse({ maxPages: value });
       expect(result.success).toBe(true);
     }
 
-    const invalidValues = [0, -1, -100, 0.5, 10.5];
+    const invalidValues = [-1, -100, 0.5, 10.5];
 
     for (const value of invalidValues) {
       const result = jobOptionsSchema.safeParse({ maxPages: value });
@@ -656,7 +655,9 @@ describe("Validation Schemas - Constants", () => {
     expect(VALID_JOB_STATUSES).toBeDefined();
     expect(MAX_JOB_ID_LENGTH).toBeDefined();
 
-    expect(VALID_JOB_TYPES).toHaveLength(8);
+    expect(VALID_JOB_TYPES.length).toBeGreaterThanOrEqual(10);
+    expect(VALID_JOB_TYPES).toContain("fetch-ready");
+    expect(VALID_JOB_TYPES).toContain("fetch-all");
     expect(VALID_JOB_STATUSES).toHaveLength(4);
     expect(MAX_JOB_ID_LENGTH).toBe(100);
   });

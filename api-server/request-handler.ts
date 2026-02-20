@@ -7,6 +7,7 @@ import { getCorsHeaders } from "./middleware/cors";
 import {
   ErrorCode,
   generateRequestId,
+  createPreJobErrorEnvelope,
   createErrorResponse,
   type ErrorResponse,
 } from "./response-schemas";
@@ -28,8 +29,9 @@ export async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    // Check if endpoint is public
-    const isPublic = isPublicEndpoint(path);
+    // Check if endpoint is public or CORS preflight (OPTIONS)
+    // CORS preflight requests must skip auth since browsers don't send credentials
+    const isPublic = isPublicEndpoint(path) || req.method === "OPTIONS";
 
     // Authenticate request (only for protected endpoints)
     const authHeader = req.headers.get("authorization");
@@ -53,6 +55,20 @@ export async function handleRequest(req: Request): Promise<Response> {
         req,
         authResult as { success: false; error?: string }
       );
+      if (path === "/jobs" && req.method === "POST") {
+        const envelope = createPreJobErrorEnvelope(
+          "UNAUTHORIZED",
+          authResult.error || "Authentication failed"
+        );
+        return new Response(JSON.stringify(envelope, null, 2), {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+            ...getCorsHeaders(requestOrigin),
+            "X-Request-ID": requestId,
+          },
+        });
+      }
       const error: ErrorResponse = createErrorResponse(
         ErrorCode.UNAUTHORIZED,
         authResult.error || "Authentication failed",

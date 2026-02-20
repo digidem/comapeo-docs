@@ -2,11 +2,11 @@
  * Health check endpoint handler
  */
 import { getAuth } from "../auth";
-import { createApiResponse, type ApiResponse } from "../response-schemas";
 import { getCorsHeaders } from "../middleware/cors";
 
 interface HealthData {
   status: string;
+  version: string;
   timestamp: string;
   uptime: number;
   auth: {
@@ -19,13 +19,15 @@ interface HealthData {
  * Handle GET /health
  */
 export async function handleHealth(
-  req: Request,
-  url: URL,
+  _req: Request,
+  _url: URL,
   requestOrigin: string | null,
-  requestId: string
+  _requestId: string
 ): Promise<Response> {
   const data: HealthData = {
     status: "ok",
+    version:
+      process.env.API_VERSION || process.env.npm_package_version || "unknown",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     auth: {
@@ -34,13 +36,7 @@ export async function handleHealth(
     },
   };
 
-  const response: ApiResponse<HealthData> = createApiResponse(
-    data,
-    requestId,
-    undefined
-  );
-
-  return new Response(JSON.stringify(response, null, 2), {
+  return new Response(JSON.stringify(data, null, 2), {
     status: 200,
     headers: {
       "Content-Type": "application/json",

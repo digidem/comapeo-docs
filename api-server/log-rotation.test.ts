@@ -274,7 +274,7 @@ describe.sequential("Log Rotation", () => {
   });
 
   describe("cleanupOldJobs() with jobs cap", () => {
-    it("should enforce MAX_STORED_JOBS cap", () => {
+    it("should enforce MAX_STORED_JOBS cap", async () => {
       const maxJobs = 5;
       process.env.MAX_STORED_JOBS = maxJobs.toString();
 
@@ -287,7 +287,7 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - (10 - i) * 1000).toISOString(),
           completedAt: new Date(Date.now() - (10 - i) * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
       // Verify all jobs saved
@@ -295,7 +295,7 @@ describe.sequential("Log Rotation", () => {
       expect(jobs.length).toBe(10);
 
       // Run cleanup with very old maxAge (won't remove by time)
-      const removed = cleanupOldJobs(365 * 24 * 60 * 60 * 1000); // 1 year
+      const removed = await cleanupOldJobs(365 * 24 * 60 * 60 * 1000); // 1 year
 
       // Should have removed 5 jobs (10 - 5 = 5)
       expect(removed).toBe(5);
@@ -304,7 +304,7 @@ describe.sequential("Log Rotation", () => {
       expect(jobs.length).toBe(maxJobs);
     });
 
-    it("should keep newest jobs when enforcing cap", () => {
+    it("should keep newest jobs when enforcing cap", async () => {
       process.env.MAX_STORED_JOBS = "3";
 
       // Create jobs with different completion times
@@ -316,7 +316,7 @@ describe.sequential("Log Rotation", () => {
         Date.now() - 1000, // Newest
       ];
 
-      timestamps.forEach((ts, i) => {
+      for (const [i, ts] of timestamps.entries()) {
         const job: PersistedJob = {
           id: `job-${i}`,
           type: "test",
@@ -324,10 +324,10 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(ts).toISOString(),
           completedAt: new Date(ts).toISOString(),
         };
-        saveJob(job);
-      });
+        await saveJob(job);
+      }
 
-      cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
+      await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
       const jobs = loadAllJobs();
       expect(jobs.length).toBe(3);
@@ -337,7 +337,7 @@ describe.sequential("Log Rotation", () => {
       expect(jobIds).toEqual(["job-2", "job-3", "job-4"]);
     });
 
-    it("should never remove pending or running jobs", () => {
+    it("should never remove pending or running jobs", async () => {
       process.env.MAX_STORED_JOBS = "3";
 
       // Create 2 pending jobs
@@ -348,7 +348,7 @@ describe.sequential("Log Rotation", () => {
           status: "pending",
           createdAt: new Date().toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
       // Create 5 completed jobs
@@ -360,10 +360,10 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
-      cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
+      await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
       const jobs = loadAllJobs();
 
@@ -377,7 +377,7 @@ describe.sequential("Log Rotation", () => {
       expect(completedJobs.length).toBe(1);
     });
 
-    it("should respect both time-based and cap-based cleanup", () => {
+    it("should respect both time-based and cap-based cleanup", async () => {
       process.env.MAX_STORED_JOBS = "10";
 
       // Create 5 old jobs (should be removed by time)
@@ -389,7 +389,7 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours ago
           completedAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
       // Create 3 recent jobs (should be kept)
@@ -401,11 +401,11 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
       // Run cleanup with 24h maxAge
-      const removed = cleanupOldJobs(24 * 60 * 60 * 1000);
+      const removed = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removed).toBe(5); // All old jobs removed
 

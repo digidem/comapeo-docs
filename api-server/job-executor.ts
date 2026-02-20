@@ -11,6 +11,8 @@ import { getJobTracker } from "./job-tracker";
 import { createJobLogger } from "./job-persistence";
 import { reportJobCompletion } from "./github-status";
 import { isContentMutatingJob, runContentTask } from "./content-repo";
+import { releaseFetchJobLock } from "./fetch-job-lock";
+import { runFetchJob } from "./fetch-job-runner";
 
 /**
  * Whitelist of environment variables that child processes are allowed to access.
@@ -109,6 +111,7 @@ export interface JobOptions {
  * Default timeout for jobs (5 minutes) in milliseconds
  */
 const DEFAULT_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_FETCH_JOB_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
 
 /**
  * Time to wait after SIGTERM before sending SIGKILL (5 seconds)
@@ -186,6 +189,12 @@ function isJobCancelled(jobId: string): boolean {
   );
 }
 
+function isFetchJobType(
+  jobType: JobType
+): jobType is "fetch-ready" | "fetch-all" {
+  return jobType === "fetch-ready" || jobType === "fetch-all";
+}
+
 export const JOB_COMMANDS: Record<
   JobType,
   {
@@ -195,6 +204,34 @@ export const JOB_COMMANDS: Record<
     timeoutMs: number;
   }
 > = {
+  "fetch-ready": {
+    script: "bun",
+    args: ["scripts/notion-fetch-all", "--status-filter", "Ready to publish"],
+    buildArgs: (options) => {
+      const args: string[] = [];
+      if (options.maxPages !== undefined) {
+        args.push("--max-pages", String(options.maxPages));
+      }
+      if (options.force) args.push("--force");
+      if (options.dryRun) args.push("--dry-run");
+      return args;
+    },
+    timeoutMs: DEFAULT_FETCH_JOB_TIMEOUT_MS,
+  },
+  "fetch-all": {
+    script: "bun",
+    args: ["scripts/notion-fetch-all"],
+    buildArgs: (options) => {
+      const args: string[] = [];
+      if (options.maxPages !== undefined) {
+        args.push("--max-pages", String(options.maxPages));
+      }
+      if (options.force) args.push("--force");
+      if (options.dryRun) args.push("--dry-run");
+      return args;
+    },
+    timeoutMs: DEFAULT_FETCH_JOB_TIMEOUT_MS,
+  },
   "notion:fetch": {
     script: "bun",
     args: ["scripts/notion-fetch/index.ts"],
@@ -265,6 +302,8 @@ export async function executeJob(
   const { jobId, onProgress, onComplete } = context;
   const jobTracker = getJobTracker();
   const logger = createJobLogger(jobId);
+  const eventData = { jobId, type: jobType };
+  const releaseFetchLockOnExit = isFetchJobType(jobType);
 
   // Update job status to running
   jobTracker.updateJobStatus(jobId, "running");
@@ -275,6 +314,7 @@ export async function executeJob(
     const availableTypes = Object.keys(JOB_COMMANDS).join(", ");
     const errorMsg = `Unknown job type: ${jobType}. Available types: ${availableTypes}`;
     logger.error("Unknown job type", { jobType, availableTypes });
+    logger.error("job_failed", { ...eventData, error: errorMsg });
     onComplete(false, undefined, errorMsg);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,
@@ -286,6 +326,13 @@ export async function executeJob(
   // Build command arguments
   const args = [...jobConfig.args, ...(jobConfig.buildArgs?.(options) || [])];
   logger.info("Executing job", { script: jobConfig.script, args });
+  logger.info("job_started", {
+    ...eventData,
+    timeoutMs: parseTimeoutOverride(
+      process.env.JOB_TIMEOUT_MS,
+      jobConfig.timeoutMs
+    ),
+  });
 
   let childProcess: ChildProcess | null = null;
   let stdout = "";
@@ -484,7 +531,112 @@ export async function executeJob(
   };
 
   try {
-    const useContentRepoManagement = isContentMutatingJob(jobType);
+    if (isFetchJobType(jobType)) {
+      const timeoutMs = parseTimeoutOverride(
+        process.env.JOB_TIMEOUT_MS,
+        jobConfig.timeoutMs
+      );
+      const abortController = new AbortController();
+      const fetchTimeoutHandle = setTimeout(() => {
+        timedOut = true;
+        abortController.abort();
+      }, timeoutMs);
+
+      const fetchResult = await (async () => {
+        try {
+          return await runFetchJob({
+            type: jobType,
+            jobId,
+            options,
+            onProgress,
+            logger,
+            childEnv: buildChildEnv(),
+            signal: abortController.signal,
+            timeoutMs,
+          });
+        } finally {
+          clearTimeout(fetchTimeoutHandle);
+        }
+      })();
+
+      const resultData = {
+        output: fetchResult.output ?? "",
+        commitHash: fetchResult.terminal.commitHash,
+        failedPageIds: fetchResult.terminal.failedPageIds ?? [],
+        warnings: fetchResult.terminal.warnings ?? [],
+        counters: {
+          pagesProcessed: fetchResult.terminal.pagesProcessed,
+          pagesSkipped: fetchResult.terminal.pagesSkipped,
+          pagesTransitioned: fetchResult.terminal.pagesTransitioned,
+        },
+        errorEnvelope: fetchResult.terminal.error,
+        dryRun: fetchResult.terminal.dryRun,
+      };
+
+      if (fetchResult.terminal.warnings?.length) {
+        for (const warning of fetchResult.terminal.warnings) {
+          logger.warn("job_warning", {
+            ...eventData,
+            warningType: warning.type,
+            pageId: warning.pageId,
+            message: warning.message,
+          });
+        }
+      }
+
+      if (fetchResult.success) {
+        logger.info("job_completed", {
+          ...eventData,
+          pagesProcessed: fetchResult.terminal.pagesProcessed,
+          pagesSkipped: fetchResult.terminal.pagesSkipped,
+          pagesTransitioned: fetchResult.terminal.pagesTransitioned,
+          commitHash: fetchResult.terminal.commitHash,
+          dryRun: fetchResult.terminal.dryRun === true,
+        });
+      } else {
+        if (fetchResult.terminal.error?.code === "JOB_TIMEOUT") {
+          logger.error("job_timeout", {
+            ...eventData,
+            timeoutMs,
+            message: fetchResult.terminal.error.message,
+          });
+        }
+        logger.error("job_failed", {
+          ...eventData,
+          error: fetchResult.terminal.error?.message ?? fetchResult.error,
+          code: fetchResult.terminal.error?.code ?? "UNKNOWN",
+          commitHash: fetchResult.terminal.commitHash,
+          failedPageIds: fetchResult.terminal.failedPageIds ?? [],
+        });
+      }
+
+      jobTracker.setTerminalState(jobId, fetchResult.terminal);
+      jobTracker.unregisterProcess(jobId);
+      onComplete(fetchResult.success, resultData, fetchResult.error);
+      jobTracker.updateJobStatus(
+        jobId,
+        fetchResult.success ? "completed" : "failed",
+        {
+          success: fetchResult.success,
+          output: fetchResult.output,
+          data: resultData,
+          error: fetchResult.error,
+          commitHash: fetchResult.terminal.commitHash,
+          failedPageIds: fetchResult.terminal.failedPageIds,
+          warnings: fetchResult.terminal.warnings,
+          counters: {
+            pagesProcessed: fetchResult.terminal.pagesProcessed,
+            pagesSkipped: fetchResult.terminal.pagesSkipped,
+            pagesTransitioned: fetchResult.terminal.pagesTransitioned,
+          },
+          errorEnvelope: fetchResult.terminal.error,
+        }
+      );
+      return;
+    }
+
+    const useContentRepoManagement =
+      isContentMutatingJob(jobType) && !isFetchJobType(jobType);
 
     let resultData: Record<string, unknown>;
     if (useContentRepoManagement) {
@@ -505,6 +657,7 @@ export async function executeJob(
     }
 
     jobTracker.unregisterProcess(jobId);
+    logger.info("job_completed", { ...eventData, exitCode: lastExitCode ?? 0 });
     onComplete(true, resultData);
     jobTracker.updateJobStatus(jobId, "completed", {
       success: true,
@@ -538,11 +691,27 @@ export async function executeJob(
       lastExitCode,
       exitCodeKnown: lastExitCode !== null,
     });
+    if (timedOut) {
+      logger.error("job_timeout", {
+        ...eventData,
+        message: errorOutput,
+      });
+    }
+    logger.error("job_failed", {
+      ...eventData,
+      error: errorOutput,
+      timedOut,
+      lastExitCode,
+    });
     onComplete(false, undefined, errorOutput);
     jobTracker.updateJobStatus(jobId, "failed", {
       success: false,
       error: errorOutput,
     });
+  } finally {
+    if (releaseFetchLockOnExit) {
+      releaseFetchJobLock(jobId);
+    }
   }
 }
 

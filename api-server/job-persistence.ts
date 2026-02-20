@@ -80,6 +80,39 @@ export interface PersistedJob {
     data?: unknown;
     error?: string;
     output?: string;
+    commitHash?: string | null;
+    failedPageIds?: string[];
+    warnings?: Array<{
+      type: string;
+      pageId?: string;
+      message: string;
+    }>;
+    counters?: {
+      pagesProcessed?: number;
+      pagesSkipped?: number;
+      pagesTransitioned?: number;
+    };
+    errorEnvelope?: {
+      code: string;
+      message: string;
+    };
+  };
+  terminal?: {
+    pagesProcessed?: number;
+    pagesSkipped?: number;
+    pagesTransitioned?: number;
+    commitHash?: string | null;
+    failedPageIds?: string[];
+    warnings?: Array<{
+      type: string;
+      pageId?: string;
+      message: string;
+    }>;
+    dryRun?: boolean;
+    error?: {
+      code: string;
+      message: string;
+    };
   };
   github?: GitHubContext;
   githubStatusReported?: boolean;

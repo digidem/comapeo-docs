@@ -160,10 +160,14 @@ export const OPENAPI_SPEC = {
       },
       HealthResponse: {
         type: "object",
+        required: ["status", "version", "timestamp", "uptime"],
         properties: {
           status: {
             type: "string",
             example: "ok",
+          },
+          version: {
+            type: "string",
           },
           timestamp: {
             type: "string",
@@ -303,27 +307,39 @@ export const OPENAPI_SPEC = {
       },
       CreateJobResponse: {
         type: "object",
+        required: ["jobId", "status"],
         properties: {
           jobId: {
-            type: "string",
-          },
-          type: {
             type: "string",
           },
           status: {
             type: "string",
             enum: ["pending"],
           },
-          message: {
+        },
+      },
+      PreJobErrorResponse: {
+        type: "object",
+        required: ["status", "error"],
+        properties: {
+          status: {
             type: "string",
+            enum: ["failed"],
           },
-          _links: {
+          error: {
             type: "object",
+            required: ["code", "message"],
             properties: {
-              self: {
+              code: {
                 type: "string",
+                enum: [
+                  "UNAUTHORIZED",
+                  "INVALID_REQUEST",
+                  "CONFLICT",
+                  "UNKNOWN",
+                ],
               },
-              status: {
+              message: {
                 type: "string",
               },
             },
@@ -503,8 +519,8 @@ export const OPENAPI_SPEC = {
           },
         },
         responses: {
-          "201": {
-            description: "Job created successfully",
+          "202": {
+            description: "Job accepted",
             content: {
               "application/json": {
                 schema: {
@@ -518,7 +534,7 @@ export const OPENAPI_SPEC = {
             content: {
               "application/json": {
                 schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
+                  $ref: "#/components/schemas/PreJobErrorResponse",
                 },
               },
             },
@@ -528,7 +544,17 @@ export const OPENAPI_SPEC = {
             content: {
               "application/json": {
                 schema: {
-                  $ref: "#/components/schemas/ErrorResponse",
+                  $ref: "#/components/schemas/PreJobErrorResponse",
+                },
+              },
+            },
+          },
+          "409": {
+            description: "Conflict",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/PreJobErrorResponse",
                 },
               },
             },

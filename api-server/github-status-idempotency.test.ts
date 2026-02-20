@@ -17,6 +17,7 @@ import {
   reportJobCompletion,
   type GitHubStatusOptions,
 } from "./github-status";
+import { waitForPendingWrites } from "./job-persistence";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -440,6 +441,9 @@ describe("GitHub Status - Idempotency and Integration", () => {
       // Mark as reported
       tracker.markGitHubStatusReported(jobId);
 
+      // Ensure data is persisted before restart
+      await waitForPendingWrites();
+
       // Destroy and recreate tracker (simulates server restart)
       destroyJobTracker();
       const newTracker = getJobTracker();
@@ -461,6 +465,9 @@ describe("GitHub Status - Idempotency and Integration", () => {
       // Clear the flag
       tracker.clearGitHubStatusReported(jobId);
 
+      // Ensure data is persisted before restart
+      await waitForPendingWrites();
+
       // Destroy and recreate tracker
       destroyJobTracker();
       const newTracker = getJobTracker();
@@ -478,6 +485,9 @@ describe("GitHub Status - Idempotency and Integration", () => {
 
       // Don't mark as reported - should default to false
       expect(tracker.isGitHubStatusReported(jobId)).toBe(false);
+
+      // Ensure data is persisted before restart
+      await waitForPendingWrites();
 
       // Destroy and recreate tracker
       destroyJobTracker();

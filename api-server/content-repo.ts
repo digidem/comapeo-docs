@@ -468,7 +468,7 @@ export async function stageGeneratedPaths(): Promise<void> {
 
   if (pathsToStage.length > 0) {
     try {
-      await runGit(["add", ...pathsToStage], {
+      await runGit(["add", "--force", ...pathsToStage], {
         cwd: config.workdir,
         errorPrefix: "Failed to stage generated paths",
       });
@@ -838,7 +838,14 @@ export async function runContentTask(
 
     assertNotAborted(options.shouldAbort);
 
-    // Scope the status check to the same paths we will stage, so the no-op
+    // Stage only the content output directories that notion-fetch writes to.
+    // Using --force bypasses .gitignore for these specific generated paths.
+    await runGit(["add", "--force", "docs", "static/images", "i18n"], {
+      cwd: config.workdir,
+      errorPrefix: "Failed to stage content changes",
+    });
+
+    // Scope the status check to the same paths we just staged, so the no-op
     // detection is not confused by files written outside the content directories
     // (e.g. telemetry output files or any other working-tree noise).
     const status = await runGit(
@@ -852,14 +859,6 @@ export async function runContentTask(
     if (!status.stdout.trim() && !config.allowEmptyCommits) {
       return { output, noOp: true };
     }
-
-    // Stage only the content output directories that notion-fetch writes to.
-    // Using specific paths instead of "-A" prevents accidentally committing
-    // build artifacts if .gitignore is incomplete.
-    await runGit(["add", "docs", "static/images", "i18n"], {
-      cwd: config.workdir,
-      errorPrefix: "Failed to stage content changes",
-    });
 
     const timestamp = new Date().toISOString();
     const commitMessage = `${config.commitMessagePrefix} ${taskName} ${timestamp} [${requestId}]`;

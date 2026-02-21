@@ -455,6 +455,7 @@ export async function stageGeneratedPaths(): Promise<void> {
       try {
         const { stdout } = await runGit(["ls-files", p], {
           cwd: config.workdir,
+          errorPrefix: "Failed to check tracked paths",
         });
         if (stdout.trim().length > 0) {
           pathsToStage.push(p);
@@ -466,10 +467,24 @@ export async function stageGeneratedPaths(): Promise<void> {
   }
 
   if (pathsToStage.length > 0) {
-    await runGit(["add", ...pathsToStage], {
-      cwd: config.workdir,
-      errorPrefix: "Failed to stage generated paths",
-    });
+    try {
+      await runGit(["add", ...pathsToStage], {
+        cwd: config.workdir,
+        errorPrefix: "Failed to stage generated paths",
+      });
+    } catch (error) {
+      // Best-effort cleanup to avoid leaving a partially-staged working tree
+      // that would cause the next run to fail with DIRTY_WORKING_TREE.
+      await restoreAndCleanGeneratedPaths(config.workdir);
+      if (error instanceof ContentRepoError) {
+        throw new ContentRepoError(
+          error.message,
+          error.details,
+          "CONTENT_GENERATION_FAILED"
+        );
+      }
+      throw error;
+    }
   }
 }
 

@@ -809,6 +809,29 @@ describe("buildStatusFilter", () => {
       select: { does_not_equal: "Remove" },
     });
   });
+
+  it("should return a targeted equals filter when statusFilter is provided", () => {
+    const filter = buildStatusFilter(false, "Ready to publish");
+
+    expect(filter).toEqual({
+      property: "Publish Status",
+      select: { equals: "Ready to publish" },
+    });
+  });
+
+  it("should use the targeted filter for any statusFilter value", () => {
+    const filter = buildStatusFilter(false, "Draft");
+
+    expect(filter).toEqual({
+      property: "Publish Status",
+      select: { equals: "Draft" },
+    });
+  });
+
+  it("should return undefined when includeRemoved is true even with statusFilter", () => {
+    const filter = buildStatusFilter(true, "Ready to publish");
+    expect(filter).toBeUndefined();
+  });
 });
 
 // Helper function to create mock PageWithStatus

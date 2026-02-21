@@ -70,7 +70,7 @@ export async function fetchAllNotionData(
     generateOptions = {},
   } = options;
 
-  const filter = buildStatusFilter(includeRemoved);
+  const filter = buildStatusFilter(includeRemoved, statusFilter);
 
   let fetchedCount = 0;
   let candidateIds: string[] = [];
@@ -142,9 +142,22 @@ export async function fetchAllNotionData(
   };
 }
 
-export function buildStatusFilter(includeRemoved: boolean) {
+export function buildStatusFilter(
+  includeRemoved: boolean,
+  statusFilter?: string
+) {
   if (includeRemoved) {
     return undefined;
+  }
+
+  // When a specific status is requested, query only those pages from the API.
+  // This avoids fetching the entire database and filtering in-memory, which is
+  // especially important for fetch-ready jobs that only need a handful of pages.
+  if (statusFilter) {
+    return {
+      property: NOTION_PROPERTIES.STATUS,
+      select: { equals: statusFilter },
+    };
   }
 
   return {

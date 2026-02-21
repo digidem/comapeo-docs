@@ -585,9 +585,12 @@ export async function runFetchJob({
     };
   } catch (error) {
     const classified = classifyError(error);
+    const errorDetails =
+      error instanceof ContentRepoError ? error.details : undefined;
     logger.error("Fetch job failed", {
       error: classified.message,
       code: classified.code,
+      ...(errorDetails ? { details: errorDetails } : {}),
     });
     terminal.error = classified;
     if (type === "fetch-ready") {

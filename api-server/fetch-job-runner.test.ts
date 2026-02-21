@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NOTION_PROPERTIES } from "../scripts/constants";
+import { ContentRepoError } from "./content-repo";
 
 const {
   mockFetchAllNotionData,
@@ -294,6 +295,54 @@ describe("fetch-job-runner", () => {
     expect(result.terminal.commitHash).toBe("merge-only-sha");
     expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
     expect(mockVerifyRemoteHeadMatchesLocal).not.toHaveBeenCalled();
+  });
+
+  it("returns CONTENT_GENERATION_FAILED when staging fails", async () => {
+    mockFetchAllNotionData.mockResolvedValue({
+      pages: [
+        {
+          id: "page-1",
+          status: NOTION_PROPERTIES.READY_TO_PUBLISH,
+          order: 1,
+          lastEdited: new Date("2024-01-01T00:00:00.000Z"),
+        },
+      ],
+      rawPages: [],
+      candidateIds: ["page-1"],
+      fetchedCount: 1,
+      processedCount: 1,
+    });
+    mockStageGeneratedPaths.mockRejectedValue(
+      new ContentRepoError(
+        "Failed to stage generated paths (exit code 1)",
+        "fatal: git add failed",
+        "CONTENT_GENERATION_FAILED"
+      )
+    );
+
+    const logger = createLogger();
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-stage-fail",
+      options: {},
+      onProgress: vi.fn(),
+      logger,
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.terminal.error?.code).toBe("CONTENT_GENERATION_FAILED");
+    expect(result.terminal.commitHash).toBeNull();
+    expect(result.terminal.failedPageIds).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      "Fetch job failed",
+      expect.objectContaining({
+        code: "CONTENT_GENERATION_FAILED",
+        details: "fatal: git add failed",
+      })
+    );
   });
 
   it("returns JOB_TIMEOUT and skips side effects when already aborted", async () => {

@@ -139,7 +139,7 @@ export const jobOptionsSchema = z
     dryRun: z.boolean().optional(),
     includeRemoved: z.boolean().optional(),
   })
-  .strip();
+  .strict();
 
 /**
  * Request body validation schema for POST /jobs

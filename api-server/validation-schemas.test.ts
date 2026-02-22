@@ -242,11 +242,16 @@ describe("Validation Schemas - Job Options", () => {
       }
     });
 
-    it("should strip unknown options", () => {
+    it("should reject unknown options", () => {
       const result = jobOptionsSchema.safeParse({ unknownOption: "value" });
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data).toEqual({});
+      expect(result.success).toBe(false);
+      if (!result.success && result.error) {
+        const issue = result.error.issues[0] as {
+          code: string;
+          keys: string[];
+        };
+        expect(issue.code).toBe("unrecognized_keys");
+        expect(issue.keys).toContain("unknownOption");
       }
     });
 
@@ -479,11 +484,14 @@ describe("Validation Helpers - formatZodError", () => {
     }
   });
 
-  it("should strip unknown options before formatting", () => {
+  it("should reject unknown options before formatting", () => {
     const zodError = jobOptionsSchema.safeParse({ unknownOption: "value" });
-    expect(zodError.success).toBe(true);
-    if (zodError.success) {
-      expect(zodError.data).toEqual({});
+    expect(zodError.success).toBe(false);
+    if (!zodError.success && zodError.error) {
+      const formatted = formatZodError(zodError.error, "req_test_unknown");
+      expect(formatted.code).toBe(ErrorCode.INVALID_INPUT);
+      expect(formatted.details.field).toBe("unknownOption");
+      expect(formatted.message).toContain("Unknown option");
     }
   });
 

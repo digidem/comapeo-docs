@@ -14,6 +14,7 @@ import {
   getJobLogs,
   getRecentLogs,
   cleanupOldJobs,
+  waitForPendingWrites,
   type PersistedJob,
   type JobLogEntry,
 } from "./job-persistence";
@@ -87,10 +88,10 @@ describe("job-persistence - deterministic behavior", () => {
 
       // Save and load multiple times
       await saveJob(job);
-      const loaded1 = loadJob(job.id);
+      const loaded1 = await loadJob(job.id);
 
       await saveJob(job); // Save again
-      const loaded2 = loadJob(job.id);
+      const loaded2 = await loadJob(job.id);
 
       // Should be identical
       expect(loaded1).toEqual(loaded2);
@@ -125,16 +126,16 @@ describe("job-persistence - deterministic behavior", () => {
       }
 
       // Load all jobs
-      const loadedJobs = loadAllJobs();
+      const loadedJobs = await loadAllJobs();
 
       // Should have same count
       expect(loadedJobs).toHaveLength(3);
 
       // Each job should be loadable by ID
-      jobs.forEach((job) => {
-        const loaded = loadJob(job.id);
+      for (const job of jobs) {
+        const loaded = await loadJob(job.id);
         expect(loaded).toEqual(job);
-      });
+      }
     });
 
     it("should handle multiple rapid updates to same job deterministically", async () => {
@@ -179,7 +180,7 @@ describe("job-persistence - deterministic behavior", () => {
       }
 
       // Final state should be last update
-      const finalJob = loadJob(jobId);
+      const finalJob = await loadJob(jobId);
       expect(finalJob).toEqual(updates[updates.length - 1]);
     });
 
@@ -221,14 +222,14 @@ describe("job-persistence - deterministic behavior", () => {
       expect(removed1).toBe(1);
 
       // Final state should be deterministic
-      expect(loadJob("old-completed")).toBeUndefined();
-      expect(loadJob("recent-completed")).toBeDefined();
-      expect(loadJob("old-pending")).toBeDefined();
+      expect(await loadJob("old-completed")).toBeUndefined();
+      expect(await loadJob("recent-completed")).toBeDefined();
+      expect(await loadJob("old-pending")).toBeDefined();
     });
   });
 
   describe("deterministic log capture", () => {
-    it("should maintain chronological order of log entries", () => {
+    it("should maintain chronological order of log entries", async () => {
       const logger = createJobLogger("chronology-test");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -251,7 +252,7 @@ describe("job-persistence - deterministic behavior", () => {
       consoleSpy.mockRestore();
 
       // Retrieve logs
-      const logs = getJobLogs("chronology-test");
+      const logs = await getJobLogs("chronology-test");
 
       // Should have exactly 4 logs (fresh test run)
       expect(logs.length).toBe(4);
@@ -261,7 +262,7 @@ describe("job-persistence - deterministic behavior", () => {
       expect(logMessages).toEqual(messages);
     });
 
-    it("should produce identical logs for identical logging sequences", () => {
+    it("should produce identical logs for identical logging sequences", async () => {
       const logger1 = createJobLogger("deterministic-log-1");
       const logger2 = createJobLogger("deterministic-log-2");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -281,8 +282,8 @@ describe("job-persistence - deterministic behavior", () => {
       consoleSpy.mockRestore();
 
       // Get logs for both jobs
-      const logs1 = getJobLogs("deterministic-log-1");
-      const logs2 = getJobLogs("deterministic-log-2");
+      const logs1 = await getJobLogs("deterministic-log-1");
+      const logs2 = await getJobLogs("deterministic-log-2");
 
       // Should have same number of logs
       expect(logs1.length).toBe(logs2.length);
@@ -293,7 +294,7 @@ describe("job-persistence - deterministic behavior", () => {
       expect(logs1[0].data).toEqual(logs2[0].data);
     });
 
-    it("should handle concurrent logging from multiple jobs deterministically", () => {
+    it("should handle concurrent logging from multiple jobs deterministically", async () => {
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       const logger1 = createJobLogger("concurrent-job-1");
@@ -312,9 +313,9 @@ describe("job-persistence - deterministic behavior", () => {
       consoleSpy.mockRestore();
 
       // Each job should have its own logs
-      const logs1 = getJobLogs("concurrent-job-1");
-      const logs2 = getJobLogs("concurrent-job-2");
-      const logs3 = getJobLogs("concurrent-job-3");
+      const logs1 = await getJobLogs("concurrent-job-1");
+      const logs2 = await getJobLogs("concurrent-job-2");
+      const logs3 = await getJobLogs("concurrent-job-3");
 
       expect(logs1.length).toBe(3);
       expect(logs2.length).toBe(3);
@@ -327,7 +328,7 @@ describe("job-persistence - deterministic behavior", () => {
       });
     });
 
-    it("should return consistent results for getRecentLogs", () => {
+    it("should return consistent results for getRecentLogs", async () => {
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       const logger = createJobLogger("recent-logs-test");
@@ -340,8 +341,8 @@ describe("job-persistence - deterministic behavior", () => {
       consoleSpy.mockRestore();
 
       // Get recent logs with limit 5
-      const recent1 = getRecentLogs(5);
-      const recent2 = getRecentLogs(5);
+      const recent1 = await getRecentLogs(5);
+      const recent2 = await getRecentLogs(5);
 
       // Should be identical
       expect(recent1).toEqual(recent2);
@@ -375,7 +376,7 @@ describe("job-persistence - recoverable behavior", () => {
       createCorruptedJobsFile("{ invalid json content");
 
       // Should return empty array instead of crashing
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs).toEqual([]);
 
       // Should be able to save new jobs after corruption
@@ -387,18 +388,18 @@ describe("job-persistence - recoverable behavior", () => {
       };
       await saveJob(newJob);
 
-      const loaded = loadJob("recovery-job");
+      const loaded = await loadJob("recovery-job");
       expect(loaded).toEqual(newJob);
     });
 
-    it("should recover from partially written jobs file", () => {
+    it("should recover from partially written jobs file", async () => {
       // Create a partially written file (simulating crash during write)
       createCorruptedJobsFile(
         '{"jobs": [{"id": "job-1", "type": "notion:fetch"'
       );
 
       // Should handle gracefully
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(Array.isArray(jobs)).toBe(true);
     });
 
@@ -407,7 +408,7 @@ describe("job-persistence - recoverable behavior", () => {
       createCorruptedJobsFile("");
 
       // Should return empty array
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs).toEqual([]);
 
       // Should be able to create new jobs
@@ -419,10 +420,10 @@ describe("job-persistence - recoverable behavior", () => {
       };
       await saveJob(job);
 
-      expect(loadJob("after-empty")).toBeDefined();
+      expect(await loadJob("after-empty")).toBeDefined();
     });
 
-    it("should recover from jobs file with invalid job objects", () => {
+    it("should recover from jobs file with invalid job objects", async () => {
       // Create file with valid and invalid entries
       createCorruptedJobsFile(
         JSON.stringify({
@@ -441,7 +442,7 @@ describe("job-persistence - recoverable behavior", () => {
       );
 
       // Should load what it can
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs.length).toBeGreaterThanOrEqual(0);
 
       // Valid job should be accessible
@@ -449,7 +450,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(validJob).toBeDefined();
     });
 
-    it("should recover from corrupted log file", () => {
+    it("should recover from corrupted log file", async () => {
       // Create corrupted log file - write directly without using logger
       // to simulate actual corruption in an existing log file
       if (!existsSync(DATA_DIR)) {
@@ -462,18 +463,18 @@ describe("job-persistence - recoverable behavior", () => {
       );
 
       // Should not crash and should parse valid entries
-      const logs = getRecentLogs();
+      const logs = await getRecentLogs();
       expect(Array.isArray(logs)).toBe(true);
       // At least one valid JSON line should be parsed
       expect(logs.length).toBeGreaterThanOrEqual(0);
     });
 
-    it("should recover from empty log file", () => {
+    it("should recover from empty log file", async () => {
       // Create empty log file
       createCorruptedLogFile("");
 
       // Should return empty array
-      const logs = getRecentLogs();
+      const logs = await getRecentLogs();
       expect(logs).toEqual([]);
 
       // Should be able to create new logs
@@ -484,16 +485,16 @@ describe("job-persistence - recoverable behavior", () => {
 
       consoleSpy.mockRestore();
 
-      const newLogs = getJobLogs("after-empty-log");
+      const newLogs = await getJobLogs("after-empty-log");
       expect(newLogs.length).toBe(1);
     });
 
-    it("should handle log file with only invalid entries", () => {
+    it("should handle log file with only invalid entries", async () => {
       // Create log file with only invalid JSON
       createCorruptedLogFile("not json\nstill not json\n{incomplete json");
 
       // Should return empty array (all entries invalid)
-      const logs = getRecentLogs();
+      const logs = await getRecentLogs();
       expect(logs).toEqual([]);
     });
   });
@@ -515,10 +516,10 @@ describe("job-persistence - recoverable behavior", () => {
 
       await saveJob(job);
       expect(existsSync(DATA_DIR)).toBe(true);
-      expect(loadJob("no-dir-job")).toBeDefined();
+      expect(await loadJob("no-dir-job")).toBeDefined();
     });
 
-    it("should handle missing jobs file gracefully", () => {
+    it("should handle missing jobs file gracefully", async () => {
       // Create directory but no jobs file
       if (!existsSync(DATA_DIR)) {
         mkdirSync(DATA_DIR, { recursive: true });
@@ -529,14 +530,14 @@ describe("job-persistence - recoverable behavior", () => {
       }
 
       // Should return empty array
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs).toEqual([]);
 
       // Loading specific job should return undefined
-      expect(loadJob("any-job")).toBeUndefined();
+      expect(await loadJob("any-job")).toBeUndefined();
     });
 
-    it("should handle missing log file gracefully", () => {
+    it("should handle missing log file gracefully", async () => {
       // Create directory but no log file
       if (!existsSync(DATA_DIR)) {
         mkdirSync(DATA_DIR, { recursive: true });
@@ -547,15 +548,15 @@ describe("job-persistence - recoverable behavior", () => {
       }
 
       // Should return empty array
-      const logs = getRecentLogs();
+      const logs = await getRecentLogs();
       expect(logs).toEqual([]);
 
       // Job logs should be empty
-      const jobLogs = getJobLogs("any-job");
+      const jobLogs = await getJobLogs("any-job");
       expect(jobLogs).toEqual([]);
     });
 
-    it("should recover by creating files on first write", () => {
+    it("should recover by creating files on first write", async () => {
       // Start with no directory
       if (existsSync(DATA_DIR)) {
         rmSync(DATA_DIR, { recursive: true, force: true });
@@ -566,6 +567,7 @@ describe("job-persistence - recoverable behavior", () => {
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       logger.info("First log ever");
+      await waitForPendingWrites();
 
       consoleSpy.mockRestore();
 
@@ -573,7 +575,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(existsSync(LOGS_FILE)).toBe(true);
 
       // Log should be retrievable
-      const logs = getJobLogs("first-write");
+      const logs = await getJobLogs("first-write");
       expect(logs.length).toBe(1);
     });
   });
@@ -594,7 +596,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(deleted).toBe(false);
 
       // Real job should still exist
-      expect(loadJob("real-job")).toBeDefined();
+      expect(await loadJob("real-job")).toBeDefined();
     });
 
     it("should recover from partially completed cleanup", async () => {
@@ -613,7 +615,7 @@ describe("job-persistence - recoverable behavior", () => {
       await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       // Job should be gone
-      expect(loadJob("old-job")).toBeUndefined();
+      expect(await loadJob("old-job")).toBeUndefined();
 
       // Running cleanup again should be idempotent
       const removed = await cleanupOldJobs(24 * 60 * 60 * 1000);
@@ -635,13 +637,13 @@ describe("job-persistence - recoverable behavior", () => {
       }
 
       // All jobs should be retrievable
-      jobs.forEach((job) => {
-        const loaded = loadJob(job.id);
+      for (const job of jobs) {
+        const loaded = await loadJob(job.id);
         expect(loaded).toEqual(job);
-      });
+      }
 
       // loadAllJobs should have all jobs
-      const allJobs = loadAllJobs();
+      const allJobs = await loadAllJobs();
       expect(allJobs.length).toBe(10);
     });
   });
@@ -669,7 +671,7 @@ describe("job-persistence - recoverable behavior", () => {
 
       await saveJob(fullJob);
 
-      const loaded = loadJob("full-job");
+      const loaded = await loadJob("full-job");
       expect(loaded).toEqual(fullJob);
       expect(loaded?.progress?.current).toBe(100);
       expect(loaded?.result?.data).toEqual({ pagesProcessed: 100, errors: 0 });
@@ -685,7 +687,7 @@ describe("job-persistence - recoverable behavior", () => {
 
       await saveJob(minimalJob);
 
-      const loaded = loadJob("minimal-job");
+      const loaded = await loadJob("minimal-job");
       expect(loaded).toEqual(minimalJob);
       expect(loaded?.startedAt).toBeUndefined();
       expect(loaded?.completedAt).toBeUndefined();
@@ -693,7 +695,7 @@ describe("job-persistence - recoverable behavior", () => {
       expect(loaded?.result).toBeUndefined();
     });
 
-    it("should handle special characters in log messages", () => {
+    it("should handle special characters in log messages", async () => {
       const logger = createJobLogger("special-chars");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -709,7 +711,7 @@ describe("job-persistence - recoverable behavior", () => {
 
       consoleSpy.mockRestore();
 
-      const logs = getJobLogs("special-chars");
+      const logs = await getJobLogs("special-chars");
       const retrievedMessages = logs.map((l) => l.message);
 
       // All messages should be preserved
@@ -718,7 +720,7 @@ describe("job-persistence - recoverable behavior", () => {
       });
     });
 
-    it("should handle very long log messages", () => {
+    it("should handle very long log messages", async () => {
       const logger = createJobLogger("long-message");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -727,11 +729,11 @@ describe("job-persistence - recoverable behavior", () => {
 
       consoleSpy.mockRestore();
 
-      const logs = getJobLogs("long-message");
+      const logs = await getJobLogs("long-message");
       expect(logs[logs.length - 1].message).toBe(longMessage);
     });
 
-    it("should handle log with complex data objects", () => {
+    it("should handle log with complex data objects", async () => {
       const logger = createJobLogger("complex-data");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -747,7 +749,7 @@ describe("job-persistence - recoverable behavior", () => {
 
       consoleSpy.mockRestore();
 
-      const logs = getJobLogs("complex-data");
+      const logs = await getJobLogs("complex-data");
       // After JSON serialization, undefined and NaN are converted to null or omitted
       expect(logs[logs.length - 1].data).toEqual(complexData);
     });
@@ -768,15 +770,15 @@ describe("job-persistence - recoverable behavior", () => {
       await saveJob(job);
 
       // Should only have one copy
-      const allJobs = loadAllJobs();
+      const allJobs = await loadAllJobs();
       const matchingJobs = allJobs.filter((j) => j.id === "idempotent-job");
       expect(matchingJobs.length).toBe(1);
 
       // Job should be unchanged
-      expect(loadJob("idempotent-job")).toEqual(job);
+      expect(await loadJob("idempotent-job")).toEqual(job);
     });
 
-    it("should produce consistent getJobLogs results across calls", () => {
+    it("should produce consistent getJobLogs results across calls", async () => {
       const logger = createJobLogger("consistent-logs");
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -787,9 +789,9 @@ describe("job-persistence - recoverable behavior", () => {
       consoleSpy.mockRestore();
 
       // Get logs multiple times
-      const logs1 = getJobLogs("consistent-logs");
-      const logs2 = getJobLogs("consistent-logs");
-      const logs3 = getJobLogs("consistent-logs");
+      const logs1 = await getJobLogs("consistent-logs");
+      const logs2 = await getJobLogs("consistent-logs");
+      const logs3 = await getJobLogs("consistent-logs");
 
       // All should be identical
       expect(logs1).toEqual(logs2);

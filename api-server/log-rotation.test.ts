@@ -68,17 +68,17 @@ describe.sequential("Log Rotation", () => {
   });
 
   describe("rotateLogIfNeeded()", () => {
-    it("should not rotate file below size limit", () => {
+    it("should not rotate file below size limit", async () => {
       const testFile = join(TEST_DATA_DIR, "test.log");
       writeFileSync(testFile, "small content\n", "utf-8");
 
-      rotateLogIfNeeded(testFile, 1024 * 1024); // 1MB limit
+      await rotateLogIfNeeded(testFile, 1024 * 1024); // 1MB limit
 
       expect(existsSync(testFile)).toBe(true);
       expect(existsSync(`${testFile}.1`)).toBe(false);
     });
 
-    it("should rotate file when exceeding size limit", () => {
+    it("should rotate file when exceeding size limit", async () => {
       const testFile = join(TEST_DATA_DIR, "test.log");
       const largeContent = "x".repeat(2000); // 2KB
       writeFileSync(testFile, largeContent, "utf-8");
@@ -86,20 +86,20 @@ describe.sequential("Log Rotation", () => {
       const sizeBefore = statSync(testFile).size;
       expect(sizeBefore).toBeGreaterThan(1024);
 
-      rotateLogIfNeeded(testFile, 1024); // 1KB limit
+      await rotateLogIfNeeded(testFile, 1024); // 1KB limit
 
       expect(existsSync(`${testFile}.1`)).toBe(true);
       expect(existsSync(testFile)).toBe(false); // Original file rotated away
     });
 
-    it("should keep up to 3 rotated files", () => {
+    it("should keep up to 3 rotated files", async () => {
       const testFile = join(TEST_DATA_DIR, "test.log");
 
       // Create 4 rotations to test max 3 kept
       for (let i = 1; i <= 4; i++) {
         const content = `rotation ${i}\n`.repeat(200); // Make it large
         writeFileSync(testFile, content, "utf-8");
-        rotateLogIfNeeded(testFile, 500);
+        await rotateLogIfNeeded(testFile, 500);
       }
 
       expect(existsSync(`${testFile}.1`)).toBe(true);
@@ -108,34 +108,32 @@ describe.sequential("Log Rotation", () => {
       expect(existsSync(`${testFile}.4`)).toBe(false); // Should not exist
     });
 
-    it("should handle non-existent file gracefully", () => {
+    it("should handle non-existent file gracefully", async () => {
       const testFile = join(TEST_DATA_DIR, "nonexistent.log");
 
-      expect(() => {
-        rotateLogIfNeeded(testFile, 1024);
-      }).not.toThrow();
+      await expect(rotateLogIfNeeded(testFile, 1024)).resolves.toBeUndefined();
 
       expect(existsSync(testFile)).toBe(false);
       expect(existsSync(`${testFile}.1`)).toBe(false);
     });
 
-    it("should rotate in correct order: .log -> .log.1 -> .log.2 -> .log.3", () => {
+    it("should rotate in correct order: .log -> .log.1 -> .log.2 -> .log.3", async () => {
       const testFile = join(TEST_DATA_DIR, "test.log");
 
       // First rotation
       writeFileSync(testFile, "content1\n".repeat(200), "utf-8");
-      rotateLogIfNeeded(testFile, 500);
+      await rotateLogIfNeeded(testFile, 500);
       expect(existsSync(`${testFile}.1`)).toBe(true);
 
       // Second rotation
       writeFileSync(testFile, "content2\n".repeat(200), "utf-8");
-      rotateLogIfNeeded(testFile, 500);
+      await rotateLogIfNeeded(testFile, 500);
       expect(existsSync(`${testFile}.1`)).toBe(true);
       expect(existsSync(`${testFile}.2`)).toBe(true);
 
       // Third rotation
       writeFileSync(testFile, "content3\n".repeat(200), "utf-8");
-      rotateLogIfNeeded(testFile, 500);
+      await rotateLogIfNeeded(testFile, 500);
       expect(existsSync(`${testFile}.1`)).toBe(true);
       expect(existsSync(`${testFile}.2`)).toBe(true);
       expect(existsSync(`${testFile}.3`)).toBe(true);
@@ -143,7 +141,7 @@ describe.sequential("Log Rotation", () => {
   });
 
   describe("appendLog() with rotation", () => {
-    it("should rotate jobs.log when size limit exceeded", () => {
+    it("should rotate jobs.log when size limit exceeded", async () => {
       const logsFile = join(TEST_DATA_DIR, "jobs.log");
 
       // Append many log entries to exceed 1KB limit multiple times
@@ -157,7 +155,7 @@ describe.sequential("Log Rotation", () => {
           message: "x".repeat(100), // Make entries large
           data: { index: i },
         };
-        appendLog(entry);
+        await appendLog(entry);
       }
 
       // After 20 entries with 1KB limit, we should have triggered rotation
@@ -166,7 +164,7 @@ describe.sequential("Log Rotation", () => {
       expect(hasRotated).toBe(true);
     });
 
-    it("should continue logging after rotation", () => {
+    it("should continue logging after rotation", async () => {
       // Fill up log to trigger rotation
       for (let i = 0; i < 30; i++) {
         const entry: JobLogEntry = {
@@ -175,7 +173,7 @@ describe.sequential("Log Rotation", () => {
           jobId: `job-${i}`,
           message: "x".repeat(100),
         };
-        appendLog(entry);
+        await appendLog(entry);
       }
 
       // Log after rotation should work
@@ -186,14 +184,12 @@ describe.sequential("Log Rotation", () => {
         message: "final message",
       };
 
-      expect(() => {
-        appendLog(finalEntry);
-      }).not.toThrow();
+      await expect(appendLog(finalEntry)).resolves.toBeUndefined();
     });
   });
 
   describe("AuditLogger with rotation", () => {
-    it("should rotate audit.log when size limit exceeded", () => {
+    it("should rotate audit.log when size limit exceeded", async () => {
       // Reset singleton and configure with test directory
       // @ts-expect-error - Resetting private singleton for testing
       AuditLogger.instance = undefined;
@@ -225,12 +221,15 @@ describe.sequential("Log Rotation", () => {
         audit.log(entry);
       }
 
+      // Wait for all queued writes and rotations to complete
+      await audit.waitForPendingWrites();
+
       // After 20 entries with 1KB limit, we should have triggered rotation
       const hasRotated = existsSync(`${auditFile}.1`);
       expect(hasRotated).toBe(true);
     });
 
-    it("should continue logging after rotation", () => {
+    it("should continue logging after rotation", async () => {
       // Reset singleton and configure with test directory
       // @ts-expect-error - Resetting private singleton for testing
       AuditLogger.instance = undefined;
@@ -256,6 +255,8 @@ describe.sequential("Log Rotation", () => {
         audit.log(entry);
       }
 
+      await audit.waitForPendingWrites();
+
       // Log after rotation should work
       const finalEntry: AuditEntry = {
         id: "audit_final",
@@ -267,9 +268,8 @@ describe.sequential("Log Rotation", () => {
         statusCode: 200,
       };
 
-      expect(() => {
-        audit.log(finalEntry);
-      }).not.toThrow();
+      audit.log(finalEntry);
+      await expect(audit.waitForPendingWrites()).resolves.toBeUndefined();
     });
   });
 
@@ -291,7 +291,7 @@ describe.sequential("Log Rotation", () => {
       }
 
       // Verify all jobs saved
-      let jobs = loadAllJobs();
+      let jobs = await loadAllJobs();
       expect(jobs.length).toBe(10);
 
       // Run cleanup with very old maxAge (won't remove by time)
@@ -300,7 +300,7 @@ describe.sequential("Log Rotation", () => {
       // Should have removed 5 jobs (10 - 5 = 5)
       expect(removed).toBe(5);
 
-      jobs = loadAllJobs();
+      jobs = await loadAllJobs();
       expect(jobs.length).toBe(maxJobs);
     });
 
@@ -329,7 +329,7 @@ describe.sequential("Log Rotation", () => {
 
       await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs.length).toBe(3);
 
       // Should keep the 3 newest jobs
@@ -365,7 +365,7 @@ describe.sequential("Log Rotation", () => {
 
       await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
 
       // Should keep 2 pending + 1 completed (3 total)
       expect(jobs.length).toBe(3);
@@ -409,26 +409,26 @@ describe.sequential("Log Rotation", () => {
 
       expect(removed).toBe(5); // All old jobs removed
 
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs.length).toBe(3); // Only recent jobs remain
       expect(jobs.every((j) => j.id.startsWith("recent-"))).toBe(true);
     });
   });
 
   describe("Environment variable configuration", () => {
-    it("should use default MAX_LOG_SIZE_MB if env var not set", () => {
+    it("should use default MAX_LOG_SIZE_MB if env var not set", async () => {
       delete process.env.MAX_LOG_SIZE_MB;
 
       const testFile = join(TEST_DATA_DIR, "test.log");
       const content = "x".repeat(11 * 1024 * 1024); // 11MB
       writeFileSync(testFile, content, "utf-8");
 
-      rotateLogIfNeeded(testFile, 10 * 1024 * 1024); // Default 10MB
+      await rotateLogIfNeeded(testFile, 10 * 1024 * 1024); // Default 10MB
 
       expect(existsSync(`${testFile}.1`)).toBe(true);
     });
 
-    it("should use default MAX_STORED_JOBS if env var not set", () => {
+    it("should use default MAX_STORED_JOBS if env var not set", async () => {
       delete process.env.MAX_STORED_JOBS;
 
       // Create 1001 jobs
@@ -440,16 +440,16 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
-      cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
+      await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs.length).toBeLessThanOrEqual(1000); // Default cap
     });
 
-    it("should handle invalid MAX_LOG_SIZE_MB env var", () => {
+    it("should handle invalid MAX_LOG_SIZE_MB env var", async () => {
       process.env.MAX_LOG_SIZE_MB = "invalid";
 
       const testFile = join(TEST_DATA_DIR, "test.log");
@@ -457,12 +457,12 @@ describe.sequential("Log Rotation", () => {
       writeFileSync(testFile, content, "utf-8");
 
       // Should use default 10MB
-      rotateLogIfNeeded(testFile, 10 * 1024 * 1024);
+      await rotateLogIfNeeded(testFile, 10 * 1024 * 1024);
 
       expect(existsSync(`${testFile}.1`)).toBe(true);
     });
 
-    it("should handle invalid MAX_STORED_JOBS env var", () => {
+    it("should handle invalid MAX_STORED_JOBS env var", async () => {
       process.env.MAX_STORED_JOBS = "not-a-number";
 
       // Create 1001 jobs
@@ -474,12 +474,12 @@ describe.sequential("Log Rotation", () => {
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),
         };
-        saveJob(job);
+        await saveJob(job);
       }
 
-      cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
+      await cleanupOldJobs(365 * 24 * 60 * 60 * 1000);
 
-      const jobs = loadAllJobs();
+      const jobs = await loadAllJobs();
       expect(jobs.length).toBeLessThanOrEqual(1000); // Default cap
     });
   });

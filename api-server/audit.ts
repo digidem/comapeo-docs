@@ -9,9 +9,16 @@
  */
 
 import { join } from "node:path";
-import { existsSync, mkdirSync, appendFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  appendFileSync,
+  writeFileSync,
+  statSync,
+  renameSync,
+  unlinkSync,
+} from "node:fs";
 import type { ApiKeyMeta } from "./auth";
-import { rotateLogIfNeeded } from "./job-persistence";
 
 /**
  * Audit log entry structure
@@ -127,6 +134,38 @@ export class AuditLogger {
   }
 
   /**
+   * Rotate the audit log file if it exceeds the size limit (synchronous).
+   * Keeps up to 3 rotated files: .log.1, .log.2, .log.3
+   */
+  private rotateIfNeeded(maxSizeBytes: number): void {
+    try {
+      if (!existsSync(this.logPath)) return;
+      const stats = statSync(this.logPath);
+      if (stats.size < maxSizeBytes) return;
+
+      for (let i = 3; i > 0; i--) {
+        const rotated = `${this.logPath}.${i}`;
+        if (i === 3) {
+          try {
+            unlinkSync(rotated);
+          } catch {
+            // ignore ENOENT
+          }
+        } else {
+          try {
+            renameSync(rotated, `${this.logPath}.${i + 1}`);
+          } catch {
+            // ignore ENOENT
+          }
+        }
+      }
+      renameSync(this.logPath, `${this.logPath}.1`);
+    } catch (error) {
+      console.error(`Failed to rotate audit log ${this.logPath}:`, error);
+    }
+  }
+
+  /**
    * Generate a unique audit entry ID
    */
   private generateId(): string {
@@ -187,17 +226,24 @@ export class AuditLogger {
   }
 
   /**
-   * Log an audit entry
+   * Log an audit entry (synchronous write)
    */
   log(entry: AuditEntry): void {
     const logLine = JSON.stringify(entry) + "\n";
     try {
-      // Rotate log file if needed before appending
-      rotateLogIfNeeded(this.logPath, getMaxLogSize());
+      this.rotateIfNeeded(getMaxLogSize());
       appendFileSync(this.logPath, logLine, "utf-8");
     } catch (error) {
       console.error("Failed to write audit log:", error);
     }
+  }
+
+  /**
+   * No-op for API compatibility — log() is synchronous, so writes are
+   * always complete by the time this is called.
+   */
+  waitForPendingWrites(): Promise<void> {
+    return Promise.resolve();
   }
 
   /**

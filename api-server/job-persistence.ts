@@ -35,15 +35,15 @@
  */
 
 import {
-  readFileSync,
-  writeFileSync,
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  statSync,
-  renameSync,
-  unlinkSync,
-} from "node:fs";
+  readFile,
+  writeFile,
+  appendFile,
+  access,
+  mkdir,
+  stat,
+  rename,
+  unlink,
+} from "node:fs/promises";
 import { join } from "node:path";
 
 export interface JobLogEntry {
@@ -156,7 +156,12 @@ function getMaxStoredJobs(): number {
  * Prevents race conditions when multiple jobs complete simultaneously
  */
 let writeLockPromise: Promise<void> = Promise.resolve();
+let logWritePromise: Promise<void> = Promise.resolve();
 const MAX_LOCK_WAIT_MS = 5000; // Maximum time to wait for lock
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Wait for any pending writes to complete
@@ -168,7 +173,7 @@ export function waitForPendingWrites(timeoutMs: number = 1000): Promise<void> {
       () => reject(new Error("Timeout waiting for pending writes")),
       timeoutMs
     );
-    writeLockPromise
+    Promise.all([writeLockPromise, logWritePromise])
       .then(() => {
         clearTimeout(timeoutHandle);
         resolve();
@@ -180,6 +185,14 @@ export function waitForPendingWrites(timeoutMs: number = 1000): Promise<void> {
         return undefined;
       });
   });
+}
+
+function queueLogWrite(entry: JobLogEntry, jobId: string): void {
+  logWritePromise = logWritePromise
+    .then(() => appendLog(entry))
+    .catch((error) => {
+      console.error(`Failed to append job log for ${jobId}:`, error);
+    });
 }
 
 /**
@@ -209,17 +222,19 @@ function getLogsFile(): string {
  * Keeps up to 3 rotated files: file.log.1, file.log.2, file.log.3
  * Older files are deleted
  */
-export function rotateLogIfNeeded(
+export async function rotateLogIfNeeded(
   filePath: string,
   maxSizeBytes: number
-): void {
+): Promise<void> {
   try {
     // Check if file exists and its size
-    if (!existsSync(filePath)) {
+    try {
+      await access(filePath);
+    } catch {
       return; // Nothing to rotate
     }
 
-    const stats = statSync(filePath);
+    const stats = await stat(filePath);
     if (stats.size < maxSizeBytes) {
       return; // File is below size limit
     }
@@ -229,19 +244,29 @@ export function rotateLogIfNeeded(
       const rotatedFile = `${filePath}.${i}`;
       if (i === 3) {
         // Delete the oldest rotated file if it exists
-        if (existsSync(rotatedFile)) {
-          unlinkSync(rotatedFile);
+        try {
+          await unlink(rotatedFile);
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err.code !== "ENOENT") {
+            throw error;
+          }
         }
       } else {
         // Rename .log.{i} to .log.{i+1}
-        if (existsSync(rotatedFile)) {
-          renameSync(rotatedFile, `${filePath}.${i + 1}`);
+        try {
+          await rename(rotatedFile, `${filePath}.${i + 1}`);
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err.code !== "ENOENT") {
+            throw error;
+          }
         }
       }
     }
 
     // Rename current log to .log.1
-    renameSync(filePath, `${filePath}.1`);
+    await rename(filePath, `${filePath}.1`);
   } catch (error) {
     // Log error but don't crash - rotation is best-effort
     console.error(`Failed to rotate log file ${filePath}:`, error);
@@ -251,14 +276,21 @@ export function rotateLogIfNeeded(
 /**
  * Ensure data directory exists with retry logic for race conditions
  */
-function ensureDataDir(): void {
+async function ensureDataDir(): Promise<void> {
   const maxRetries = 3;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    if (existsSync(getDataDir())) {
-      return;
-    }
     try {
-      mkdirSync(getDataDir(), { recursive: true });
+      await access(getDataDir());
+      return;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    try {
+      await mkdir(getDataDir(), { recursive: true });
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -269,10 +301,7 @@ function ensureDataDir(): void {
       if (err.code === "ENOENT" && attempt < maxRetries - 1) {
         // Brief delay before retry
         const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // Busy wait for very short delays
-        }
+        await sleep(delay);
         continue;
       }
       throw error;
@@ -283,17 +312,12 @@ function ensureDataDir(): void {
 /**
  * Load jobs from file with retry logic for concurrent access
  */
-function loadJobs(): JobStorage {
+async function loadJobs(): Promise<JobStorage> {
   const maxRetries = 5;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      ensureDataDir();
-
-      if (!existsSync(getJobsFile())) {
-        return { jobs: [] };
-      }
-
-      const data = readFileSync(getJobsFile(), "utf-8");
+      await ensureDataDir();
+      const data = await readFile(getJobsFile(), "utf-8");
       return JSON.parse(data) as JobStorage;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -306,10 +330,7 @@ function loadJobs(): JobStorage {
         attempt < maxRetries - 1
       ) {
         const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // Busy wait for very short delays
-        }
+        await sleep(delay);
         continue;
       }
       // On final attempt or unrecoverable error, return empty storage
@@ -358,20 +379,20 @@ async function saveJobs(
     const maxRetries = 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        ensureDataDir();
+        await ensureDataDir();
 
         // Read is now inside the lock - prevents race condition
-        const storage = loadJobs();
+        const storage = await loadJobs();
         modifier(storage); // Apply modification
 
         const jobsFile = getJobsFile();
         const tempFile = `${jobsFile}.tmp`;
 
         // Write to temp file first
-        writeFileSync(tempFile, JSON.stringify(storage, null, 2), "utf-8");
+        await writeFile(tempFile, JSON.stringify(storage, null, 2), "utf-8");
 
         // Atomic rename (replaces target file atomically on most filesystems)
-        renameSync(tempFile, jobsFile);
+        await rename(tempFile, jobsFile);
         return;
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
@@ -413,16 +434,18 @@ export async function saveJob(job: PersistedJob): Promise<void> {
 /**
  * Load a job from persistent storage
  */
-export function loadJob(id: string): PersistedJob | undefined {
-  const storage = loadJobs();
+export async function loadJob(id: string): Promise<PersistedJob | undefined> {
+  await writeLockPromise;
+  const storage = await loadJobs();
   return storage.jobs.find((j) => j.id === id);
 }
 
 /**
  * Load all jobs from persistent storage
  */
-export function loadAllJobs(): PersistedJob[] {
-  const storage = loadJobs();
+export async function loadAllJobs(): Promise<PersistedJob[]> {
+  await writeLockPromise;
+  const storage = await loadJobs();
   return storage.jobs;
 }
 
@@ -445,19 +468,19 @@ export async function deleteJob(id: string): Promise<boolean> {
 /**
  * Append a log entry to the log file with retry logic for concurrent access
  */
-export function appendLog(entry: JobLogEntry): void {
+export async function appendLog(entry: JobLogEntry): Promise<void> {
   const maxRetries = 5;
   const logLine = JSON.stringify(entry) + "\n";
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      ensureDataDir();
+      await ensureDataDir();
 
       // Rotate log file if needed before appending
       const logsFile = getLogsFile();
-      rotateLogIfNeeded(logsFile, getMaxLogSize());
+      await rotateLogIfNeeded(logsFile, getMaxLogSize());
 
-      appendFileSync(logsFile, logLine, "utf-8");
+      await appendFile(logsFile, logLine, "utf-8");
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -469,10 +492,7 @@ export function appendLog(entry: JobLogEntry): void {
         attempt < maxRetries - 1
       ) {
         const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // Busy wait for very short delays
-        }
+        await sleep(delay);
         continue;
       }
       throw error;
@@ -500,7 +520,7 @@ export function createJobLogger(jobId: string): JobLogger {
         message,
         data,
       };
-      appendLog(entry);
+      queueLogWrite(entry, jobId);
       console.log(`[Job ${jobId}] ${message}`, data ?? "");
     },
     warn: (message: string, data?: unknown) => {
@@ -511,7 +531,7 @@ export function createJobLogger(jobId: string): JobLogger {
         message,
         data,
       };
-      appendLog(entry);
+      queueLogWrite(entry, jobId);
       console.warn(`[Job ${jobId}] ${message}`, data ?? "");
     },
     error: (message: string, data?: unknown) => {
@@ -522,7 +542,7 @@ export function createJobLogger(jobId: string): JobLogger {
         message,
         data,
       };
-      appendLog(entry);
+      queueLogWrite(entry, jobId);
       console.error(`[Job ${jobId}] ${message}`, data ?? "");
     },
     debug: (message: string, data?: unknown) => {
@@ -533,7 +553,7 @@ export function createJobLogger(jobId: string): JobLogger {
         message,
         data,
       };
-      appendLog(entry);
+      queueLogWrite(entry, jobId);
       if (process.env.DEBUG) {
         console.debug(`[Job ${jobId}] ${message}`, data ?? "");
       }
@@ -544,17 +564,13 @@ export function createJobLogger(jobId: string): JobLogger {
 /**
  * Get logs for a specific job with retry logic for concurrent access
  */
-export function getJobLogs(jobId: string): JobLogEntry[] {
+export async function getJobLogs(jobId: string): Promise<JobLogEntry[]> {
+  await logWritePromise;
   const maxRetries = 5;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      ensureDataDir();
-
-      if (!existsSync(getLogsFile())) {
-        return [];
-      }
-
-      const logContent = readFileSync(getLogsFile(), "utf-8");
+      await ensureDataDir();
+      const logContent = await readFile(getLogsFile(), "utf-8");
       const lines = logContent.trim().split("\n");
 
       return lines
@@ -579,10 +595,7 @@ export function getJobLogs(jobId: string): JobLogEntry[] {
         attempt < maxRetries - 1
       ) {
         const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // Busy wait for very short delays
-        }
+        await sleep(delay);
         continue;
       }
       // On final attempt or unrecoverable error, return empty array
@@ -595,17 +608,13 @@ export function getJobLogs(jobId: string): JobLogEntry[] {
 /**
  * Get recent logs (all jobs) with retry logic for concurrent access
  */
-export function getRecentLogs(limit = 100): JobLogEntry[] {
+export async function getRecentLogs(limit = 100): Promise<JobLogEntry[]> {
+  await logWritePromise;
   const maxRetries = 5;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      ensureDataDir();
-
-      if (!existsSync(getLogsFile())) {
-        return [];
-      }
-
-      const logContent = readFileSync(getLogsFile(), "utf-8");
+      await ensureDataDir();
+      const logContent = await readFile(getLogsFile(), "utf-8");
       const lines = logContent.trim().split("\n");
 
       const entries: JobLogEntry[] = lines
@@ -630,10 +639,7 @@ export function getRecentLogs(limit = 100): JobLogEntry[] {
         attempt < maxRetries - 1
       ) {
         const delay = Math.pow(2, attempt) * 10; // 10ms, 20ms, 40ms, 80ms
-        const start = Date.now();
-        while (Date.now() - start < delay) {
-          // Busy wait for very short delays
-        }
+        await sleep(delay);
         continue;
       }
       // On final attempt or unrecoverable error, return empty array

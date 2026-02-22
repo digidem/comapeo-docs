@@ -48,7 +48,7 @@ describe("job-persistence", () => {
       saveJob(job);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
       expect(loaded).toEqual(job);
     });
 
@@ -74,14 +74,14 @@ describe("job-persistence", () => {
       saveJob(updatedJob);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
       expect(loaded).toEqual(updatedJob);
       expect(loaded?.status).toBe("completed");
       expect(loaded?.result?.success).toBe(true);
     });
 
-    it("should return undefined for non-existent job", () => {
-      const loaded = loadJob("non-existent-job");
+    it("should return undefined for non-existent job", async () => {
+      const loaded = await loadJob("non-existent-job");
       expect(loaded).toBeUndefined();
     });
 
@@ -106,13 +106,13 @@ describe("job-persistence", () => {
       saveJob(job2);
       await waitForPendingWrites();
 
-      const loaded1 = loadJob(job1.id);
-      const loaded2 = loadJob(job2.id);
+      const loaded1 = await loadJob(job1.id);
+      const loaded2 = await loadJob(job2.id);
 
       expect(loaded1).toEqual(job1);
       expect(loaded2).toEqual(job2);
 
-      const all = loadAllJobs();
+      const all = await loadAllJobs();
       expect(all).toHaveLength(2);
       expect(all).toContainEqual(job1);
       expect(all).toContainEqual(job2);
@@ -134,7 +134,7 @@ describe("job-persistence", () => {
       const deleted = await deleteJob(job.id);
 
       expect(deleted).toBe(true);
-      expect(loadJob(job.id)).toBeUndefined();
+      expect(await loadJob(job.id)).toBeUndefined();
     });
 
     it("should return false when deleting non-existent job", async () => {
@@ -165,17 +165,17 @@ describe("job-persistence", () => {
       await deleteJob(job1.id);
       await waitForPendingWrites();
 
-      expect(loadAllJobs()).toEqual([job2]);
+      expect(await loadAllJobs()).toEqual([job2]);
 
       await deleteJob(job2.id);
       await waitForPendingWrites();
 
-      expect(loadAllJobs()).toEqual([]);
+      expect(await loadAllJobs()).toEqual([]);
     });
   });
 
   describe("appendLog and getJobLogs", () => {
-    it("should append and retrieve logs for a job", () => {
+    it("should append and retrieve logs for a job", async () => {
       const jobId = "test-job-1";
       const logger = createJobLogger(jobId);
 
@@ -183,7 +183,7 @@ describe("job-persistence", () => {
       logger.warn("Warning message");
       logger.error("Error message");
 
-      const logs = getJobLogs(jobId);
+      const logs = await getJobLogs(jobId);
 
       expect(logs).toHaveLength(3);
       expect(logs[0].message).toBe("Job started");
@@ -194,7 +194,7 @@ describe("job-persistence", () => {
       expect(logs[2].level).toBe("error");
     });
 
-    it("should filter logs by job ID", () => {
+    it("should filter logs by job ID", async () => {
       const logger1 = createJobLogger("job-1");
       const logger2 = createJobLogger("job-2");
 
@@ -202,8 +202,8 @@ describe("job-persistence", () => {
       logger2.info("Job 2 message");
       logger1.warn("Job 1 warning");
 
-      const job1Logs = getJobLogs("job-1");
-      const job2Logs = getJobLogs("job-2");
+      const job1Logs = await getJobLogs("job-1");
+      const job2Logs = await getJobLogs("job-2");
 
       expect(job1Logs).toHaveLength(2);
       expect(job1Logs[0].message).toBe("Job 1 message");
@@ -213,18 +213,18 @@ describe("job-persistence", () => {
       expect(job2Logs[0].message).toBe("Job 2 message");
     });
 
-    it("should return empty logs for non-existent job", () => {
-      const logs = getJobLogs("non-existent-job");
+    it("should return empty logs for non-existent job", async () => {
+      const logs = await getJobLogs("non-existent-job");
       expect(logs).toEqual([]);
     });
 
-    it("should handle logs with data", () => {
+    it("should handle logs with data", async () => {
       const jobId = "test-job-1";
       const logger = createJobLogger(jobId);
 
       logger.info("Processing", { count: 42, status: "running" });
 
-      const logs = getJobLogs(jobId);
+      const logs = await getJobLogs(jobId);
 
       expect(logs).toHaveLength(1);
       expect(logs[0].data).toEqual({ count: 42, status: "running" });
@@ -232,7 +232,7 @@ describe("job-persistence", () => {
   });
 
   describe("getRecentLogs", () => {
-    it("should retrieve recent logs across all jobs", () => {
+    it("should retrieve recent logs across all jobs", async () => {
       const logger1 = createJobLogger("job-1");
       const logger2 = createJobLogger("job-2");
 
@@ -241,7 +241,7 @@ describe("job-persistence", () => {
       logger1.info("Job 1 log 2");
       logger2.info("Job 2 log 2");
 
-      const recentLogs = getRecentLogs();
+      const recentLogs = await getRecentLogs();
 
       expect(recentLogs).toHaveLength(4);
       expect(recentLogs[0].jobId).toBe("job-1");
@@ -250,22 +250,22 @@ describe("job-persistence", () => {
       expect(recentLogs[3].message).toBe("Job 2 log 2");
     });
 
-    it("should respect limit parameter", () => {
+    it("should respect limit parameter", async () => {
       const logger = createJobLogger("job-1");
 
       for (let i = 0; i < 50; i++) {
         logger.info(`Log ${i}`);
       }
 
-      const recentLogs = getRecentLogs(10);
+      const recentLogs = await getRecentLogs(10);
 
       expect(recentLogs).toHaveLength(10);
       expect(recentLogs[0].message).toBe("Log 40");
       expect(recentLogs[9].message).toBe("Log 49");
     });
 
-    it("should return empty array when no logs exist", () => {
-      const recentLogs = getRecentLogs();
+    it("should return empty array when no logs exist", async () => {
+      const recentLogs = await getRecentLogs();
       expect(recentLogs).toEqual([]);
     });
   });
@@ -287,7 +287,7 @@ describe("job-persistence", () => {
       saveJob(job);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
 
       expect(loaded?.result?.success).toBe(true);
       expect(loaded?.result?.data).toEqual({
@@ -312,7 +312,7 @@ describe("job-persistence", () => {
       saveJob(job);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
 
       expect(loaded?.result?.success).toBe(false);
       expect(loaded?.result?.error).toBe("Network error");
@@ -344,7 +344,7 @@ describe("job-persistence", () => {
       saveJob(updatedJob);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
 
       expect(loaded?.progress?.current).toBe(50);
       expect(loaded?.progress?.message).toBe("Halfway");
@@ -370,7 +370,7 @@ describe("job-persistence", () => {
       saveJob(job);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
 
       expect(loaded?.github?.owner).toBe("test-owner");
       expect(loaded?.github?.repo).toBe("test-repo");
@@ -400,7 +400,7 @@ describe("job-persistence", () => {
       saveJob(updated);
       await waitForPendingWrites();
 
-      const loaded = loadJob(job.id);
+      const loaded = await loadJob(job.id);
 
       expect(loaded?.githubStatusReported).toBe(true);
     });
@@ -422,7 +422,7 @@ describe("job-persistence", () => {
       const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(0);
-      expect(loadJob("test-job-1")).toBeDefined();
+      expect(await loadJob("test-job-1")).toBeDefined();
     });
 
     it("should keep pending jobs regardless of age", async () => {
@@ -441,7 +441,7 @@ describe("job-persistence", () => {
       const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(0);
-      expect(loadJob("old-pending-job")).toBeDefined();
+      expect(await loadJob("old-pending-job")).toBeDefined();
     });
 
     it("should keep running jobs regardless of age", async () => {
@@ -461,7 +461,7 @@ describe("job-persistence", () => {
       const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(0);
-      expect(loadJob("old-running-job")).toBeDefined();
+      expect(await loadJob("old-running-job")).toBeDefined();
     });
 
     it("should remove old failed jobs", async () => {
@@ -482,7 +482,7 @@ describe("job-persistence", () => {
       const removedCount = await cleanupOldJobs(24 * 60 * 60 * 1000);
 
       expect(removedCount).toBe(1);
-      expect(loadJob("old-failed-job")).toBeUndefined();
+      expect(await loadJob("old-failed-job")).toBeUndefined();
     });
 
     it("should enforce max stored jobs limit", async () => {
@@ -518,7 +518,7 @@ describe("job-persistence", () => {
       const removedCount = await cleanupOldJobs();
       await waitForPendingWrites();
 
-      expect(loadAllJobs()).toHaveLength(5);
+      expect(await loadAllJobs()).toHaveLength(5);
       expect(removedCount).toBe(10);
 
       // Cleanup
@@ -562,12 +562,12 @@ describe("job-persistence", () => {
       await waitForPendingWrites();
 
       // Should keep 2 pending + 1 newest completed = 3 total
-      expect(loadAllJobs()).toHaveLength(3);
+      expect(await loadAllJobs()).toHaveLength(3);
       expect(removedCount).toBe(4);
 
       // Verify pending jobs are preserved
-      expect(loadJob("pending-1")).toBeDefined();
-      expect(loadJob("pending-2")).toBeDefined();
+      expect(await loadJob("pending-1")).toBeDefined();
+      expect(await loadJob("pending-2")).toBeDefined();
 
       // Cleanup
       delete process.env.MAX_STORED_JOBS;

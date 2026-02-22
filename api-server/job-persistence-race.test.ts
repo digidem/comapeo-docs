@@ -43,7 +43,7 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Verify all jobs were saved
-      const initialJobs = loadAllJobs();
+      const initialJobs = await loadAllJobs();
       expect(initialJobs).toHaveLength(10);
 
       // Simulate concurrent job completions
@@ -74,12 +74,12 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify ALL jobs were saved with their completion status
-      const finalJobs = loadAllJobs();
+      const finalJobs = await loadAllJobs();
       expect(finalJobs).toHaveLength(10);
 
       // Check each job individually
       for (let i = 0; i < 10; i++) {
-        const job = loadJob(`job-${i}`);
+        const job = await loadJob(`job-${i}`);
         expect(job).toBeDefined();
         expect(job?.status).toBe("completed");
         expect(job?.completedAt).toBeDefined();
@@ -145,7 +145,7 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify the final state is correct
-      const finalJob = loadJob("rapid-update-job");
+      const finalJob = await loadJob("rapid-update-job");
       expect(finalJob).toBeDefined();
       expect(finalJob?.status).toBe("completed");
       expect(finalJob?.completedAt).toBeDefined();
@@ -171,7 +171,7 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Verify initial state
-      const initialJobs = loadAllJobs();
+      const initialJobs = await loadAllJobs();
       expect(initialJobs).toHaveLength(20);
 
       // Update jobs with different statuses simultaneously
@@ -225,12 +225,12 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify ALL jobs are still present and correctly updated
-      const finalJobs = loadAllJobs();
+      const finalJobs = await loadAllJobs();
       expect(finalJobs).toHaveLength(20);
 
       // Verify specific job states
       for (let i = 0; i < 20; i++) {
-        const job = loadJob(`multi-job-${i}`);
+        const job = await loadJob(`multi-job-${i}`);
         expect(job).toBeDefined();
 
         if (i < 5) {
@@ -311,19 +311,19 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify we have 20 total jobs
-      const allJobs = loadAllJobs();
+      const allJobs = await loadAllJobs();
       expect(allJobs).toHaveLength(20);
 
       // Verify existing jobs were updated
       for (let i = 0; i < 10; i++) {
-        const job = loadJob(`existing-job-${i}`);
+        const job = await loadJob(`existing-job-${i}`);
         expect(job).toBeDefined();
         expect(job?.status).toBe("completed");
       }
 
       // Verify new jobs were created
       for (let i = 0; i < 10; i++) {
-        const job = loadJob(`new-job-${i}`);
+        const job = await loadJob(`new-job-${i}`);
         expect(job).toBeDefined();
         expect(job?.status).toBe("pending");
       }
@@ -378,12 +378,12 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Verify ALL jobs are present with correct unique data
-      const finalJobs = loadAllJobs();
+      const finalJobs = await loadAllJobs();
       expect(finalJobs).toHaveLength(jobCount);
 
       // Verify each job has its unique data intact
       for (let i = 0; i < jobCount; i++) {
-        const job = loadJob(`stress-job-${i}`);
+        const job = await loadJob(`stress-job-${i}`);
         expect(job).toBeDefined();
         expect(job?.status).toBe("completed");
         expect(job?.result?.success).toBe(true);
@@ -414,7 +414,7 @@ describe("job-persistence race conditions", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Verify job was saved
-      const loaded = loadJob("atomic-test-job");
+      const loaded = await loadJob("atomic-test-job");
       expect(loaded).toBeDefined();
       expect(loaded?.id).toBe("atomic-test-job");
 

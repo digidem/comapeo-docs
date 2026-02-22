@@ -105,7 +105,7 @@ class JobTracker {
 
   constructor() {
     // Load persisted jobs on initialization
-    this.loadPersistedJobs();
+    void this.loadPersistedJobs();
 
     // Clean up old jobs every hour
     this.cleanupInterval = setInterval(
@@ -119,8 +119,8 @@ class JobTracker {
   /**
    * Load jobs from persistent storage into memory
    */
-  private loadPersistedJobs(): void {
-    const persistedJobs = loadAllJobs();
+  private async loadPersistedJobs(): Promise<void> {
+    const persistedJobs = await loadAllJobs();
     for (const persistedJob of persistedJobs) {
       const wasInFlight =
         persistedJob.status === "pending" || persistedJob.status === "running";
@@ -167,7 +167,7 @@ class JobTracker {
 
       this.jobs.set(job.id, job);
       if (wasInFlight) {
-        this.persistJob(job);
+        void this.persistJob(job);
       }
     }
   }
@@ -371,7 +371,7 @@ class JobTracker {
   deleteJob(id: string): boolean {
     const deleted = this.jobs.delete(id);
     if (deleted) {
-      deletePersistedJob(id);
+      void deletePersistedJob(id);
     }
     return deleted;
   }
@@ -393,7 +393,7 @@ class JobTracker {
       github: job.github,
       githubStatusReported: job.githubStatusReported,
     };
-    saveJob(persistedJob);
+    void saveJob(persistedJob);
   }
 
   /**
@@ -409,7 +409,7 @@ class JobTracker {
         job.completedAt < twentyFourHoursAgo
       ) {
         this.jobs.delete(id);
-        deletePersistedJob(id);
+        void deletePersistedJob(id);
       }
     }
   }

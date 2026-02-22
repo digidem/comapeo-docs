@@ -303,6 +303,9 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       destroyJobTracker();
       const newTracker = getJobTracker();
 
+      // Wait for async job loading to complete
+      await newTracker.waitForLoad();
+
       // Flag should persist
       expect(newTracker.isGitHubStatusReported(jobId)).toBe(true);
     });

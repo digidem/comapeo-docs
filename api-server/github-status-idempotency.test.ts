@@ -447,6 +447,9 @@ describe("GitHub Status - Idempotency and Integration", () => {
       destroyJobTracker();
       const newTracker = getJobTracker();
 
+      // Wait for async job loading to complete
+      await newTracker.waitForLoad();
+
       // The flag should be persisted
       expect(newTracker.isGitHubStatusReported(jobId)).toBe(true);
     });
@@ -471,6 +474,9 @@ describe("GitHub Status - Idempotency and Integration", () => {
       destroyJobTracker();
       const newTracker = getJobTracker();
 
+      // Wait for async job loading to complete
+      await newTracker.waitForLoad();
+
       // The flag should be persisted as false
       expect(newTracker.isGitHubStatusReported(jobId)).toBe(false);
     });
@@ -491,6 +497,10 @@ describe("GitHub Status - Idempotency and Integration", () => {
       // Destroy and recreate tracker
       destroyJobTracker();
       const newTracker = getJobTracker();
+
+      // Wait for async job loading to complete
+      await newTracker.waitForLoad();
+
       expect(newTracker.isGitHubStatusReported(jobId)).toBe(false);
     });
   });

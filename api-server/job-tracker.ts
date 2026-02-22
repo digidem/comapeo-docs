@@ -102,10 +102,11 @@ class JobTracker {
   private jobs: Map<string, Job> = new Map();
   private processes: Map<string, { kill: () => void }> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private loadPromise: Promise<void>;
 
   constructor() {
     // Load persisted jobs on initialization
-    void this.loadPersistedJobs();
+    this.loadPromise = this.loadPersistedJobs();
 
     // Clean up old jobs every hour
     this.cleanupInterval = setInterval(
@@ -431,6 +432,14 @@ class JobTracker {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+  }
+
+  /**
+   * Wait for initial job loading to complete
+   * Useful for tests that need to ensure persistence is loaded before assertions
+   */
+  async waitForLoad(): Promise<void> {
+    await this.loadPromise;
   }
 }
 

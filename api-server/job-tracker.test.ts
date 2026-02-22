@@ -246,6 +246,9 @@ describe("JobTracker", () => {
       destroyJobTracker();
       const newTracker = getJobTracker();
 
+      // Wait for async job loading to complete
+      await newTracker.waitForLoad();
+
       // Jobs should be persisted and available in the new tracker
       const loadedJob1 = newTracker.getJob(jobId1);
       const loadedJob2 = newTracker.getJob(jobId2);

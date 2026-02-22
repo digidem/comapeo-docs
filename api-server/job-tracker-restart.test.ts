@@ -22,7 +22,7 @@ describe("Job Tracker - Server Restart", () => {
     destroyJobTracker();
   });
 
-  it("marks in-flight jobs as SERVER_RESTART_ABORT on restart", () => {
+  it("marks in-flight jobs as SERVER_RESTART_ABORT on restart", async () => {
     const jobId = "test-job-123";
     const jobData = {
       id: jobId,
@@ -36,6 +36,9 @@ describe("Job Tracker - Server Restart", () => {
     writeFileSync(JOBS_FILE, JSON.stringify({ jobs: [jobData] }));
 
     const tracker = getJobTracker();
+
+    // Wait for async job loading to complete
+    await tracker.waitForLoad();
 
     const job = tracker.getJob(jobId);
     expect(job).toBeDefined();

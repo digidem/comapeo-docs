@@ -213,16 +213,16 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       }
     });
 
-    it("should strip unknown option keys", () => {
+    it("should reject unknown option keys", () => {
       const result = safeValidate(createJobRequestSchema, {
         type: "notion:fetch",
         options: {
           unknownOption: "value",
         },
       });
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.options).toEqual({});
+      expect(result.success).toBe(false);
+      if (result.success === false) {
+        expect(result.error.issues[0].code).toBe("unrecognized_keys");
       }
     });
 
@@ -623,11 +623,11 @@ describe("Endpoint Schema Validation - Zod Error Formatting", () => {
     }
   });
 
-  it("should ignore unknown keys in options schema", () => {
+  it("should reject unknown keys in options schema", () => {
     const result = jobOptionsSchema.safeParse({ unknownOption: "value" });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data).toEqual({});
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].code).toBe("unrecognized_keys");
     }
   });
 });

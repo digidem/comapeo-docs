@@ -33,42 +33,44 @@ Production deployment
 
 ### Option 1: GitHub UI (Recommended)
 
-1. **Open Actions** → "Promote Content to Production"
-2. **Run workflow** — leave SHA blank to use current content branch HEAD
-3. Review the automatically-created PR:
-   - Check content SHA
-   - Verify pre-merge checklist is complete
-   - Add any additional review comments
-4. **Merge PR to main** → triggers production deploy with locked SHA
+1. **Open Actions** → "Deploy to Production"
+2. Click **Run workflow**
+3. Leave **Content SHA** blank to use current content branch HEAD, or paste a specific SHA
+4. Click **Run workflow** → the workflow updates `content-lock.sha`, commits it to `main`, and deploys
 
 ### Option 2: CLI
 
 ```bash
-# Promote current content branch HEAD
-git rev-parse origin/content > content-lock.sha
-git add content-lock.sha
-git commit -m "chore(content): promote content to production"
-git push origin HEAD -u
-gh pr create --base main
+# Trigger via GitHub CLI (uses current content HEAD)
+gh workflow run deploy-production.yml
+
+# Trigger with a specific SHA
+gh workflow run deploy-production.yml -f content_sha=<sha>
 ```
 
-Then review and merge the PR.
+No PR required — `content-lock.sha` is updated automatically as part of the deploy.
 
 ## Deployment Flow
 
 When `deploy-production.yml` runs:
 
-1. **Resolve locked SHA**:
-   - Read `content-lock.sha` from `main`
+1. **[`workflow_dispatch` only] Promote content lock SHA**:
+   - Resolves SHA (from input or current `origin/content` HEAD)
+   - Validates format and existence
+   - If different from current lock: commits updated `content-lock.sha` to `main` with `[skip ci]`
+
+2. **Resolve locked SHA**:
+   - Read `content-lock.sha` from `main` (just updated if `workflow_dispatch`)
    - Validate format and existence
    - Error if empty or invalid
    - Warning if not ancestor of current content branch (rebased case)
 
-2. **Checkout locked content**:
+3. **Checkout locked content**:
    - `git checkout <locked-sha> -- docs/ i18n/ static/images/`
    - All existing validation (markdown count, image checks) unchanged
 
 3. **Deploy with locked SHA**:
+4. **Deploy**:
    - Build Docusaurus
    - Deploy to Cloudflare Pages
    - Update Notion status (production flow only)
@@ -134,9 +136,9 @@ First time `content-lock.sha` is added to a repo:
 ### SHA not in repository (force-push)
 ```
 ::error::SHA <sha> does not exist in repository. This may happen after force-push.
-Remediation: run 'promote-content' workflow or update content-lock.sha.
+Remediation: re-trigger this workflow via workflow_dispatch to update the lock.
 ```
-**Fix**: Either push a new commit to content branch or promote a different SHA
+**Fix**: Re-trigger `deploy-production.yml` via `workflow_dispatch` — it will resolve and lock a new SHA
 
 ### SHA not ancestor of content HEAD (rebase)
 ```

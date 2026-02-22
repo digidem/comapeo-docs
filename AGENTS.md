@@ -136,12 +136,13 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 
 ### Production Content Deployment
 
-Content reaches production via an approval gate:
+Content reaches production via a manual deploy trigger:
 
 1. **Write/update content** in Notion → synced to `content` branch (staging)
 2. **Review on staging** site (PR preview or staging deploy)
-3. **Approve for production** → open "Promote Content" PR which updates `content-lock.sha`
-4. **Merge promotion PR to main** → automatic production deploy with locked content SHA
+3. **Deploy to production** → Actions → "Deploy to Production" → Run workflow
+   - Updates `content-lock.sha` on `main` automatically
+   - Builds and deploys with that locked SHA
 
 See `context/workflows/PRODUCTION_DEPLOYMENT.md` for complete workflow.
 

@@ -68,10 +68,9 @@ Documentation content workflow from creation to publication.
    - Create navigation structure
 2. Content synced to `content` branch (staging workspace)
 3. Review content on staging site (PR previews or staging deploy)
-4. When approved, open "Promote Content to Production" PR:
-   - Updates `content-lock.sha` on `main`
-   - This PR is the approval gate
-   - Merging triggers automatic production deploy
+4. When approved, trigger "Deploy to Production" workflow (Actions → workflow_dispatch):
+   - Automatically updates `content-lock.sha` on `main`
+   - Deploys with the locked SHA in the same run
 
 ### 6. Published
 

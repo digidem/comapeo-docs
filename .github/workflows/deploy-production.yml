@@ -16,6 +16,11 @@ on:
         required: false
         default: "test"
         type: string
+      content_sha:
+        description: "Content SHA to deploy (leave blank to use current content branch HEAD)"
+        required: false
+        default: ""
+        type: string
   repository_dispatch:
     types: [deploy-production]
   push:
@@ -29,6 +34,8 @@ jobs:
   deploy:
     name: Deploy to Cloudflare Pages and Update Notion
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code (main branch)
@@ -36,6 +43,44 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Promote content lock SHA
+        if: github.event_name == 'workflow_dispatch' && inputs.environment != 'test'
+        run: |
+          set -e
+
+          git fetch origin content
+
+          if [ -n "${{ inputs.content_sha }}" ]; then
+            SHA="${{ inputs.content_sha }}"
+            echo "Using provided SHA: $SHA"
+          else
+            SHA=$(git rev-parse origin/content)
+            echo "Using content branch HEAD: $SHA"
+          fi
+
+          if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::Invalid SHA format: '$SHA'. Expected 40-character lowercase hex string."
+            exit 1
+          fi
+
+          if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
+            echo "::error::SHA $SHA does not exist in the repository."
+            exit 1
+          fi
+
+          CURRENT=$(tr -d '[:space:]' < content-lock.sha 2>/dev/null || echo "")
+          if [ "$CURRENT" = "$SHA" ]; then
+            echo "ℹ️ content-lock.sha already at ${SHA:0:8} — skipping update"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            echo "${SHA}" > content-lock.sha
+            git add content-lock.sha
+            git commit -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
+            git push origin HEAD:main
+            echo "✅ Updated content-lock.sha → ${SHA:0:8}"
+          fi
 
       - name: Resolve content lock SHA
         id: content-lock
@@ -53,7 +98,7 @@ jobs:
             SHA=$(tr -d '[:space:]' < "$LOCK_FILE")
 
             if [ -z "$SHA" ]; then
-              echo "::error::content-lock.sha is empty. Update content-lock.sha with a valid 40-char content SHA."
+              echo "::error::content-lock.sha is empty. Trigger this workflow via workflow_dispatch to update it."
               exit 1
             fi
 
@@ -67,7 +112,7 @@ jobs:
             if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
               echo "::error::SHA $SHA from content-lock.sha does not exist in the repository."
               echo "  This may happen after a force-push to the content branch."
-              echo "  Remediation: run 'promote-content' workflow or manually update content-lock.sha."
+              echo "  Remediation: re-trigger this workflow via workflow_dispatch to update the lock."
               exit 1
             fi
 

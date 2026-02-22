@@ -47,7 +47,7 @@ describe("Docker Publish Workflow", () => {
       expect(paths).toContain("Dockerfile");
       expect(paths).toContain(".dockerignore");
       expect(paths).toContain("package.json");
-      expect(paths).toContain("bun.lockb*");
+      expect(paths).toContain("bun.lock*");
       expect(paths).toContain("scripts/**");
       expect(paths).toContain("tsconfig.json");
       expect(paths).toContain("docusaurus.config.ts");

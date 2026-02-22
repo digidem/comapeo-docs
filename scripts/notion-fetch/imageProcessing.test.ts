@@ -26,8 +26,25 @@ import {
 } from "./imageProcessing";
 
 // Mock dependencies
-vi.mock("node:fs");
-vi.mock("axios");
+vi.mock("node:fs", () => ({
+  __esModule: true,
+  default: {
+    existsSync: vi.fn().mockReturnValue(false),
+    readFileSync: vi.fn().mockReturnValue(""),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+    readdirSync: vi.fn().mockReturnValue([]),
+    unlinkSync: vi.fn(),
+    renameSync: vi.fn(),
+    statSync: vi.fn(),
+  },
+}));
+vi.mock("axios", () => ({
+  __esModule: true,
+  default: {
+    get: vi.fn(),
+  },
+}));
 vi.mock("./imageProcessor", () => ({
   processImage: vi.fn(async (buffer: Buffer) => ({
     outputBuffer: buffer,

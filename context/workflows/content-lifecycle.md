@@ -54,10 +54,10 @@ Documentation content workflow from creation to publication.
 3. Technical review passed
 4. Ready for site deployment
 
-### 5. Published
+### 5. Ready for Production
 
-**Status**: "Draft published"
-**Action**: Live on documentation site
+**Status**: "Draft published" (after fetch)
+**Action**: Approved content ready for production deploy
 
 **Process**:
 
@@ -66,7 +66,25 @@ Documentation content workflow from creation to publication.
    - Generate frontmatter
    - Optimize images
    - Create navigation structure
-2. Deploy to production site
+2. Content synced to `content` branch (staging workspace)
+3. Review content on staging site (PR previews or staging deploy)
+4. When approved, open "Promote Content to Production" PR:
+   - Updates `content-lock.sha` on `main`
+   - This PR is the approval gate
+   - Merging triggers automatic production deploy
+
+### 6. Published
+
+**Status**: "Draft published"
+**Action**: Live on production documentation site
+
+**Process**:
+
+1. Production deploy workflow triggered by `content-lock.sha` merge:
+   - Checks out locked content SHA
+   - Validates content exists and is valid
+   - Deploys to production Cloudflare Pages
+   - Updates Notion status to published
 
 ### 6. Removal
 

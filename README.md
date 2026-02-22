@@ -13,9 +13,15 @@ Documentation site and content pipeline for CoMapeo, built with Docusaurus v3 an
 This repository uses two branches:
 
 - `main`: source code, scripts, workflows, and configuration
+  - Includes `content-lock.sha`: pins approved content SHA for production
 - `content`: generated docs and assets (`docs/`, `i18n/`, `static/images/`)
+  - Staging workspace for content review (not directly deployed to production)
 
 Do not manually edit generated content in `docs/` or `static/`; these are synced from Notion.
+
+### Production Deployment & Content Approval
+
+Production content deploys use a locked content SHA (stored in `content-lock.sha` on `main`) to ensure only reviewed and approved content goes live. Promoting content requires a PR to `main` — that PR is the approval gate. See `context/workflows/PRODUCTION_DEPLOYMENT.md` for details.
 
 ## Quick Start
 
@@ -139,6 +145,8 @@ bun run typecheck --noEmit
 - Repository guidelines: `context/repository-guidelines.md`
 - API reference: `context/api-server/reference.md`
 - API deployment workflow: `context/workflows/api-service-deployment.md`
+- Production deployment workflow: `context/workflows/PRODUCTION_DEPLOYMENT.md`
+- Content lifecycle: `context/workflows/content-lifecycle.md`
 - Notion architecture: `NOTION_FETCH_ARCHITECTURE.md`
 
 ## License

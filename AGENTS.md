@@ -134,6 +134,17 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 - write a short human explanation of what changed and why
 - update documentation or task trackers (like `TASK.md`) when workflows change
 
+### Production Content Deployment
+
+Content reaches production via an approval gate:
+
+1. **Write/update content** in Notion → synced to `content` branch (staging)
+2. **Review on staging** site (PR preview or staging deploy)
+3. **Approve for production** → open "Promote Content" PR which updates `content-lock.sha`
+4. **Merge promotion PR to main** → automatic production deploy with locked content SHA
+
+See `context/workflows/PRODUCTION_DEPLOYMENT.md` for complete workflow.
+
 ### When Stuck
 
 - ask a clarifying question or propose a short plan before large changes
@@ -144,5 +155,5 @@ gh pr edit <PR#> --remove-label "fetch-10-pages"
 - Database info: `./context/database/` (overview, schema, block-types, patterns)
 - Script info: `./context/development/` (constants, architecture, testing, roadmap)
 - Architecture & Lessons: `./NOTION_FETCH_ARCHITECTURE.md`
-- Workflows: `./context/workflows/` (commands, lifecycle, translations)
+- Workflows: `./context/workflows/` (commands, lifecycle, translations, production deployment)
 - Quick Lookups: `./context/quick-ref/` (mappings, status, examples)

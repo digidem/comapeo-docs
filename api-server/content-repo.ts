@@ -60,7 +60,6 @@ let cachedConfig: ContentRepoConfig | null = null;
 let initPromise: Promise<void> | null = null;
 
 function requireEnv(name: string): string {
-  // eslint-disable-next-line security/detect-object-injection
   const value = process.env[name]?.trim();
   if (!value) {
     throw new ContentRepoError(
@@ -114,6 +113,29 @@ function getConfig(): ContentRepoConfig {
   return config;
 }
 
+const GIT_ENV_WHITELIST = [
+  "PATH",
+  "HOME",
+  "USER",
+  "LANG",
+  "LC_ALL",
+  "GIT_SSH_COMMAND",
+  "GIT_TERMINAL_PROMPT",
+  "SSH_AUTH_SOCK",
+  "SSH_AGENT_PID",
+] as const;
+
+function buildGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of GIT_ENV_WHITELIST) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      env[key as keyof typeof env] = value;
+    }
+  }
+  return env;
+}
+
 async function withAskPass<T>(
   token: string,
   callback: (env: NodeJS.ProcessEnv) => Promise<T>
@@ -126,7 +148,7 @@ async function withAskPass<T>(
 
   try {
     return await callback({
-      ...process.env,
+      ...buildGitEnv(),
       GIT_ASKPASS: helperPath,
       GIT_ASKPASS_TOKEN: token,
       GIT_TERMINAL_PROMPT: "0",
@@ -197,7 +219,7 @@ async function runGit(
 
   return await runCommand("git", args, {
     cwd: options.cwd,
-    env: process.env,
+    env: buildGitEnv(),
     errorPrefix: options.errorPrefix,
   });
 }

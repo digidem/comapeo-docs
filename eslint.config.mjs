@@ -103,6 +103,14 @@ const eslintConfig = [
       "security/detect-object-injection": "off",
     },
   },
+
+  // content-repo.ts uses const whitelist for env keys
+  {
+    files: ["api-server/content-repo.ts"],
+    rules: {
+      "security/detect-object-injection": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

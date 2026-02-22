@@ -1,0 +1,124 @@
+name: Promote Content to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Content branch SHA to promote (leave blank to use current content HEAD)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Promote content SHA to production lock
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve and validate SHA
+        id: resolve
+        run: |
+          set -e
+
+          git fetch origin content
+
+          if [ -n "${{ inputs.sha }}" ]; then
+            SHA="${{ inputs.sha }}"
+            echo "Using provided SHA: $SHA"
+          else
+            SHA=$(git rev-parse origin/content)
+            echo "Using content branch HEAD: $SHA"
+          fi
+
+          # Validate format
+          if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::Invalid SHA format: '$SHA'. Expected 40-character lowercase hex string."
+            exit 1
+          fi
+
+          # Validate SHA exists
+          if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
+            echo "::error::SHA $SHA does not exist in the repository."
+            exit 1
+          fi
+
+          SHA_SHORT="${SHA:0:8}"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+
+          # Get commit message for PR body
+          COMMIT_MSG=$(git log -1 --format="%s" "$SHA" 2>/dev/null || echo "(unable to retrieve commit message)")
+          echo "commit_msg=$COMMIT_MSG" >> "$GITHUB_OUTPUT"
+
+      - name: Check if already promoted
+        id: check
+        run: |
+          set -e
+          SHA="${{ steps.resolve.outputs.sha }}"
+
+          if [ -f content-lock.sha ]; then
+            CURRENT=$(tr -d '[:space:]' < content-lock.sha)
+            if [ "$CURRENT" = "$SHA" ]; then
+              echo "::notice::content-lock.sha already points to $SHA — nothing to do."
+              echo "already_promoted=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "already_promoted=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "already_promoted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create promotion branch and PR
+        if: steps.check.outputs.already_promoted != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          SHA="${{ steps.resolve.outputs.sha }}"
+          SHA_SHORT="${{ steps.resolve.outputs.sha_short }}"
+          COMMIT_MSG="${{ steps.resolve.outputs.commit_msg }}"
+          BRANCH="promote-content/${SHA_SHORT}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+
+          echo "${SHA}" > content-lock.sha
+          git add content-lock.sha
+          git commit -m "chore(content): promote content ${SHA_SHORT} to production"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Promote content ${SHA_SHORT} to production" \
+            --body "## Content Promotion
+
+          **Content SHA**: \`${SHA}\`
+          **Commit message**: ${COMMIT_MSG}
+
+          ### Review Checklist
+
+          - [ ] Staging site has been reviewed and content looks correct
+          - [ ] All content sections are complete (no placeholders or WIP)
+          - [ ] No broken links or missing images
+          - [ ] Translations are up to date (if applicable)
+
+          ---
+
+          Merging this PR will update \`content-lock.sha\` and trigger a production deployment with the locked content SHA above.
+
+          To roll back: update \`content-lock.sha\` to a previous SHA and merge to \`main\`."

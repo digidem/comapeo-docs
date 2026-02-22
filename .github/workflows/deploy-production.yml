@@ -35,16 +35,60 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
+          fetch-depth: 0
 
-      - name: Checkout content files from content branch
+      - name: Resolve content lock SHA
+        id: content-lock
         run: |
-          set -e  # Exit on error
+          set -e
 
-          echo "📥 Fetching content from content branch..."
-          git fetch origin content
+          LOCK_FILE="content-lock.sha"
 
-          echo "📂 Checking out content files..."
-          git checkout origin/content -- docs/ i18n/ static/images/
+          if [ ! -f "$LOCK_FILE" ]; then
+            echo "::warning::content-lock.sha not found — falling back to origin/content HEAD (backward compat)"
+            git fetch origin content
+            SHA=$(git rev-parse origin/content)
+            echo "source=branch-head-fallback" >> "$GITHUB_OUTPUT"
+          else
+            SHA=$(tr -d '[:space:]' < "$LOCK_FILE")
+
+            if [ -z "$SHA" ]; then
+              echo "::error::content-lock.sha is empty. Update content-lock.sha with a valid 40-char content SHA."
+              exit 1
+            fi
+
+            if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
+              echo "::error::content-lock.sha contains an invalid SHA: '$SHA'. Expected a 40-character lowercase hex string."
+              exit 1
+            fi
+
+            git fetch origin content
+
+            if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
+              echo "::error::SHA $SHA from content-lock.sha does not exist in the repository."
+              echo "  This may happen after a force-push to the content branch."
+              echo "  Remediation: run 'promote-content' workflow or manually update content-lock.sha."
+              exit 1
+            fi
+
+            CONTENT_HEAD=$(git rev-parse origin/content)
+            if ! git merge-base --is-ancestor "$SHA" "$CONTENT_HEAD" 2>/dev/null; then
+              echo "::warning::Locked SHA $SHA is not an ancestor of origin/content HEAD ($CONTENT_HEAD). The content branch may have been rebased."
+            fi
+
+            echo "source=lock-file" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "✅ Resolved content SHA: $SHA (source: $(grep 'source=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2))"
+
+      - name: Checkout locked content
+        run: |
+          set -e
+
+          SHA="${{ steps.content-lock.outputs.sha }}"
+          echo "📂 Checking out content at SHA ${SHA:0:8}..."
+          git checkout "$SHA" -- docs/ i18n/ static/images/
 
           # Validate content exists
           echo "🔍 Validating content..."
@@ -131,6 +175,9 @@ jobs:
 
       - name: Deployment summary
         run: |
+          CONTENT_SHA="${{ steps.content-lock.outputs.sha }}"
+          CONTENT_SOURCE="${{ steps.content-lock.outputs.source }}"
+          CONTENT_SHORT="${CONTENT_SHA:0:8}"
           if [ "${{ inputs.environment }}" = "test" ]; then
             BRANCH_NAME="${{ inputs.branch_name }}"
             echo "🧪 **Test Deployment Complete!**" >> $GITHUB_STEP_SUMMARY
@@ -138,6 +185,7 @@ jobs:
             echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Deployed to Cloudflare Pages (test)" >> $GITHUB_STEP_SUMMARY
             echo "- 🌐 Test URL: https://${BRANCH_NAME}.comapeo-docs.pages.dev" >> $GITHUB_STEP_SUMMARY
+            echo "- 📌 Content SHA: \`${CONTENT_SHORT}\` (source: ${CONTENT_SOURCE})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Note**: This is a test deployment. Notion status not updated." >> $GITHUB_STEP_SUMMARY
           else
@@ -147,6 +195,7 @@ jobs:
             echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Notion status updated: Staging → Published" >> $GITHUB_STEP_SUMMARY
             echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+            echo "- 📌 Content SHA: \`${CONTENT_SHORT}\` (source: ${CONTENT_SOURCE})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY
           fi
@@ -171,4 +220,4 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'test' && format('Preview URL: https://{0}.comapeo-docs.pages.dev', github.event.inputs.branch_name) || 'Production URL: https://docs.comapeo.app' }}"
+                  text: "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'test' && format('Preview URL: https://{0}.comapeo-docs.pages.dev', github.event.inputs.branch_name) || 'Production URL: https://docs.comapeo.app' }}\nContent SHA: `${{ steps.content-lock.outputs.sha && format('{0}', steps.content-lock.outputs.sha) || 'unknown' }}`"

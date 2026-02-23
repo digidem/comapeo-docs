@@ -345,17 +345,28 @@ export async function executeJob(
   let rejectProcessCompletion: ((error: Error) => void) | null = null;
   let pendingProcessCompletionError: Error | null = null;
 
-  const runJobProcess = async (cwd?: string): Promise<string> => {
+  const runJobProcess = async (
+    cwd?: string,
+    envOverrides?: NodeJS.ProcessEnv
+  ): Promise<string> => {
     const processArgs = [...args];
     if (cwd && processArgs[0]?.startsWith("scripts/")) {
       processArgs[0] = resolve(PROJECT_ROOT, processArgs[0]);
     }
 
+    // Merge base environment with overrides
+    const baseEnv = buildChildEnv();
+    const mergedEnv: NodeJS.ProcessEnv = { ...baseEnv, ...envOverrides };
+
     childProcess = spawn(jobConfig.script, processArgs, {
       cwd,
-      env: buildChildEnv(),
+      env: mergedEnv,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     });
+
+    // Allow parent to exit independently of detached child
+    childProcess.unref();
 
     // Register the process so it can be killed on cancellation
     jobTracker.registerProcess(jobId, {
@@ -643,7 +654,12 @@ export async function executeJob(
       const repoResult = await runContentTask(
         jobType,
         jobId,
-        async (workdir) => runJobProcess(workdir),
+        async (workdir) =>
+          runJobProcess(workdir, {
+            CONTENT_PATH: resolve(workdir, "docs"),
+            I18N_PATH: resolve(workdir, "i18n"),
+            IMAGES_PATH: resolve(workdir, "static", "images"),
+          }),
         { shouldAbort: () => isJobCancelled(jobId) }
       );
       resultData = {

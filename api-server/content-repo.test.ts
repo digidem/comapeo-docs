@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   openMock,
@@ -73,6 +73,8 @@ function createSuccessfulProcess(): EventEmitter & {
 }
 
 describe("content-repo", () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();
@@ -85,6 +87,7 @@ describe("content-repo", () => {
     chmodMock.mockResolvedValue(undefined);
     spawnMock.mockImplementation(() => createSuccessfulProcess());
 
+    process.env = { ...originalEnv };
     process.env.GITHUB_REPO_URL = "https://github.com/comapeo/comapeo-docs.git";
     process.env.GITHUB_CONTENT_BRANCH = "content";
     process.env.GITHUB_TOKEN = "test-token";
@@ -92,6 +95,10 @@ describe("content-repo", () => {
     process.env.GIT_AUTHOR_EMAIL = "bot@example.com";
     process.env.WORKDIR = "/workspace/repo";
     process.env.COMMIT_MESSAGE_PREFIX = "content-bot:";
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
   });
 
   describe("acquireRepoLock", () => {

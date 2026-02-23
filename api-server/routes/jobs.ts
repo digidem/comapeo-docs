@@ -22,6 +22,10 @@ import {
 import type { JobType } from "../job-tracker";
 import { getCorsHeaders } from "../middleware/cors";
 import { isFetchJobLockHeld, tryAcquireFetchJobLock } from "../fetch-job-lock";
+import {
+  validateContentRepoConfig,
+  isContentMutatingJob,
+} from "../content-repo";
 
 // Validation errors - extend the base ValidationError for compatibility
 class ValidationError extends BaseValidationError {
@@ -309,6 +313,18 @@ export async function handleCreateJob(
 
   const tracker = getJobTracker();
   const isFetch = isFetchJobType(type);
+
+  if (isFetch || isContentMutatingJob(type)) {
+    const configCheck = validateContentRepoConfig();
+    if (!configCheck.valid) {
+      return preJobErrorResponse(
+        "INVALID_REQUEST",
+        `Configuration error: ${configCheck.error}`,
+        500,
+        requestOrigin
+      );
+    }
+  }
 
   if (isFetch && isFetchJobLockHeld()) {
     return preJobErrorResponse(

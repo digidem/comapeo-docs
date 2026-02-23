@@ -5,7 +5,7 @@
  * Supports multiple API keys with optional metadata.
  */
 
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import { ValidationError } from "../scripts/shared/errors";
 
 /**
@@ -114,23 +114,6 @@ export class ApiKeyAuth {
   }
 
   /**
-   * Verify an API key using timing-safe comparison
-   */
-  private verifyKey(key: string, hash: string): boolean {
-    const computedHash = this.hashKey(key);
-    // Both hashes are guaranteed to be the same length (sha256_ + 64 hex chars)
-    const hashBuffer = Buffer.from(computedHash);
-    const storedBuffer = Buffer.from(hash);
-
-    // Ensure buffers are same length before comparison (defensive check)
-    if (hashBuffer.length !== storedBuffer.length) {
-      return false;
-    }
-
-    return timingSafeEqual(hashBuffer, storedBuffer);
-  }
-
-  /**
    * Authenticate a request using an API key from the Authorization header
    *
    * Expected format: "Bearer <api-key>" or "Api-Key <api-key>"
@@ -178,20 +161,21 @@ export class ApiKeyAuth {
       };
     }
 
-    // Verify the key against all registered keys
-    for (const [hash, record] of this.apiKeys.entries()) {
-      if (this.verifyKey(key, hash)) {
-        if (!record.meta.active) {
-          return {
-            success: false,
-            error: `API key '${record.meta.name}' is inactive.`,
-          };
-        }
+    // Hash the incoming key once and perform an O(1) lookup against registered keys
+    const computedHash = this.hashKey(key);
+    const record = this.apiKeys.get(computedHash);
+
+    if (record) {
+      if (!record.meta.active) {
         return {
-          success: true,
-          meta: record.meta,
+          success: false,
+          error: `API key '${record.meta.name}' is inactive.`,
         };
       }
+      return {
+        success: true,
+        meta: record.meta,
+      };
     }
 
     return {

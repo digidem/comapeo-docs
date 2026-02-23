@@ -113,6 +113,21 @@ function getConfig(): ContentRepoConfig {
   return config;
 }
 
+export function validateContentRepoConfig(): {
+  valid: boolean;
+  error?: string;
+} {
+  try {
+    getConfig();
+    return { valid: true };
+  } catch (error) {
+    if (error instanceof ContentRepoError) {
+      return { valid: false, error: error.message };
+    }
+    return { valid: false, error: String(error) };
+  }
+}
+
 const GIT_ENV_WHITELIST = [
   "PATH",
   "HOME",

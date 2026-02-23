@@ -55,7 +55,10 @@ function sanitizeUrl(url: string | null | undefined): string | null {
   }
 }
 
-async function translateRichTextArray(richTextArr, targetLanguage) {
+async function translateRichTextArray(
+  richTextArr: any[],
+  targetLanguage: string
+): Promise<void> {
   if (!Array.isArray(richTextArr)) return;
   // Concurrently translate rich text segments to avoid timeouts
   await Promise.all(
@@ -95,14 +98,14 @@ async function translateRichTextArray(richTextArr, targetLanguage) {
 }
 
 async function translateBlocksTree(
-  blocks,
-  targetLanguage,
+  blocks: any[],
+  targetLanguage: string,
   sanitizedPageName?: string,
   state: { imageIndex: number; orderedImagePaths?: string[] } = {
     imageIndex: 0,
   }
-) {
-  const result = [];
+): Promise<BlockObjectRequest[]> {
+  const result: BlockObjectRequest[] = [];
   for (const block of blocks) {
     const newBlock = { ...block };
     delete newBlock.id;

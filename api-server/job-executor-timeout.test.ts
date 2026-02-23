@@ -96,6 +96,7 @@ function createMockChildProcess(): {
     kill: killMock,
     killed: false,
     pid: 12345,
+    unref: vi.fn(),
   };
 
   const emit = (event: string, data?: unknown) => {
@@ -152,6 +153,7 @@ function createRealisticMockChildProcess(): {
       return killMock.mock.calls.length > 0;
     },
     pid: 12345,
+    unref: vi.fn(),
   };
 
   const emit = (event: string, data?: unknown) => {

@@ -49,6 +49,10 @@ async function fetchAllBlocks(blockId: string): Promise<FetchedBlock[]> {
   return blocks;
 }
 
+/**
+ * @param orderedImagePaths - Array of image paths to consume in order.
+ *                           NOTE: This array is mutated (shift() called) during processing.
+ */
 export async function translateNotionBlocksDirectly(
   pageId: string,
   targetLanguage: string,
@@ -241,12 +245,28 @@ async function translateBlocksTree(
         if (sanitized) {
           typeObj.url = sanitized;
         } else {
-          // If a required URL is invalid, we might need to convert it or fallback.
-          // For now, let's set it to a valid fallback URL or remove it if possible.
-          // Notion API requires URL for bookmark/embed, we can't just delete it.
+          const originalUrl = typeObj.url;
+          const urlRequiredBlocks = [
+            "bookmark",
+            "embed",
+            "video",
+            "file",
+            "pdf",
+            "link_preview",
+          ];
+
+          if (urlRequiredBlocks.includes(blockType)) {
+            console.warn(
+              chalk.yellow(
+                `⚠️  Skipping ${blockType} block with invalid URL: ${originalUrl}`
+              )
+            );
+            continue;
+          }
+
           console.warn(
             chalk.yellow(
-              `Warning: Invalid URL in ${blockType} block: ${typeObj.url}`
+              `Warning: Invalid URL in ${blockType} block replaced with placeholder: ${originalUrl}`
             )
           );
           typeObj.url = INVALID_URL_PLACEHOLDER;
@@ -269,7 +289,9 @@ async function translateBlocksTree(
                   );
                   break;
                 }
-                state.orderedImagePaths.shift();
+                if (state.orderedImagePaths.length > 0) {
+                  state.orderedImagePaths.shift();
+                }
               }
               const consumed = remainingBefore - state.orderedImagePaths.length;
               if (consumed > 0) {

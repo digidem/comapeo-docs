@@ -27,12 +27,7 @@ const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 
 function supportsStrictJsonSchema(modelName: string): boolean {
-  const normalized = modelName.toLowerCase();
-  return (
-    normalized.includes("gpt") ||
-    normalized.includes("o1") ||
-    normalized.includes("o3")
-  );
+  return modelName.toLowerCase().startsWith("gpt-");
 }
 
 // Translation prompt template

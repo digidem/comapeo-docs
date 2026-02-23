@@ -48,6 +48,7 @@ vi.mock("../notion-fetch/runFetch", () => ({
 
 vi.mock("../fetchNotionData", () => ({
   fetchNotionData: vi.fn(),
+  fetchNotionBlocks: vi.fn(() => Promise.resolve([])),
 }));
 
 // Mock enhancedNotion to prevent actual API calls
@@ -60,7 +61,10 @@ vi.mock("../notionClient", () => ({
     blocksDelete: vi.fn(),
   },
   notion: {},
-  n2m: {},
+  n2m: {
+    pageToMarkdown: vi.fn(() => Promise.resolve([])),
+    toMarkdownString: vi.fn(() => ({ parent: "# Test Content\n" })),
+  },
 }));
 
 vi.mock("../notion-placeholders/pageAnalyzer", () => ({

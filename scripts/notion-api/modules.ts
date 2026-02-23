@@ -78,8 +78,9 @@ import {
   fetchAllNotionData,
   transformPage,
 } from "../notion-fetch-all/fetchAll";
+import { fetchNotionBlocks } from "../fetchNotionData";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
-import { enhancedNotion } from "../notionClient";
+import { enhancedNotion, n2m } from "../notionClient";
 
 /**
  * Fetch all pages from Notion database
@@ -194,9 +195,15 @@ export async function fetchPage(
 
     const page = transformPage(rawPage as any);
 
+    // Fetch blocks and convert to markdown
+    const blocks = await fetchNotionBlocks(pageId);
+    const mdBlocks = await n2m.pageToMarkdown(pageId);
+    const markdownResult = n2m.toMarkdownString(mdBlocks);
+    const content = markdownResult.parent;
+
     return {
       success: true,
-      data: page,
+      data: { ...page, content },
       metadata: {
         executionTimeMs: Date.now() - startTime,
         timestamp: new Date(),

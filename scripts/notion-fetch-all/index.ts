@@ -532,6 +532,12 @@ async function main() {
       }
     }
 
+    process.stdout.write(
+      JSON.stringify({
+        candidateIds: fetchResult.candidateIds,
+        pagesProcessed: fetchResult.processedCount,
+      }) + "\n"
+    );
     await gracefulShutdown(0);
   } catch (error) {
     if (

@@ -3,10 +3,6 @@ import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve as pathResolve } from "node:path";
 import { NOTION_PROPERTIES } from "../scripts/constants";
-import {
-  fetchAllNotionData,
-  type PageWithStatus,
-} from "../scripts/notion-fetch-all/fetchAll";
 import { notion, enhancedNotion } from "../scripts/notionClient";
 import type { FetchJobError, FetchJobWarning } from "./response-schemas";
 import {
@@ -22,6 +18,7 @@ import {
   stageGeneratedPaths,
   verifyRemoteHeadMatchesLocal,
 } from "./content-repo";
+import { extractLastJsonLine } from "./json-extraction";
 
 /**
  * Time to wait after SIGTERM before sending SIGKILL (5 seconds)
@@ -96,29 +93,6 @@ function classifyError(error: unknown): FetchJobError {
   };
 }
 
-function normalizePages(
-  pages: PageWithStatus[],
-  maxPages?: number
-): PageWithStatus[] {
-  const sorted = [...pages].sort((a, b) => {
-    if (a.order !== b.order) {
-      return a.order - b.order;
-    }
-
-    const editedCompare = a.lastEdited.getTime() - b.lastEdited.getTime();
-    if (editedCompare !== 0) {
-      return editedCompare;
-    }
-
-    return a.id.localeCompare(b.id);
-  });
-
-  if (maxPages && maxPages > 0) {
-    return sorted.slice(0, maxPages);
-  }
-  return sorted;
-}
-
 function timeoutError(timeoutMs: number): ContentRepoError {
   const timeoutSeconds = Math.floor(timeoutMs / 1000);
   return new ContentRepoError(
@@ -132,39 +106,6 @@ function throwIfAborted(signal: AbortSignal, timeoutMs: number): void {
   if (signal.aborted) {
     throw timeoutError(timeoutMs);
   }
-}
-
-/**
- * Wraps a promise with a timeout that rejects if the promise doesn't settle
- * within the specified time. This is useful for operations that don't natively
- * support AbortSignal (like Notion API calls) to ensure they respect job timeouts.
- */
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  operation: string
-): Promise<T> {
-  let timer: NodeJS.Timeout;
-  const timeoutPromise = new Promise<T>((_resolve, reject) => {
-    timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
-  });
-
-  return Promise.race([
-    promise.finally(() => {
-      if (timer) clearTimeout(timer);
-    }),
-    timeoutPromise,
-  ]).catch((error) => {
-    // Re-throw with context about which operation timed out
-    if (error instanceof ContentRepoError && error.code === "JOB_TIMEOUT") {
-      throw new ContentRepoError(
-        `${operation} timed out after ${timeoutMs}ms`,
-        undefined,
-        "JOB_TIMEOUT"
-      );
-    }
-    throw error;
-  });
 }
 
 async function sleepWithAbort(
@@ -475,58 +416,6 @@ export async function runFetchJob({
     await assertCleanWorkingTree(Boolean(options.force));
 
     throwIfAborted(signal, timeoutMs);
-    // Wrap fetchAllNotionData with timeout since it doesn't support AbortSignal
-    // This ensures the Notion API fetch phase respects JOB_TIMEOUT_MS
-    const fetchResult = await withTimeout(
-      withExponentialBackoff(
-        () =>
-          fetchAllNotionData({
-            includeRemoved: false,
-            statusFilter:
-              type === "fetch-ready"
-                ? NOTION_PROPERTIES.READY_TO_PUBLISH
-                : undefined,
-            maxPages:
-              options.maxPages && options.maxPages > 0
-                ? options.maxPages
-                : undefined,
-            exportFiles: false,
-            sortBy: "order",
-            sortDirection: "asc",
-          }),
-        signal,
-        timeoutMs
-      ),
-      timeoutMs,
-      "Notion data fetch"
-    );
-
-    throwIfAborted(signal, timeoutMs);
-
-    // Capture transition candidates BEFORE any child replacement or maxPages slicing.
-    // The fetch-ready flow may replace parent pages with their children, but we need
-    // to transition the original "Ready to publish" pages to "Draft published".
-    const transitionCandidates =
-      type === "fetch-ready" ? fetchResult.candidateIds : [];
-
-    const pages = normalizePages(fetchResult.pages, options.maxPages);
-    terminal.pagesProcessed = pages.length;
-
-    if (pages.length === 0) {
-      if (options.dryRun) {
-        terminal.dryRun = true;
-      }
-      if (type === "fetch-ready") {
-        terminal.pagesTransitioned = 0;
-        terminal.failedPageIds = [];
-        terminal.warnings = [];
-      }
-      return {
-        success: true,
-        terminal,
-      };
-    }
-
     tempDir = pathResolve(tmpdir(), `fetch-job-${jobId}`);
     await rm(tempDir, { recursive: true, force: true });
     await mkdir(tempDir, { recursive: true });
@@ -541,6 +430,30 @@ export async function runFetchJob({
       signal,
       timeoutMs
     );
+
+    const parsedOutput = extractLastJsonLine(output) as {
+      candidateIds?: string[];
+      pagesProcessed?: number;
+    } | null;
+    terminal.pagesProcessed = parsedOutput?.pagesProcessed ?? 0;
+    const transitionCandidates: string[] =
+      type === "fetch-ready" ? (parsedOutput?.candidateIds ?? []) : [];
+
+    if (terminal.pagesProcessed === 0) {
+      if (options.dryRun) {
+        terminal.dryRun = true;
+      }
+      if (type === "fetch-ready") {
+        terminal.pagesTransitioned = 0;
+        terminal.failedPageIds = [];
+        terminal.warnings = [];
+      }
+      return {
+        success: true,
+        output,
+        terminal,
+      };
+    }
 
     if (options.dryRun) {
       terminal.dryRun = true;

@@ -84,7 +84,10 @@ vi.mock("node:child_process", () => ({
 
 import { runFetchJob } from "./fetch-job-runner";
 
-function createSpawnSuccessProcess() {
+function createSpawnSuccessProcess(options?: {
+  candidateIds?: string[];
+  pagesProcessed?: number;
+}) {
   const stdout = new EventEmitter();
   const stderr = new EventEmitter();
   const child = new EventEmitter() as EventEmitter & {
@@ -94,8 +97,12 @@ function createSpawnSuccessProcess() {
   child.stdout = stdout;
   child.stderr = stderr;
 
+  const summary = JSON.stringify({
+    candidateIds: options?.candidateIds ?? [],
+    pagesProcessed: options?.pagesProcessed ?? 1,
+  });
   queueMicrotask(() => {
-    stdout.emit("data", Buffer.from("Progress: 1/1\n"));
+    stdout.emit("data", Buffer.from("Progress: 1/1\n" + summary + "\n"));
     child.emit("close", 0);
   });
 
@@ -139,13 +146,9 @@ describe("fetch-job-runner", () => {
   });
 
   it("returns completed response for zero-page ready query", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [],
-      rawPages: [],
-      candidateIds: [],
-      fetchedCount: 0,
-      processedCount: 0,
-    });
+    mockSpawn.mockImplementation(() =>
+      createSpawnSuccessProcess({ pagesProcessed: 0, candidateIds: [] })
+    );
 
     const logger = createLogger();
     const result = await runFetchJob({
@@ -168,13 +171,9 @@ describe("fetch-job-runner", () => {
   });
 
   it("returns dryRun marker for zero-page dry-run queries", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [],
-      rawPages: [],
-      candidateIds: [],
-      fetchedCount: 0,
-      processedCount: 0,
-    });
+    mockSpawn.mockImplementation(() =>
+      createSpawnSuccessProcess({ pagesProcessed: 0, candidateIds: [] })
+    );
 
     const result = await runFetchJob({
       type: "fetch-ready",
@@ -194,21 +193,6 @@ describe("fetch-job-runner", () => {
   });
 
   it("supports dry-run without branch prep or status transitions", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [
-        {
-          id: "page-1",
-          status: NOTION_PROPERTIES.READY_TO_PUBLISH,
-          order: 1,
-          lastEdited: new Date("2024-01-01T00:00:00.000Z"),
-        },
-      ],
-      rawPages: [],
-      candidateIds: ["page-1"],
-      fetchedCount: 1,
-      processedCount: 1,
-    });
-
     const result = await runFetchJob({
       type: "fetch-ready",
       jobId: "job-2",
@@ -228,20 +212,9 @@ describe("fetch-job-runner", () => {
   });
 
   it("returns NOTION_STATUS_PARTIAL when ready-page transitions fail", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [
-        {
-          id: "page-1",
-          status: NOTION_PROPERTIES.READY_TO_PUBLISH,
-          order: 1,
-          lastEdited: new Date("2024-01-01T00:00:00.000Z"),
-        },
-      ],
-      rawPages: [],
-      candidateIds: ["page-1"],
-      fetchedCount: 1,
-      processedCount: 1,
-    });
+    mockSpawn.mockImplementation(() =>
+      createSpawnSuccessProcess({ pagesProcessed: 1, candidateIds: ["page-1"] })
+    );
     mockNotionPagesUpdate.mockRejectedValue(new Error("status update failed"));
 
     const result = await runFetchJob({
@@ -262,20 +235,6 @@ describe("fetch-job-runner", () => {
   });
 
   it("does not transition statuses for fetch-all jobs", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [
-        {
-          id: "page-1",
-          status: "Draft published",
-          order: 1,
-          lastEdited: new Date("2024-01-01T00:00:00.000Z"),
-        },
-      ],
-      rawPages: [],
-      candidateIds: [],
-      fetchedCount: 1,
-      processedCount: 1,
-    });
     mockHasStagedGeneratedChanges.mockResolvedValue(false);
     mockHasHeadAdvancedSince.mockResolvedValue(true);
     mockPushContentBranchWithRetry.mockResolvedValue("merge-only-sha");
@@ -298,20 +257,6 @@ describe("fetch-job-runner", () => {
   });
 
   it("returns CONTENT_GENERATION_FAILED when staging fails", async () => {
-    mockFetchAllNotionData.mockResolvedValue({
-      pages: [
-        {
-          id: "page-1",
-          status: NOTION_PROPERTIES.READY_TO_PUBLISH,
-          order: 1,
-          lastEdited: new Date("2024-01-01T00:00:00.000Z"),
-        },
-      ],
-      rawPages: [],
-      candidateIds: ["page-1"],
-      fetchedCount: 1,
-      processedCount: 1,
-    });
     mockStageGeneratedPaths.mockRejectedValue(
       new ContentRepoError(
         "Failed to stage generated paths (exit code 1)",

@@ -64,6 +64,7 @@ export async function handleRequest(req: Request): Promise<Response> {
           status: 401,
           headers: {
             "Content-Type": "application/json",
+            "WWW-Authenticate": 'Bearer realm="API", scope="api-access"',
             ...getCorsHeaders(requestOrigin),
             "X-Request-ID": requestId,
           },
@@ -79,6 +80,7 @@ export async function handleRequest(req: Request): Promise<Response> {
         status: 401,
         headers: {
           "Content-Type": "application/json",
+          "WWW-Authenticate": 'Bearer realm="API", scope="api-access"',
           ...getCorsHeaders(requestOrigin),
           "X-Request-ID": requestId,
         },

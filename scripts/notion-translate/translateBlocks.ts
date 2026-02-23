@@ -3,7 +3,7 @@ import path from "node:path";
 import { enhancedNotion } from "../notionClient.js";
 import { translateText } from "./translateFrontMatter.js";
 import { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { NOTION_PROPERTIES, INVALID_URL_PLACEHOLDER } from "../constants.js";
 import { extractImageMatches } from "../notion-fetch/imageReplacer.js";
 import chalk from "chalk";
 
@@ -208,7 +208,7 @@ async function translateBlocksTree(
               `Warning: Invalid URL in ${newBlock.type} block: ${typeObj.url}`
             )
           );
-          typeObj.url = "https://example.com/invalid-url-removed";
+          typeObj.url = INVALID_URL_PLACEHOLDER;
         }
       }
 
@@ -218,9 +218,25 @@ async function translateBlocksTree(
           for (const rt of typeObj.rich_text) {
             if (rt.text && rt.text.content) {
               const matches = extractImageMatches(rt.text.content);
+              const remainingBefore = state.orderedImagePaths.length;
               for (let i = 0; i < matches.length; i++) {
-                if (state.orderedImagePaths.length === 0) break;
+                if (state.orderedImagePaths.length === 0) {
+                  console.warn(
+                    chalk.yellow(
+                      `Warning: More inline images found (${matches.length - i}) than available paths in orderedImagePaths`
+                    )
+                  );
+                  break;
+                }
                 state.orderedImagePaths.shift();
+              }
+              const consumed = remainingBefore - state.orderedImagePaths.length;
+              if (consumed > 0) {
+                console.log(
+                  chalk.dim(
+                    `Consumed ${consumed} image path(s) from orderedImagePaths (found ${matches.length} in rich_text)`
+                  )
+                );
               }
             }
           }

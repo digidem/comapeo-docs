@@ -2,20 +2,43 @@ import fs from "node:fs";
 import path from "node:path";
 import { enhancedNotion } from "../notionClient.js";
 import { translateText } from "./translateFrontMatter.js";
-import { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
+import type { Client } from "@notionhq/client";
+import type {
+  BlockObjectResponse,
+  PartialBlockObjectResponse,
+  BlockObjectRequest,
+} from "@notionhq/client/build/src/api-endpoints";
 import { NOTION_PROPERTIES, INVALID_URL_PLACEHOLDER } from "../constants.js";
 import { extractImageMatches } from "../notion-fetch/imageReplacer.js";
 import chalk from "chalk";
 
-async function fetchAllBlocks(blockId: string): Promise<any[]> {
-  const blocks: any[] = [];
+/** Block fetched from Notion API, extended with recursively-fetched children. */
+type FetchedBlock = (PartialBlockObjectResponse | BlockObjectResponse) & {
+  children?: FetchedBlock[];
+  [key: string]: unknown;
+};
+
+/** Mutable rich-text item used during translation (subset of RichTextItemResponse). */
+interface MutableRichTextItem {
+  type: string;
+  text?: {
+    content: string;
+    link?: { url: string } | null;
+  };
+  plain_text?: string;
+  href?: string | null;
+  annotations?: Record<string, unknown>;
+}
+
+async function fetchAllBlocks(blockId: string): Promise<FetchedBlock[]> {
+  const blocks: FetchedBlock[] = [];
   let cursor: string | undefined;
   do {
     const response = await enhancedNotion.blocksChildrenList({
       block_id: blockId,
       start_cursor: cursor,
     });
-    for (const block of response.results as any[]) {
+    for (const block of response.results as FetchedBlock[]) {
       if (block.has_children) {
         block.children = await fetchAllBlocks(block.id);
       }
@@ -56,7 +79,7 @@ function sanitizeUrl(url: string | null | undefined): string | null {
 }
 
 async function translateRichTextArray(
-  richTextArr: any[],
+  richTextArr: MutableRichTextItem[],
   targetLanguage: string
 ): Promise<void> {
   if (!Array.isArray(richTextArr)) return;
@@ -98,7 +121,7 @@ async function translateRichTextArray(
 }
 
 async function translateBlocksTree(
-  blocks: any[],
+  blocks: FetchedBlock[],
   targetLanguage: string,
   sanitizedPageName?: string,
   state: { imageIndex: number; orderedImagePaths?: string[] } = {
@@ -107,7 +130,10 @@ async function translateBlocksTree(
 ): Promise<BlockObjectRequest[]> {
   const result: BlockObjectRequest[] = [];
   for (const block of blocks) {
-    const newBlock = { ...block };
+    // Work with a mutable copy; strict typing is impractical here because
+    // block types are deleted/reassigned (e.g. image → callout) and accessed
+    // dynamically via newBlock[newBlock.type].
+    const newBlock: Record<string, unknown> = { ...block };
     delete newBlock.id;
     delete newBlock.created_time;
     delete newBlock.last_edited_time;
@@ -189,11 +215,26 @@ async function translateBlocksTree(
       delete newBlock.image;
     }
 
-    if (newBlock.type === "synced_block" && newBlock.synced_block) {
-      newBlock.synced_block.synced_from = null;
+    if (
+      newBlock.type === "synced_block" &&
+      newBlock.synced_block &&
+      typeof newBlock.synced_block === "object"
+    ) {
+      (newBlock.synced_block as Record<string, unknown>).synced_from = null;
     }
 
-    const typeObj = newBlock[newBlock.type];
+    const blockType = newBlock.type as string;
+    // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
+    const typeObj = newBlock[blockType] as
+      | (Record<string, unknown> & {
+          url?: string;
+          rich_text?: MutableRichTextItem[];
+          caption?: MutableRichTextItem[];
+          cells?: MutableRichTextItem[][];
+          table_width?: number;
+          children?: BlockObjectRequest[];
+        })
+      | undefined;
     if (typeObj) {
       if (typeObj.url) {
         const sanitized = sanitizeUrl(typeObj.url);
@@ -205,7 +246,7 @@ async function translateBlocksTree(
           // Notion API requires URL for bookmark/embed, we can't just delete it.
           console.warn(
             chalk.yellow(
-              `Warning: Invalid URL in ${newBlock.type} block: ${typeObj.url}`
+              `Warning: Invalid URL in ${blockType} block: ${typeObj.url}`
             )
           );
           typeObj.url = INVALID_URL_PLACEHOLDER;
@@ -246,20 +287,22 @@ async function translateBlocksTree(
       if (typeObj.caption) {
         await translateRichTextArray(typeObj.caption, targetLanguage);
       }
-      if (newBlock.type === "table_row" && typeObj.cells) {
+      if (blockType === "table_row" && typeObj.cells) {
         for (const cell of typeObj.cells) {
           await translateRichTextArray(cell, targetLanguage);
         }
       }
 
       // Clean up unsupported properties that Notion API rejects on creation
-      if (newBlock.type === "table" && typeObj.table_width !== undefined) {
+      if (blockType === "table" && typeObj.table_width !== undefined) {
         // sometimes table_width is read-only? No, table_width is required.
       }
     }
 
     if (block.children) {
-      newBlock[newBlock.type].children = await translateBlocksTree(
+      // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
+      const parentTypeObj = newBlock[blockType] as Record<string, unknown>;
+      parentTypeObj.children = await translateBlocksTree(
         block.children,
         targetLanguage,
         sanitizedPageName,
@@ -267,12 +310,12 @@ async function translateBlocksTree(
       );
     }
 
-    result.push(newBlock);
+    result.push(newBlock as unknown as BlockObjectRequest);
   }
   return result;
 }
 export async function createNotionPageWithBlocks(
-  notion: any, // Client
+  notion: Client,
   parentPageId: string,
   databaseId: string,
   title: string,
@@ -319,12 +362,18 @@ export async function createNotionPageWithBlocks(
 
         const nonEnglishResults = language
           ? response.results
-          : response.results.filter((page: any) => {
-              const pageLang =
-                page.properties?.[NOTION_PROPERTIES.LANGUAGE]?.select?.name ||
-                "en";
-              return pageLang !== "en";
-            });
+          : response.results.filter(
+              (page: {
+                properties?: Record<string, unknown>;
+                [k: string]: unknown;
+              }) => {
+                const langProp = page.properties?.[
+                  NOTION_PROPERTIES.LANGUAGE
+                ] as { select?: { name?: string } } | undefined;
+                const pageLang = langProp?.select?.name || "en";
+                return pageLang !== "en";
+              }
+            );
 
         if (nonEnglishResults.length > 0) {
           pageId = nonEnglishResults[0].id;
@@ -353,9 +402,7 @@ export async function createNotionPageWithBlocks(
             block_id: pageId,
             start_cursor: startCursor,
           });
-          blockIdsToDelete.push(
-            ...existingBlocks.results.map((b: any) => b.id)
-          );
+          blockIdsToDelete.push(...existingBlocks.results.map((b) => b.id));
           hasMore = existingBlocks.has_more;
           startCursor = existingBlocks.next_cursor ?? undefined;
         }
@@ -364,10 +411,12 @@ export async function createNotionPageWithBlocks(
           try {
             await notion.blocks.delete({ block_id: blockId });
             await new Promise((resolve) => setTimeout(resolve, 50));
-          } catch (deleteError: any) {
-            console.warn(
-              `Warning: Failed to delete block ${blockId}: ${deleteError.message}`
-            );
+          } catch (deleteError: unknown) {
+            const msg =
+              deleteError instanceof Error
+                ? deleteError.message
+                : String(deleteError);
+            console.warn(`Warning: Failed to delete block ${blockId}: ${msg}`);
           }
         }
       } else {

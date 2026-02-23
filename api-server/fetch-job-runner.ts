@@ -23,6 +23,16 @@ import {
   verifyRemoteHeadMatchesLocal,
 } from "./content-repo";
 
+/**
+ * Time to wait after SIGTERM before sending SIGKILL (5 seconds)
+ */
+const SIGKILL_DELAY_MS = 5000;
+
+/**
+ * Fail-safe delay after SIGKILL before force-failing unresponsive process (1 second)
+ */
+const SIGKILL_FAILSAFE_MS = 1000;
+
 interface FetchJobLogger {
   info: (message: string, data?: unknown) => void;
   warn: (message: string, data?: unknown) => void;
@@ -271,6 +281,7 @@ async function runGenerationScript(
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let processExited = false;
 
     const settleReject = (error: ContentRepoError) => {
       if (settled) {
@@ -290,9 +301,48 @@ async function runGenerationScript(
       resolve(value);
     };
 
-    const onAbort = () => {
-      child.kill("SIGTERM");
-      settleReject(timeoutError(timeoutMs));
+    const onAbort = async () => {
+      // Send SIGTERM to the child process
+      if (!child.killed) {
+        child.kill("SIGTERM");
+      }
+      // Also kill entire process group to catch grandchildren
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          // ESRCH = ok (process doesn't exist)
+        }
+      }
+
+      // Wait for SIGKILL_DELAY_MS, then escalate to SIGKILL if process hasn't exited
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (!processExited) {
+            if (!child.killed) {
+              child.kill("SIGKILL");
+            }
+            if (child.pid) {
+              try {
+                process.kill(-child.pid, "SIGKILL");
+              } catch {
+                // ESRCH = ok
+              }
+            }
+          }
+          resolve();
+        }, SIGKILL_DELAY_MS);
+      });
+
+      // Fail-safe: wait for SIGKILL_FAILSAFE_MS, then reject if process still running
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (!processExited) {
+            settleReject(timeoutError(timeoutMs));
+          }
+          resolve();
+        }, SIGKILL_FAILSAFE_MS);
+      });
     };
 
     signal.addEventListener("abort", onAbort, { once: true });
@@ -317,6 +367,7 @@ async function runGenerationScript(
     }
 
     child.on("error", (error) => {
+      processExited = true;
       settleReject(
         new ContentRepoError(
           `Failed to execute generation command: ${error.message}`,
@@ -327,6 +378,8 @@ async function runGenerationScript(
     });
 
     child.on("close", (code) => {
+      processExited = true;
+
       if (signal.aborted) {
         settleReject(timeoutError(timeoutMs));
         return;

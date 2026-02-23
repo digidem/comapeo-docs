@@ -16,7 +16,7 @@ type MarkdownBlock = Awaited<
   ReturnType<InstanceType<typeof NotionToMarkdown>["blockToMarkdown"]>
 >;
 
-dotenv.config();
+dotenv.config({ override: true });
 
 if (!process.env.NOTION_API_KEY) {
   throw new Error(

@@ -10,7 +10,7 @@ import {
 } from "./runtime";
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ override: true });
 
 function resolveDatabaseId(): string | undefined {
   const databaseId = process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

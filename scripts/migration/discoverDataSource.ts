@@ -19,7 +19,7 @@ import { Client } from "@notionhq/client";
 import chalk from "chalk";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const DATABASE_ID = process.env.DATABASE_ID || process.env.NOTION_DATABASE_ID;
 const NOTION_API_KEY = process.env.NOTION_API_KEY;

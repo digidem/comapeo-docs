@@ -15,7 +15,7 @@ import {
 } from "../notion-fetch/runtime";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

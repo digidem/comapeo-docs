@@ -548,6 +548,9 @@ export async function executeJob(
         jobConfig.timeoutMs
       );
       const abortController = new AbortController();
+      jobTracker.registerProcess(jobId, {
+        kill: () => abortController.abort(),
+      });
       const fetchTimeoutHandle = setTimeout(() => {
         timedOut = true;
         abortController.abort();

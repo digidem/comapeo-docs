@@ -276,6 +276,7 @@ async function runGenerationScript(
         IMAGES_PATH: pathResolve(tempDir, "static", "images"),
       },
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     });
 
     let stdout = "";

@@ -200,6 +200,11 @@ async function translateBlocksTree(
           // If a required URL is invalid, we might need to convert it or fallback.
           // For now, let's set it to a valid fallback URL or remove it if possible.
           // Notion API requires URL for bookmark/embed, we can't just delete it.
+          console.warn(
+            chalk.yellow(
+              `Warning: Invalid URL in ${newBlock.type} block: ${typeObj.url}`
+            )
+          );
           typeObj.url = "https://example.com/invalid-url-removed";
         }
       }
@@ -211,6 +216,7 @@ async function translateBlocksTree(
             if (rt.text && rt.text.content) {
               const matches = extractImageMatches(rt.text.content);
               for (let i = 0; i < matches.length; i++) {
+                if (state.orderedImagePaths.length === 0) break;
                 state.orderedImagePaths.shift();
               }
             }

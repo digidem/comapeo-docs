@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getJobTracker, destroyJobTracker, type JobType } from "./job-tracker";
-import { existsSync, unlinkSync, rmdirSync, rmSync } from "node:fs";
+import { existsSync, unlinkSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const DATA_DIR = join(process.cwd(), ".jobs-data");
@@ -30,7 +30,7 @@ function cleanupTestData(): void {
         unlinkSync(JOBS_FILE);
       }
       try {
-        rmdirSync(DATA_DIR);
+        rmSync(DATA_DIR, { recursive: true, force: true });
       } catch {
         // Ignore error if directory still has files
       }

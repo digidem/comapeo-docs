@@ -12,7 +12,7 @@ import {
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config();
 
 // Initialize OpenAI client - only set baseURL if explicitly configured
 const openai = new OpenAI({
@@ -25,6 +25,16 @@ const openai = new OpenAI({
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
+
+function supportsStrictJsonSchema(modelName: string): boolean {
+  const normalized = modelName.toLowerCase();
+  return (
+    normalized.includes("gpt") ||
+    normalized.includes("o1") ||
+    normalized.includes("o3")
+  );
+}
+
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -291,12 +301,8 @@ export async function translateText(
   const modelParams = getModelParams(model, { useReasoningNone: true });
 
   // Determine response format based on model
-  // OpenAI models (gpt-4, gpt-5) support strict JSON schema
-  // Other models (deepseek, etc.) might only support json_object
-  const isStrictSchemaSupported =
-    model.toLowerCase().includes("gpt") ||
-    model.toLowerCase().includes("o1") ||
-    model.toLowerCase().includes("o3");
+  // OpenAI models (gpt-4, gpt-5, o1, o3) support strict JSON schema
+  const isStrictSchemaSupported = supportsStrictJsonSchema(model);
 
   const responseFormat = isStrictSchemaSupported
     ? {

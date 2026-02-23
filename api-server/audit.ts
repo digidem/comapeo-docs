@@ -9,15 +9,8 @@
  */
 
 import { join } from "node:path";
-import {
-  existsSync,
-  mkdirSync,
-  appendFileSync,
-  writeFileSync,
-  statSync,
-  renameSync,
-  unlinkSync,
-} from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFile, stat, rename, unlink, access } from "node:fs/promises";
 import type { ApiKeyMeta } from "./auth";
 
 /**
@@ -107,6 +100,7 @@ export class AuditLogger {
   private config: AuditConfig;
   private logPath: string;
   private entryCounter = 0;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   public constructor(config: Partial<AuditConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -134,32 +128,36 @@ export class AuditLogger {
   }
 
   /**
-   * Rotate the audit log file if it exceeds the size limit (synchronous).
+   * Rotate the audit log file if it exceeds the size limit (async).
    * Keeps up to 3 rotated files: .log.1, .log.2, .log.3
    */
-  private rotateIfNeeded(maxSizeBytes: number): void {
+  private async rotateIfNeededAsync(maxSizeBytes: number): Promise<void> {
     try {
-      if (!existsSync(this.logPath)) return;
-      const stats = statSync(this.logPath);
+      try {
+        await access(this.logPath);
+      } catch {
+        return; // file doesn't exist
+      }
+      const stats = await stat(this.logPath);
       if (stats.size < maxSizeBytes) return;
 
       for (let i = 3; i > 0; i--) {
         const rotated = `${this.logPath}.${i}`;
         if (i === 3) {
           try {
-            unlinkSync(rotated);
+            await unlink(rotated);
           } catch {
             // ignore ENOENT
           }
         } else {
           try {
-            renameSync(rotated, `${this.logPath}.${i + 1}`);
+            await rename(rotated, `${this.logPath}.${i + 1}`);
           } catch {
             // ignore ENOENT
           }
         }
       }
-      renameSync(this.logPath, `${this.logPath}.1`);
+      await rename(this.logPath, `${this.logPath}.1`);
     } catch (error) {
       console.error(`Failed to rotate audit log ${this.logPath}:`, error);
     }
@@ -226,24 +224,30 @@ export class AuditLogger {
   }
 
   /**
-   * Log an audit entry (synchronous write)
+   * Log an audit entry (fire-and-forget, async write queued sequentially)
    */
-  log(entry: AuditEntry): void {
-    const logLine = JSON.stringify(entry) + "\n";
+  private async writeEntry(logLine: string): Promise<void> {
     try {
-      this.rotateIfNeeded(getMaxLogSize());
-      appendFileSync(this.logPath, logLine, "utf-8");
+      await this.rotateIfNeededAsync(getMaxLogSize());
+      await appendFile(this.logPath, logLine, "utf-8");
     } catch (error) {
       console.error("Failed to write audit log:", error);
     }
   }
 
   /**
-   * No-op for API compatibility — log() is synchronous, so writes are
-   * always complete by the time this is called.
+   * Log an audit entry (fire-and-forget, async write queued sequentially)
+   */
+  log(entry: AuditEntry): void {
+    const logLine = JSON.stringify(entry) + "\n";
+    this.writeQueue = this.writeQueue.then(() => this.writeEntry(logLine));
+  }
+
+  /**
+   * Wait for all pending async writes to complete (e.g. before shutdown).
    */
   waitForPendingWrites(): Promise<void> {
-    return Promise.resolve();
+    return this.writeQueue;
   }
 
   /**

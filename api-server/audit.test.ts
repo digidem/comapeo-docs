@@ -152,7 +152,7 @@ describe("AuditLogger", () => {
   });
 
   describe("Audit Logging", () => {
-    it("should log successful requests", () => {
+    it("should log successful requests", async () => {
       const req = new Request("http://localhost:3001/health", {
         method: "GET",
       });
@@ -164,6 +164,7 @@ describe("AuditLogger", () => {
       const entry = audit.createEntry(req, authResult);
 
       audit.logSuccess(entry, 200, 45);
+      await audit.waitForPendingWrites();
 
       // Verify log file was created
       const logPath = audit.getLogPath();
@@ -178,7 +179,7 @@ describe("AuditLogger", () => {
       expect(logEntry.responseTime).toBe(45);
     });
 
-    it("should log failed requests", () => {
+    it("should log failed requests", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "POST",
       });
@@ -190,6 +191,7 @@ describe("AuditLogger", () => {
       const entry = audit.createEntry(req, authResult);
 
       audit.logFailure(entry, 400, "Invalid job type");
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -199,7 +201,7 @@ describe("AuditLogger", () => {
       expect(logEntry.errorMessage).toBe("Invalid job type");
     });
 
-    it("should log authentication failures", () => {
+    it("should log authentication failures", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "GET",
         headers: {
@@ -213,6 +215,7 @@ describe("AuditLogger", () => {
       };
 
       audit.logAuthFailure(req, authResult);
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -223,7 +226,7 @@ describe("AuditLogger", () => {
       expect(logEntry.auth.error).toBe("Invalid API key");
     });
 
-    it("should append multiple log entries", () => {
+    it("should append multiple log entries", async () => {
       const req1 = new Request("http://localhost:3001/health", {
         method: "GET",
       });
@@ -242,6 +245,7 @@ describe("AuditLogger", () => {
 
       audit.logSuccess(audit.createEntry(req1, authResult1), 200, 10);
       audit.logSuccess(audit.createEntry(req2, authResult2), 200, 15);
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -256,7 +260,7 @@ describe("AuditLogger", () => {
       expect(entry2.path).toBe("/jobs");
     });
 
-    it("should clear logs", () => {
+    it("should clear logs", async () => {
       const req = new Request("http://localhost:3001/health", {
         method: "GET",
       });
@@ -266,6 +270,7 @@ describe("AuditLogger", () => {
       };
 
       audit.logSuccess(audit.createEntry(req, authResult), 200, 10);
+      await audit.waitForPendingWrites();
 
       let logContents = readFileSync(audit.getLogPath(), "utf-8");
       expect(logContents.trim()).toBeTruthy();
@@ -290,7 +295,7 @@ describe("AuditLogger", () => {
       expect(logPath).toContain("custom.log");
     });
 
-    it("should handle log write errors gracefully", () => {
+    it("should handle log write errors gracefully", async () => {
       // Test that logSuccess/logFailure don't throw errors
       const req = new Request("http://localhost:3001/health", {
         method: "GET",
@@ -309,6 +314,8 @@ describe("AuditLogger", () => {
           "Bad request"
         );
       }).not.toThrow();
+
+      await audit.waitForPendingWrites();
 
       // Verify logs were created successfully
       const logPath = audit.getLogPath();
@@ -420,6 +427,7 @@ describe("AuditLogger", () => {
 
       const response = await wrappedHandler(req, authResult);
       expect(response.status).toBe(200);
+      await getAudit().waitForPendingWrites();
 
       // Verify audit log was written
       const logPath = getAudit().getLogPath();
@@ -459,6 +467,7 @@ describe("AuditLogger", () => {
       await expect(wrappedHandler(req, authResult)).rejects.toThrow(
         "Handler error"
       );
+      await getAudit().waitForPendingWrites();
 
       // Verify audit log was written with failure info
       const logPath = getAudit().getLogPath();
@@ -500,6 +509,7 @@ describe("AuditLogger", () => {
       const startTime = Date.now();
       await wrappedHandler(req, authResult);
       const endTime = Date.now();
+      await getAudit().waitForPendingWrites();
 
       // Verify audit log contains response time
       const logPath = getAudit().getLogPath();
@@ -545,6 +555,7 @@ describe("AuditLogger", () => {
       };
 
       await wrappedHandler(req, authResult);
+      await getAudit().waitForPendingWrites();
 
       // Verify audit entry has correct auth info
       const logPath = getAudit().getLogPath();
@@ -579,6 +590,7 @@ describe("AuditLogger", () => {
       };
 
       await wrappedHandler(req, authResult);
+      await getAudit().waitForPendingWrites();
 
       // Verify audit entry has auth failure info
       const logPath = getAudit().getLogPath();
@@ -614,6 +626,7 @@ describe("AuditLogger", () => {
       };
 
       await wrappedHandler(req, authResult);
+      await getAudit().waitForPendingWrites();
 
       // Verify query params are captured
       const logPath = getAudit().getLogPath();
@@ -654,6 +667,7 @@ describe("AuditLogger", () => {
         new Request("http://localhost:3001/jobs/types", { method: "GET" }),
         authResult
       );
+      await getAudit().waitForPendingWrites();
 
       // Verify multiple log entries
       const logPath = getAudit().getLogPath();

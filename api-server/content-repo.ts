@@ -285,14 +285,18 @@ async function restoreAndCleanGeneratedPaths(workdir: string): Promise<void> {
 }
 
 async function ensureRemoteContentBranchExists(workdir: string): Promise<void> {
+  const config = getConfig();
   try {
-    await runGit(["rev-parse", "--verify", "refs/remotes/origin/content"], {
-      cwd: workdir,
-      errorPrefix: "origin/content branch not found",
-    });
+    await runGit(
+      ["rev-parse", "--verify", `refs/remotes/origin/${config.contentBranch}`],
+      {
+        cwd: workdir,
+        errorPrefix: `origin/${config.contentBranch} branch not found`,
+      }
+    );
   } catch {
     throw new ContentRepoError(
-      "origin/content branch does not exist. Bootstrap it manually: `git push origin main:content`",
+      `origin/${config.contentBranch} branch does not exist. Bootstrap it manually: \`git push origin main:${config.contentBranch}\``,
       undefined,
       "BRANCH_MISSING"
     );
@@ -586,14 +590,14 @@ export async function pushContentBranchWithRetry(): Promise<string> {
     return await getHeadCommitHash();
   } catch (pushError) {
     try {
-      await runGit(["fetch", "origin", "content"], {
+      await runGit(["fetch", "origin", config.contentBranch], {
         cwd: config.workdir,
         auth: true,
-        errorPrefix: "Failed to fetch origin/content before push retry",
+        errorPrefix: `Failed to fetch origin/${config.contentBranch} before push retry`,
       });
-      await runGit(["merge", "origin/content"], {
+      await runGit(["merge", `origin/${config.contentBranch}`], {
         cwd: config.workdir,
-        errorPrefix: "Failed to merge origin/content before push retry",
+        errorPrefix: `Failed to merge origin/${config.contentBranch} before push retry`,
       });
     } catch (mergeError) {
       try {
@@ -630,16 +634,16 @@ export async function pushContentBranchWithRetry(): Promise<string> {
 
 export async function verifyRemoteHeadMatchesLocal(): Promise<void> {
   const config = getConfig();
-  await runGit(["fetch", "origin", "content"], {
+  await runGit(["fetch", "origin", config.contentBranch], {
     cwd: config.workdir,
     auth: true,
-    errorPrefix: "Failed to fetch origin/content for remote-head verification",
+    errorPrefix: `Failed to fetch origin/${config.contentBranch} for remote-head verification`,
   });
 
   const remoteHead = (
-    await runGit(["rev-parse", "origin/content"], {
+    await runGit(["rev-parse", `origin/${config.contentBranch}`], {
       cwd: config.workdir,
-      errorPrefix: "Failed to resolve origin/content head",
+      errorPrefix: `Failed to resolve origin/${config.contentBranch} head`,
     })
   ).stdout.trim();
   const localHead = await getHeadCommitHash();
@@ -647,8 +651,8 @@ export async function verifyRemoteHeadMatchesLocal(): Promise<void> {
   if (remoteHead !== localHead) {
     await resetToRemoteContentBranch();
     throw new ContentRepoError(
-      "origin/content changed before status transition",
-      `origin/content=${remoteHead}, local=${localHead}`,
+      `origin/${config.contentBranch} changed before status transition`,
+      `origin/${config.contentBranch}=${remoteHead}, local=${localHead}`,
       "PUSH_FAILED"
     );
   }

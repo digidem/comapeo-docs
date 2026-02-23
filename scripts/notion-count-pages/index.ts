@@ -106,7 +106,9 @@ async function countPages(options: CountOptions) {
   const { fetchNotionData, sortAndExpandNotionData } = await import(
     "../fetchNotionData"
   );
-  const { getStatusFromRawPage } = await import("../notionPageUtils");
+  const { getStatusFromRawPage, resolveChildrenByStatus } = await import(
+    "../notionPageUtils"
+  );
   const { NOTION_PROPERTIES } = await import("../constants");
 
   // Step 1: Build the same filter as fetch-all (using local function)
@@ -121,13 +123,17 @@ async function countPages(options: CountOptions) {
   const totalAfterExpansion = expandedPages.length;
   const subPageCount = totalAfterExpansion - parentCount;
 
-  // Step 4: Apply defensive status filter (same as fetchAll.ts:107-113)
-  const filtered = expandedPages.filter((p) => {
+  // Step 4: Apply defensive status filter (mirrors applyFetchAllTransform in fetchAll.ts)
+  let filtered = expandedPages.filter((p) => {
     const status = getStatusFromRawPage(p);
     if (!options.includeRemoved && status === "Remove") return false;
-    if (options.statusFilter && status !== options.statusFilter) return false;
     return true;
   });
+
+  // When statusFilter is provided, resolve children from parent pages (same as fetchAll.ts)
+  if (options.statusFilter) {
+    filtered = resolveChildrenByStatus(filtered, options.statusFilter);
+  }
 
   // Step 5: Count by status
   const byStatus: Record<string, number> = {};

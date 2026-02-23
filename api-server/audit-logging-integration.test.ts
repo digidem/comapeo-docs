@@ -76,7 +76,7 @@ describe("Audit Logging Integration", () => {
   });
 
   describe("Audit Records for Authenticated Requests", () => {
-    it("should write audit record for successful authenticated request", () => {
+    it("should write audit record for successful authenticated request", async () => {
       // Create a mock request with valid authentication
       const req = new Request("http://localhost:3001/jobs", {
         method: "POST",
@@ -97,6 +97,7 @@ describe("Audit Logging Integration", () => {
       // Create and log audit entry
       const entry = audit.createEntry(req, authResult);
       audit.logSuccess(entry, 201, 15);
+      await audit.waitForPendingWrites();
 
       // Verify audit log file was created
       const logPath = audit.getLogPath();
@@ -117,7 +118,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.timestamp).toBeDefined();
     });
 
-    it("should write audit record for GET request with authentication", () => {
+    it("should write audit record for GET request with authentication", async () => {
       const req = new Request("http://localhost:3001/jobs?type=fetch", {
         method: "GET",
         headers: {
@@ -133,6 +134,7 @@ describe("Audit Logging Integration", () => {
 
       const entry = audit.createEntry(req, authResult);
       audit.logSuccess(entry, 200, 8);
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -148,7 +150,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.responseTime).toBe(8);
     });
 
-    it("should write audit record for DELETE request with authentication", () => {
+    it("should write audit record for DELETE request with authentication", async () => {
       const req = new Request("http://localhost:3001/jobs/job-123", {
         method: "DELETE",
         headers: {
@@ -163,6 +165,7 @@ describe("Audit Logging Integration", () => {
 
       const entry = audit.createEntry(req, authResult);
       audit.logSuccess(entry, 200, 25);
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -174,7 +177,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.statusCode).toBe(200);
     });
 
-    it("should write multiple audit records for multiple authenticated requests", () => {
+    it("should write multiple audit records for multiple authenticated requests", async () => {
       const PUBLIC_ENDPOINTS = ["/health", "/jobs/types", "/docs"];
 
       function isPublicEndpoint(path: string): boolean {
@@ -213,6 +216,7 @@ describe("Audit Logging Integration", () => {
         const entry = audit.createEntry(req, authResult as any);
         audit.logSuccess(entry, 200, 10);
       });
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -240,7 +244,7 @@ describe("Audit Logging Integration", () => {
   });
 
   describe("Audit Records for Failed Requests", () => {
-    it("should write audit record for failed authenticated request", () => {
+    it("should write audit record for failed authenticated request", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "POST",
         headers: {
@@ -257,6 +261,7 @@ describe("Audit Logging Integration", () => {
       // Create entry for authenticated request that fails validation
       const entry = audit.createEntry(req, authResult);
       audit.logFailure(entry, 400, "Invalid job type");
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -270,7 +275,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.path).toBe("/jobs");
     });
 
-    it("should write audit record for internal server error", () => {
+    it("should write audit record for internal server error", async () => {
       const req = new Request("http://localhost:3001/jobs/job-123", {
         method: "GET",
         headers: {
@@ -285,6 +290,7 @@ describe("Audit Logging Integration", () => {
 
       const entry = audit.createEntry(req, authResult);
       audit.logFailure(entry, 500, "Database connection failed");
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -295,7 +301,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.errorMessage).toBe("Database connection failed");
     });
 
-    it("should write audit record for request timeout", () => {
+    it("should write audit record for request timeout", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "POST",
         headers: {
@@ -310,6 +316,7 @@ describe("Audit Logging Integration", () => {
 
       const entry = audit.createEntry(req, authResult);
       audit.logFailure(entry, 504, "Request timeout after 30s");
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -322,7 +329,7 @@ describe("Audit Logging Integration", () => {
   });
 
   describe("Audit Records for Authentication Failures", () => {
-    it("should write audit record for missing authorization header", () => {
+    it("should write audit record for missing authorization header", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "POST",
         headers: {
@@ -342,6 +349,7 @@ describe("Audit Logging Integration", () => {
         req,
         authResult as { success: false; error?: string }
       );
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -356,7 +364,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.clientIp).toBe("10.0.0.50");
     });
 
-    it("should write audit record for invalid API key", () => {
+    it("should write audit record for invalid API key", async () => {
       const req = new Request("http://localhost:3001/jobs/job-123", {
         method: "GET",
         headers: {
@@ -374,6 +382,7 @@ describe("Audit Logging Integration", () => {
         req,
         authResult as { success: false; error?: string }
       );
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -385,7 +394,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.path).toBe("/jobs/job-123");
     });
 
-    it("should write audit record for malformed authorization header", () => {
+    it("should write audit record for malformed authorization header", async () => {
       const req = new Request("http://localhost:3001/jobs", {
         method: "GET",
         headers: {
@@ -403,6 +412,7 @@ describe("Audit Logging Integration", () => {
         req,
         authResult as { success: false; error?: string }
       );
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -415,7 +425,7 @@ describe("Audit Logging Integration", () => {
       expect(logEntry.statusCode).toBe(401);
     });
 
-    it("should write audit record for inactive API key", () => {
+    it("should write audit record for inactive API key", async () => {
       // Add inactive key
       const inactiveKey = "inactive-key-123456789";
       auth.addKey("inactive", inactiveKey, {
@@ -440,6 +450,7 @@ describe("Audit Logging Integration", () => {
         req,
         authResult as { success: false; error?: string }
       );
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");
@@ -452,7 +463,7 @@ describe("Audit Logging Integration", () => {
   });
 
   describe("Mixed Success and Failure Scenarios", () => {
-    it("should write audit records for mix of successful and failed requests", () => {
+    it("should write audit records for mix of successful and failed requests", async () => {
       const scenarios = [
         {
           req: new Request("http://localhost:3001/health", { method: "GET" }),
@@ -516,6 +527,7 @@ describe("Audit Logging Integration", () => {
           );
         }
       });
+      await audit.waitForPendingWrites();
 
       const logPath = audit.getLogPath();
       const logContents = readFileSync(logPath, "utf-8");

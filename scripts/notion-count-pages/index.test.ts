@@ -8,6 +8,7 @@ vi.mock("../fetchNotionData", () => ({
 
 vi.mock("../notionPageUtils", () => ({
   getStatusFromRawPage: vi.fn(),
+  resolveChildrenByStatus: vi.fn((pages: unknown[]) => pages),
 }));
 
 vi.mock("../constants", () => ({

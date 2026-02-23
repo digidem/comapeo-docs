@@ -5,7 +5,7 @@ import {
 import { z } from "zod";
 
 import {
-  createJobTypeSchema as createJobSchema,
+  createJobRequestSchema as createJobSchema,
   jobTypeSchema as cancelJobSchema,
   jobsQuerySchema as jobsListSchema,
 } from "./validation-schemas";

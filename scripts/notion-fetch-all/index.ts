@@ -14,8 +14,8 @@ import {
   trackSpinner,
 } from "../notion-fetch/runtime";
 
-// Load environment variables
-dotenv.config({ override: true });
+// Load environment variables (.env does not override CI/production env vars)
+dotenv.config();
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

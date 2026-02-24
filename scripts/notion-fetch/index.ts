@@ -9,8 +9,8 @@ import {
   initializeGracefulShutdownHandlers,
 } from "./runtime";
 
-// Load environment variables from .env file
-dotenv.config({ override: true });
+// Load environment variables from .env file (.env does not override CI/production env vars)
+dotenv.config();
 
 function resolveDatabaseId(): string | undefined {
   const databaseId = process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

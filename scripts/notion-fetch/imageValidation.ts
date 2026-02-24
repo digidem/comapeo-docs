@@ -34,7 +34,7 @@ export function validateAndSanitizeImageUrl(
   try {
     const urlObj = new URL(trimmedUrl);
     // Ensure it's a reasonable protocol
-    if (!["http:", "https:"].includes(urlObj.protocol)) {
+    if (!["http:", "https:", "data:"].includes(urlObj.protocol)) {
       return { isValid: false, error: `Invalid protocol: ${urlObj.protocol}` };
     }
     return { isValid: true, sanitizedUrl: trimmedUrl };

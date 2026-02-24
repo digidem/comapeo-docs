@@ -12,7 +12,7 @@ import { RateLimiter } from "./utils/rateLimiter";
 import { BackupManager } from "./utils/backupManager";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
@@ -49,6 +49,7 @@ const parseArgs = (): CliOptions => {
   };
 
   for (let i = 0; i < args.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- numeric index from controlled for-loop
     switch (args[i]) {
       case "--dry-run":
       case "-d":
@@ -354,6 +355,7 @@ async function main() {
     // Generate and apply content
     const updates = [];
     for (let i = 0; i < pagesToUpdate.length; i++) {
+      // eslint-disable-next-line security/detect-object-injection -- numeric index from controlled for-loop
       const { pageId, title, analysis } = pagesToUpdate[i];
 
       console.log(

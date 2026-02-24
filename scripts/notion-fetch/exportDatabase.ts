@@ -9,7 +9,7 @@ import { fetchNotionBlocks } from "../fetchNotionData";
 import { NOTION_PROPERTIES } from "../constants";
 import SpinnerManager from "./spinnerManager";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +37,7 @@ function parseCliArgs(): ExportOptions {
   };
 
   for (let i = 0; i < args.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- numeric index from controlled for-loop
     switch (args[i]) {
       case "--verbose":
       case "-v":
@@ -211,8 +212,10 @@ function isReadyToPublish(page: Record<string, any>): boolean {
  */
 function extractTextFromBlock(block: Record<string, any>): string {
   const blockType = block.type;
+  // eslint-disable-next-line security/detect-object-injection -- blockType is sourced from block.type, a known Notion schema field
   if (!blockType || !block[blockType]) return "";
 
+  // eslint-disable-next-line security/detect-object-injection -- blockType is sourced from block.type, a known Notion schema field
   const blockContent = block[blockType];
 
   // Handle rich text arrays (most common case)
@@ -305,6 +308,7 @@ function analyzeBlock(block: Record<string, any>): BlockAnalysis {
     textContent: textContent,
     hasChildren,
     childrenCount,
+    // eslint-disable-next-line security/detect-object-injection -- blockType is sourced from block.type, a known Notion schema field
     properties: block[blockType] || {},
     metadata: {
       id: block.id,

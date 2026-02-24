@@ -124,6 +124,11 @@ export const ENGLISH_DIR_SAVE_ERROR =
 export const TRANSLATION_MAX_RETRIES = 3;
 export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
 
+// URL handling
+export const INVALID_URL_PLACEHOLDER =
+  process.env.INVALID_URL_PLACEHOLDER ||
+  "https://example.com/invalid-url-removed";
+
 // Test environment configuration
 export const SAFE_BRANCH_PATTERNS = [
   "test/*",

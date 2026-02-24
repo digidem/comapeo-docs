@@ -11,7 +11,7 @@ import {
   initializeGracefulShutdownHandlers,
 } from "../notion-fetch/runtime";
 
-// Load environment variables
+// Load environment variables (.env does not override CI/production env vars)
 dotenv.config();
 
 const resolvedDatabaseId =

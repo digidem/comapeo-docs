@@ -791,23 +791,39 @@ export async function downloadAndProcessImage(
 
     // Capture the entire async operation so we can track when it fully settles
     const currentAttempt = (async () => {
-      spinner.text = `Processing image ${index + 1}: Downloading`;
-      const response = await axios.get(url, {
-        responseType: "arraybuffer",
-        timeout: 30000,
-        maxRedirects: 5,
-        signal: abortController.signal,
-        headers: {
-          "User-Agent": "notion-fetch-script/1.0",
-        },
-      });
+      let originalBuffer: Buffer;
+      let cleanUrl = url;
+      let rawCT: string | string[] | undefined = undefined;
 
-      const originalBuffer = Buffer.from(response.data, "binary");
-      const cleanUrl = url.split("?")[0];
+      if (url.startsWith("data:")) {
+        spinner.text = `Processing image ${index + 1}: Decoding data URI`;
+        const match = url.match(/^data:([^;]+);base64,(.*)$/);
+        if (match) {
+          rawCT = match[1];
+          originalBuffer = Buffer.from(match[2], "base64");
+          cleanUrl = "data-uri";
+        } else {
+          throw new Error("Invalid data URI format");
+        }
+      } else {
+        spinner.text = `Processing image ${index + 1}: Downloading`;
+        const response = await axios.get(url, {
+          responseType: "arraybuffer",
+          timeout: 30000,
+          maxRedirects: 5,
+          signal: abortController.signal,
+          headers: {
+            "User-Agent": "notion-fetch-script/1.0",
+          },
+        });
 
-      const rawCT = (response.headers as Record<string, unknown>)[
-        "content-type"
-      ];
+        originalBuffer = Buffer.from(response.data, "binary");
+        cleanUrl = url.split("?")[0];
+        rawCT = (response.headers as Record<string, unknown>)[
+          "content-type"
+        ] as string | string[] | undefined;
+      }
+
       const normalizedCT =
         typeof rawCT === "string"
           ? rawCT

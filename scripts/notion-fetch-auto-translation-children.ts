@@ -14,7 +14,7 @@ import {
   normalizePath,
 } from "./notion-fetch/pageMetadataCache";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const TARGET_STATUS = "Auto translation generated";
 const LANGUAGE_EN = "English";

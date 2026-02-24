@@ -17,7 +17,10 @@ import {
   extractTranslatableText,
   getLanguageName,
 } from "./translateCodeJson.js";
-import { createNotionPageFromMarkdown } from "./markdownToNotion.js";
+import {
+  createNotionPageWithBlocks,
+  translateNotionBlocksDirectly,
+} from "./translateBlocks.js";
 import {
   fetchNotionData,
   sortAndExpandNotionData,
@@ -33,6 +36,7 @@ import {
   processAndReplaceImages,
   getImageDiagnostics,
   validateAndFixRemainingImages,
+  extractImageMatches,
 } from "../notion-fetch/imageReplacer.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
@@ -1167,14 +1171,47 @@ async function processSinglePageTranslation({
   }
   // Create or update translation page in Notion as a sibling (child of the same parent)
   // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
-  await createNotionPageFromMarkdown(
+  let translatedBlocks: any[] = [];
+  if (!isTitlePage) {
+    const sanitizedPageName = generateSafeFilename(
+      originalTitle,
+      englishPage.id
+    );
+    const markdownContent = stabilizedMarkdownCache?.get(englishPage.id) || "";
+    const orderedImagePaths = extractImageMatches(markdownContent).map(
+      (m) => m.url
+    );
+    translatedBlocks = await translateNotionBlocksDirectly(
+      englishPage.id,
+      config.language,
+      sanitizedPageName,
+      orderedImagePaths
+    );
+  } else {
+    // Restore regression: title pages previously got a minimal heading block
+    translatedBlocks = [
+      {
+        object: "block",
+        type: "heading_1",
+        heading_1: {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: translatedTitle },
+            },
+          ],
+        },
+      },
+    ];
+  }
+
+  await createNotionPageWithBlocks(
     notion,
     parentInfo,
     DATA_SOURCE_ID || DATABASE_ID, // Primary: DATA_SOURCE_ID, Fallback: DATABASE_ID
     translatedTitle,
-    translatedContent,
+    translatedBlocks,
     properties,
-    true,
     config.notionLangCode,
     translationPage?.id
   );

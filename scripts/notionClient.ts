@@ -16,6 +16,9 @@ type MarkdownBlock = Awaited<
   ReturnType<InstanceType<typeof NotionToMarkdown>["blockToMarkdown"]>
 >;
 
+// Load environment variables from .env file
+// Note: This runs at module import time. In test environments, ensure env vars
+// are set before importing this module, or use process.env directly.
 dotenv.config();
 
 if (!process.env.NOTION_API_KEY) {

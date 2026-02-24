@@ -9,7 +9,7 @@ import {
   initializeGracefulShutdownHandlers,
 } from "./runtime";
 
-// Load environment variables from .env file
+// Load environment variables from .env file (.env does not override CI/production env vars)
 dotenv.config();
 
 function resolveDatabaseId(): string | undefined {

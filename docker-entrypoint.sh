@@ -7,7 +7,7 @@ if [ -d "/app/workspace" ]; then
 fi
 
 # Fix git safe.directory for the workspace (needed in Docker)
-git config --global --add safe.directory /app/workspace/repo 2>/dev/null || true
+git config --global --add safe.directory "${WORKDIR:-/app/workspace/repo}" 2>/dev/null || true
 
 # Switch to bun user and exec the command
 exec gosu bun "$@"

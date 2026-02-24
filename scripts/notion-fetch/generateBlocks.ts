@@ -251,6 +251,86 @@ export function findExistingSidebarPosition(
   return null;
 }
 
+function findMaxExistingSidebarPosition(
+  metadataCache: PageMetadataCache,
+  existingCache?: PageMetadataCache
+): number | null {
+  const candidatePaths: string[] = [];
+  const seenPaths = new Set<string>();
+  let maxPosition: number | null = null;
+
+  const addCandidate = (candidate?: string) => {
+    const resolvedPath = normalizePath(candidate ?? "");
+    if (!resolvedPath || seenPaths.has(resolvedPath)) {
+      return;
+    }
+    seenPaths.add(resolvedPath);
+    candidatePaths.push(resolvedPath);
+  };
+
+  const addCachePaths = (cache?: PageMetadataCache) => {
+    if (!cache?.pages) {
+      return;
+    }
+
+    for (const metadata of Object.values(cache.pages)) {
+      for (const outputPath of metadata.outputPaths ?? []) {
+        addCandidate(outputPath);
+      }
+    }
+  };
+
+  addCachePaths(metadataCache);
+  addCachePaths(existingCache);
+
+  const addMarkdownFilesRecursively = (directoryPath: string) => {
+    if (!directoryPath || !fs.existsSync(directoryPath)) {
+      return;
+    }
+
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        addMarkdownFilesRecursively(entryPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith(".md")) {
+        addCandidate(entryPath);
+      }
+    }
+  };
+
+  addMarkdownFilesRecursively(CONTENT_PATH);
+  for (const locale of locales.filter((locale) => locale !== DEFAULT_LOCALE)) {
+    addMarkdownFilesRecursively(getI18NPath(locale));
+  }
+
+  for (const candidatePath of candidatePaths) {
+    if (!fs.existsSync(candidatePath)) {
+      continue;
+    }
+
+    const content = fs.readFileSync(candidatePath, "utf-8");
+    const position = extractSidebarPositionFromFrontmatter(content);
+    if (position === null) {
+      continue;
+    }
+
+    maxPosition =
+      maxPosition === null ? position : Math.max(maxPosition, position);
+  }
+
+  return maxPosition;
+}
+
 // setTranslationString moved to translationManager.ts
 
 /**
@@ -743,6 +823,45 @@ export async function generateBlocks(
       return count + Object.keys(pageGroup.content).length;
     }, 0);
     let pageProcessingIndex = 0;
+    const pageGroupSidebarPositions = new Map<number, number>();
+    let nextGeneratedSidebarPosition: number | null = null;
+
+    let maxExplicitOrderInRun: number | null = null;
+    for (const pageByLang of pagesByLang) {
+      for (const page of Object.values(pageByLang.content ?? {})) {
+        const orderValue = (page as any)?.properties?.["Order"]?.number;
+        if (typeof orderValue !== "number" || !Number.isFinite(orderValue)) {
+          continue;
+        }
+        maxExplicitOrderInRun =
+          maxExplicitOrderInRun === null
+            ? orderValue
+            : Math.max(maxExplicitOrderInRun, orderValue);
+      }
+    }
+
+    const getNextGeneratedSidebarPosition = () => {
+      if (nextGeneratedSidebarPosition === null) {
+        const maxKnownPosition = findMaxExistingSidebarPosition(
+          metadataCache,
+          existingCache ?? undefined
+        );
+        const baselineCandidates = [
+          maxKnownPosition,
+          maxExplicitOrderInRun,
+        ].filter(
+          (value): value is number =>
+            typeof value === "number" && Number.isFinite(value)
+        );
+        const baseline =
+          baselineCandidates.length > 0 ? Math.max(...baselineCandidates) : 0;
+        nextGeneratedSidebarPosition = baseline + 1;
+      }
+
+      const position = nextGeneratedSidebarPosition;
+      nextGeneratedSidebarPosition += 1;
+      return position;
+    };
 
     const blocksMap = new Map<string, { key: string; data: any[] }>();
     const markdownMap = new Map<string, { key: string; data: any }>();
@@ -873,6 +992,10 @@ export async function generateBlocks(
           const orderValue = props?.["Order"]?.number;
           // Fix: Use !== undefined check instead of Number.isFinite to properly handle 0 values
           let sidebarPosition = orderValue !== undefined ? orderValue : null;
+          const groupSidebarPosition = pageGroupSidebarPositions.get(i);
+          if (sidebarPosition === null && groupSidebarPosition !== undefined) {
+            sidebarPosition = groupSidebarPosition;
+          }
           if (sidebarPosition === null && !enableDeletion) {
             sidebarPosition = findExistingSidebarPosition(
               page.id,
@@ -882,8 +1005,14 @@ export async function generateBlocks(
               syncMode.fullRebuild
             );
           }
+          if (sidebarPosition === null && !enableDeletion) {
+            sidebarPosition = getNextGeneratedSidebarPosition();
+          }
           if (sidebarPosition === null) {
             sidebarPosition = i + 1;
+          }
+          if (!pageGroupSidebarPositions.has(i)) {
+            pageGroupSidebarPositions.set(i, sidebarPosition);
           }
 
           const customProps: Record<string, unknown> = {};

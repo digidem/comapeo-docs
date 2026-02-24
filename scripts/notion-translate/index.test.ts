@@ -16,6 +16,12 @@ const mockReaddir = vi.fn();
 const mockStat = vi.fn();
 const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
+const mockNotionDataSourcesQuery = vi.fn();
+const mockNotionPagesCreate = vi.fn();
+const mockNotionPagesUpdate = vi.fn();
+const mockNotionBlocksChildrenList = vi.fn();
+const mockNotionBlocksChildrenAppend = vi.fn();
+const mockNotionBlocksDelete = vi.fn();
 const mockProcessAndReplaceImages = vi.fn();
 const mockGetImageDiagnostics = vi.fn();
 const mockValidateAndFixRemainingImages = vi.fn();
@@ -37,8 +43,22 @@ vi.mock("fs/promises", () => ({
 }));
 
 vi.mock("../notionClient", () => ({
-  notion: {},
-  // DATA_SOURCE_ID is primary, DATABASE_ID is fallback (standardization policy)
+  notion: {
+    dataSources: {
+      query: mockNotionDataSourcesQuery,
+    },
+    pages: {
+      create: mockNotionPagesCreate,
+      update: mockNotionPagesUpdate,
+    },
+    blocks: {
+      children: {
+        list: mockNotionBlocksChildrenList,
+        append: mockNotionBlocksChildrenAppend,
+      },
+      delete: mockNotionBlocksDelete,
+    },
+  },
   DATABASE_ID: "test-database-id",
   DATA_SOURCE_ID: "test-data-source-id",
   n2m: mockN2m,
@@ -117,6 +137,13 @@ describe("notion-translate index", () => {
     mockReaddir.mockReset();
     mockStat.mockReset();
     mockBlocksChildrenList.mockReset();
+    mockPagesRetrieve.mockReset();
+    mockNotionDataSourcesQuery.mockReset();
+    mockNotionPagesCreate.mockReset();
+    mockNotionPagesUpdate.mockReset();
+    mockNotionBlocksChildrenList.mockReset();
+    mockNotionBlocksChildrenAppend.mockReset();
+    mockNotionBlocksDelete.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
     mockProcessAndReplaceImages.mockReset();
@@ -171,6 +198,20 @@ describe("notion-translate index", () => {
       has_more: false,
       next_cursor: null,
     });
+    mockNotionDataSourcesQuery.mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    });
+    mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
+    mockNotionPagesUpdate.mockResolvedValue({});
+    mockNotionBlocksChildrenList.mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    });
+    mockNotionBlocksChildrenAppend.mockResolvedValue({});
+    mockNotionBlocksDelete.mockResolvedValue({});
     mockTranslateText.mockResolvedValue({
       markdown: "# Ola",
       title: "Ola",
@@ -444,7 +485,7 @@ describe("notion-translate index", () => {
       });
 
       expect(summary.totalEnglishPages).toBe(1);
-      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(2);
+      expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
       // Markdown conversion is cached per source page and reused across languages.
       expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(1);
       expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
@@ -485,19 +526,47 @@ describe("notion-translate index", () => {
         ) {
           return [englishPage];
         }
-        if (
-          filter?.and?.some(
-            (condition: {
-              property?: string;
-              relation?: { contains?: string };
-            }) =>
-              condition.property === "Parent item" &&
-              condition.relation?.contains === sourcePageId
-          )
-        ) {
-          return [existingPortugueseTranslation];
+        const hasParentItem = filter?.and?.some(
+          (condition: {
+            property?: string;
+            relation?: { contains?: string };
+          }) =>
+            condition.property === "Parent item" &&
+            condition.relation?.contains === sourcePageId
+        );
+        const hasLanguage = filter?.and?.some(
+          (condition: { property?: string; select?: { equals?: string } }) =>
+            condition.property === "Language"
+        );
+        if (hasParentItem) {
+          const langCondition = filter?.and?.find(
+            (c: { property?: string }) => c.property === "Language"
+          ) as { select?: { equals?: string } } | undefined;
+          if (langCondition?.select?.equals === "Portuguese") {
+            return [existingPortugueseTranslation];
+          }
+          return [];
         }
         return [];
+      });
+
+      mockNotionDataSourcesQuery.mockImplementation(async ({ filter }) => {
+        if (
+          filter?.and?.some(
+            (c: { property?: string }) => c.property === "Language"
+          )
+        ) {
+          const langCondition = filter.and.find(
+            (c: { property?: string }) => c.property === "Language"
+          ) as { select?: { equals?: string } } | undefined;
+          if (langCondition?.select?.equals === "Portuguese") {
+            return {
+              results: [existingPortugueseTranslation],
+              has_more: false,
+            };
+          }
+        }
+        return { results: [], has_more: false };
       });
 
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -512,10 +581,8 @@ describe("notion-translate index", () => {
         )
       ).toBe(false);
 
-      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(2);
-      mockCreateNotionPageFromMarkdown.mock.calls.forEach((callArgs) => {
-        expect(callArgs[1]).toBe(sourcePageId);
-      });
+      expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
+      expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(1);
 
       const lookedUpBySourceId = mockFetchNotionData.mock.calls.some(
         ([filter]) =>

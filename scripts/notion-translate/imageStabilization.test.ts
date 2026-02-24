@@ -16,6 +16,12 @@ const mockReaddir = vi.fn();
 const mockStat = vi.fn();
 const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
+const mockNotionDataSourcesQuery = vi.fn();
+const mockNotionPagesCreate = vi.fn();
+const mockNotionPagesUpdate = vi.fn();
+const mockNotionBlocksChildrenList = vi.fn();
+const mockNotionBlocksChildrenAppend = vi.fn();
+const mockNotionBlocksDelete = vi.fn();
 const mockProcessAndReplaceImages = vi.fn();
 const mockGetImageDiagnostics = vi.fn();
 const mockValidateAndFixRemainingImages = vi.fn();
@@ -37,7 +43,22 @@ vi.mock("fs/promises", () => ({
 }));
 
 vi.mock("../notionClient", () => ({
-  notion: {},
+  notion: {
+    dataSources: {
+      query: mockNotionDataSourcesQuery,
+    },
+    pages: {
+      create: mockNotionPagesCreate,
+      update: mockNotionPagesUpdate,
+    },
+    blocks: {
+      children: {
+        list: mockNotionBlocksChildrenList,
+        append: mockNotionBlocksChildrenAppend,
+      },
+      delete: mockNotionBlocksDelete,
+    },
+  },
   DATABASE_ID: "test-database-id",
   DATA_SOURCE_ID: "test-data-source-id",
   n2m: mockN2m,
@@ -131,6 +152,12 @@ describe("image stabilization in translation pipeline", () => {
     mockStat.mockReset();
     mockBlocksChildrenList.mockReset();
     mockPagesRetrieve.mockReset();
+    mockNotionDataSourcesQuery.mockReset();
+    mockNotionPagesCreate.mockReset();
+    mockNotionPagesUpdate.mockReset();
+    mockNotionBlocksChildrenList.mockReset();
+    mockNotionBlocksChildrenAppend.mockReset();
+    mockNotionBlocksDelete.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
     mockProcessAndReplaceImages.mockReset();
@@ -168,6 +195,20 @@ describe("image stabilization in translation pipeline", () => {
       has_more: false,
       next_cursor: null,
     });
+    mockNotionDataSourcesQuery.mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    });
+    mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
+    mockNotionPagesUpdate.mockResolvedValue({});
+    mockNotionBlocksChildrenList.mockResolvedValue({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    });
+    mockNotionBlocksChildrenAppend.mockResolvedValue({});
+    mockNotionBlocksDelete.mockResolvedValue({});
 
     mockProcessAndReplaceImages.mockResolvedValue({
       markdown: "![img](/images/test_0.png)\n\nContent",

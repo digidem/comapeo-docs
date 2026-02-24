@@ -88,6 +88,15 @@ function createSpawnSuccessProcess(options?: {
   candidateIds?: string[];
   pagesProcessed?: number;
 }) {
+  return createSpawnProcess(
+    JSON.stringify({
+      candidateIds: options?.candidateIds ?? [],
+      pagesProcessed: options?.pagesProcessed ?? 1,
+    })
+  );
+}
+
+function createSpawnProcess(outputLine: string, exitCode = 0) {
   const stdout = new EventEmitter();
   const stderr = new EventEmitter();
   const child = new EventEmitter() as EventEmitter & {
@@ -97,13 +106,9 @@ function createSpawnSuccessProcess(options?: {
   child.stdout = stdout;
   child.stderr = stderr;
 
-  const summary = JSON.stringify({
-    candidateIds: options?.candidateIds ?? [],
-    pagesProcessed: options?.pagesProcessed ?? 1,
-  });
   queueMicrotask(() => {
-    stdout.emit("data", Buffer.from("Progress: 1/1\n" + summary + "\n"));
-    child.emit("close", 0);
+    stdout.emit("data", Buffer.from("Progress: 1/1\n" + outputLine + "\n"));
+    child.emit("close", exitCode);
   });
 
   return child;
@@ -311,5 +316,132 @@ describe("fetch-job-runner", () => {
     expect(mockFetchAllNotionData).not.toHaveBeenCalled();
     expect(mockPrepareContentBranchForFetch).not.toHaveBeenCalled();
     expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+  });
+
+  it("fails when terminal JSON summary is missing", async () => {
+    mockSpawn.mockImplementation(() =>
+      createSpawnProcess("Progress complete without summary")
+    );
+
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-missing-json",
+      options: {},
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.terminal.error?.code).toBe("CONTENT_GENERATION_FAILED");
+    expect(result.terminal.pagesProcessed).toBe(0);
+    expect(mockPrepareContentBranchForFetch).not.toHaveBeenCalled();
+  });
+
+  it("fails when terminal JSON summary is inconsistent for fetch-ready", async () => {
+    mockSpawn.mockImplementation(() =>
+      createSpawnSuccessProcess({
+        pagesProcessed: 0,
+        candidateIds: ["page-1"],
+      })
+    );
+
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-inconsistent-summary",
+      options: {},
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.terminal.error?.code).toBe("CONTENT_GENERATION_FAILED");
+    expect(result.terminal.pagesProcessed).toBe(0);
+    expect(mockPrepareContentBranchForFetch).not.toHaveBeenCalled();
+  });
+
+  it("passes fetch-ready status filter args to generation script", async () => {
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-ready-status-filter",
+      options: { dryRun: true },
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockSpawn.mock.calls[0]?.[0]).toBe("bun");
+    expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining([
+        "--status-filter",
+        NOTION_PROPERTIES.READY_TO_PUBLISH,
+      ])
+    );
+    expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(["--status-filter", "Ready to publish"])
+    );
+  });
+
+  it("transitions all fetch-ready candidates on happy path", async () => {
+    const candidateIds = ["page-1", "page-2", "page-3"];
+    mockSpawn.mockImplementation(() =>
+      createSpawnSuccessProcess({
+        pagesProcessed: candidateIds.length,
+        candidateIds,
+      })
+    );
+
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-ready-happy-path",
+      options: {},
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.terminal.pagesTransitioned).toBe(candidateIds.length);
+    expect(result.terminal.failedPageIds).toEqual([]);
+    expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(candidateIds.length);
+    for (const pageId of candidateIds) {
+      expect(mockNotionPagesUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          page_id: pageId,
+        })
+      );
+    }
+    expect(mockVerifyRemoteHeadMatchesLocal).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes --force and --dry-run through to generation script", async () => {
+    const result = await runFetchJob({
+      type: "fetch-ready",
+      jobId: "job-force-dry-run",
+      options: { force: true, dryRun: true },
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockSpawn.mock.calls[0]?.[0]).toBe("bun");
+    expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(["--force", "--dry-run"])
+    );
   });
 });

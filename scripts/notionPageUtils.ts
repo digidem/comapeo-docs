@@ -112,6 +112,10 @@ export function resolveChildrenByStatus(
     (page) => getStatusFromRawPage(page) === statusFilter
   );
 
+  if (parentPages.length === 0) {
+    return [];
+  }
+
   // Collect all child page IDs from the "Sub-item" relation
   const childIds = new Set<string>();
   for (const parent of parentPages) {
@@ -121,12 +125,18 @@ export function resolveChildrenByStatus(
     }
   }
 
-  // Return only the children, not the parents
+  // Return only children when they can be resolved from the fetched set.
+  // If children are referenced but not present in `pages`, fall back to parents.
   if (childIds.size > 0) {
-    return pages.filter((page) => childIds.has(page.id as string));
+    const resolvedChildren = pages.filter((page) =>
+      childIds.has(page.id as string)
+    );
+    if (resolvedChildren.length > 0) {
+      return resolvedChildren;
+    }
   }
 
-  // No children found, fall back to original behavior
+  // No children found or resolvable: deterministically fall back to parents.
   return parentPages;
 }
 
@@ -208,13 +218,25 @@ export function selectPagesWithPriority(
     }
 
     if (childIds.size > 0) {
-      hasChildren = true;
-      if (verbose) {
-        console.log(
-          `  🔍 statusFilter "${statusFilter}": found ${parentPages.length} parent(s) with ${childIds.size} child(ren)`
-        );
+      const resolvedChildren = filtered.filter((p) =>
+        childIds.has(p.id as string)
+      );
+      if (resolvedChildren.length > 0) {
+        hasChildren = true;
+        if (verbose) {
+          console.log(
+            `  🔍 statusFilter "${statusFilter}": found ${parentPages.length} parent(s) with ${resolvedChildren.length} child(ren)`
+          );
+        }
+        filtered = resolvedChildren;
+      } else {
+        if (verbose) {
+          console.log(
+            `  ⚠️ statusFilter "${statusFilter}": children referenced but not present, returning parent pages`
+          );
+        }
+        filtered = parentPages;
       }
-      filtered = filtered.filter((p) => childIds.has(p.id as string));
     } else {
       if (verbose) {
         console.log(

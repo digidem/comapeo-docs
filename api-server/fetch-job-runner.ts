@@ -207,6 +207,12 @@ async function runGenerationScript(
   if (options.maxPages !== undefined && options.maxPages > 0) {
     args.push("--max-pages", String(options.maxPages));
   }
+  if (options.force) {
+    args.push("--force");
+  }
+  if (options.dryRun) {
+    args.push("--dry-run");
+  }
 
   return await new Promise<string>((resolve, reject) => {
     const child = spawn("bun", args, {
@@ -342,6 +348,72 @@ async function runGenerationScript(
   });
 }
 
+function parseTerminalSummary(
+  output: string,
+  type: "fetch-ready" | "fetch-all"
+): { pagesProcessed: number; candidateIds: string[] } {
+  const parsedOutput = extractLastJsonLine(output) as {
+    candidateIds?: unknown;
+    pagesProcessed?: unknown;
+  } | null;
+
+  if (!parsedOutput || typeof parsedOutput !== "object") {
+    throw new ContentRepoError(
+      "Generation command did not produce a terminal JSON summary",
+      undefined,
+      "CONTENT_GENERATION_FAILED"
+    );
+  }
+
+  const pagesProcessed = parsedOutput.pagesProcessed;
+  if (
+    typeof pagesProcessed !== "number" ||
+    !Number.isFinite(pagesProcessed) ||
+    !Number.isInteger(pagesProcessed) ||
+    pagesProcessed < 0
+  ) {
+    throw new ContentRepoError(
+      "Generation command produced invalid pagesProcessed in terminal JSON summary",
+      undefined,
+      "CONTENT_GENERATION_FAILED"
+    );
+  }
+
+  const rawCandidateIds = parsedOutput.candidateIds;
+  const candidateIds =
+    rawCandidateIds === undefined
+      ? []
+      : Array.isArray(rawCandidateIds) &&
+          rawCandidateIds.every((id) => typeof id === "string")
+        ? rawCandidateIds
+        : null;
+
+  if (candidateIds === null) {
+    throw new ContentRepoError(
+      "Generation command produced invalid candidateIds in terminal JSON summary",
+      undefined,
+      "CONTENT_GENERATION_FAILED"
+    );
+  }
+
+  if (
+    type === "fetch-ready" &&
+    candidateIds.length > 0 &&
+    pagesProcessed === 0
+  ) {
+    throw new ContentRepoError(
+      "Generation summary is inconsistent: candidateIds present but pagesProcessed is zero",
+      undefined,
+      "CONTENT_GENERATION_FAILED"
+    );
+  }
+
+  return {
+    pagesProcessed,
+    candidateIds,
+  };
+}
+
 async function getPageStatus(
   pageId: string,
   signal: AbortSignal,
@@ -431,13 +503,10 @@ export async function runFetchJob({
       timeoutMs
     );
 
-    const parsedOutput = extractLastJsonLine(output) as {
-      candidateIds?: string[];
-      pagesProcessed?: number;
-    } | null;
-    terminal.pagesProcessed = parsedOutput?.pagesProcessed ?? 0;
+    const summary = parseTerminalSummary(output, type);
+    terminal.pagesProcessed = summary.pagesProcessed;
     const transitionCandidates: string[] =
-      type === "fetch-ready" ? (parsedOutput?.candidateIds ?? []) : [];
+      type === "fetch-ready" ? summary.candidateIds : [];
 
     if (terminal.pagesProcessed === 0) {
       if (options.dryRun) {

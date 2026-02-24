@@ -32,13 +32,24 @@ export const MIN_API_KEY_LENGTH = 16;
  * Environment Variables Validation Schema
  * Ensures required secrets and configuration are present before startup
  */
-export const envSchema = z.object({
-  NOTION_API_KEY: z
-    .string()
-    .min(1, "NOTION_API_KEY is required for fetching content"),
-  DATABASE_ID: z.string().min(1, "DATABASE_ID is required").optional(),
-  DATA_SOURCE_ID: z.string().min(1, "DATA_SOURCE_ID is required").optional(),
-});
+export const envSchema = z
+  .object({
+    NOTION_API_KEY: z
+      .string()
+      .min(1, "NOTION_API_KEY is required for fetching content"),
+    DATABASE_ID: z.string().min(1, "DATABASE_ID is required").optional(),
+    DATA_SOURCE_ID: z.string().min(1, "DATA_SOURCE_ID is required").optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.DATABASE_ID && !data.DATA_SOURCE_ID) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "At least one of DATABASE_ID or DATA_SOURCE_ID is required for fetching content",
+        path: ["DATABASE_ID"],
+      });
+    }
+  });
 
 export function validateEnv(): void {
   // Only validate in production or when explicitly required, skip in test mode

@@ -8,7 +8,7 @@ import type {
   PartialBlockObjectResponse,
   BlockObjectRequest,
 } from "@notionhq/client/build/src/api-endpoints";
-import { NOTION_PROPERTIES } from "../constants.js";
+import { INVALID_URL_PLACEHOLDER, NOTION_PROPERTIES } from "../constants.js";
 import { extractImageMatches } from "../notion-fetch/imageReplacer.js";
 import chalk from "chalk";
 
@@ -243,13 +243,12 @@ async function translateBlocksTree(
         if (sanitized) {
           typeObj.url = sanitized;
         } else {
-          const originalUrl = typeObj.url;
           console.warn(
             chalk.yellow(
-              `⚠️  Skipping ${blockType} block with invalid URL: ${originalUrl}`
+              `⚠️  Invalid URL in ${blockType} block, using placeholder: ${typeObj.url}`
             )
           );
-          continue;
+          typeObj.url = INVALID_URL_PLACEHOLDER;
         }
       }
 

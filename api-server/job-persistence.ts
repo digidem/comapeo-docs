@@ -420,13 +420,24 @@ async function saveJobs(
  * Save a job to persistent storage
  */
 export async function saveJob(job: PersistedJob): Promise<void> {
+  // Strip sensitive credentials before persisting to disk
+  const jobToSave: PersistedJob = job.github
+    ? {
+        ...job,
+        github: {
+          ...job.github,
+          token: "", // Do not persist tokens to disk
+        },
+      }
+    : job;
+
   await saveJobs((storage) => {
-    const existingIndex = storage.jobs.findIndex((j) => j.id === job.id);
+    const existingIndex = storage.jobs.findIndex((j) => j.id === jobToSave.id);
     if (existingIndex !== -1) {
       // eslint-disable-next-line security/detect-object-injection -- existingIndex is from findIndex, not user input
-      storage.jobs[existingIndex] = job;
+      storage.jobs[existingIndex] = jobToSave;
     } else {
-      storage.jobs.push(job);
+      storage.jobs.push(jobToSave);
     }
   });
 }

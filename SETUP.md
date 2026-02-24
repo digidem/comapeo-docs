@@ -134,7 +134,7 @@ docker run -p 3001:3001 \
 
 ### Production VPS
 
-The API server runs on `137.184.153.36:3001`.
+The production API server URL is configured per deployment. Contact the administrator or check deployment configuration for the production endpoint.
 
 ---
 

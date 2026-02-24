@@ -129,8 +129,8 @@ describe("Module Extraction - extractKeyFromHeader (auth module)", () => {
   let auth: ApiKeyAuth;
 
   beforeEach(() => {
-    ApiKeyAuth["instance"] = undefined;
-    auth = new ApiKeyAuth();
+    ApiKeyAuth.resetInstance();
+    auth = ApiKeyAuth.getInstance();
   });
 
   const extractKeyFromHeader = (header: string): string | null => {

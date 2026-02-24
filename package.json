@@ -28,7 +28,7 @@
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
     "api:server": "bun api-server",
-    "api:server:dev": "bun api-server",
+    "api:server:dev": "bun --watch api-server",
     "clean:generated": "bun scripts/cleanup-generated-content.ts",
     "scaffold:test": "bun run scripts/test-scaffold/index.ts",
     "scaffold:test:all": "bun run scripts/test-scaffold/index.ts --all",

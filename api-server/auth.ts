@@ -51,10 +51,10 @@ export interface AuthResult {
  * Keys are loaded from environment variables in format: API_KEY_<name>
  */
 export class ApiKeyAuth {
-  private static instance: ApiKeyAuth;
+  private static instance: ApiKeyAuth | undefined;
   private apiKeys: Map<string, ApiKeyRecord> = new Map();
 
-  public constructor() {
+  private constructor() {
     this.loadKeysFromEnv();
   }
 
@@ -66,6 +66,14 @@ export class ApiKeyAuth {
       ApiKeyAuth.instance = new ApiKeyAuth();
     }
     return ApiKeyAuth.instance;
+  }
+
+  /**
+   * Reset the singleton instance and clear all keys.
+   * Intended for use in tests only.
+   */
+  static resetInstance(): void {
+    ApiKeyAuth.instance = undefined;
   }
 
   /**

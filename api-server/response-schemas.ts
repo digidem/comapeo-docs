@@ -38,6 +38,9 @@ export enum ErrorCode {
   // Rate limiting (4xx)
   RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED",
 
+  // Payload errors (4xx)
+  PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE",
+
   // Server errors (5xx)
   INTERNAL_ERROR = "INTERNAL_ERROR",
   SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
@@ -273,6 +276,7 @@ export function getErrorCodeForStatus(status: number): ErrorCode {
     403: ErrorCode.FORBIDDEN,
     404: ErrorCode.NOT_FOUND,
     409: ErrorCode.CONFLICT,
+    413: ErrorCode.PAYLOAD_TOO_LARGE,
     429: ErrorCode.RATE_LIMIT_EXCEEDED,
     500: ErrorCode.INTERNAL_ERROR,
     503: ErrorCode.SERVICE_UNAVAILABLE,

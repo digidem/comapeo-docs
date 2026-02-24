@@ -62,8 +62,8 @@ describe("GitHub Actions Secret Handling", () => {
   describe("API key auth compatibility", () => {
     it("accepts GitHub Actions bearer token style keys", () => {
       // Reset singleton for isolated test behavior.
-      ApiKeyAuth["instance"] = undefined;
-      const auth = new ApiKeyAuth();
+      ApiKeyAuth.resetInstance();
+      const auth = ApiKeyAuth.getInstance();
 
       const token = "gha_" + "a".repeat(32);
       auth.addKey("GITHUB_ACTIONS", token, {

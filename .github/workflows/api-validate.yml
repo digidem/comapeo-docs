@@ -3,11 +3,18 @@ name: API Validate
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - "feat/**"
     paths:
       - ".github/workflows/api-validate.yml"
+      - "api-server/**"
+      - "package.json"
   pull_request:
     paths:
       - ".github/workflows/api-validate.yml"
+      - "api-server/**"
+      - "package.json"
 
 jobs:
   api-validate:

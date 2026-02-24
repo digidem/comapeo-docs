@@ -11,7 +11,7 @@ import {
   createErrorResponse,
   type ErrorResponse,
 } from "./response-schemas";
-import { isPublicEndpoint } from "./validation";
+import { isPublicEndpoint, MAX_REQUEST_SIZE } from "./validation";
 import { routeRequest } from "./router";
 
 /**
@@ -28,6 +28,29 @@ export async function handleRequest(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // Reject oversized requests early using the Content-Length header.
+    // Only reject when the header is present; chunked requests (no header) pass through.
+    const contentLength = req.headers.get("content-length");
+    if (
+      contentLength !== null &&
+      parseInt(contentLength, 10) > MAX_REQUEST_SIZE
+    ) {
+      const error: ErrorResponse = createErrorResponse(
+        ErrorCode.PAYLOAD_TOO_LARGE,
+        "Request body exceeds 1MB limit",
+        413,
+        requestId
+      );
+      return new Response(JSON.stringify(error, null, 2), {
+        status: 413,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders(requestOrigin),
+          "X-Request-ID": requestId,
+        },
+      });
+    }
 
     // Check if endpoint is public or CORS preflight (OPTIONS)
     // CORS preflight requests must skip auth since browsers don't send credentials

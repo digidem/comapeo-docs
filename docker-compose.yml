@@ -75,6 +75,11 @@ services:
       # Example: API_KEY_DEPLOYMENT=your-secret-key-min-16-chars
       API_KEY_GITHUB_ACTIONS: ${API_KEY_GITHUB_ACTIONS}
 
+      # CORS Origin Allowlist (optional, comma-separated)
+      # Leave unset to allow all origins; set to restrict cross-origin access
+      # Example: ALLOWED_ORIGINS=https://your-app.com,https://admin.your-app.com
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+
     # Volume mounts for persistent data
     volumes:
       # Mount job persistence directory

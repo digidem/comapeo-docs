@@ -16,9 +16,9 @@ describe("ApiKeyAuth", () => {
   let auth: ApiKeyAuth;
 
   beforeEach(() => {
-    // Clear any existing instance and create fresh one for each test
-    ApiKeyAuth["instance"] = undefined;
-    auth = new ApiKeyAuth();
+    // Reset the singleton and obtain a fresh instance for each test
+    ApiKeyAuth.resetInstance();
+    auth = ApiKeyAuth.getInstance();
     // Ensure no keys are loaded from environment for consistent testing
     auth.clearKeys();
   });
@@ -243,7 +243,8 @@ describe("ApiKeyAuth", () => {
 
   describe("Hash collision resistance", () => {
     it("should produce different hashes for different keys", () => {
-      const auth = new ApiKeyAuth();
+      ApiKeyAuth.resetInstance();
+      const auth = ApiKeyAuth.getInstance();
       const keys = [
         "test-key-aaaa-1234567890",
         "test-key-bbbb-1234567890",
@@ -272,7 +273,8 @@ describe("ApiKeyAuth", () => {
     });
 
     it("should not authenticate with a key that has the same hash length but different content", () => {
-      const auth = new ApiKeyAuth();
+      ApiKeyAuth.resetInstance();
+      const auth = ApiKeyAuth.getInstance();
       auth.addKey("real", "real-api-key-1234567890ab", {
         name: "real",
         active: true,

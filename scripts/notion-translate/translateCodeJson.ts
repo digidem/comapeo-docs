@@ -7,7 +7,7 @@ import chalk from "chalk";
 import { DEFAULT_OPENAI_MODEL, getModelParams } from "../constants.js";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize OpenAI client - only set baseURL if explicitly configured
 const openai = new OpenAI({

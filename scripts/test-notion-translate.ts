@@ -1,3 +1,7 @@
+// WARNING: This script modifies live Notion data (page status updates and translation runs).
+// Always use --dry-run to preview what would happen before executing for real.
+// Example safe invocation: bun scripts/test-notion-translate.ts --dry-run
+
 import { enhancedNotion, notion, getActiveDataSourceId } from "./notionClient";
 import {
   main as runTranslation,
@@ -8,6 +12,16 @@ import { NOTION_PROPERTIES, MAIN_LANGUAGE, NotionPage } from "./constants";
 import assert from "node:assert";
 
 async function main() {
+  const isDryRun = process.argv.includes("--dry-run");
+
+  if (isDryRun) {
+    console.log("[DRY RUN] No Notion data will be modified.");
+  } else {
+    console.log(
+      "Live mode: Notion page status and translation pipeline will be executed."
+    );
+  }
+
   console.log("Setting up test page...");
   // Use a hardcoded existing english test page ID for fast testing if possible
   // Let's use notion API to fetch an English page with title "[TEST] Installation Guide"
@@ -37,21 +51,30 @@ async function main() {
 
   console.log(`Test page found: ${englishPage.id}`);
 
-  console.log("Setting workflow status to 'Ready for translation'...");
-  await notion.pages.update({
-    page_id: englishPage.id,
-    properties: {
-      [NOTION_PROPERTIES.STATUS]: {
-        select: { name: NOTION_PROPERTIES.READY_FOR_TRANSLATION },
+  if (!isDryRun) {
+    console.log("Setting workflow status to 'Ready for translation'...");
+    await notion.pages.update({
+      page_id: englishPage.id,
+      properties: {
+        [NOTION_PROPERTIES.STATUS]: {
+          select: { name: NOTION_PROPERTIES.READY_FOR_TRANSLATION },
+        },
       },
-    },
-  });
+    });
 
-  console.log("Running translation...");
-  await runTranslation({ pageId: englishPage.id });
-  console.log("Translation finished");
+    console.log("Running translation...");
+    await runTranslation({ pageId: englishPage.id });
+    console.log("Translation finished");
+  } else {
+    console.log(
+      `[DRY RUN] Would set page ${englishPage.id} status to '${NOTION_PROPERTIES.READY_FOR_TRANSLATION}'.`
+    );
+    console.log(
+      `[DRY RUN] Would call runTranslation({ pageId: "${englishPage.id}" }).`
+    );
+  }
 
-  // Verification
+  // Verification (read-only — runs in both live and dry-run mode)
   console.log("Verifying...");
 
   const ptPage = await findTranslationPage(englishPage, "pt-BR");
@@ -99,7 +122,9 @@ async function main() {
     let count = 0;
     blocks.results.forEach((b) => {
       const type = b.type;
+      // eslint-disable-next-line security/detect-object-injection
       if (b[type] && b[type].rich_text) {
+        // eslint-disable-next-line security/detect-object-injection
         b[type].rich_text.forEach((rt) => {
           if (
             rt.annotations.bold ||

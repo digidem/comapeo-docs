@@ -63,6 +63,7 @@ vi.mock("../notionClient", () => ({
   DATA_SOURCE_ID: "test-data-source-id",
   n2m: mockN2m,
   enhancedNotion: {
+    dataSourcesQuery: mockNotionDataSourcesQuery,
     blocksChildrenList: mockBlocksChildrenList,
     pagesRetrieve: mockPagesRetrieve,
   },

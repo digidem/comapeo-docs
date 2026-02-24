@@ -12,7 +12,7 @@ import {
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 // Initialize OpenAI client - only set baseURL if explicitly configured
 const openai = new OpenAI({
@@ -26,13 +26,18 @@ const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 
+const STRICT_JSON_SCHEMA_MODELS = [
+  // eslint-disable-next-line security/detect-unsafe-regex
+  /^gpt-4o(-\w+)?$/, // gpt-4o, gpt-4o-mini
+  // eslint-disable-next-line security/detect-unsafe-regex
+  /^gpt-4(-\w+)?$/, // gpt-4, gpt-4-turbo
+  // eslint-disable-next-line security/detect-unsafe-regex
+  /^gpt-5(-[\w.]+)?$/, // gpt-5, gpt-5-nano, gpt-5-mini
+];
+
 function supportsStrictJsonSchema(modelName: string): boolean {
   const normalized = modelName.toLowerCase();
-  return (
-    normalized.startsWith("gpt-") ||
-    normalized.startsWith("o1-") ||
-    normalized.startsWith("o3-")
-  );
+  return STRICT_JSON_SCHEMA_MODELS.some((pattern) => pattern.test(normalized));
 }
 
 // Translation prompt template
@@ -301,7 +306,7 @@ export async function translateText(
   const modelParams = getModelParams(model, { useReasoningNone: true });
 
   // Determine response format based on model
-  // OpenAI models (gpt-4, gpt-5, o1, o3) support strict JSON schema
+  // OpenAI models (gpt-4, gpt-4o, gpt-5) support strict JSON schema
   const isStrictSchemaSupported = supportsStrictJsonSchema(model);
 
   const responseFormat = isStrictSchemaSupported

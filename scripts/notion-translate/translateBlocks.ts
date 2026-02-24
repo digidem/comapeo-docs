@@ -87,41 +87,39 @@ async function translateRichTextArray(
   targetLanguage: string
 ): Promise<void> {
   if (!Array.isArray(richTextArr)) return;
-  // Concurrently translate rich text segments to avoid timeouts
-  await Promise.all(
-    richTextArr.map(async (rt) => {
-      if (rt.text && rt.text.content) {
-        const res = await translateText(rt.text.content, "", targetLanguage);
-        let translated = res.markdown.trim();
-        if (translated.startsWith("markdown:")) {
-          translated = translated.replace("markdown:", "").trim();
-        }
-        if (translated.startsWith("title:")) {
-          translated = translated.split("\n").slice(1).join("\n").trim();
-        }
-        rt.text.content = translated;
-        rt.plain_text = translated;
+  // Translate rich text segments sequentially to avoid OpenAI rate limits
+  for (const rt of richTextArr) {
+    if (rt.text && rt.text.content) {
+      const res = await translateText(rt.text.content, "", targetLanguage);
+      let translated = res.markdown.trim();
+      if (translated.startsWith("markdown:")) {
+        translated = translated.replace("markdown:", "").trim();
       }
+      if (translated.startsWith("title:")) {
+        translated = translated.split("\n").slice(1).join("\n").trim();
+      }
+      rt.text.content = translated;
+      rt.plain_text = translated;
+    }
 
-      // Sanitize rich_text link URLs
-      if (rt.text && rt.text.link && rt.text.link.url) {
-        const sanitized = sanitizeUrl(rt.text.link.url);
-        if (sanitized) {
-          rt.text.link.url = sanitized;
-        } else {
-          rt.text.link = null;
-        }
+    // Sanitize rich_text link URLs
+    if (rt.text && rt.text.link && rt.text.link.url) {
+      const sanitized = sanitizeUrl(rt.text.link.url);
+      if (sanitized) {
+        rt.text.link.url = sanitized;
+      } else {
+        rt.text.link = null;
       }
-      if (rt.href) {
-        const sanitized = sanitizeUrl(rt.href);
-        if (sanitized) {
-          rt.href = sanitized;
-        } else {
-          rt.href = null;
-        }
+    }
+    if (rt.href) {
+      const sanitized = sanitizeUrl(rt.href);
+      if (sanitized) {
+        rt.href = sanitized;
+      } else {
+        rt.href = null;
       }
-    })
-  );
+    }
+  }
 }
 
 async function translateBlocksTree(
@@ -316,6 +314,7 @@ async function translateBlocksTree(
   }
   return result;
 }
+
 export async function createNotionPageWithBlocks(
   notion: Client,
   parentPageId: string,
@@ -357,7 +356,7 @@ export async function createNotionPageWithBlocks(
             }
           : { property: NOTION_PROPERTIES.TITLE, title: { equals: title } };
 
-        const response = await notion.dataSources.query({
+        const response = await enhancedNotion.dataSourcesQuery({
           data_source_id: databaseId,
           filter: filter,
         });

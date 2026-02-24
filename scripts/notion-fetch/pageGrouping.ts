@@ -345,3 +345,25 @@ export const getMissingTranslations = (
   const result = ensureTranslationSiblings(pages, page);
   return result.missingLocales;
 };
+
+/**
+ * Get the English title from a grouped page structure.
+ * Returns undefined if no English version exists.
+ *
+ * @param pageByLang - Grouped page structure with content by locale
+ * @returns English title to use as translation key, or undefined if no English page
+ */
+export const getEnglishTitle = (pageByLang: {
+  mainTitle: string;
+  content: Record<string, any>;
+}): string | undefined => {
+  const englishPage = pageByLang.content[DEFAULT_LOCALE];
+  if (!englishPage) {
+    return undefined;
+  }
+  const englishTitle = resolvePageTitle(englishPage);
+  if (!englishTitle || englishTitle.startsWith(`${FALLBACK_TITLE_PREFIX}-`)) {
+    return undefined;
+  }
+  return englishTitle;
+};

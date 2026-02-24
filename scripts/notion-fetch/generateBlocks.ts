@@ -24,6 +24,7 @@ import {
   groupPagesByLang,
   createStandalonePageGroup,
   getOrderedLocales,
+  getEnglishTitle,
 } from "./pageGrouping";
 import { LRUCache, validateCacheSize } from "./cacheStrategies";
 import { getImageCache, logImageFailure } from "./imageProcessing";
@@ -122,7 +123,6 @@ const resolveSectionFolderForLocale = (
   sectionFolders: Record<string, string>,
   locale: string
 ): string | undefined => {
-  // eslint-disable-next-line security/detect-object-injection -- locale keys are controlled by configured locales and DEFAULT_LOCALE fallback
   return sectionFolders[locale] ?? sectionFolders[DEFAULT_LOCALE];
 };
 
@@ -219,9 +219,8 @@ export function findExistingSidebarPosition(
     }
   };
 
-  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
   const cachedPage = metadataCache.pages?.[pageId];
-  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
+
   const existingCachedPage = existingCache?.pages?.[pageId];
   const existingOutputPaths = existingCachedPage?.outputPaths;
   const cachedOutputPaths = cachedPage?.outputPaths;
@@ -461,7 +460,7 @@ async function processSinglePage(
       );
 
       const sectionFolderForWrite: Record<string, string | undefined> = {};
-      // eslint-disable-next-line security/detect-object-injection -- lang is constrained to locale values from grouped content
+
       sectionFolderForWrite[lang] = currentSectionFolderForLang;
 
       const finalDiagnostics = getImageDiagnostics(markdownString.parent ?? "");
@@ -760,7 +759,6 @@ export async function generateBlocks(
     // Phase 1: Process Toggle/Heading sequentially (they modify shared state)
     // and collect Page tasks with their captured context
     for (let i = 0; i < pagesByLang.length; i++) {
-      // eslint-disable-next-line security/detect-object-injection -- i iterates array bounds of pagesByLang
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
       const title = pageByLang.mainTitle;
@@ -778,7 +776,7 @@ export async function generateBlocks(
       const orderedLocales = getOrderedLocales(Object.keys(pageByLang.content));
       for (const lang of orderedLocales) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
-        // eslint-disable-next-line security/detect-object-injection -- lang is from ordered locale keys of pageByLang.content
+
         const page = pageByLang.content[lang];
         const pageTitle = resolvePageTitle(page);
         const safeFallbackId = (page?.id ?? String(i + 1)).slice(0, 8);
@@ -798,8 +796,12 @@ export async function generateBlocks(
           : fileName;
 
         // Set translation string for non-English pages
+        // Use English title as key for consistency across locales
         if (lang !== "en") {
-          setTranslationString(lang, pageByLang.mainTitle, pageTitle);
+          const englishTitle = getEnglishTitle(pageByLang);
+          if (englishTitle) {
+            setTranslationString(lang, englishTitle, pageTitle);
+          }
         }
 
         // TOGGLE - process sequentially (modifies currentSectionFolder)
@@ -820,7 +822,7 @@ export async function generateBlocks(
               currentHeading,
               pageSpinner
             );
-            // eslint-disable-next-line security/detect-object-injection -- lang is constrained locale key during sequential toggle processing
+
             currentSectionFolder[lang] = sectionFolder;
             sectionCount++;
             processedPages++;
@@ -1091,7 +1093,7 @@ export async function generateBlocks(
             } else {
               failedCount++;
               // Include page title for better error context
-              // eslint-disable-next-line security/detect-object-injection -- index is produced by iterating settled promise results
+
               const failedTask = pageTasks[index];
               console.error(
                 chalk.red(

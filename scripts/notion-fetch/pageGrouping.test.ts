@@ -10,6 +10,7 @@ import {
   getTranslationLocales,
   hasTranslation,
   getMissingTranslations,
+  getEnglishTitle,
   type TranslationSiblingsResult,
 } from "./pageGrouping";
 import { NOTION_PROPERTIES } from "../constants";
@@ -1011,6 +1012,90 @@ describe("pageGrouping", () => {
       const missing = getMissingTranslations(pages, englishPage);
 
       expect(missing).not.toContain("en");
+    });
+  });
+
+  describe("getEnglishTitle", () => {
+    const createMockPage = (
+      id: string,
+      title: string,
+      language: string
+    ): Record<string, any> => ({
+      id,
+      properties: {
+        [NOTION_PROPERTIES.TITLE]: {
+          title: [{ plain_text: title }],
+        },
+        [NOTION_PROPERTIES.LANGUAGE]: {
+          select: { name: language },
+        },
+        [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+          select: { name: "Page" },
+        },
+      },
+    });
+
+    it("should return English title when English page exists", () => {
+      const pageByLang = {
+        mainTitle: "Introducción",
+        content: {
+          en: createMockPage("en-1", "Introduction", "English"),
+          es: createMockPage("es-1", "Introducción", "Spanish"),
+          pt: createMockPage("pt-1", "Introdução", "Portuguese"),
+        },
+      };
+      expect(getEnglishTitle(pageByLang)).toBe("Introduction");
+    });
+
+    it("should return undefined when no English page exists", () => {
+      const pageByLang = {
+        mainTitle: "Página Española",
+        content: {
+          es: createMockPage("es-1", "Página Española", "Spanish"),
+        },
+      };
+      expect(getEnglishTitle(pageByLang)).toBeUndefined();
+    });
+
+    it("should return undefined for empty content", () => {
+      const pageByLang = {
+        mainTitle: "Fallback Title",
+        content: {},
+      };
+      expect(getEnglishTitle(pageByLang)).toBeUndefined();
+    });
+
+    it("should return undefined for untitled English pages", () => {
+      const pageByLang = {
+        mainTitle: "Some Title",
+        content: {
+          en: {
+            id: "en-1",
+            properties: {},
+          },
+        },
+      };
+      expect(getEnglishTitle(pageByLang)).toBeUndefined();
+    });
+
+    it("should return undefined for fallback title format", () => {
+      const pageByLang = {
+        mainTitle: "Some Title",
+        content: {
+          en: createMockPage("abc12345", "untitled-abc12345", "English"),
+        },
+      };
+      expect(getEnglishTitle(pageByLang)).toBeUndefined();
+    });
+
+    it("should use English title even when mainTitle is different", () => {
+      const pageByLang = {
+        mainTitle: "Different Title",
+        content: {
+          en: createMockPage("en-1", "Real English Title", "English"),
+        },
+      };
+      expect(getEnglishTitle(pageByLang)).toBe("Real English Title");
     });
   });
 });

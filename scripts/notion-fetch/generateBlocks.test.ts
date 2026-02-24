@@ -331,6 +331,50 @@ describe("generateBlocks", () => {
       // Should have writes for pt and es locales
       expect(translationWrites.length).toBeGreaterThanOrEqual(2);
     });
+
+    it("should use English title as translation key for non-English pages", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const mainPage = createMockNotionPage({
+        id: "main-1",
+        title: "Main Page",
+        subItems: ["en-1", "es-1", "pt-1"],
+      });
+      const englishPage = createMockNotionPage({
+        id: "en-1",
+        title: "Introduction",
+        language: "English",
+      });
+      const spanishPage = createMockNotionPage({
+        id: "es-1",
+        title: "Introducción",
+        language: "Spanish",
+      });
+      const portuguesePage = createMockNotionPage({
+        id: "pt-1",
+        title: "Introdução",
+        language: "Portuguese",
+      });
+
+      const pages = [mainPage, englishPage, spanishPage, portuguesePage];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await generateBlocks(pages, progressCallback);
+
+      const esWriteCall = mockWriteFileSync.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" && call[0].includes("es/code.json")
+      );
+      const esCodeJson = JSON.parse(esWriteCall[1] as string);
+
+      // Key should be English "Introduction", not Spanish "Introducción"
+      expect(esCodeJson).toHaveProperty("Introduction");
+      expect(esCodeJson.Introduction.message).toBe("Introducción");
+    });
   });
 
   describe("Title fallbacks", () => {

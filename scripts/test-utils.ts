@@ -165,15 +165,20 @@ export function createMockPageFamily(
     const type = elementType || "Page";
     const mainId = "main-" + Math.random().toString(36).substr(2, 9);
 
+    const enId = "en-" + Math.random().toString(36).substr(2, 9);
+    const ptId = "pt-" + Math.random().toString(36).substr(2, 9);
+    const esId = "es-" + Math.random().toString(36).substr(2, 9);
+
     const mainPage = createMockNotionPage({
       id: mainId,
       title,
       elementType: type,
       status: "Ready to publish",
+      subItems: [enId, ptId, esId],
     });
 
     const enPage = createMockNotionPage({
-      id: "en-" + Math.random().toString(36).substr(2, 9),
+      id: enId,
       title,
       elementType: type,
       language: "English",
@@ -181,7 +186,7 @@ export function createMockPageFamily(
     });
 
     const ptPage = createMockNotionPage({
-      id: "pt-" + Math.random().toString(36).substr(2, 9),
+      id: ptId,
       title,
       elementType: type,
       language: "Portuguese",
@@ -189,7 +194,7 @@ export function createMockPageFamily(
     });
 
     const esPage = createMockNotionPage({
-      id: "es-" + Math.random().toString(36).substr(2, 9),
+      id: esId,
       title,
       elementType: type,
       language: "Spanish",

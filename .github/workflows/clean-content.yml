@@ -73,8 +73,8 @@ jobs:
           # Stage all changes from the cleanup
           git add .
 
-          # Commit if there are changes
-          git diff --cached --quiet || git commit -m "(content-cleanup): remove all generated content from Notion"
+          # Commit if there are changes (skip pre-commit hooks in CI)
+          git diff --cached --quiet || git commit --no-verify -m "(content-cleanup): remove all generated content from Notion"
 
           # Push to content branch
           git push origin content

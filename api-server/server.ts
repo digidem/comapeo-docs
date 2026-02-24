@@ -67,8 +67,9 @@ if (!isTestMode) {
         .join(", ")}`
     );
   } else {
-    console.log(
-      "\n⚠️  Authentication is disabled. Set API_KEY_* environment variables to enable."
+    process.stderr.write(
+      "\n⚠️  WARNING: Authentication is disabled. Set API_KEY_* environment variables to enable.\n" +
+        "   All API endpoints are publicly accessible without credentials.\n"
     );
   }
 

@@ -99,6 +99,10 @@ export async function handleRequest(req: Request): Promise<Response> {
     // Add request ID header to response
     const newHeaders = new Headers(response.headers);
     newHeaders.set("X-Request-ID", requestId);
+    // Warn clients when auth is disabled so misconfiguration is visible
+    if (!isPublic && authResult.meta?.name === "default") {
+      newHeaders.set("X-Auth-Disabled", "true");
+    }
     return new Response(response.body, {
       status: response.status,
       headers: newHeaders,

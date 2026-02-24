@@ -67,8 +67,11 @@ services:
       ENABLE_RETRY_IMAGE_PROCESSING: ${ENABLE_RETRY_IMAGE_PROCESSING:-true}
       MAX_IMAGE_RETRIES: ${MAX_IMAGE_RETRIES:-3}
 
-      # API Authentication (optional - server runs without auth if not set)
-      # Format: API_KEY_<name>=value
+      # API Authentication
+      # ⚠️  WARNING: When no API_KEY_* variables are set, the API is FULLY OPEN
+      # and accepts ALL requests without authentication. Always configure at
+      # least one key for any non-local deployment.
+      # Format: API_KEY_<name>=value (minimum 16 characters)
       # Example: API_KEY_DEPLOYMENT=your-secret-key-min-16-chars
       API_KEY_GITHUB_ACTIONS: ${API_KEY_GITHUB_ACTIONS}
 

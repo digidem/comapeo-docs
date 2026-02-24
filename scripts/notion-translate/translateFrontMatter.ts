@@ -27,7 +27,12 @@ const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 
 function supportsStrictJsonSchema(modelName: string): boolean {
-  return modelName.toLowerCase().startsWith("gpt-");
+  const normalized = modelName.toLowerCase();
+  return (
+    normalized.startsWith("gpt-") ||
+    normalized.startsWith("o1-") ||
+    normalized.startsWith("o3-")
+  );
 }
 
 // Translation prompt template
@@ -262,7 +267,7 @@ export async function translateMarkdownFile(
   } catch (error) {
     spinner.fail(
       chalk.red(
-        `Failed to translate ${path.basename(filePath)}: ${error.message}`
+        `Failed to translate ${path.basename(filePath)}: ${getErrorMessage(error)}`
       )
     );
     throw error;
@@ -379,7 +384,9 @@ export async function translateString(
     spinner.succeed(chalk.green(`Text translated to ${targetLanguage}`));
     return translatedText.markdown;
   } catch (error) {
-    spinner.fail(chalk.red(`Failed to translate text: ${error.message}`));
+    spinner.fail(
+      chalk.red(`Failed to translate text: ${getErrorMessage(error)}`)
+    );
     throw error;
   }
 }

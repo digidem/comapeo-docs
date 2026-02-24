@@ -8,7 +8,7 @@ import type {
   PartialBlockObjectResponse,
   BlockObjectRequest,
 } from "@notionhq/client/build/src/api-endpoints";
-import { NOTION_PROPERTIES, INVALID_URL_PLACEHOLDER } from "../constants.js";
+import { NOTION_PROPERTIES } from "../constants.js";
 import { extractImageMatches } from "../notion-fetch/imageReplacer.js";
 import chalk from "chalk";
 
@@ -50,8 +50,8 @@ async function fetchAllBlocks(blockId: string): Promise<FetchedBlock[]> {
 }
 
 /**
- * @param orderedImagePaths - Array of image paths to consume in order.
- *                           NOTE: This array is mutated (shift() called) during processing.
+ * @param orderedImagePaths - Array of image paths to consume in order (read-only).
+ *                           A shallow copy is made internally; the caller's array is never mutated.
  */
 export async function translateNotionBlocksDirectly(
   pageId: string,
@@ -246,30 +246,12 @@ async function translateBlocksTree(
           typeObj.url = sanitized;
         } else {
           const originalUrl = typeObj.url;
-          const urlRequiredBlocks = [
-            "bookmark",
-            "embed",
-            "video",
-            "file",
-            "pdf",
-            "link_preview",
-          ];
-
-          if (urlRequiredBlocks.includes(blockType)) {
-            console.warn(
-              chalk.yellow(
-                `⚠️  Skipping ${blockType} block with invalid URL: ${originalUrl}`
-              )
-            );
-            continue;
-          }
-
           console.warn(
             chalk.yellow(
-              `Warning: Invalid URL in ${blockType} block replaced with placeholder: ${originalUrl}`
+              `⚠️  Skipping ${blockType} block with invalid URL: ${originalUrl}`
             )
           );
-          typeObj.url = INVALID_URL_PLACEHOLDER;
+          continue;
         }
       }
 
@@ -289,9 +271,7 @@ async function translateBlocksTree(
                   );
                   break;
                 }
-                if (state.orderedImagePaths.length > 0) {
-                  state.orderedImagePaths.shift();
-                }
+                state.orderedImagePaths.shift();
               }
               const consumed = remainingBefore - state.orderedImagePaths.length;
               if (consumed > 0) {

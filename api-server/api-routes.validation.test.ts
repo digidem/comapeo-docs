@@ -384,12 +384,17 @@ describe("API Routes - Endpoint Coverage", () => {
     },
     { method: "GET", path: "/jobs", description: "List all jobs" },
     { method: "POST", path: "/jobs", description: "Create a new job" },
+    {
+      method: "POST",
+      path: "/notion-trigger",
+      description: "Trigger fetch-ready job with x-api-key",
+    },
     { method: "GET", path: "/jobs/:id", description: "Get job status" },
     { method: "DELETE", path: "/jobs/:id", description: "Cancel a job" },
   ];
 
   it("should have all required endpoints defined", () => {
-    expect(requiredEndpoints).toHaveLength(7);
+    expect(requiredEndpoints).toHaveLength(8);
 
     // Verify each endpoint has the required properties
     for (const endpoint of requiredEndpoints) {
@@ -408,7 +413,7 @@ describe("API Routes - Endpoint Coverage", () => {
     );
 
     expect(getEndpoints.length).toBeGreaterThanOrEqual(4);
-    expect(postEndpoints.length).toBeGreaterThanOrEqual(1);
+    expect(postEndpoints.length).toBeGreaterThanOrEqual(2);
     expect(deleteEndpoints.length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -432,18 +437,23 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
     { method: "GET", path: "/jobs/types", purpose: "Job type discovery" },
     { method: "GET", path: "/jobs", purpose: "List all jobs with filtering" },
     { method: "POST", path: "/jobs", purpose: "Create new job" },
+    {
+      method: "POST",
+      path: "/notion-trigger",
+      purpose: "Internal Notion button trigger via x-api-key",
+    },
     { method: "GET", path: "/jobs/:id", purpose: "Get specific job status" },
     { method: "DELETE", path: "/jobs/:id", purpose: "Cancel job" },
   ];
 
-  it("should have exactly 7 endpoints (minimality check)", () => {
+  it("should have exactly 8 endpoints (minimality check)", () => {
     // Each endpoint must serve a unique purpose
-    expect(actualEndpoints).toHaveLength(7);
+    expect(actualEndpoints).toHaveLength(8);
 
     // Verify unique endpoint identifiers (method + path)
     const endpointIds = actualEndpoints.map((e) => `${e.method}:${e.path}`);
     const uniqueIds = new Set(endpointIds);
-    expect(uniqueIds.size).toBe(7); // All endpoints are unique
+    expect(uniqueIds.size).toBe(8); // All endpoints are unique
 
     // Note: /jobs/:id appears twice (GET and DELETE) which is correct REST design
   });
@@ -475,6 +485,7 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
       "healthCheck",
       "typeDiscovery",
       "jobCreation",
+      "notionTrigger",
       "jobListing",
       "jobStatusQuery",
       "jobCancellation",
@@ -485,6 +496,9 @@ describe("API Routes - Endpoint Minimality and Sufficiency", () => {
     expect(endpointPurposes).toContain("Health monitoring");
     expect(endpointPurposes).toContain("Job type discovery");
     expect(endpointPurposes).toContain("Create new job");
+    expect(endpointPurposes).toContain(
+      "Internal Notion button trigger via x-api-key"
+    );
     expect(endpointPurposes).toContain("List all jobs with filtering");
     expect(endpointPurposes).toContain("Get specific job status");
     expect(endpointPurposes).toContain("Cancel job");

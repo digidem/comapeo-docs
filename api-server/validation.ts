@@ -30,7 +30,12 @@ export function isValidJobId(jobId: string): boolean {
 }
 
 // Public endpoints that don't require authentication
-export const PUBLIC_ENDPOINTS = ["/health", "/jobs/types", "/docs"];
+export const PUBLIC_ENDPOINTS = [
+  "/health",
+  "/jobs/types",
+  "/docs",
+  "/notion-trigger",
+];
 
 export function isPublicEndpoint(path: string): boolean {
   return PUBLIC_ENDPOINTS.some((endpoint) => path === endpoint);

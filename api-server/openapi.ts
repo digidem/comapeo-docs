@@ -61,6 +61,15 @@ const bearerAuth = registry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",
   scheme: "bearer",
 });
+const notionTriggerApiKey = registry.registerComponent(
+  "securitySchemes",
+  "notionTriggerApiKey",
+  {
+    type: "apiKey",
+    in: "header",
+    name: "x-api-key",
+  }
+);
 
 registry.registerPath({
   method: "get",
@@ -118,6 +127,48 @@ registry.registerPath({
     },
   },
   security: [{ [bearerAuth.name]: [] }],
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/notion-trigger",
+  summary: "Trigger fetch-ready job from Notion",
+  description:
+    "Creates a fetch-ready job using x-api-key authentication for Notion webhook/button integrations.",
+  responses: {
+    202: {
+      description: "Job created successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            jobId: z.string(),
+            status: z.literal("pending"),
+          }),
+        },
+      },
+    },
+    403: {
+      description: "Forbidden: invalid x-api-key",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    500: {
+      description: "Server misconfiguration",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  security: [{ [notionTriggerApiKey.name]: [] }],
 });
 
 registry.registerPath({

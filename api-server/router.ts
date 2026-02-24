@@ -10,6 +10,7 @@ import { getCorsHeaders, handleCorsPreflightRequest } from "./middleware/cors";
 import { handleHealth } from "./routes/health";
 import { handleDocs } from "./routes/docs";
 import { handleJobTypes } from "./routes/job-types";
+import { handleNotionTrigger } from "./routes/notion-trigger";
 import {
   handleListJobs,
   handleCreateJob,
@@ -73,6 +74,11 @@ export async function routeRequest(
     return handleCreateJob(req, url, requestOrigin, requestId);
   }
 
+  // Trigger a fetch-ready job from Notion webhook button
+  if (path === "/notion-trigger" && req.method === "POST") {
+    return handleNotionTrigger(req, url, requestOrigin, requestId);
+  }
+
   // 404 for unknown routes
   const error: ErrorResponse = createErrorResponse(
     ErrorCode.ENDPOINT_NOT_FOUND,
@@ -98,6 +104,11 @@ export async function routeRequest(
           description: "List all jobs (optional ?status= and ?type= filters)",
         },
         { method: "POST", path: "/jobs", description: "Create a new job" },
+        {
+          method: "POST",
+          path: "/notion-trigger",
+          description: "Trigger fetch-ready job with x-api-key",
+        },
         { method: "GET", path: "/jobs/:id", description: "Get job status" },
         {
           method: "DELETE",

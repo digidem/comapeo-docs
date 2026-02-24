@@ -37,6 +37,9 @@ openssl rand -base64 32 | tee github_actions_key.txt
 
 # Generate deployment key
 openssl rand -base64 32 | tee deployment_key.txt
+
+# Generate Notion trigger endpoint key (x-api-key for POST /notion-trigger)
+openssl rand -base64 32 | tee notion_trigger_key.txt
 ```
 
 **Save these values** - you'll need them in the next step.
@@ -80,6 +83,9 @@ DEFAULT_DOCS_PAGE=introduction
 # API Authentication (Required)
 API_KEY_GITHUB_ACTIONS=paste_github_actions_key_here
 API_KEY_DEPLOYMENT=paste_deployment_key_here
+
+# Notion trigger endpoint authentication (Required for POST /notion-trigger)
+NOTION_TRIGGER_API_KEY=paste_notion_trigger_key_here
 EOF
 ```
 
@@ -454,6 +460,7 @@ Navigate to your repository on GitHub and add these secrets:
 | ------------------------ | ----------------------------------- | --------------------------------------- |
 | `API_KEY_GITHUB_ACTIONS` | Value from Step 1.2                 | API Validate workflow, API job callers  |
 | `API_ENDPOINT`           | `https://your-api-host.example.com` | Manual VPS smoke commands and operators |
+| `NOTION_TRIGGER_API_KEY` | Value from Step 1.2                 | `POST /notion-trigger` (`x-api-key`)    |
 
 **Note:** `API_ENDPOINT` is used by manual smoke checks and operator calls against the deployed API service. The CI `API Validate` workflow runs the API locally and does not require `API_ENDPOINT`.
 
@@ -748,6 +755,7 @@ Then run a direct smoke test against the deployed API endpoint:
 ```bash
 export API_ENDPOINT="https://your-api-host.example.com"
 export API_KEY_GITHUB_ACTIONS="your-api-key"
+export NOTION_TRIGGER_API_KEY="your-notion-trigger-key"
 
 # fetch-ready dry run
 curl -X POST "${API_ENDPOINT}/jobs" \
@@ -760,6 +768,10 @@ curl -X POST "${API_ENDPOINT}/jobs" \
   -H "Authorization: Bearer ${API_KEY_GITHUB_ACTIONS}" \
   -H "Content-Type: application/json" \
   -d '{"type":"fetch-all","options":{"dryRun":true,"maxPages":1}}'
+
+# trigger fetch-ready from Notion button/webhook path
+curl -X POST "${API_ENDPOINT}/notion-trigger" \
+  -H "x-api-key: ${NOTION_TRIGGER_API_KEY}"
 ```
 
 **Verify**: both requests return `202`, each terminal result includes `dryRun: true` and `commitHash: null`, and no unexpected `UNKNOWN` failures appear.

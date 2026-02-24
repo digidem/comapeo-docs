@@ -87,6 +87,10 @@ describe("Protected Endpoints Authentication Coverage", () => {
       expect(isPublicEndpoint("/jobs/types")).toBe(true);
     });
 
+    it("should identify /notion-trigger as public", () => {
+      expect(isPublicEndpoint("/notion-trigger")).toBe(true);
+    });
+
     it("should not identify /jobs as public", () => {
       expect(isPublicEndpoint("/jobs")).toBe(false);
     });
@@ -119,6 +123,13 @@ describe("Protected Endpoints Authentication Coverage", () => {
       const result = simulateHandleRequestAuth("/jobs/types", null);
       expect(result.isPublic).toBe(true);
       expect(result.isAuthenticated).toBe(true);
+    });
+
+    it("should bypass bearer auth for /notion-trigger route classification", () => {
+      const result = simulateHandleRequestAuth("/notion-trigger", null);
+      expect(result.isPublic).toBe(true);
+      expect(result.isAuthenticated).toBe(true);
+      expect(result.authResult.meta?.name).toBe("public");
     });
   });
 

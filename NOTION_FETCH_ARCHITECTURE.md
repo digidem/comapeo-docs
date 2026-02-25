@@ -4,21 +4,35 @@ This document captures the architecture decisions, bug fixes, and lessons learne
 
 ---
 
+## API-Driven Fetching Mechanism
+
+The GitHub Actions based fetching mechanism has been replaced with a more robust API-driven approach. 
+
+### Job State & Recovery
+- The server now explicitly tracks job status via `job.completedAt` and specific error envelopes.
+- In the event of an API server restart while a job is in-flight, the server will transition the orphaned job to a `SERVER_RESTART_ABORT` state upon reboot. This ensures no jobs are silently hung.
+
+### Concurrency
+- The API server handles concurrency limits natively rather than relying on GitHub Actions `concurrency` groups.
+- Multiple fetch jobs can be queued or aborted safely without overlap corruption.
+
+---
+
 ## Implementation Summary
 
 **Completed:** 9 improvement issues + 9 critical bug fixes
 
 ### Core Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| SpinnerManager | `spinnerManager.ts` | CI-aware spinner management |
-| ProgressTracker | `progressTracker.ts` | Aggregate progress display with ETA |
-| ErrorManager | `errorManager.ts` | Centralized error handling with retry logic |
-| RateLimitManager | `rateLimitManager.ts` | 429 detection and backoff |
-| ResourceManager | `resourceManager.ts` | Adaptive concurrency based on system resources |
-| TelemetryCollector | `telemetryCollector.ts` | Timeout instrumentation with percentiles |
-| ImageCache | `imageProcessing.ts` | Per-entry lazy cache with freshness tracking |
+| Component          | File                    | Purpose                                        |
+| ------------------ | ----------------------- | ---------------------------------------------- |
+| SpinnerManager     | `spinnerManager.ts`     | CI-aware spinner management                    |
+| ProgressTracker    | `progressTracker.ts`    | Aggregate progress display with ETA            |
+| ErrorManager       | `errorManager.ts`       | Centralized error handling with retry logic    |
+| RateLimitManager   | `rateLimitManager.ts`   | 429 detection and backoff                      |
+| ResourceManager    | `resourceManager.ts`    | Adaptive concurrency based on system resources |
+| TelemetryCollector | `telemetryCollector.ts` | Timeout instrumentation with percentiles       |
+| ImageCache         | `imageProcessing.ts`    | Per-entry lazy cache with freshness tracking   |
 
 ### Key Patterns
 
@@ -40,6 +54,7 @@ These bugs were discovered during implementation. Future developers should be aw
 **Problem:** Metrics incremented inside retry loop, counting retries as separate operations.
 
 **Root Cause:**
+
 ```typescript
 while (attempt < maxRetries) {
   processingMetrics.totalProcessed++;  // ❌ Counts retries
@@ -61,6 +76,7 @@ while (attempt < maxRetries) {
 **Problem:** ProgressTracker created for empty arrays never finished, causing 2.5 minute hangs.
 
 **Root Cause:**
+
 ```typescript
 const progressTracker = new ProgressTracker({
   total: validImages.length,  // Could be 0!
@@ -81,6 +97,7 @@ await processBatch(validImages, ...);  // Never calls completeItem
 **Problem:** Shared module-level `processingMetrics` reset by concurrent pages caused nondeterministic telemetry.
 
 **Root Cause:**
+
 ```typescript
 // Module-level shared state
 const processingMetrics = { totalProcessed: 0, ... };
@@ -91,6 +108,7 @@ export async function processAndReplaceImages(...) {
 ```
 
 **Fix:** Factory function for per-call metrics:
+
 ```typescript
 export function createProcessingMetrics(): ImageProcessingMetrics {
   return { totalProcessed: 0, ... };
@@ -114,6 +132,7 @@ export async function processAndReplaceImages(...) {
 **Problem:** `processBatch` counted all fulfilled promises as success, but `processImageWithFallbacks` returns `{ success: false }` instead of rejecting.
 
 **Root Cause:**
+
 ```typescript
 .then((result) => {
   progressTracker.completeItem(true);  // ❌ Always true
@@ -121,10 +140,12 @@ export async function processAndReplaceImages(...) {
 ```
 
 **Fix:** Check `result.success` property if available:
+
 ```typescript
-const isSuccess = typeof result === "object" && result !== null && "success" in result
-  ? result.success === true
-  : true;
+const isSuccess =
+  typeof result === "object" && result !== null && "success" in result
+    ? result.success === true
+    : true;
 progressTracker.completeItem(isSuccess);
 ```
 
@@ -139,6 +160,7 @@ progressTracker.completeItem(isSuccess);
 **Problem:** When timeout fires, `withTimeout` rejects immediately but underlying promise's `.then/.catch` never runs, so `completeItem()` never called.
 
 **Root Cause:**
+
 ```typescript
 const trackedPromise = promise
   .then(() => progressTracker.completeItem(true))
@@ -148,6 +170,7 @@ return withTimeout(trackedPromise, timeoutMs, ...);  // ❌ Timeout bypasses han
 ```
 
 **Fix:** Notify tracker in timeout catch block too:
+
 ```typescript
 return withTimeout(trackedPromise, timeoutMs, ...).catch((error) => {
   if (error instanceof TimeoutError && progressTracker) {
@@ -168,6 +191,7 @@ return withTimeout(trackedPromise, timeoutMs, ...).catch((error) => {
 **Problem:** Timeout calls `completeItem(false)`, then underlying promise settles and calls it again.
 
 **Fix:** Per-item guard flag:
+
 ```typescript
 let hasNotifiedTracker = false;
 
@@ -190,6 +214,7 @@ let hasNotifiedTracker = false;
 **Problem:** Direct access to `page.properties["Tags"]` crashed on malformed pages.
 
 **Fix:** Guard with optional chaining:
+
 ```typescript
 const props = page.properties;
 if (props?.["Tags"]?.multi_select) { ... }
@@ -206,6 +231,7 @@ if (props?.["Tags"]?.multi_select) { ... }
 **Problem:** `pageSpinner.succeed()` called unconditionally, overwriting warn state from `writePlaceholderFile()`.
 
 **Fix:** Only call `succeed()` for real content:
+
 ```typescript
 if (markdownString) {
   // Write real content
@@ -226,6 +252,7 @@ if (markdownString) {
 **Problem:** Callback only guarded in fulfilled case, not rejected/timeout/sync error cases. Callback errors masked real failures.
 
 **Fix:** Wrap ALL invocations in try-catch:
+
 ```typescript
 .catch((error) => {
   try {
@@ -246,6 +273,7 @@ if (markdownString) {
 ### Parallel Processing Strategy
 
 **Two-phase approach:**
+
 1. **Sequential:** Toggle/Heading sections (modify shared state)
 2. **Parallel:** Page sections (independent, max 5 concurrent)
 
@@ -264,6 +292,7 @@ processBatch (max 5 pages)
 ### Cache Design
 
 **Per-entry file cache** instead of monolithic JSON:
+
 - Instant startup (no full load)
 - True lazy loading
 - `notionLastEdited` freshness tracking

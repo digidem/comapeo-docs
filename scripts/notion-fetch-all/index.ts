@@ -239,8 +239,9 @@ async function main() {
       statusFilter: options.statusFilter,
       maxPages: options.maxPages,
       exportFiles: options.exportFiles,
-      fetchSpinnerText:
-        "Fetching ALL pages from Notion (excluding removed items by default)...",
+      fetchSpinnerText: options.statusFilter
+        ? `Fetching database to filter by "${options.statusFilter}" and resolve children...`
+        : "Fetching ALL pages from Notion (excluding removed items by default)...",
       generateSpinnerText: "Exporting pages to markdown files",
       progressLogger,
       generateOptions: {
@@ -531,6 +532,12 @@ async function main() {
       }
     }
 
+    process.stdout.write(
+      JSON.stringify({
+        candidateIds: fetchResult.candidateIds,
+        pagesProcessed: fetchResult.processedCount,
+      }) + "\n"
+    );
     await gracefulShutdown(0);
   } catch (error) {
     if (
@@ -706,7 +713,9 @@ export { main, parseArgs };
 // Run if executed directly
 const __filename = fileURLToPath(import.meta.url);
 const isDirectExec =
-  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+  process.argv[1] &&
+  (path.resolve(process.argv[1]) === path.resolve(__filename) ||
+    path.resolve(process.argv[1]) === path.dirname(path.resolve(__filename)));
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
   (async () => {

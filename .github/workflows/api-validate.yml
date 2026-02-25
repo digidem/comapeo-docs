@@ -1,0 +1,135 @@
+name: API Validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    paths:
+      - ".github/workflows/api-validate.yml"
+      - "api-server/**"
+      - "package.json"
+  pull_request:
+    paths:
+      - ".github/workflows/api-validate.yml"
+      - "api-server/**"
+      - "package.json"
+
+jobs:
+  api-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_HOST: "127.0.0.1"
+      API_PORT: "3001"
+      API_BASE_URL: "http://127.0.0.1:3001"
+      API_KEY_CI: ${{ secrets.API_KEY_GITHUB_ACTIONS || 'ci-fallback-api-key-1234567890abcdef' }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      DATABASE_ID: ${{ secrets.DATABASE_ID }}
+      DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEFAULT_DOCS_PAGE: "overview"
+      CI_FETCH_HOLD_MS: "3000"
+      GITHUB_REPO_URL: "https://github.com/${{ github.repository }}.git"
+      GITHUB_TOKEN: ${{ github.token }}
+      GIT_AUTHOR_NAME: "github-actions[bot]"
+      GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+      WORKDIR: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1"
+
+      - name: Install dependencies
+        run: bun i --frozen-lockfile
+
+      - name: Rebuild sharp for CI environment
+        run: npm rebuild sharp
+
+      - name: Start local API
+        run: |
+          set -euo pipefail
+          bun run api:server > /tmp/api-validate-server.log 2>&1 &
+          echo $! > /tmp/api-validate-server.pid
+
+      - name: Wait for health endpoint
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -sf "${API_BASE_URL}/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API health endpoint did not become ready in time"
+          exit 1
+
+      - name: Run API smoke assertions
+        run: |
+          set -euo pipefail
+          test -n "${API_KEY_CI}"
+
+          # 401 envelope for missing auth on create-job endpoint.
+          HTTP_CODE=$(curl -sS -o /tmp/api-validate-unauthorized.json -w "%{http_code}" \
+            -X POST "${API_BASE_URL}/jobs" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"fetch-ready","options":{"dryRun":true,"maxPages":1}}')
+          test "${HTTP_CODE}" = "401"
+          jq -e '.status == "failed" and .error.code == "UNAUTHORIZED" and (.jobId | not)' /tmp/api-validate-unauthorized.json >/dev/null
+
+          # Sequential 202 (accepted) then immediate 409 (lock held by CI_FETCH_HOLD_MS).
+          HTTP_CODE=$(curl -sS -o /tmp/api-validate-job-1.json -w "%{http_code}" \
+            -X POST "${API_BASE_URL}/jobs" \
+            -H "Authorization: Bearer ${API_KEY_CI}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"fetch-ready","options":{"dryRun":true,"maxPages":1}}')
+          test "${HTTP_CODE}" = "202"
+          JOB_ID=$(jq -r '.jobId' /tmp/api-validate-job-1.json)
+          test -n "${JOB_ID}"
+          test "${JOB_ID}" != "null"
+          jq -e '.status == "pending"' /tmp/api-validate-job-1.json >/dev/null
+
+          HTTP_CODE=$(curl -sS -o /tmp/api-validate-job-2.json -w "%{http_code}" \
+            -X POST "${API_BASE_URL}/jobs" \
+            -H "Authorization: Bearer ${API_KEY_CI}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"fetch-all","options":{"dryRun":true,"maxPages":1}}')
+          test "${HTTP_CODE}" = "409"
+          jq -e '.status == "failed" and .error.code == "CONFLICT" and (.jobId | not)' /tmp/api-validate-job-2.json >/dev/null
+
+          # Poll the accepted fetch-ready job to terminal state.
+          STATUS=""
+          for i in $(seq 1 180); do
+            curl -sS \
+              -H "Authorization: Bearer ${API_KEY_CI}" \
+              "${API_BASE_URL}/jobs/${JOB_ID}" > /tmp/api-validate-job-status.json
+            STATUS=$(jq -r '.status' /tmp/api-validate-job-status.json)
+            if [ "${STATUS}" = "completed" ] || [ "${STATUS}" = "failed" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          test "${STATUS}" = "completed"
+          jq -e '.dryRun == true and .commitHash == null and (.pagesProcessed | type == "number")' /tmp/api-validate-job-status.json >/dev/null
+
+      - name: Cleanup local API
+        if: always()
+        run: |
+          set +e
+          if [ -f /tmp/api-validate-server.pid ]; then
+            PID="$(cat /tmp/api-validate-server.pid)"
+            if [ -n "${PID}" ] && kill -0 "${PID}" 2>/dev/null; then
+              kill "${PID}" 2>/dev/null || true
+              sleep 1
+            fi
+          fi
+          if [ -f /tmp/api-validate-server.log ]; then
+            echo "=== api-validate-server.log ==="
+            tail -n 200 /tmp/api-validate-server.log || true
+          fi

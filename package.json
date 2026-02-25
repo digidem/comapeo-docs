@@ -27,6 +27,8 @@
     "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
+    "api:server": "bun api-server",
+    "api:server:dev": "bun --watch api-server",
     "clean:generated": "bun scripts/cleanup-generated-content.ts",
     "scaffold:test": "bun run scripts/test-scaffold/index.ts",
     "scaffold:test:all": "bun run scripts/test-scaffold/index.ts --all",
@@ -43,6 +45,7 @@
     "test:scripts:watch": "vitest scripts/ --watch",
     "test:notion-fetch": "vitest --run scripts/notion-fetch/__tests__/",
     "test:notion-cli": "vitest --run scripts/notion-fetch-all/__tests__/",
+    "test:api-server": "vitest --run api-server/",
     "test:notion-pipeline": "vitest --run \"scripts/notion-fetch/__tests__/runFetchPipeline.test.ts\"",
     "test:notion-image": "vitest --run \"scripts/notion-fetch/__tests__/downloadImage.test.ts\"",
     "swizzle": "docusaurus swizzle",
@@ -57,6 +60,7 @@
     "test:locale-parity": "vitest --run scripts/locale-parity.test.ts"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.4.1",
     "@docusaurus/core": "^3.9.2",
     "@docusaurus/plugin-client-redirects": "^3.9.2",
     "@docusaurus/plugin-google-gtag": "^3.9.2",
@@ -85,6 +89,7 @@
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "^4.0.16",
     "axios": "^1.13.2",
+    "bun-types": "^1.3.9",
     "chalk": "^5.6.2",
     "commander": "^14.0.2",
     "docusaurus-prince-pdf": "^1.2.1",
@@ -110,7 +115,8 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.50.1",
     "vitest": "^4.0.16",
-    "wrangler": "^4.54.0"
+    "wrangler": "^4.54.0",
+    "yaml": "^2.8.2"
   },
   "browserslist": {
     "production": [

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   installTestNotionEnv,
   createMockNotionPage,
-  createMockPageFamily,
   captureConsoleOutput,
 } from "../test-utils";
 import {
@@ -11,8 +10,8 @@ import {
   groupPagesByElementType,
   buildPageHierarchy,
   filterPages,
+  buildStatusFilter,
   type PageWithStatus,
-  type FetchAllOptions,
 } from "./fetchAll";
 
 // Mock sharp to avoid installation issues
@@ -53,6 +52,38 @@ vi.mock("../notion-fetch/runFetch", () => ({
 vi.mock("../notionPageUtils", () => ({
   getStatusFromRawPage: vi.fn((page: any) => {
     return page?.properties?.["Publish Status"]?.select?.name || "No Status";
+  }),
+  resolveChildrenByStatus: vi.fn((pages: any[], statusFilter: string) => {
+    const parentPages = pages.filter(
+      (page) =>
+        page?.properties?.["Publish Status"]?.select?.name === statusFilter
+    );
+
+    if (parentPages.length === 0) {
+      return [];
+    }
+
+    const childIds = new Set<string>();
+    for (const parent of parentPages) {
+      const relations = parent?.properties?.["Sub-item"]?.relation;
+      if (!Array.isArray(relations)) continue;
+      for (const relation of relations) {
+        if (typeof relation?.id === "string" && relation.id.length > 0) {
+          childIds.add(relation.id);
+        }
+      }
+    }
+
+    if (childIds.size > 0) {
+      const resolvedChildren = pages.filter((page) =>
+        childIds.has(page?.id as string)
+      );
+      if (resolvedChildren.length > 0) {
+        return resolvedChildren;
+      }
+    }
+
+    return parentPages;
   }),
   selectPagesWithPriority: vi.fn((pages, maxPages) => pages.slice(0, maxPages)),
 }));
@@ -141,23 +172,93 @@ describe("fetchAll - Core Functions", () => {
     it("should filter by status when statusFilter is provided", async () => {
       const { runFetchPipeline } = await import("../notion-fetch/runFetch");
       const mockPages = [
-        createMockNotionPage({ title: "Page 1", status: "Ready to publish" }),
-        createMockNotionPage({ title: "Page 2", status: "Draft" }),
-        createMockNotionPage({ title: "Page 3", status: "Ready to publish" }),
+        createMockNotionPage({
+          id: "parent-1",
+          title: "Parent 1",
+          status: "Ready to publish",
+          order: 1,
+          subItems: ["child-1"],
+        }),
+        createMockNotionPage({
+          id: "draft-1",
+          title: "Draft Page",
+          status: "Draft",
+          order: 2,
+        }),
+        createMockNotionPage({
+          id: "parent-2",
+          title: "Parent 2",
+          status: "Ready to publish",
+          order: 3,
+          subItems: ["child-3"],
+        }),
       ];
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
-        data: mockPages,
+      vi.mocked(runFetchPipeline).mockImplementation(async (options: any) => {
+        const filteredByApi = mockPages.filter(
+          (page) =>
+            page.properties?.["Publish Status"]?.select?.name ===
+            options?.filter?.select?.equals
+        );
+        const transformed = options.transform(filteredByApi);
+        return { data: transformed };
       });
 
       const result = await fetchAllNotionData({
         statusFilter: "Ready to publish",
       });
 
-      expect(result.pages.length).toBeGreaterThan(0);
-      result.pages.forEach((page) => {
-        expect(page.status).toBe("Ready to publish");
+      expect(result.processedCount).toBe(2);
+      expect(result.pages.map((page) => page.id)).toEqual([
+        "parent-1",
+        "parent-2",
+      ]);
+      expect(result.candidateIds).toEqual(["parent-1", "parent-2"]);
+    });
+
+    it("should preserve parent candidateIds when statusFilter resolves to child pages", async () => {
+      const { runFetchPipeline } = await import("../notion-fetch/runFetch");
+
+      const mockPages = [
+        createMockNotionPage({
+          id: "parent-1",
+          title: "Parent 1",
+          status: "Ready to publish",
+          subItems: ["child-1"],
+        }),
+        createMockNotionPage({
+          id: "parent-2",
+          title: "Parent 2",
+          status: "Ready to publish",
+          subItems: ["child-2"],
+        }),
+        createMockNotionPage({
+          id: "child-1",
+          title: "Child 1",
+          status: "Draft",
+        }),
+        createMockNotionPage({
+          id: "child-2",
+          title: "Child 2",
+          status: "Draft",
+        }),
+      ];
+
+      vi.mocked(runFetchPipeline).mockImplementation(async (options: any) => {
+        const transformed = options.transform(mockPages);
+        return { data: transformed };
       });
+
+      const result = await fetchAllNotionData({
+        statusFilter: "Ready to publish",
+      });
+
+      expect(result.pages.map((page) => page.id)).toEqual([
+        "child-1",
+        "child-2",
+      ]);
+      expect(result.candidateIds).toEqual(["parent-1", "parent-2"]);
+      expect(result.processedCount).toBe(2);
     });
 
     it("should limit pages when maxPages is specified", async () => {
@@ -165,7 +266,7 @@ describe("fetchAll - Core Functions", () => {
       const { selectPagesWithPriority } = await import("../notionPageUtils");
 
       const mockPages = Array.from({ length: 20 }, (_, i) =>
-        createMockNotionPage({ title: `Page ${i + 1}` })
+        createMockNotionPage({ title: `Page ${i + 1}`, order: i + 1 })
       );
 
       // Update mock to properly limit pages
@@ -175,18 +276,25 @@ describe("fetchAll - Core Functions", () => {
         }
       );
 
-      vi.mocked(runFetchPipeline).mockResolvedValue({
-        data: mockPages,
+      vi.mocked(runFetchPipeline).mockImplementation(async (options: any) => {
+        const transformed = options.transform(mockPages);
+        return { data: transformed };
       });
 
       const result = await fetchAllNotionData({
         maxPages: 5,
       });
 
-      // With the mock properly set up, this should work
-      // Note: The actual behavior depends on implementation details
-      expect(result.pages.length).toBeGreaterThan(0);
-      expect(result.processedCount).toBeGreaterThan(0);
+      expect(selectPagesWithPriority).toHaveBeenCalledTimes(1);
+      expect(result.pages).toHaveLength(5);
+      expect(result.processedCount).toBe(5);
+      expect(result.pages.map((page) => page.title)).toEqual([
+        "Page 1",
+        "Page 2",
+        "Page 3",
+        "Page 4",
+        "Page 5",
+      ]);
     });
 
     it("should sort pages by order (ascending)", async () => {
@@ -738,6 +846,157 @@ describe("fetchAll - Core Functions", () => {
 
       expect(filtered).toHaveLength(3);
     });
+  });
+});
+
+describe("resolveChildrenByStatus", () => {
+  it("should fall back to matching parents when children are referenced but not fetched", async () => {
+    const { resolveChildrenByStatus } =
+      await vi.importActual<typeof import("../notionPageUtils")>(
+        "../notionPageUtils"
+      );
+
+    const pages = [
+      createMockNotionPage({ id: "draft-1", title: "Draft", status: "Draft" }),
+      createMockNotionPage({
+        id: "parent-b",
+        title: "Parent B",
+        status: "Ready to publish",
+        subItems: ["missing-child-b"],
+      }),
+      createMockNotionPage({
+        id: "parent-a",
+        title: "Parent A",
+        status: "Ready to publish",
+        subItems: ["missing-child-a"],
+      }),
+    ];
+
+    const resolved = resolveChildrenByStatus(pages, "Ready to publish");
+
+    expect(resolved.map((page: any) => page.id)).toEqual([
+      "parent-b",
+      "parent-a",
+    ]);
+  });
+
+  it("should return resolved children when children exist in fetched pages", async () => {
+    const { resolveChildrenByStatus } =
+      await vi.importActual<typeof import("../notionPageUtils")>(
+        "../notionPageUtils"
+      );
+
+    const pages = [
+      createMockNotionPage({
+        id: "parent-1",
+        title: "Parent",
+        status: "Ready to publish",
+        subItems: ["child-1", "child-2"],
+      }),
+      createMockNotionPage({
+        id: "child-1",
+        title: "Child 1",
+        status: "Draft",
+      }),
+      createMockNotionPage({
+        id: "child-2",
+        title: "Child 2",
+        status: "Draft",
+      }),
+      createMockNotionPage({
+        id: "unrelated-1",
+        title: "Other",
+        status: "Draft",
+      }),
+    ];
+
+    const resolved = resolveChildrenByStatus(pages, "Ready to publish");
+
+    expect(resolved.map((page: any) => page.id)).toEqual([
+      "child-1",
+      "child-2",
+    ]);
+  });
+});
+
+describe("buildStatusFilter", () => {
+  it("should return undefined when includeRemoved is true", () => {
+    const filter = buildStatusFilter(true);
+    expect(filter).toBeUndefined();
+  });
+
+  it("should return a filter object when includeRemoved is false", () => {
+    const filter = buildStatusFilter(false);
+    expect(filter).toBeDefined();
+    expect(filter).toHaveProperty("or");
+    expect(filter.or).toBeInstanceOf(Array);
+    expect(filter.or).toHaveLength(2);
+  });
+
+  it("should create correct filter structure for excluding removed items", () => {
+    const filter = buildStatusFilter(false);
+
+    expect(filter).toEqual({
+      or: [
+        {
+          property: "Publish Status",
+          select: { is_empty: true },
+        },
+        {
+          property: "Publish Status",
+          select: { does_not_equal: "Remove" },
+        },
+      ],
+    });
+  });
+
+  it("should match Notion API filter query format", () => {
+    const filter = buildStatusFilter(false);
+
+    // Verify the structure matches Notion's compound filter format
+    expect(filter).toMatchObject({
+      or: expect.arrayContaining([
+        expect.objectContaining({
+          property: expect.any(String),
+          select: expect.any(Object),
+        }),
+      ]),
+    });
+
+    // Verify first condition checks for empty status
+    expect(filter.or[0]).toEqual({
+      property: "Publish Status",
+      select: { is_empty: true },
+    });
+
+    // Verify second condition excludes "Remove" status
+    expect(filter.or[1]).toEqual({
+      property: "Publish Status",
+      select: { does_not_equal: "Remove" },
+    });
+  });
+
+  it("should return a targeted equals filter when statusFilter is provided", () => {
+    const filter = buildStatusFilter(false, "Ready to publish");
+
+    expect(filter).toEqual({
+      property: "Publish Status",
+      select: { equals: "Ready to publish" },
+    });
+  });
+
+  it("should use the targeted filter for any statusFilter value", () => {
+    const filter = buildStatusFilter(false, "Draft");
+
+    expect(filter).toEqual({
+      property: "Publish Status",
+      select: { equals: "Draft" },
+    });
+  });
+
+  it("should return undefined when includeRemoved is true even with statusFilter", () => {
+    const filter = buildStatusFilter(true, "Ready to publish");
+    expect(filter).toBeUndefined();
   });
 });
 

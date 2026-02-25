@@ -1,0 +1,136 @@
+name: Deploy API to Fly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api-fly-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP_NAME: ${{ secrets.FLY_APP_NAME }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      DATABASE_ID: ${{ secrets.DATABASE_ID }}
+      DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
+      GITHUB_REPO_URL: ${{ secrets.GITHUB_REPO_URL }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GIT_AUTHOR_NAME: ${{ secrets.GIT_AUTHOR_NAME }}
+      GIT_AUTHOR_EMAIL: ${{ secrets.GIT_AUTHOR_EMAIL }}
+      NOTION_TRIGGER_API_KEY: ${{ secrets.NOTION_TRIGGER_API_KEY }}
+      API_KEY_GITHUB_ACTIONS: ${{ secrets.API_KEY_GITHUB_ACTIONS }}
+      DEFAULT_DOCS_PAGE: ${{ secrets.DEFAULT_DOCS_PAGE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate deploy prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          }
+
+          require_secret "FLY_API_TOKEN" "${FLY_API_TOKEN}"
+          require_secret "FLY_APP_NAME" "${FLY_APP_NAME}"
+          require_secret "NOTION_API_KEY" "${NOTION_API_KEY}"
+          require_secret "GITHUB_REPO_URL" "${GITHUB_REPO_URL}"
+          require_secret "GITHUB_TOKEN" "${GITHUB_TOKEN}"
+          require_secret "GIT_AUTHOR_NAME" "${GIT_AUTHOR_NAME}"
+          require_secret "GIT_AUTHOR_EMAIL" "${GIT_AUTHOR_EMAIL}"
+          require_secret "NOTION_TRIGGER_API_KEY" "${NOTION_TRIGGER_API_KEY}"
+          require_secret "API_KEY_GITHUB_ACTIONS" "${API_KEY_GITHUB_ACTIONS}"
+
+          if [ -z "${DATABASE_ID}" ] && [ -z "${DATA_SOURCE_ID}" ]; then
+            missing+=("DATABASE_ID or DATA_SOURCE_ID")
+          fi
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing deploy prerequisites: ${missing[*]}"
+            exit 1
+          fi
+
+          fallback_page="${DEFAULT_DOCS_PAGE:-introduction}"
+          if [ -z "${DEFAULT_DOCS_PAGE}" ]; then
+            echo "::notice::DEFAULT_DOCS_PAGE not set, using fallback 'introduction'."
+          fi
+          echo "DEFAULT_DOCS_PAGE_VALUE=${fallback_page}" >> "$GITHUB_ENV"
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Render Fly config
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > fly.generated.toml <<EOF
+          app = "${FLY_APP_NAME}"
+          primary_region = "dfw"
+
+          [build]
+            dockerfile = "Dockerfile"
+
+          [env]
+            NODE_ENV = "production"
+            API_HOST = "0.0.0.0"
+            API_PORT = "3001"
+
+          [http_service]
+            internal_port = 3001
+            force_https = true
+            auto_stop_machines = "off"
+            auto_start_machines = true
+            min_machines_running = 1
+            processes = ["app"]
+
+          [[vm]]
+            memory = "1gb"
+            cpu_kind = "shared"
+            cpus = 1
+          EOF
+
+      - name: Sync runtime secrets to Fly
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fly_secrets=(
+            "NOTION_API_KEY=${NOTION_API_KEY}"
+            "GITHUB_REPO_URL=${GITHUB_REPO_URL}"
+            "GITHUB_TOKEN=${GITHUB_TOKEN}"
+            "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}"
+            "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}"
+            "NOTION_TRIGGER_API_KEY=${NOTION_TRIGGER_API_KEY}"
+            "API_KEY_GITHUB_ACTIONS=${API_KEY_GITHUB_ACTIONS}"
+            "DEFAULT_DOCS_PAGE=${DEFAULT_DOCS_PAGE_VALUE}"
+          )
+
+          if [ -n "${DATABASE_ID}" ]; then
+            fly_secrets+=("DATABASE_ID=${DATABASE_ID}")
+          fi
+
+          if [ -n "${DATA_SOURCE_ID}" ]; then
+            fly_secrets+=("DATA_SOURCE_ID=${DATA_SOURCE_ID}")
+          fi
+
+          flyctl secrets set --stage --config fly.generated.toml "${fly_secrets[@]}"
+
+      - name: Deploy to Fly
+        run: flyctl deploy --remote-only --config fly.generated.toml

@@ -1,7 +1,7 @@
 {
   "validStatuses": [
     "No Status",
-    "Not started", 
+    "Not started",
     "Update in progress",
     "Draft published",
     "Ready to publish",
@@ -43,33 +43,17 @@
     "active": [
       "No Status",
       "Not started",
-      "Update in progress", 
+      "Update in progress",
       "Draft published",
       "Ready to publish"
     ],
-    "excluded": [
-      "Remove"
-    ],
-    "empty": [
-      "No Status"
-    ],
-    "inProgress": [
-      "Not started",
-      "Update in progress"
-    ],
-    "ready": [
-      "Ready to publish"
-    ],
-    "published": [
-      "Draft published"
-    ]
+    "excluded": ["Remove"],
+    "empty": ["No Status"],
+    "inProgress": ["Not started", "Update in progress"],
+    "ready": ["Ready to publish"],
+    "published": ["Draft published"]
   },
-  "elementTypes": [
-    "Page",
-    "Title", 
-    "Toggle",
-    "Unknown"
-  ],
+  "elementTypes": ["Page", "Title", "Toggle", "Unknown"],
   "elementTypeDistribution": {
     "Page": {
       "count": 136,
@@ -92,11 +76,7 @@
       "description": "Unclassified content"
     }
   },
-  "languages": [
-    "English",
-    "Spanish",
-    "Portuguese"
-  ],
+  "languages": ["English", "Spanish", "Portuguese"],
   "languageDistribution": {
     "English": {
       "count": 48,

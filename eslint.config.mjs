@@ -9,8 +9,8 @@ import securityPlugin from "eslint-plugin-security";
 import prettierPlugin from "eslint-plugin-prettier";
 import prettierConfig from "eslint-config-prettier";
 
-/** @type {import('eslint').Linter.Config[]} */
-export default [
+/** @type {import('eslint').Linter.FlatConfig[]} */
+const eslintConfig = [
   // Global configurations for all files
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
@@ -32,7 +32,7 @@ export default [
   // Docusaurus specific configurations
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
-    ignores: ["scripts/**"], // Ignore scripts directory for docusaurus rules
+    ignores: ["scripts/**", "api-server/**"], // Ignore scripts and api-server directories for docusaurus rules
     plugins: {
       "@docusaurus": docusaurusPlugin,
       react: pluginReact,
@@ -72,9 +72,9 @@ export default [
     },
   },
 
-  // Scripts specific configurations
+  // Scripts and API server specific configurations
   {
-    files: ["scripts/**/*.{js,mjs,cjs,ts}"],
+    files: ["scripts/**/*.{js,mjs,cjs,ts}", "api-server/**/*.{js,mjs,cjs,ts}"],
     plugins: {
       import: importPlugin,
       promise: promisePlugin,
@@ -85,6 +85,7 @@ export default [
         typescript: true,
         node: true,
       },
+      "import/core-modules": ["bun", "bun:test"],
     },
     rules: {
       ...importPlugin.configs.recommended.rules,
@@ -94,4 +95,22 @@ export default [
       "security/detect-non-literal-fs-filename": "off",
     },
   },
+
+  // Notion API scripts use controlled dynamic property access (not user input)
+  {
+    files: ["scripts/notion-fetch/generateBlocks.ts"],
+    rules: {
+      "security/detect-object-injection": "off",
+    },
+  },
+
+  // content-repo.ts uses const whitelist for env keys
+  {
+    files: ["api-server/content-repo.ts"],
+    rules: {
+      "security/detect-object-injection": "off",
+    },
+  },
 ];
+
+export default eslintConfig;

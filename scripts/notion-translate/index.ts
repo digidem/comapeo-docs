@@ -238,7 +238,7 @@ async function writeSummaryFile(summary: TranslationRunSummary): Promise<void> {
 }
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ override: true });
 
 // Translation config is imported from constants.js
 

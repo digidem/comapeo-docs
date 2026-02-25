@@ -120,11 +120,11 @@ export function getModelContextLimit(modelName: string): number {
   return 128000;
 }
 
-/** Estimated max chars per chunk (context limit / 3.5 chars per token, with 20% buffer) */
+/** Estimated max chars per chunk (context limit / 3.5 chars per token, with 50% buffer) */
 export function getMaxChunkChars(modelName: string): number {
   const contextLimit = getModelContextLimit(modelName);
-  // Reserve ~20% for prompt overhead and response
-  return Math.floor((contextLimit * 3.5) / 1.2);
+  // Reserve ~50% for prompt overhead, title, and response to be safe
+  return Math.floor((contextLimit * 3.5) / 1.5);
 }
 
 /**

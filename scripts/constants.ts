@@ -77,6 +77,56 @@ export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
 // Check if using OpenAI's default API (vs custom endpoint like DeepSeek)
 export const IS_CUSTOM_OPENAI_API = !!OPENAI_BASE_URL;
 
+// Known model context limits (tokens)
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  // OpenAI models
+  "gpt-5": 272000,
+  "gpt-5-nano": 272000,
+  "gpt-5-mini": 272000,
+  "gpt-5.2": 272000,
+  "gpt-4o": 128000,
+  "gpt-4o-mini": 128000,
+  "gpt-4-turbo": 128000,
+  "gpt-4": 128000,
+  "gpt-3.5-turbo": 16385,
+  // DeepSeek models
+  "deepseek-chat": 131072,
+  "deepseek-coder": 131072,
+};
+
+/**
+ * Gets the maximum context length (in tokens) for a given model.
+ * For unknown models, returns a conservative default.
+ */
+export function getModelContextLimit(modelName: string): number {
+  const normalized = modelName.toLowerCase().trim();
+
+  // Exact match first
+  const entry = Object.entries(MODEL_CONTEXT_LIMITS).find(
+    ([key]) => key === normalized
+  );
+  if (entry) {
+    return entry[1];
+  }
+
+  // Prefix match for variants (e.g., "gpt-5-mini-2025-01-01")
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
+    if (normalized.startsWith(key) || key.startsWith(normalized)) {
+      return limit;
+    }
+  }
+
+  // Conservative fallback for unknown models
+  return 128000;
+}
+
+/** Estimated max chars per chunk (context limit / 3.5 chars per token, with 20% buffer) */
+export function getMaxChunkChars(modelName: string): number {
+  const contextLimit = getModelContextLimit(modelName);
+  // Reserve ~20% for prompt overhead and response
+  return Math.floor((contextLimit * 3.5) / 1.2);
+}
+
 /**
  * GPT-5.2 supports custom temperature ONLY when reasoning_effort="none"
  * Based on: https://platform.openai.com/docs/guides/reasoning

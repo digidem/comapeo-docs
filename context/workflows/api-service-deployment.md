@@ -482,6 +482,35 @@ Navigate to your repository on GitHub and add these secrets:
 
 **Note:** Without `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, PR preview deployments and production deployments to Cloudflare Pages will not work.
 
+#### Fly Deployment Secrets (Required for API auto-deploy workflow)
+
+| Secret Name     | Value                                                 | Used By Workflows         |
+| --------------- | ----------------------------------------------------- | ------------------------- |
+| `FLY_API_TOKEN` | Fly API token                                         | Deploy API service to Fly |
+| `FLY_APP_NAME`  | Fly app name (for example `comapeo-docs-api-trigger`) | Deploy API service to Fly |
+
+**Runtime environment secrets (Fly app):**
+
+The workflow syncs these runtime values to the Fly app before each deploy:
+`NOTION_API_KEY`, `DATABASE_ID`/`DATA_SOURCE_ID`, `GITHUB_REPO_URL`, `GITHUB_TOKEN`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `NOTION_TRIGGER_API_KEY`, `API_KEY_GITHUB_ACTIONS`, and `DEFAULT_DOCS_PAGE` (fallback `introduction`).
+
+Example:
+
+```bash
+flyctl secrets set \
+  NOTION_API_KEY=... \
+  DATABASE_ID=... \
+  DATA_SOURCE_ID=... \
+  GITHUB_REPO_URL=... \
+  GITHUB_TOKEN=... \
+  GIT_AUTHOR_NAME=... \
+  GIT_AUTHOR_EMAIL=... \
+  API_KEY_GITHUB_ACTIONS=... \
+  NOTION_TRIGGER_API_KEY=... \
+  DEFAULT_DOCS_PAGE=introduction \
+  --app comapeo-docs-api-trigger
+```
+
 #### Docker Hub Secrets (Required for Docker Publish Workflow)
 
 | Secret Name          | Value                    | Used By Workflows |
@@ -508,15 +537,16 @@ Navigate to your repository on GitHub and add these secrets:
 
 ### Quick Reference: Secret Requirements by Workflow
 
-| Workflow               | Required Secrets                                                                              | Optional Secrets                                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| API Validate           | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY` | None                                                                 |
-| Sync Notion Docs       | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `SLACK_WEBHOOK_URL`                                                  |
-| Translate Notion Docs  | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                           | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
-| Docker Publish         | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                       | `SLACK_WEBHOOK_URL`                                                  |
-| Deploy PR Preview      | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
-| Deploy to Production   | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                             | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
-| Deploy to GitHub Pages | None (uses GitHub Pages infrastructure)                                                       | `SLACK_WEBHOOK_URL`                                                  |
+| Workflow                  | Required Secrets                                                                                                                                                                                                         | Optional Secrets                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| API Validate              | `API_KEY_GITHUB_ACTIONS`, `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                                                                                                                            | None                                                                 |
+| Deploy API Service to Fly | `FLY_API_TOKEN`, `FLY_APP_NAME`, `NOTION_API_KEY`, `GITHUB_REPO_URL`, `GITHUB_TOKEN`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `NOTION_TRIGGER_API_KEY`, `API_KEY_GITHUB_ACTIONS`, and (`DATABASE_ID` or `DATA_SOURCE_ID`) | `DEFAULT_DOCS_PAGE`                                                  |
+| Sync Notion Docs          | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                                                                                                                                                        | `SLACK_WEBHOOK_URL`                                                  |
+| Translate Notion Docs     | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`, `OPENAI_API_KEY`                                                                                                                                                      | `OPENAI_MODEL`, `SLACK_WEBHOOK_URL`                                  |
+| Docker Publish            | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`                                                                                                                                                                                  | `SLACK_WEBHOOK_URL`                                                  |
+| Deploy PR Preview         | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                                                                                                                                                        | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
+| Deploy to Production      | `NOTION_API_KEY`, `DATABASE_ID`, `DATA_SOURCE_ID`                                                                                                                                                                        | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `SLACK_WEBHOOK_URL` |
+| Deploy to GitHub Pages    | None (uses GitHub Pages infrastructure)                                                                                                                                                                                  | `SLACK_WEBHOOK_URL`                                                  |
 
 ### Step 5.2: Available GitHub Workflows
 
@@ -741,6 +771,39 @@ Deploys documentation to GitHub Pages (staging environment).
 
 **Staging URL:** Available via GitHub Pages settings
 
+#### 9. Deploy API Service to Fly (automatic on `main`)
+
+Deploys the API service to Fly whenever code is pushed to `main`.
+
+**Triggers:**
+
+- Automatic on every push to `main`
+- Manual via **Run workflow** (`workflow_dispatch`)
+
+**Required Secrets:**
+
+- `FLY_API_TOKEN`
+- `FLY_APP_NAME` (or the equivalent app-name input/secret used by the workflow)
+
+**Manual Trigger (workflow_dispatch):**
+
+1. Go to **Actions** tab in your repository
+2. Select the Fly API deploy workflow
+3. Click **Run workflow**
+4. Choose `main` (or the branch allowed by that workflow) and run
+
+**Verification (concise):**
+
+1. Confirm the Fly deploy workflow run is green in GitHub Actions
+2. Confirm release in Fly (`flyctl releases --app "$FLY_APP_NAME"`)
+3. Smoke test the API: `curl -fsS https://<your-fly-host>/health`
+
+**Troubleshooting (concise):**
+
+- `403`/auth errors in GitHub Actions: invalid or missing `FLY_API_TOKEN`
+- App lookup/deploy target errors: invalid `FLY_APP_NAME` or mismatched app/org
+- Runtime boot failures after successful deploy: missing runtime secrets in Fly (`flyctl secrets list --app "$FLY_APP_NAME"`)
+
 ### Step 5.3: Validate CI + Run VPS Smoke
 
 After adding secrets, validate CI contract checks and then smoke test the deployed service:
@@ -788,6 +851,9 @@ To verify that all required secrets are properly configured:
 **Common Issues:**
 
 - Missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` will cause deployment failures
+- Missing or invalid `FLY_API_TOKEN` causes Fly workflow auth failures
+- Missing or incorrect `FLY_APP_NAME` causes Fly app target/deploy failures
+- Missing runtime secrets in Fly causes API startup/runtime failures after deploy
 - Missing `SLACK_WEBHOOK_URL` will cause notification failures (non-critical)
 - Invalid `API_KEY_GITHUB_ACTIONS` returns `401` on `POST /jobs`
 - Missing/invalid Notion credentials causes dry-run fetch jobs to fail before terminal assertions
@@ -811,6 +877,9 @@ After completing deployment, verify:
   - [ ] `OPENAI_API_KEY`
   - [ ] `CLOUDFLARE_API_TOKEN` (for Cloudflare Pages deployments)
   - [ ] `CLOUDFLARE_ACCOUNT_ID` (for Cloudflare Pages deployments)
+  - [ ] `FLY_API_TOKEN` (for Fly API deployments)
+  - [ ] `FLY_APP_NAME` (for Fly API deployments)
+  - [ ] API runtime secrets mirrored to Fly (`NOTION_API_KEY`, `DATABASE_ID`/`DATA_SOURCE_ID`, `GITHUB_REPO_URL`, `GITHUB_TOKEN`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `API_KEY_GITHUB_ACTIONS`, `NOTION_TRIGGER_API_KEY`, `DEFAULT_DOCS_PAGE`)
   - [ ] `SLACK_WEBHOOK_URL` (for Slack notifications)
 
 ## Troubleshooting

@@ -331,6 +331,50 @@ describe("generateBlocks", () => {
       // Should have writes for pt and es locales
       expect(translationWrites.length).toBeGreaterThanOrEqual(2);
     });
+
+    it("should use English title as translation key for non-English pages", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const mainPage = createMockNotionPage({
+        id: "main-1",
+        title: "Main Page",
+        subItems: ["en-1", "es-1", "pt-1"],
+      });
+      const englishPage = createMockNotionPage({
+        id: "en-1",
+        title: "Introduction",
+        language: "English",
+      });
+      const spanishPage = createMockNotionPage({
+        id: "es-1",
+        title: "Introducción",
+        language: "Spanish",
+      });
+      const portuguesePage = createMockNotionPage({
+        id: "pt-1",
+        title: "Introdução",
+        language: "Portuguese",
+      });
+
+      const pages = [mainPage, englishPage, spanishPage, portuguesePage];
+      const progressCallback = vi.fn();
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await generateBlocks(pages, progressCallback);
+
+      const esWriteCall = mockWriteFileSync.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" && call[0].includes("es/code.json")
+      );
+      const esCodeJson = JSON.parse(esWriteCall[1] as string);
+
+      // Key should be English "Introduction", not Spanish "Introducción"
+      expect(esCodeJson).toHaveProperty("Introduction");
+      expect(esCodeJson.Introduction.message).toBe("Introducción");
+    });
   });
 
   describe("Title fallbacks", () => {
@@ -795,6 +839,196 @@ describe("generateBlocks", () => {
 
       const content = markdownCalls[markdownCalls.length - 1][1] as string;
       expect(content).toContain("sidebar_position: 12");
+    });
+
+    it("should assign missing Order pages after the max existing sidebar_position in filtered runs", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const { PAGE_METADATA_CACHE_PATH } = await import("./pageMetadataCache");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const page = createMockNotionPage({
+        title: "New Incremental Page",
+        elementType: "Page",
+      });
+      delete page.properties.Order;
+
+      const generateBlocksPath = fileURLToPath(
+        new URL("./generateBlocks.ts", import.meta.url)
+      );
+      const generateBlocksDir = path.dirname(generateBlocksPath);
+      const docsPath = path.join(generateBlocksDir, "../../docs");
+      const existingDocPath = path.join(docsPath, "existing-order-page.md");
+      const newDocPath = path.join(docsPath, "new-incremental-page.md");
+
+      fs.writeFileSync(
+        existingDocPath,
+        `---\nsidebar_position: "20"\n---\n\n# Existing Ordered Page\n`,
+        "utf-8"
+      );
+
+      fs.writeFileSync(
+        PAGE_METADATA_CACHE_PATH,
+        JSON.stringify({
+          version: "1.0",
+          scriptHash: "test-hash",
+          lastSync: "2024-01-01T00:00:00.000Z",
+          pages: {
+            "existing-page-id": {
+              lastEdited: "2024-01-01T00:00:00.000Z",
+              outputPaths: ["/docs/existing-order-page.md"],
+              processedAt: "2024-01-01T00:00:00.000Z",
+            },
+          },
+        }),
+        "utf-8"
+      );
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# New Incremental Page\n\nContent here.",
+      });
+
+      await generateBlocks([page], vi.fn());
+
+      const markdownCalls = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === newDocPath
+      );
+
+      expect(markdownCalls.length).toBeGreaterThan(0);
+
+      const content = markdownCalls[markdownCalls.length - 1][1] as string;
+      expect(content).toContain("sidebar_position: 21");
+    });
+
+    it("should assign unique sequential fallback positions for multiple missing Order pages", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const { PAGE_METADATA_CACHE_PATH } = await import("./pageMetadataCache");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const pageOne = createMockNotionPage({
+        title: "Missing One",
+        elementType: "Page",
+      });
+      const pageTwo = createMockNotionPage({
+        title: "Missing Two",
+        elementType: "Page",
+      });
+      delete pageOne.properties.Order;
+      delete pageTwo.properties.Order;
+
+      const generateBlocksPath = fileURLToPath(
+        new URL("./generateBlocks.ts", import.meta.url)
+      );
+      const generateBlocksDir = path.dirname(generateBlocksPath);
+      const docsPath = path.join(generateBlocksDir, "../../docs");
+      const existingDocPath = path.join(docsPath, "existing-order-page.md");
+      const firstDocPath = path.join(docsPath, "missing-one.md");
+      const secondDocPath = path.join(docsPath, "missing-two.md");
+
+      fs.writeFileSync(
+        existingDocPath,
+        `---\nsidebar_position: "20"\n---\n\n# Existing Ordered Page\n`,
+        "utf-8"
+      );
+
+      fs.writeFileSync(
+        PAGE_METADATA_CACHE_PATH,
+        JSON.stringify({
+          version: "1.0",
+          scriptHash: "test-hash",
+          lastSync: "2024-01-01T00:00:00.000Z",
+          pages: {
+            "existing-page-id": {
+              lastEdited: "2024-01-01T00:00:00.000Z",
+              outputPaths: ["/docs/existing-order-page.md"],
+              processedAt: "2024-01-01T00:00:00.000Z",
+            },
+          },
+        }),
+        "utf-8"
+      );
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# Content\n\nBody.",
+      });
+
+      await generateBlocks([pageOne, pageTwo], vi.fn());
+
+      const firstWrites = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === firstDocPath
+      );
+      const secondWrites = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === secondDocPath
+      );
+
+      expect(firstWrites.length).toBeGreaterThan(0);
+      expect(secondWrites.length).toBeGreaterThan(0);
+
+      const firstContent = firstWrites[firstWrites.length - 1][1] as string;
+      const secondContent = secondWrites[secondWrites.length - 1][1] as string;
+      expect(firstContent).toContain("sidebar_position: 21");
+      expect(secondContent).toContain("sidebar_position: 22");
+    });
+
+    it("should recover max sidebar_position from existing markdown when cache is missing", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const { PAGE_METADATA_CACHE_PATH } = await import("./pageMetadataCache");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+      const mockReaddirSync = fs.readdirSync as Mock;
+      const mockUnlinkSync = fs.unlinkSync as Mock;
+
+      const page = createMockNotionPage({
+        title: "Cacheless Incremental Page",
+        elementType: "Page",
+      });
+      delete page.properties.Order;
+
+      const generateBlocksPath = fileURLToPath(
+        new URL("./generateBlocks.ts", import.meta.url)
+      );
+      const generateBlocksDir = path.dirname(generateBlocksPath);
+      const docsPath = path.join(generateBlocksDir, "../../docs");
+      const existingDocPath = path.join(docsPath, "existing-disk-page.md");
+      const newDocPath = path.join(docsPath, "cacheless-incremental-page.md");
+
+      fs.writeFileSync(
+        existingDocPath,
+        `---\nsidebar_position: "30"\n---\n\n# Existing Disk Page\n`,
+        "utf-8"
+      );
+      mockUnlinkSync(PAGE_METADATA_CACHE_PATH);
+
+      mockReaddirSync.mockImplementation(
+        (targetPath: string, options?: any) => {
+          if (targetPath === docsPath && options?.withFileTypes) {
+            return [
+              {
+                name: "existing-disk-page.md",
+                isDirectory: () => false,
+                isFile: () => true,
+              },
+            ];
+          }
+          return [];
+        }
+      );
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# Cacheless Incremental Page\n\nContent here.",
+      });
+
+      await generateBlocks([page], vi.fn());
+
+      const markdownCalls = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0] === newDocPath
+      );
+
+      expect(markdownCalls.length).toBeGreaterThan(0);
+
+      const content = markdownCalls[markdownCalls.length - 1][1] as string;
+      expect(content).toContain("sidebar_position: 31");
     });
 
     it("should not reuse existing sidebar_position on full sync when Order is missing", async () => {

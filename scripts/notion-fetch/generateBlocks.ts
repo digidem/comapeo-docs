@@ -24,6 +24,7 @@ import {
   groupPagesByLang,
   createStandalonePageGroup,
   getOrderedLocales,
+  getEnglishTitle,
 } from "./pageGrouping";
 import { LRUCache, validateCacheSize } from "./cacheStrategies";
 import { getImageCache, logImageFailure } from "./imageProcessing";
@@ -102,8 +103,10 @@ type CalloutBlockNode = CalloutBlockObjectResponse & {
   children?: Array<PartialBlockObjectResponse | BlockObjectResponse>;
 };
 
-const CONTENT_PATH = path.join(__dirname, "../../docs");
-const IMAGES_PATH = path.join(__dirname, "../../static/images/");
+const CONTENT_PATH =
+  process.env.CONTENT_PATH || path.join(__dirname, "../../docs");
+const IMAGES_PATH =
+  process.env.IMAGES_PATH || path.join(__dirname, "../../static/images/");
 const locales = config.i18n.locales;
 
 // Global retry metrics tracking across all pages in a batch
@@ -120,7 +123,6 @@ const resolveSectionFolderForLocale = (
   sectionFolders: Record<string, string>,
   locale: string
 ): string | undefined => {
-  // eslint-disable-next-line security/detect-object-injection -- locale keys are controlled by configured locales and DEFAULT_LOCALE fallback
   return sectionFolders[locale] ?? sectionFolders[DEFAULT_LOCALE];
 };
 
@@ -217,9 +219,8 @@ export function findExistingSidebarPosition(
     }
   };
 
-  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
   const cachedPage = metadataCache.pages?.[pageId];
-  // eslint-disable-next-line security/detect-object-injection -- pageId comes from current Notion page metadata index
+
   const existingCachedPage = existingCache?.pages?.[pageId];
   const existingOutputPaths = existingCachedPage?.outputPaths;
   const cachedOutputPaths = cachedPage?.outputPaths;
@@ -248,6 +249,86 @@ export function findExistingSidebarPosition(
   }
 
   return null;
+}
+
+function findMaxExistingSidebarPosition(
+  metadataCache: PageMetadataCache,
+  existingCache?: PageMetadataCache
+): number | null {
+  const candidatePaths: string[] = [];
+  const seenPaths = new Set<string>();
+  let maxPosition: number | null = null;
+
+  const addCandidate = (candidate?: string) => {
+    const resolvedPath = normalizePath(candidate ?? "");
+    if (!resolvedPath || seenPaths.has(resolvedPath)) {
+      return;
+    }
+    seenPaths.add(resolvedPath);
+    candidatePaths.push(resolvedPath);
+  };
+
+  const addCachePaths = (cache?: PageMetadataCache) => {
+    if (!cache?.pages) {
+      return;
+    }
+
+    for (const metadata of Object.values(cache.pages)) {
+      for (const outputPath of metadata.outputPaths ?? []) {
+        addCandidate(outputPath);
+      }
+    }
+  };
+
+  addCachePaths(metadataCache);
+  addCachePaths(existingCache);
+
+  const addMarkdownFilesRecursively = (directoryPath: string) => {
+    if (!directoryPath || !fs.existsSync(directoryPath)) {
+      return;
+    }
+
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        addMarkdownFilesRecursively(entryPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith(".md")) {
+        addCandidate(entryPath);
+      }
+    }
+  };
+
+  addMarkdownFilesRecursively(CONTENT_PATH);
+  for (const locale of locales.filter((locale) => locale !== DEFAULT_LOCALE)) {
+    addMarkdownFilesRecursively(getI18NPath(locale));
+  }
+
+  for (const candidatePath of candidatePaths) {
+    if (!fs.existsSync(candidatePath)) {
+      continue;
+    }
+
+    const content = fs.readFileSync(candidatePath, "utf-8");
+    const position = extractSidebarPositionFromFrontmatter(content);
+    if (position === null) {
+      continue;
+    }
+
+    maxPosition =
+      maxPosition === null ? position : Math.max(maxPosition, position);
+  }
+
+  return maxPosition;
 }
 
 // setTranslationString moved to translationManager.ts
@@ -286,6 +367,33 @@ interface PageProcessingResult {
   markdownFetches: number;
   markdownCacheHits: number;
   containsS3: boolean;
+}
+
+function createFailedPageProcessingResult(
+  task: PageTask,
+  error: unknown
+): PageProcessingResult {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  console.error(
+    chalk.red(
+      `Unexpected failure before page processing could complete for ${task.page.id}: ${errorMessage}`
+    )
+  );
+
+  return {
+    success: false,
+    totalSaved: 0,
+    emojiCount: 0,
+    pageTitle: task.pageTitle,
+    pageId: task.page.id,
+    lastEdited: task.page.last_edited_time,
+    outputPath: task.filePath,
+    blockFetches: 0,
+    blockCacheHits: 0,
+    markdownFetches: 0,
+    markdownCacheHits: 0,
+    containsS3: true,
+  };
 }
 
 /**
@@ -432,7 +540,7 @@ async function processSinglePage(
       );
 
       const sectionFolderForWrite: Record<string, string | undefined> = {};
-      // eslint-disable-next-line security/detect-object-injection -- lang is constrained to locale values from grouped content
+
       sectionFolderForWrite[lang] = currentSectionFolderForLang;
 
       const finalDiagnostics = getImageDiagnostics(markdownString.parent ?? "");
@@ -688,10 +796,72 @@ export async function generateBlocks(
       }
     }
 
+    // Sort pagesByLang by Order property to ensure correct ordering in ToC
+    // This fixes issues where pages were not in the expected order based on their Order property
+    pagesByLang.sort((a, b) => {
+      const firstLangA = Object.keys(a.content)[0];
+      const firstLangB = Object.keys(b.content)[0];
+      const pageA = a.content[firstLangA];
+      const pageB = b.content[firstLangB];
+
+      // Fix: Handle 0 and negative values properly by checking for undefined explicitly
+      // "Order" is a Notion property, not user input
+      const orderA = pageA?.properties?.["Order"]?.number;
+      const orderB = pageB?.properties?.["Order"]?.number;
+
+      // If both have valid order values (including 0 and negatives), use them
+      // If one is missing, push it to the end
+      if (orderA !== undefined && orderB !== undefined) {
+        return orderA - orderB;
+      }
+      if (orderA !== undefined) return -1;
+      if (orderB !== undefined) return 1;
+      return 0;
+    });
+
     const totalPages = pagesByLang.reduce((count, pageGroup) => {
       return count + Object.keys(pageGroup.content).length;
     }, 0);
     let pageProcessingIndex = 0;
+    const pageGroupSidebarPositions = new Map<number, number>();
+    let nextGeneratedSidebarPosition: number | null = null;
+
+    let maxExplicitOrderInRun: number | null = null;
+    for (const pageByLang of pagesByLang) {
+      for (const page of Object.values(pageByLang.content ?? {})) {
+        const orderValue = (page as any)?.properties?.["Order"]?.number;
+        if (typeof orderValue !== "number" || !Number.isFinite(orderValue)) {
+          continue;
+        }
+        maxExplicitOrderInRun =
+          maxExplicitOrderInRun === null
+            ? orderValue
+            : Math.max(maxExplicitOrderInRun, orderValue);
+      }
+    }
+
+    const getNextGeneratedSidebarPosition = () => {
+      if (nextGeneratedSidebarPosition === null) {
+        const maxKnownPosition = findMaxExistingSidebarPosition(
+          metadataCache,
+          existingCache ?? undefined
+        );
+        const baselineCandidates = [
+          maxKnownPosition,
+          maxExplicitOrderInRun,
+        ].filter(
+          (value): value is number =>
+            typeof value === "number" && Number.isFinite(value)
+        );
+        const baseline =
+          baselineCandidates.length > 0 ? Math.max(...baselineCandidates) : 0;
+        nextGeneratedSidebarPosition = baseline + 1;
+      }
+
+      const position = nextGeneratedSidebarPosition;
+      nextGeneratedSidebarPosition += 1;
+      return position;
+    };
 
     const blocksMap = new Map<string, { key: string; data: any[] }>();
     const markdownMap = new Map<string, { key: string; data: any }>();
@@ -708,7 +878,6 @@ export async function generateBlocks(
     // Phase 1: Process Toggle/Heading sequentially (they modify shared state)
     // and collect Page tasks with their captured context
     for (let i = 0; i < pagesByLang.length; i++) {
-      // eslint-disable-next-line security/detect-object-injection -- i iterates array bounds of pagesByLang
       const pageByLang = pagesByLang[i];
       // pages share section type and filename
       const title = pageByLang.mainTitle;
@@ -726,7 +895,7 @@ export async function generateBlocks(
       const orderedLocales = getOrderedLocales(Object.keys(pageByLang.content));
       for (const lang of orderedLocales) {
         const PATH = lang == "en" ? CONTENT_PATH : getI18NPath(lang);
-        // eslint-disable-next-line security/detect-object-injection -- lang is from ordered locale keys of pageByLang.content
+
         const page = pageByLang.content[lang];
         const pageTitle = resolvePageTitle(page);
         const safeFallbackId = (page?.id ?? String(i + 1)).slice(0, 8);
@@ -746,8 +915,12 @@ export async function generateBlocks(
           : fileName;
 
         // Set translation string for non-English pages
+        // Use English title as key for consistency across locales
         if (lang !== "en") {
-          setTranslationString(lang, pageByLang.mainTitle, pageTitle);
+          const englishTitle = getEnglishTitle(pageByLang);
+          if (englishTitle) {
+            setTranslationString(lang, englishTitle, pageTitle);
+          }
         }
 
         // TOGGLE - process sequentially (modifies currentSectionFolder)
@@ -768,7 +941,7 @@ export async function generateBlocks(
               currentHeading,
               pageSpinner
             );
-            // eslint-disable-next-line security/detect-object-injection -- lang is constrained locale key during sequential toggle processing
+
             currentSectionFolder[lang] = sectionFolder;
             sectionCount++;
             processedPages++;
@@ -817,7 +990,12 @@ export async function generateBlocks(
           }
 
           const orderValue = props?.["Order"]?.number;
-          let sidebarPosition = Number.isFinite(orderValue) ? orderValue : null;
+          // Fix: Use !== undefined check instead of Number.isFinite to properly handle 0 values
+          let sidebarPosition = orderValue !== undefined ? orderValue : null;
+          const groupSidebarPosition = pageGroupSidebarPositions.get(i);
+          if (sidebarPosition === null && groupSidebarPosition !== undefined) {
+            sidebarPosition = groupSidebarPosition;
+          }
           if (sidebarPosition === null && !enableDeletion) {
             sidebarPosition = findExistingSidebarPosition(
               page.id,
@@ -827,8 +1005,14 @@ export async function generateBlocks(
               syncMode.fullRebuild
             );
           }
+          if (sidebarPosition === null && !enableDeletion) {
+            sidebarPosition = getNextGeneratedSidebarPosition();
+          }
           if (sidebarPosition === null) {
             sidebarPosition = i + 1;
+          }
+          if (!pageGroupSidebarPositions.has(i)) {
+            pageGroupSidebarPositions.set(i, sidebarPosition);
           }
 
           const customProps: Record<string, unknown> = {};
@@ -998,7 +1182,13 @@ export async function generateBlocks(
 
       const pageResults = await processBatch(
         pageTasks,
-        async (task) => processSinglePage(task),
+        async (task) => {
+          try {
+            return await processSinglePage(task);
+          } catch (error) {
+            return createFailedPageProcessingResult(task, error);
+          }
+        },
         {
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md
@@ -1032,7 +1222,7 @@ export async function generateBlocks(
             } else {
               failedCount++;
               // Include page title for better error context
-              // eslint-disable-next-line security/detect-object-injection -- index is produced by iterating settled promise results
+
               const failedTask = pageTasks[index];
               console.error(
                 chalk.red(

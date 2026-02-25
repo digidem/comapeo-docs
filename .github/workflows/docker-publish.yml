@@ -1,0 +1,195 @@
+name: Docker Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "docker-compose.yaml"
+      - ".dockerignore"
+      - "package.json"
+      - "bun.lock*"
+      - "scripts/**"
+      - "api-server/**"
+      - "tsconfig.json"
+      - "docusaurus.config.ts"
+      - "src/client/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "docker-compose.yaml"
+      - ".dockerignore"
+      - "package.json"
+      - "bun.lock*"
+      - "scripts/**"
+      - "api-server/**"
+      - "tsconfig.json"
+      - "docusaurus.config.ts"
+      - "src/client/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: communityfirst/comapeo-docs-api
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint GitHub workflows
+        uses: rhysd/actionlint@v1.7.7
+        with:
+          args: .github/workflows/docker-publish.yml
+
+      - name: Determine publish mode
+        id: publish
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          push=true
+
+          if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+            push=false
+          fi
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+              push=false
+            fi
+          fi
+
+          echo "push=$push" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to Docker Hub
+        if: steps.publish.outputs.push == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.publish.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: PR comment with image reference
+        if: github.event_name == 'pull_request' && steps.publish.outputs.push == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const imageRef = '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}';
+            const platformList = 'linux/amd64, linux/arm64';
+            const commitSha = context.payload.pull_request.head.sha.substring(0, 7);
+
+            const commentBody = `## 🐳 Docker Image Published
+
+            Your Docker image has been built and pushed for this PR.
+
+            **Image Reference:** \`${imageRef}\`
+
+            **Platforms:** ${platformList}
+
+            ### Testing
+
+            To test this image:
+            \`\`\`bash
+            docker pull ${imageRef}
+            docker run -p 3001:3001 ${imageRef}
+            \`\`\`
+
+            ---
+
+            <sub>Built with commit ${commitSha}</sub>`;
+
+            // Check if comment already exists
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              (comment.body.includes('🐳 Docker Image Built') || comment.body.includes('🐳 Docker Image Published'))
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: commentBody,
+              });
+            }
+
+      - name: Notify Slack
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Docker Publish*: ${{ job.status }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "*Docker Publish*: ${{ job.status }}\nRepository: `${{ env.IMAGE_NAME }}`"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Trigger: <${{ github.server_url }}/${{ github.actor }}|${{ github.actor }}>\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ github.event_name == 'pull_request' && format('Published tag: `pr-{0}`', github.event.number) || github.ref == 'refs/heads/main' && format('Published tags: `latest`, `{0}`', github.sha) || format('Manual run on ref `{0}`', github.ref_name) }}"

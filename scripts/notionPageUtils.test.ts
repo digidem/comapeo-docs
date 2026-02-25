@@ -823,12 +823,12 @@ describe("notionPageUtils", () => {
       ];
 
       const selected = selectPagesWithPriority(pages, 10, {
-        statusFilter: "Draft",
+        statusFilter: "Ready to publish",
         verbose: false,
       });
 
       expect(selected).toHaveLength(1);
-      expect(selected[0].id).toBe("1");
+      expect(selected[0].id).toBe("2");
     });
 
     it("should handle all pages being 'Ready to publish' + 'Page'", () => {
@@ -896,15 +896,14 @@ describe("notionPageUtils", () => {
         },
       ];
 
-      // With includeRemoved but filtering for Draft
+      // With includeRemoved but filtering for Ready to publish
       const selected = selectPagesWithPriority(pages, 10, {
         includeRemoved: true,
-        statusFilter: "Draft",
+        statusFilter: "Ready to publish",
         verbose: false,
       });
 
-      expect(selected).toHaveLength(1);
-      expect(selected[0].id).toBe("2");
+      expect(selected).toHaveLength(0);
     });
 
     it("should confirm selection is based on Publish Status and Language, not Tags", () => {

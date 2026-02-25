@@ -1,0 +1,152 @@
+# ============================================
+# .dockerignore for Comapeo Docs API Server
+# Minimizes Docker context size by excluding unnecessary files
+# ============================================
+
+# Dependencies (installed in container via package.json)
+node_modules
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs and caches
+build/
+dist/
+.out/
+.docusaurus/
+.cache-loader/
+*.tsbuildinfo
+
+# ============================================
+# Content Generation (not needed for API server)
+# ============================================
+# Generated content from Notion (synced from content branch)
+docs/
+i18n/
+static/images/
+
+# ============================================
+# Development & Testing (not needed in production)
+# ============================================
+# Test files and coverage
+coverage/
+test-results*.json
+test-results*.html
+*.test.ts
+*.test.tsx
+*.spec.ts
+vitest.config.ts
+__tests__/
+
+# Development configuration
+.eslintrc*
+.prettierrc*
+.prettierignore
+lefthook.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.azure-pipelines.yml
+.circleci/
+
+# ============================================
+# Documentation & Assets (not needed for API)
+# ============================================
+# Project documentation
+README.md
+CONTRIBUTING.md
+CHANGELOG.md
+LICENSE
+context/
+NOTION_FETCH_ARCHITECTURE.md
+
+# Assets not needed for API server
+assets/
+favicon.*
+robots.txt
+
+# ============================================
+# Development Directories (not needed in container)
+# ============================================
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.marscode/
+.eclipse/
+
+# Worktrees and development directories
+worktrees/
+.dev-docs/
+
+# ============================================
+# Environment & Secrets (use env vars or mounted secrets)
+# ============================================
+.env
+.env.*
+!.env.example
+
+# ============================================
+# Temporary & Generated Files
+# ============================================
+# Temporary files
+*.tmp
+*.temp
+*-preview-*.md
+.cache/
+screenshots/
+
+# Notion exports and emoji files (not needed for API)
+notion_*.json
+
+# Runtime metrics and cache files
+retry-metrics.json
+image-cache.json
+image-failures.json
+
+# Job persistence data (mounted as volume)
+.jobs-data/
+
+# Audit data (development only)
+.audit-data/
+
+# Development planning
+TASK.md
+NEXT_STEPS.md
+PRD.md
+TODO.md
+
+# ============================================
+# Docker Files (don't include Docker files in image)
+# ============================================
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# ============================================
+# Misc (OS files, logs)
+# ============================================
+.DS_Store
+Thumbs.db
+*.log
+
+# ============================================
+# Test Directories under scripts/ (explicit)
+# ============================================
+scripts/test-docker/
+scripts/test-scaffold/
+scripts/test-utils/
+scripts/**/__tests__/
+scripts/**/*.test.ts
+api-server/**/__tests__/
+api-server/**/*.test.ts

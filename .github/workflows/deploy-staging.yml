@@ -5,15 +5,16 @@ on:
   push:
     branches:
       - main
+      - content
     paths:
       - "src/**"
       - "static/img/**"
       - "docusaurus.config.ts"
       - "sidebars.ts"
       - "package.json"
-  workflow_run:
-    workflows: [Sync Notion Docs]
-    types: [completed]
+      - "docs/**"
+      - "i18n/**"
+      - "static/images/**"
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -29,16 +30,91 @@ concurrency:
 jobs:
   build:
     name: Build
-    # Run on push/workflow_dispatch; if workflow_run, require success
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.detect.outputs.should_deploy }}
+      reason: ${{ steps.detect.outputs.reason }}
+      event_name: ${{ steps.detect.outputs.event_name }}
+      branch_name: ${{ steps.detect.outputs.branch_name }}
     steps:
+      - name: Evaluate deploy trigger
+        id: detect
+        run: |
+          set -euo pipefail
+
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          BRANCH_NAME="${GITHUB_REF_NAME}"
+          SHOULD_DEPLOY="false"
+          REASON=""
+
+          echo "Event: ${EVENT_NAME}"
+          echo "Branch: ${BRANCH_NAME}"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SHOULD_DEPLOY="true"
+            REASON="Manual workflow dispatch."
+          elif [ "$EVENT_NAME" = "push" ]; then
+            CHANGED_FILES=$(jq -r '[.commits[]? | (.added + .modified + .removed)[]?] | unique[]' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+
+            if [ -n "$CHANGED_FILES" ]; then
+              echo "Changed files from push payload:"
+              printf '%s\n' "$CHANGED_FILES" | sed 's/^/  - /'
+            else
+              SHOULD_DEPLOY="true"
+              REASON="Push payload did not include changed files; defaulting to deploy."
+            fi
+
+            if [ "$SHOULD_DEPLOY" != "true" ]; then
+              if [ "$BRANCH_NAME" = "main" ]; then
+                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(src/|static/img/|docusaurus\.config\.ts$|sidebars\.ts$|package\.json$)'; then
+                  SHOULD_DEPLOY="true"
+                  REASON="main push includes code/config paths."
+                else
+                  REASON="main push without deploy-relevant code/config changes."
+                fi
+              elif [ "$BRANCH_NAME" = "content" ]; then
+                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(docs/|i18n/|static/images/)'; then
+                  SHOULD_DEPLOY="true"
+                  REASON="content push includes generated content paths."
+                else
+                  REASON="content push without deploy-relevant content changes."
+                fi
+              else
+                REASON="Unsupported branch for deploy workflow."
+              fi
+            fi
+          else
+            SHOULD_DEPLOY="true"
+            REASON="Non-push trigger; defaulting to deploy."
+          fi
+
+          echo "should_deploy=$SHOULD_DEPLOY" >> "$GITHUB_OUTPUT"
+          echo "event_name=$EVENT_NAME" >> "$GITHUB_OUTPUT"
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "reason<<EOF"
+            echo "$REASON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deployment decision summary
+        if: always()
+        run: |
+          echo "## Deploy Trigger Evaluation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Event: \`${{ steps.detect.outputs.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: \`${{ steps.detect.outputs.branch_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Decision: \`${{ steps.detect.outputs.should_deploy == 'true' && 'deploy' || 'skip' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ steps.detect.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout code (main branch)
-        uses: actions/checkout@v5
+        if: steps.detect.outputs.should_deploy == 'true'
+        uses: actions/checkout@v6
         with:
           ref: main
 
       - name: Checkout content files from content branch
+        if: steps.detect.outputs.should_deploy == 'true'
         run: |
           set -e  # Exit on error
 
@@ -95,12 +171,15 @@ jobs:
           find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun
+        if: steps.detect.outputs.should_deploy == 'true'
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
 
       - name: Install dependencies
+        if: steps.detect.outputs.should_deploy == 'true'
         run: bun i
 
       - name: Build website
+        if: steps.detect.outputs.should_deploy == 'true'
         env:
           BASE_URL: /comapeo-docs/
           DEFAULT_DOCS_PAGE: ${{ secrets.DEFAULT_DOCS_PAGE }}
@@ -108,12 +187,14 @@ jobs:
         run: bun run build
 
       - name: Upload artifact
+        if: steps.detect.outputs.should_deploy == 'true'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: build
 
   deploy:
     name: Deploy
+    if: ${{ needs.build.outputs.should_deploy == 'true' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -126,12 +207,14 @@ jobs:
 
   update-notion-status:
     name: Update Notion Status → Draft published
-    needs: deploy
-    if: ${{ needs.deploy.result == 'success' }}
+    needs:
+      - build
+      - deploy
+    if: ${{ needs.build.outputs.should_deploy == 'true' && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: main
 
@@ -169,6 +252,10 @@ jobs:
                 text:
                   type: "mrkdwn"
                   text: "*GitHub Pages pipeline*: build=${{ needs.build.result }}, deploy=${{ needs.deploy.result }}, notion=${{ needs['update-notion-status'].result }}"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "Decision: `${{ needs.build.outputs.should_deploy == 'true' && 'deploy' || 'skip' }}`\nReason: ${{ needs.build.outputs.reason }}"
               - type: "section"
                 text:
                   type: "mrkdwn"

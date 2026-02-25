@@ -1,0 +1,146 @@
+# Docker Compose configuration for Comapeo Docs API Service
+# Usage: docker compose up [-d] [--build]
+#
+# Environment variables can be set in .env file or via command line:
+#   API_PORT=3001 docker compose up
+#   docker compose --env-file .env.production up
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      # Build arguments for configurability
+      args:
+        BUN_VERSION: ${BUN_VERSION:-1}
+        NODE_ENV: ${NODE_ENV:-production}
+        HEALTHCHECK_INTERVAL: ${HEALTHCHECK_INTERVAL:-30s}
+        HEALTHCHECK_TIMEOUT: ${HEALTHCHECK_TIMEOUT:-10s}
+        HEALTHCHECK_START_PERIOD: ${HEALTHCHECK_START_PERIOD:-5s}
+        HEALTHCHECK_RETRIES: ${HEALTHCHECK_RETRIES:-3}
+    image: ${DOCKER_IMAGE_NAME:-comapeo-docs-api}:${DOCKER_IMAGE_TAG:-latest}
+    container_name: ${DOCKER_CONTAINER_NAME:-comapeo-api-server}
+
+    # Port mapping: host:container
+    ports:
+      - "${API_PORT:-3001}:3001"
+
+    # Environment variables
+    environment:
+      # API Configuration
+      NODE_ENV: ${NODE_ENV:-production}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-3001}
+
+      # Notion Configuration (required for job operations)
+      NOTION_API_KEY: ${NOTION_API_KEY}
+      DATABASE_ID: ${DATABASE_ID}
+      DATA_SOURCE_ID: ${DATA_SOURCE_ID}
+
+      # Content repository configuration (required for mutating jobs)
+      # Required for: notion:fetch, notion:fetch-all, notion:translate
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL}
+
+      # Content repository behavior (optional)
+      GITHUB_CONTENT_BRANCH: ${GITHUB_CONTENT_BRANCH:-content}
+      WORKDIR: ${WORKDIR:-/app/workspace/repo}
+      COMMIT_MESSAGE_PREFIX: ${COMMIT_MESSAGE_PREFIX:-content-bot:}
+      ALLOW_EMPTY_COMMITS: ${ALLOW_EMPTY_COMMITS:-false}
+
+      # OpenAI Configuration (required for translation jobs)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+
+      # Documentation Configuration
+      DEFAULT_DOCS_PAGE: ${DEFAULT_DOCS_PAGE:-introduction}
+
+      # Content output paths (override for Docker volume persistence)
+      CONTENT_PATH: ${CONTENT_PATH:-/app/workspace/repo/docs}
+      IMAGES_PATH: ${IMAGES_PATH:-/app/workspace/repo/static/images}
+      I18N_PATH: ${I18N_PATH:-/app/workspace/repo/i18n}
+
+      # Image Processing Configuration
+      ENABLE_RETRY_IMAGE_PROCESSING: ${ENABLE_RETRY_IMAGE_PROCESSING:-true}
+      MAX_IMAGE_RETRIES: ${MAX_IMAGE_RETRIES:-3}
+
+      # API Authentication
+      # ⚠️  WARNING: When no API_KEY_* variables are set, the API is FULLY OPEN
+      # and accepts ALL requests without authentication. Always configure at
+      # least one key for any non-local deployment.
+      # Format: API_KEY_<name>=value (minimum 16 characters)
+      # Example: API_KEY_DEPLOYMENT=your-secret-key-min-16-chars
+      API_KEY_GITHUB_ACTIONS: ${API_KEY_GITHUB_ACTIONS}
+
+      # CORS Origin Allowlist (optional, comma-separated)
+      # Leave unset to allow all origins; set to restrict cross-origin access
+      # Example: ALLOWED_ORIGINS=https://your-app.com,https://admin.your-app.com
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+
+    # Volume mounts for persistent data
+    volumes:
+      # Mount job persistence directory
+      - ${DOCKER_VOLUME_NAME:-comapeo-job-data}:/app/workspace
+
+    # Resource limits (configurable via environment)
+    # Note: CPU limits disabled due to NanoCPUs compatibility issues
+    deploy:
+      resources:
+        limits:
+          memory: "${DOCKER_MEMORY_LIMIT:-512M}"
+        reservations:
+          memory: "${DOCKER_MEMORY_RESERVATION:-128M}"
+
+    # Restart policy (configurable)
+    restart: ${DOCKER_RESTART_POLICY:-unless-stopped}
+
+    # Health check (configurable intervals)
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "--silent",
+          "-e",
+          "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1))",
+        ]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+      start_period: ${HEALTHCHECK_START_PERIOD:-5s}
+
+    # Logging configuration (configurable)
+    logging:
+      driver: "${DOCKER_LOG_DRIVER:-json-file}"
+      options:
+        max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+        max-file: "${DOCKER_LOG_MAX_FILE:-3}"
+
+    # Network (configurable)
+    networks:
+      - ${DOCKER_NETWORK:-comapeo-network}
+
+    # Labels for metadata and organization
+    labels:
+      - "com.comapeo.description=Comapeo Docs API Server"
+      - "com.comapeo.version=${DOCKER_IMAGE_TAG:-latest}"
+      - "com.comapeo.managed-by=docker-compose"
+
+# Named volumes for persistent data (configurable names)
+volumes:
+  comapeo-job-data:
+    driver: ${DOCKER_VOLUME_DRIVER:-local}
+    name: ${DOCKER_VOLUME_NAME:-comapeo-job-data}
+    labels:
+      - "com.comapeo.description=Job persistence data volume"
+
+# Networks (configurable)
+networks:
+  comapeo-network:
+    driver: ${DOCKER_NETWORK_DRIVER:-bridge}
+    name: ${DOCKER_NETWORK_NAME:-comapeo-network}
+    labels:
+      - "com.comapeo.description=Comapeo API network"

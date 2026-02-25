@@ -4,6 +4,7 @@ import { GenerateBlocksOptions } from "../notion-fetch/generateBlocks";
 import {
   getStatusFromRawPage,
   selectPagesWithPriority,
+  resolveChildrenByStatus,
 } from "../notionPageUtils";
 
 export interface PageWithStatus {
@@ -40,6 +41,7 @@ export interface FetchAllOptions {
 export interface FetchAllResult {
   pages: PageWithStatus[];
   rawPages: Array<Record<string, unknown>>;
+  candidateIds: string[];
   metrics?: {
     totalSaved: number;
     sectionCount: number;
@@ -68,20 +70,32 @@ export async function fetchAllNotionData(
     generateOptions = {},
   } = options;
 
-  const filter = buildStatusFilter(includeRemoved);
+  const filter = buildStatusFilter(includeRemoved, statusFilter);
 
   let fetchedCount = 0;
+  let candidateIds: string[] = [];
 
   const { data: rawData = [], metrics } = await runFetchPipeline({
     filter,
     fetchSpinnerText:
       fetchSpinnerText ??
-      "Fetching ALL pages from Notion (excluding removed items by default)...",
+      (statusFilter
+        ? `Fetching database to filter by "${statusFilter}" and resolve children...`
+        : "Fetching ALL pages from Notion (excluding removed items by default)..."),
     generateSpinnerText:
       generateSpinnerText ?? "Exporting pages to markdown files",
     transform: (pages) => {
       try {
         fetchedCount = Array.isArray(pages) ? pages.length : 0;
+
+        // Capture IDs matching statusFilter BEFORE any replacement/slicing occurs.
+        // This ensures parents replaced by children are still transitioned.
+        if (statusFilter) {
+          candidateIds = pages
+            .filter((p) => getStatusFromRawPage(p) === statusFilter)
+            .map((p) => (p as any).id);
+        }
+
         const transformed = applyFetchAllTransform(
           Array.isArray(pages) ? pages : [],
           {
@@ -104,11 +118,12 @@ export async function fetchAllNotionData(
     generateOptions,
   });
 
-  // Apply defensive filters for both removal and explicit status
+  // Apply filters for removal status only
+  // Note: statusFilter is already handled in the transform function (applyFetchAllTransform)
+  // so we just need to filter out removed pages here
   const defensivelyFiltered = rawData.filter((p) => {
     const status = getStatusFromRawPage(p);
     if (!includeRemoved && status === "Remove") return false;
-    if (statusFilter && status !== statusFilter) return false;
     return true;
   });
 
@@ -120,15 +135,29 @@ export async function fetchAllNotionData(
   return {
     pages: sortedPages,
     rawPages: defensivelyFiltered,
+    candidateIds,
     metrics: exportFiles ? metrics : undefined,
     fetchedCount,
     processedCount: sortedPages.length,
   };
 }
 
-function buildStatusFilter(includeRemoved: boolean) {
+export function buildStatusFilter(
+  includeRemoved: boolean,
+  statusFilter?: string
+) {
   if (includeRemoved) {
     return undefined;
+  }
+
+  // When a specific status is requested, query only those pages from the API.
+  // This avoids fetching the entire database and filtering in-memory, which is
+  // especially important for fetch-ready jobs that only need a handful of pages.
+  if (statusFilter) {
+    return {
+      property: NOTION_PROPERTIES.STATUS,
+      select: { equals: statusFilter },
+    };
   }
 
   return {
@@ -155,12 +184,6 @@ function applyFetchAllTransform(
 ) {
   const { statusFilter, maxPages, includeRemoved } = options;
 
-  console.log(`🔍 [DEBUG] applyFetchAllTransform called:`);
-  console.log(`  - Input pages: ${pages.length}`);
-  console.log(`  - maxPages: ${maxPages} (type: ${typeof maxPages})`);
-  console.log(`  - includeRemoved: ${includeRemoved}`);
-  console.log(`  - statusFilter: ${statusFilter || "none"}`);
-
   // Use smart page selection if maxPages is specified
   if (typeof maxPages === "number" && maxPages > 0) {
     console.log(`  ✅ Using smart page selection`);
@@ -173,19 +196,16 @@ function applyFetchAllTransform(
 
   console.log(`  ⚠️  Skipping smart page selection (condition not met)`);
 
-  // Otherwise, apply simple filtering
-  let filtered = pages;
+  // Apply filters for removal status
+  let filtered = pages.filter((p) => {
+    const status = getStatusFromRawPage(p);
+    if (!includeRemoved && status === "Remove") return false;
+    return true;
+  });
 
-  if (!includeRemoved) {
-    filtered = filtered.filter(
-      (page) => getStatusFromRawPage(page) !== "Remove"
-    );
-  }
-
+  // When statusFilter is provided, resolve children from parent pages
   if (statusFilter) {
-    filtered = filtered.filter(
-      (page) => getStatusFromRawPage(page) === statusFilter
-    );
+    filtered = resolveChildrenByStatus(filtered, statusFilter);
   }
 
   return filtered;
@@ -223,7 +243,7 @@ function logStatusSummary(pages: PageWithStatus[]) {
 /**
  * Transform raw Notion page to structured format
  */
-function transformPage(page: any): PageWithStatus {
+export function transformPage(page: any): PageWithStatus {
   const properties = page.properties || {};
 
   // Extract title safely

@@ -84,6 +84,63 @@ export function shouldIncludePage(
 }
 
 /**
+ * Extract sub-item IDs from a page's "Sub-item" relation property
+ * @param page - Raw Notion page object
+ * @returns Array of sub-item IDs
+ */
+export function getSubItemIds(page: Record<string, unknown>): string[] {
+  const relations = (page.properties as any)?.["Sub-item"]?.relation;
+  if (!Array.isArray(relations)) return [];
+  return relations
+    .map((rel) => (rel as { id?: string }).id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+/**
+ * Resolve children from parent pages matching a status filter
+ * When statusFilter is provided, finds parent pages with that status and returns their children
+ * @param pages - Array of raw Notion pages
+ * @param statusFilter - Status to filter parent pages by
+ * @returns Filtered pages (children if found, otherwise parents matching status)
+ */
+export function resolveChildrenByStatus(
+  pages: Array<Record<string, unknown>>,
+  statusFilter: string
+): Array<Record<string, unknown>> {
+  // Find parent pages that match the status filter
+  const parentPages = pages.filter(
+    (page) => getStatusFromRawPage(page) === statusFilter
+  );
+
+  if (parentPages.length === 0) {
+    return [];
+  }
+
+  // Collect all child page IDs from the "Sub-item" relation
+  const childIds = new Set<string>();
+  for (const parent of parentPages) {
+    const subItemIds = getSubItemIds(parent);
+    for (const id of subItemIds) {
+      childIds.add(id);
+    }
+  }
+
+  // Return only children when they can be resolved from the fetched set.
+  // If children are referenced but not present in `pages`, fall back to parents.
+  if (childIds.size > 0) {
+    const resolvedChildren = pages.filter((page) =>
+      childIds.has(page.id as string)
+    );
+    if (resolvedChildren.length > 0) {
+      return resolvedChildren;
+    }
+  }
+
+  // No children found or resolvable: deterministically fall back to parents.
+  return parentPages;
+}
+
+/**
  * Filter pages by status
  * @param pages - Array of raw Notion pages
  * @param status - Status to filter by
@@ -136,7 +193,7 @@ export function selectPagesWithPriority(
 ): Array<Record<string, unknown>> {
   const { includeRemoved = false, statusFilter, verbose = true } = options;
 
-  // First apply removal and status filters
+  // First apply removal filter
   let filtered = pages;
 
   if (!includeRemoved) {
@@ -145,10 +202,60 @@ export function selectPagesWithPriority(
     );
   }
 
+  // When statusFilter is provided, resolve children from parent pages
+  let hasChildren = false;
   if (statusFilter) {
-    filtered = filtered.filter(
+    const childIds = new Set<string>();
+    const parentPages = filtered.filter(
       (page) => getStatusFromRawPage(page) === statusFilter
     );
+
+    for (const parent of parentPages) {
+      const subItemIds = getSubItemIds(parent);
+      for (const id of subItemIds) {
+        childIds.add(id);
+      }
+    }
+
+    if (childIds.size > 0) {
+      const resolvedChildren = filtered.filter((p) =>
+        childIds.has(p.id as string)
+      );
+      if (resolvedChildren.length > 0) {
+        hasChildren = true;
+        if (verbose) {
+          console.log(
+            `  🔍 statusFilter "${statusFilter}": found ${parentPages.length} parent(s) with ${resolvedChildren.length} child(ren)`
+          );
+        }
+        filtered = resolvedChildren;
+      } else {
+        if (verbose) {
+          console.log(
+            `  ⚠️ statusFilter "${statusFilter}": children referenced but not present, returning parent pages`
+          );
+        }
+        filtered = parentPages;
+      }
+    } else {
+      if (verbose) {
+        console.log(
+          `  ⚠️ statusFilter "${statusFilter}": no children found, returning parent pages`
+        );
+      }
+      filtered = parentPages;
+    }
+  }
+
+  // When statusFilter found children, return them all without limiting to maxPages
+  // The maxPages limit will be applied after the pipeline completes
+  if (statusFilter && hasChildren) {
+    if (verbose) {
+      console.log(
+        `  🔍 statusFilter: returning all ${filtered.length} children (skipping maxPages limit)`
+      );
+    }
+    return filtered;
   }
 
   // Prioritize pages by likelihood of generating content

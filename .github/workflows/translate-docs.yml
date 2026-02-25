@@ -28,6 +28,46 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync content branch with main
+        if: env.TARGET_BRANCH == 'content'
+        run: |
+          set -e
+
+          echo "Fetching latest main branch..."
+          git fetch origin main
+
+          echo "Merging origin/main into content..."
+          if git merge --no-edit origin/main; then
+            echo "content branch synced with main"
+          else
+            echo "Failed to merge main into content. Resolve conflicts manually."
+            exit 1
+          fi
+
+          # Allow content branch to track generated directories (/docs/, /i18n/, /static/images/)
+          # Main's .gitignore ignores these because they're synced FROM content branch
+          # Content branch needs them NOT ignored so translations can be committed
+          echo "Adjusting .gitignore for content branch (allow generated content dirs)..."
+
+          # Remove the lines that ignore generated content directories and their associated comments
+          # This preserves all other .gitignore updates from main while allowing commits to these dirs
+          sed -i '/^# Generated content (synced from content branch)$/d; /^# These directories are populated by checking out from the content branch$/d; /^\/docs\/$/d; /^\/i18n\/$/d; /^\/static\/images\/$/d' .gitignore
+
+          # Only commit if .gitignore actually changed
+          if ! git diff --quiet .gitignore; then
+            git add .gitignore
+            git commit -m "chore: allow generated content dirs in .gitignore after merge from main"
+            echo "✅ Adjusted .gitignore to allow /docs/, /i18n/, /static/images/"
+          else
+            echo "ℹ️  .gitignore unchanged, no adjustment needed"
+          fi
 
       - name: Apply latest scripts from main
         run: |
@@ -250,9 +290,6 @@ jobs:
       - name: Commit translated docs
         if: success()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           # Stage specific paths (adjust to your generated files)
           git add i18n
           if [ -d docs ]; then
@@ -343,9 +380,9 @@ jobs:
                     • Updated translations: ${{ steps.parse_summary.outputs.updated_translations }}
                     • Skipped: ${{ steps.parse_summary.outputs.skipped_translations }}
                     ${{ steps.parse_summary.outputs.has_failures == 'true' && '*Failures:*' || '' }}
-                    ${{ steps.parse_summary.outputs.failed_translations != '0' && fromJSON('["  • Doc translation failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.failed_translations != '0' && steps.parse_summary.outputs.failed_translations || '' }}
-                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && fromJSON('["  • Code.json failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.code_json_failures != '0' && steps.parse_summary.outputs.code_json_failures || '' }}
-                    ${{ steps.parse_summary.outputs.theme_failures != '0' && fromJSON('["  • Theme (navbar/footer) failures: "]')[0] || '' }}${{ steps.parse_summary.outputs.theme_failures != '0' && steps.parse_summary.outputs.theme_failures || '' }}
+                    ${{ steps.parse_summary.outputs.failed_translations != '0' && format('  • Doc translation failures: {0}', steps.parse_summary.outputs.failed_translations) || '' }}
+                    ${{ steps.parse_summary.outputs.code_json_failures != '0' && format('  • Code.json failures: {0}', steps.parse_summary.outputs.code_json_failures) || '' }}
+                    ${{ steps.parse_summary.outputs.theme_failures != '0' && format('  • Theme (navbar/footer) failures: {0}', steps.parse_summary.outputs.theme_failures) || '' }}
               - type: "section"
                 text:
                   type: "mrkdwn"

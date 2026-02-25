@@ -27,6 +27,7 @@ yarn-error.log*
 CLAUDE.md
 test-results.json
 test-results.html
+test-results/
 coverage/
 
 # Image processing files
@@ -52,6 +53,7 @@ bg.png
 favicon.ico
 favicon.svg
 /assets/
+assets/
 
 # Generated content (synced from content branch)
 # These directories are populated by checking out from the content branch
@@ -93,3 +95,21 @@ retry-metrics.json
 
 # Claude Code command history
 .claude/command-history.log
+
+# Job persistence data
+.jobs-data/
+
+# Local agent artifacts
+.claude/command-history.log
+.audit-data/
+.beads/
+.junie/
+.ralphy/
+.qoder/
+.rollback-data/
+telemetry-id
+
+# Log and skill files (development artifacts)
+*.log
+*.skill
+api-server/flaky-test-counts.txt

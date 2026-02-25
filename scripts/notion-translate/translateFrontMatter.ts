@@ -9,6 +9,7 @@ import {
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
+  TRANSLATION_CHUNK_MAX_CHARS,
   OPENAI_BASE_URL,
 } from "../constants.js";
 
@@ -84,6 +85,7 @@ export class TranslationError extends Error {
     | "quota_exceeded"
     | "authentication_failed"
     | "schema_invalid"
+    | "token_overflow"
     | "transient_api_error"
     | "unexpected_error";
   isCritical: boolean;
@@ -158,6 +160,21 @@ const classifyOpenAIError = (error: unknown): TranslationError => {
     );
   }
 
+  // Token overflow: 400 with token limit message (must check before schema check)
+  if (
+    status === 400 &&
+    /tokens?\s+exceed|input.*tokens.*limit|configured\s+limit\s+of\s+\d+\s+tokens/i.test(
+      message
+    )
+  ) {
+    return new TranslationError(
+      `Token overflow: ${message}`,
+      "token_overflow",
+      false, // Not critical — caller can retry with chunking
+      status
+    );
+  }
+
   if (
     status === 400 &&
     /schema|response_format|json_schema|invalid schema/i.test(message)
@@ -220,6 +237,178 @@ const parseTranslationPayload = (content: string): TranslationPayload => {
 };
 
 /**
+ * Splits markdown into chunks that each fit within `maxChars`.
+ * Uses fence-aware heading boundaries, then paragraph boundaries, then line boundaries.
+ * @internal exported for testing
+ */
+export function splitMarkdownIntoChunks(
+  markdown: string,
+  maxChars: number = TRANSLATION_CHUNK_MAX_CHARS
+): string[] {
+  if (markdown.length <= maxChars) {
+    return [markdown];
+  }
+  const sections = splitBySections(markdown);
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  for (const section of sections) {
+    if (currentChunk.length + section.length > maxChars) {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = "";
+      }
+      // Section itself exceeds limit — split further
+      if (section.length > maxChars) {
+        const subChunks = splitByParagraphs(section, maxChars);
+        chunks.push(...subChunks.slice(0, -1));
+        currentChunk = subChunks[subChunks.length - 1];
+      } else {
+        currentChunk = section;
+      }
+    } else {
+      currentChunk += section;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+/** Split markdown at heading boundaries, skipping headings inside fenced code blocks. */
+function splitBySections(markdown: string): string[] {
+  const parts: string[] = [];
+  const lines = markdown.split("\n");
+  const lastIdx = lines.length - 1;
+  let current = "";
+  let inFence = false;
+
+  for (const [idx, line] of lines.entries()) {
+    // Reconstruct original text: all lines except the last trailing empty get "\n" appended
+    const lineWithNewline =
+      idx < lastIdx ? line + "\n" : line.length > 0 ? line : "";
+
+    // Toggle fence state on ``` or ~~~ lines
+    if (/^(`{3,}|~{3,})/.test(line)) {
+      inFence = !inFence;
+    }
+    // Start a new section before any ATX heading (outside fences)
+    if (!inFence && /^#{1,6}\s/.test(line) && current.length > 0) {
+      parts.push(current);
+      current = "";
+    }
+    current += lineWithNewline;
+  }
+
+  if (current.length > 0) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+/** Split text at double-newline paragraph boundaries. */
+function splitByParagraphs(text: string, maxChars: number): string[] {
+  // Split keeping separators so reassembly via join("") is lossless.
+  // Tokens alternate: content, "\n\n+" separator, content, ...
+  const tokens = text.split(/(\n\n+)/);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const token of tokens) {
+    const isSeparator = /^\n+$/.test(token);
+    const candidate = current + token;
+
+    if (candidate.length > maxChars) {
+      if (current.length > 0) {
+        if (isSeparator) {
+          // Separator tips us over — flush current + separator together
+          chunks.push(current + token);
+          current = "";
+        } else {
+          // Content token doesn't fit — flush current, start new chunk with token
+          chunks.push(current);
+          if (token.length > maxChars) {
+            // Single content token exceeds limit — split by lines
+            const lineChunks = splitByLines(token, maxChars);
+            chunks.push(...lineChunks.slice(0, -1));
+            current = lineChunks[lineChunks.length - 1];
+          } else {
+            current = token;
+          }
+        }
+      } else if (!isSeparator && token.length > maxChars) {
+        // Leading oversized token (current is empty) — split by lines immediately
+        const lineChunks = splitByLines(token, maxChars);
+        chunks.push(...lineChunks.slice(0, -1));
+        current = lineChunks[lineChunks.length - 1];
+      } else {
+        current = candidate;
+      }
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+/** Last-resort split at individual line boundaries. */
+function splitByLines(text: string, maxChars: number): string[] {
+  const lines = text.split("\n");
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const line of lines) {
+    const candidate = current.length === 0 ? line : current + "\n" + line;
+
+    if (candidate.length > maxChars) {
+      if (current.length > 0) {
+        chunks.push(current);
+        // If the line itself exceeds the limit, force-split by character
+        if (line.length > maxChars) {
+          for (let i = 0; i < line.length; i += maxChars) {
+            const segment = line.slice(i, i + maxChars);
+            if (i + maxChars < line.length) {
+              chunks.push(segment);
+            } else {
+              current = segment;
+            }
+          }
+        } else {
+          current = line;
+        }
+      } else {
+        // Leading oversized line (current is empty) — force-split by character
+        for (let i = 0; i < line.length; i += maxChars) {
+          const segment = line.slice(i, i + maxChars);
+          if (i + maxChars < line.length) {
+            chunks.push(segment);
+          } else {
+            current = segment;
+          }
+        }
+      }
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+/**
  * Translates a markdown file using OpenAI
  * @param filePath Path to the markdown file to translate
  * @param targetLanguage Target language for translation
@@ -263,24 +452,13 @@ export async function translateMarkdownFile(
   }
 }
 
-/**
- * Translates text using OpenAI
- * @param text Text to translate
- * @param title Title of the text
- * @param targetLanguage Target language for translation
- * @returns {markdown: string, title: string}
- */
-export async function translateText(
+/** Single-call implementation that sends one request to the OpenAI API. */
+async function translateTextSingleCall(
   text: string,
   title: string,
   targetLanguage: string
 ): Promise<{ markdown: string; title: string }> {
-  // Add "title: {title}" to the first line of the text
-  const safeText =
-    typeof text === "string" && text.length > 0
-      ? text
-      : "# Empty Content\n\nThis page has no content to translate.";
-  const textWithTitle = `title: ${title}\n\nmarkdown: ${safeText}`;
+  const textWithTitle = `title: ${title}\n\nmarkdown: ${text}`;
 
   // Create the prompt with the target language
   const prompt = TRANSLATION_PROMPT.replace("{targetLanguage}", targetLanguage);
@@ -346,6 +524,89 @@ export async function translateText(
     "transient_api_error",
     false
   );
+}
+
+/**
+ * Translates text using OpenAI
+ * @param text Text to translate
+ * @param title Title of the text
+ * @param targetLanguage Target language for translation
+ * @returns {markdown: string, title: string}
+ */
+export async function translateText(
+  text: string,
+  title: string,
+  targetLanguage: string
+): Promise<{ markdown: string; title: string }> {
+  const safeText =
+    typeof text === "string" && text.length > 0
+      ? text
+      : "# Empty Content\n\nThis page has no content to translate.";
+
+  // Include system prompt overhead (~1800 chars) + title prefix + "markdown: " prefix
+  const estimatedTotalChars =
+    TRANSLATION_PROMPT.length + title.length + 20 + safeText.length;
+
+  if (estimatedTotalChars <= TRANSLATION_CHUNK_MAX_CHARS) {
+    // Fast path: content fits in a single call
+    return translateTextSingleCall(safeText, title, targetLanguage);
+  }
+
+  // Slow path: content too large — split into chunks
+  const contentBudget =
+    TRANSLATION_CHUNK_MAX_CHARS - TRANSLATION_PROMPT.length - title.length - 20;
+  const chunks = splitMarkdownIntoChunks(
+    safeText,
+    Math.max(contentBudget, 50_000)
+  );
+
+  let translatedTitle = title;
+  const translatedChunks: string[] = [];
+
+  for (const [i, chunk] of chunks.entries()) {
+    const chunkTitle = i === 0 ? title : "";
+    let result: { markdown: string; title: string };
+
+    try {
+      result = await translateTextSingleCall(chunk, chunkTitle, targetLanguage);
+    } catch (err) {
+      // If a chunk still overflows, halve it and retry once (adaptive fallback)
+      if (err instanceof TranslationError && err.code === "token_overflow") {
+        const half = Math.floor(chunk.length / 2);
+        const firstHalf = chunk.slice(0, half);
+        const secondHalf = chunk.slice(half);
+
+        const r1 = await translateTextSingleCall(
+          firstHalf,
+          chunkTitle,
+          targetLanguage
+        );
+        const r2 = await translateTextSingleCall(
+          secondHalf,
+          "",
+          targetLanguage
+        );
+
+        result = {
+          markdown: r1.markdown + r2.markdown,
+          title: r1.title,
+        };
+      } else {
+        throw err;
+      }
+    }
+
+    if (i === 0) {
+      translatedTitle = result.title;
+    }
+    translatedChunks.push(result.markdown);
+  }
+
+  // Sections already end with "\n"; join with "" to avoid extra blank lines
+  return {
+    markdown: translatedChunks.join(""),
+    title: translatedTitle,
+  };
 }
 
 /**

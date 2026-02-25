@@ -129,6 +129,10 @@ export const ENGLISH_DIR_SAVE_ERROR =
 // Translation retry configuration
 export const TRANSLATION_MAX_RETRIES = 3;
 export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
+/** Max characters per translation chunk.
+ *  Targets ~143K tokens (500K chars / 3.5 chars per token).
+ *  Leaves generous buffer within OpenAI's 272K structured-output limit. */
+export const TRANSLATION_CHUNK_MAX_CHARS = 500_000;
 
 // URL handling
 export const INVALID_URL_PLACEHOLDER =

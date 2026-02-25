@@ -9,9 +9,9 @@ import {
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
-  TRANSLATION_CHUNK_MAX_CHARS,
   OPENAI_BASE_URL,
   IS_CUSTOM_OPENAI_API,
+  getMaxChunkChars,
 } from "../constants.js";
 
 // Load environment variables
@@ -244,7 +244,7 @@ const parseTranslationPayload = (content: string): TranslationPayload => {
  */
 export function splitMarkdownIntoChunks(
   markdown: string,
-  maxChars: number = TRANSLATION_CHUNK_MAX_CHARS
+  maxChars: number
 ): string[] {
   if (markdown.length <= maxChars) {
     return [markdown];
@@ -549,18 +549,21 @@ export async function translateText(
       ? text
       : "# Empty Content\n\nThis page has no content to translate.";
 
+  // Get model-specific chunk size
+  const maxChunkChars = getMaxChunkChars(model);
+
   // Include system prompt overhead (~1800 chars) + title prefix + "markdown: " prefix
   const estimatedTotalChars =
     TRANSLATION_PROMPT.length + title.length + 20 + safeText.length;
 
-  if (estimatedTotalChars <= TRANSLATION_CHUNK_MAX_CHARS) {
+  if (estimatedTotalChars <= maxChunkChars) {
     // Fast path: content fits in a single call
     return translateTextSingleCall(safeText, title, targetLanguage);
   }
 
   // Slow path: content too large — split into chunks
   const contentBudget =
-    TRANSLATION_CHUNK_MAX_CHARS - TRANSLATION_PROMPT.length - title.length - 20;
+    maxChunkChars - TRANSLATION_PROMPT.length - title.length - 20;
   const chunks = splitMarkdownIntoChunks(
     safeText,
     Math.max(contentBudget, 50_000)

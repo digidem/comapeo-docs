@@ -4,7 +4,7 @@
     "description": "Footer section title: Awana Digital"
   },
   "links.Awana Digital.Website": {
-    "message": "Site",
+    "message": "Site da Web",
     "description": "Footer link label: Website"
   },
   "links.Awana Digital.Discord": {
@@ -24,15 +24,15 @@
     "description": "Footer section title: CoMapeo"
   },
   "links.CoMapeo.Website": {
-    "message": "Site",
+    "message": "Site da Web",
     "description": "Footer link label: Website"
   },
   "links.CoMapeo.CoMapeo Mobile GitHub": {
-    "message": "GitHub do CoMapeo Mobile",
+    "message": "CoMapeo Mobile GitHub",
     "description": "Footer link label: CoMapeo Mobile GitHub"
   },
   "links.CoMapeo.CoMapeo Desktop GitHub": {
-    "message": "GitHub do CoMapeo Desktop",
+    "message": "CoMapeo Desktop GitHub",
     "description": "Footer link label: CoMapeo Desktop GitHub"
   },
   "links.title.More": {
@@ -40,7 +40,7 @@
     "description": "Footer section title: More"
   },
   "links.More.PlayStore": {
-    "message": "Play Store",
+    "message": "PlayStore",
     "description": "Footer link label: PlayStore"
   },
   "links.More.GitHub": {

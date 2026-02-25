@@ -28,11 +28,11 @@
     "description": "Footer link label: Website"
   },
   "links.CoMapeo.CoMapeo Mobile GitHub": {
-    "message": "GitHub de CoMapeo Mobile",
+    "message": "CoMapeo Mobile GitHub",
     "description": "Footer link label: CoMapeo Mobile GitHub"
   },
   "links.CoMapeo.CoMapeo Desktop GitHub": {
-    "message": "GitHub de CoMapeo Desktop",
+    "message": "CoMapeo Desktop GitHub",
     "description": "Footer link label: CoMapeo Desktop GitHub"
   },
   "links.title.More": {
@@ -40,7 +40,7 @@
     "description": "Footer section title: More"
   },
   "links.More.PlayStore": {
-    "message": "Play Store",
+    "message": "PlayStore",
     "description": "Footer link label: PlayStore"
   },
   "links.More.GitHub": {

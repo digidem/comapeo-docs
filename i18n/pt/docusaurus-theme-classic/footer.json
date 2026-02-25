@@ -28,11 +28,11 @@
     "description": "Footer link label: Website"
   },
   "links.CoMapeo.CoMapeo Mobile GitHub": {
-    "message": "GitHub do CoMapeo Mobile",
+    "message": "CoMapeo Mobile GitHub",
     "description": "Footer link label: CoMapeo Mobile GitHub"
   },
   "links.CoMapeo.CoMapeo Desktop GitHub": {
-    "message": "GitHub do CoMapeo Desktop",
+    "message": "CoMapeo Desktop GitHub",
     "description": "Footer link label: CoMapeo Desktop GitHub"
   },
   "links.title.More": {
@@ -48,7 +48,7 @@
     "description": "Footer link label: GitHub"
   },
   "links.More.Earth Defenders Toolkit": {
-    "message": "Kit de Ferramentas dos Defensores da Terra",
+    "message": "Kit de Ferramentas para Defensores da Terra",
     "description": "Footer link label: Earth Defenders Toolkit"
   },
   "copyright": {

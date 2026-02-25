@@ -26,6 +26,8 @@ pre-commit:
       skip:
         - merge
         - rebase
+        - ref: $CI
+        - ref: $GITHUB_ACTIONS
 
     eslint:
       glob: "*.{js,ts,jsx,tsx}"

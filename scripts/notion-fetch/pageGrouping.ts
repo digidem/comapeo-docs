@@ -7,13 +7,32 @@ const LEGACY_SECTION_PROPERTY = "Section";
 const FALLBACK_TITLE_PREFIX = "untitled";
 
 const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
-  English: "en",
-  Spanish: "es",
-  Portuguese: "pt",
+  english: "en",
+  spanish: "es",
+  portuguese: "pt",
+  en: "en",
+  es: "es",
+  pt: "pt",
 };
 const LOCALE_PRIORITY = new Map(
   config.i18n.locales.map((locale, index) => [locale, index])
 );
+
+type LocaleResolutionSource = "explicit" | "fallback";
+
+type LocaleResolution = {
+  locale: string;
+  source: LocaleResolutionSource;
+};
+
+const normalizeLanguageName = (languageName: unknown): string | undefined => {
+  if (typeof languageName !== "string") {
+    return undefined;
+  }
+
+  const normalized = languageName.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+};
 
 /**
  * Sort locales deterministically with default locale first.
@@ -128,16 +147,33 @@ export const resolvePageTitle = (page: Record<string, any>): string => {
  * @returns The resolved locale code (e.g., 'en', 'es', 'pt') or default locale
  */
 export const resolvePageLocale = (page: Record<string, any>): string => {
+  return resolvePageLocaleDetails(page).locale;
+};
+
+const resolvePageLocaleDetails = (
+  page: Record<string, any>
+): LocaleResolution => {
   const languageProperty =
     page?.properties?.[NOTION_PROPERTIES.LANGUAGE] ??
     page?.properties?.Language;
 
-  const languageName = languageProperty?.select?.name;
-  if (languageName && LANGUAGE_NAME_TO_LOCALE[languageName]) {
-    return LANGUAGE_NAME_TO_LOCALE[languageName];
+  const normalizedLanguageName = normalizeLanguageName(
+    languageProperty?.select?.name
+  );
+  if (
+    normalizedLanguageName &&
+    LANGUAGE_NAME_TO_LOCALE[normalizedLanguageName]
+  ) {
+    return {
+      locale: LANGUAGE_NAME_TO_LOCALE[normalizedLanguageName],
+      source: "explicit",
+    };
   }
 
-  return DEFAULT_LOCALE;
+  return {
+    locale: DEFAULT_LOCALE,
+    source: "fallback",
+  };
 };
 
 /**
@@ -166,6 +202,20 @@ export const groupPagesByLang = (
     section: sectionName,
     content: {} as Record<string, Record<string, any>>,
   };
+  const localeSources: Record<string, LocaleResolutionSource> = {};
+
+  const upsertLocalizedContent = (candidatePage: Record<string, any>) => {
+    const resolution = resolvePageLocaleDetails(candidatePage);
+    const existingSource = localeSources[resolution.locale];
+    const shouldReplace =
+      existingSource === undefined ||
+      (existingSource === "fallback" && resolution.source === "explicit");
+
+    if (shouldReplace) {
+      grouped.content[resolution.locale] = candidatePage;
+      localeSources[resolution.locale] = resolution.source;
+    }
+  };
 
   const subItemRelation = page?.properties?.["Sub-item"]?.relation ?? [];
 
@@ -175,14 +225,10 @@ export const groupPagesByLang = (
       continue;
     }
 
-    const lang = resolvePageLocale(subpage);
-    grouped.content[lang] = subpage;
+    upsertLocalizedContent(subpage);
   }
 
-  const parentLocale = resolvePageLocale(page);
-  if (!grouped.content[parentLocale]) {
-    grouped.content[parentLocale] = page;
-  }
+  upsertLocalizedContent(page);
 
   grouped.content = orderContentByLocale(grouped.content);
 

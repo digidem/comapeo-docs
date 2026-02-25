@@ -210,6 +210,17 @@ describe("pageGrouping", () => {
       expect(resolvePageLocale(page)).toBe("pt");
     });
 
+    it("should normalize whitespace and casing in language values", () => {
+      const page = {
+        properties: {
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "  Portuguese  " },
+          },
+        },
+      };
+      expect(resolvePageLocale(page)).toBe("pt");
+    });
+
     it("should fall back to Language property when LANGUAGE is missing", () => {
       const page = {
         properties: {
@@ -383,6 +394,52 @@ describe("pageGrouping", () => {
       expect(result.content.es).toBeDefined();
       expect(result.content.en.id).toBe("en-page-1");
       expect(result.content.es.id).toBe("es-page-1");
+    });
+
+    it("should prefer explicit English over fallback-default locale collisions", () => {
+      const fallbackSubpage = {
+        id: "fallback-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "Titulo sin idioma" }],
+          },
+        },
+      };
+
+      const englishSubpage = {
+        id: "en-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "English Title" }],
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "English" },
+          },
+        },
+      };
+
+      const mainPage = {
+        id: "main-page-1",
+        properties: {
+          [NOTION_PROPERTIES.TITLE]: {
+            title: [{ plain_text: "Main Page" }],
+          },
+          [NOTION_PROPERTIES.ELEMENT_TYPE]: {
+            select: { name: "Page" },
+          },
+          [NOTION_PROPERTIES.LANGUAGE]: {
+            select: { name: "Spanish" },
+          },
+          "Sub-item": {
+            relation: [{ id: "fallback-page-1" }, { id: "en-page-1" }],
+          },
+        },
+      };
+
+      const pages = [mainPage, fallbackSubpage, englishSubpage];
+      const result = groupPagesByLang(pages, mainPage);
+
+      expect(result.content.en.id).toBe("en-page-1");
     });
 
     it("should include parent page in its own locale", () => {

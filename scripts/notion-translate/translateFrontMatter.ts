@@ -11,6 +11,7 @@ import {
   TRANSLATION_RETRY_BASE_DELAY_MS,
   TRANSLATION_CHUNK_MAX_CHARS,
   OPENAI_BASE_URL,
+  IS_CUSTOM_OPENAI_API,
 } from "../constants.js";
 
 // Load environment variables
@@ -467,6 +468,26 @@ async function translateTextSingleCall(
   // For GPT-5.2, use reasoning_effort="none" to allow custom temperature
   const modelParams = getModelParams(model, { useReasoningNone: true });
 
+  // Use json_schema for OpenAI (strict), json_object for custom APIs (like DeepSeek)
+  const responseFormat = IS_CUSTOM_OPENAI_API
+    ? { type: "json_object" as const }
+    : {
+        type: "json_schema" as const,
+        json_schema: {
+          name: "translation",
+          schema: {
+            type: "object",
+            properties: {
+              markdown: { type: "string" },
+              title: { type: "string" },
+            },
+            required: ["markdown", "title"],
+            additionalProperties: false,
+          },
+          strict: true,
+        },
+      };
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
@@ -475,22 +496,7 @@ async function translateTextSingleCall(
           { role: "system", content: prompt },
           { role: "user", content: textWithTitle },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "translation",
-            schema: {
-              type: "object",
-              properties: {
-                markdown: { type: "string" },
-                title: { type: "string" },
-              },
-              required: ["markdown", "title"],
-              additionalProperties: false,
-            },
-            strict: true,
-          },
-        },
+        response_format: responseFormat,
         ...modelParams,
       });
 

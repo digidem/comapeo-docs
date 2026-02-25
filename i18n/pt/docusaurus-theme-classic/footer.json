@@ -4,7 +4,7 @@
     "description": "Footer section title: Awana Digital"
   },
   "links.Awana Digital.Website": {
-    "message": "Website",
+    "message": "Site da Web",
     "description": "Footer link label: Website"
   },
   "links.Awana Digital.Discord": {
@@ -24,15 +24,15 @@
     "description": "Footer section title: CoMapeo"
   },
   "links.CoMapeo.Website": {
-    "message": "Website",
+    "message": "Site da Web",
     "description": "Footer link label: Website"
   },
   "links.CoMapeo.CoMapeo Mobile GitHub": {
-    "message": "CoMapeo Mobile GitHub",
+    "message": "GitHub do CoMapeo Mobile",
     "description": "Footer link label: CoMapeo Mobile GitHub"
   },
   "links.CoMapeo.CoMapeo Desktop GitHub": {
-    "message": "CoMapeo Desktop GitHub",
+    "message": "GitHub do CoMapeo Desktop",
     "description": "Footer link label: CoMapeo Desktop GitHub"
   },
   "links.title.More": {
@@ -48,7 +48,7 @@
     "description": "Footer link label: GitHub"
   },
   "links.More.Earth Defenders Toolkit": {
-    "message": "Kit de Ferramentas para Defensores da Terra",
+    "message": "Kit de Ferramentas dos Defensores da Terra",
     "description": "Footer link label: Earth Defenders Toolkit"
   },
   "copyright": {

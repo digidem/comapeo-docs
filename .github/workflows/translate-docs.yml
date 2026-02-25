@@ -177,6 +177,7 @@ jobs:
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           TEST_DATA_SOURCE_ID: ${{ secrets.TEST_DATA_SOURCE_ID }}
           TEST_DATABASE_ID: ${{ secrets.TEST_DATABASE_ID }}
           TEST_MODE: ${{ secrets.TEST_MODE }}

@@ -74,6 +74,9 @@ export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
 
+// Check if using OpenAI's default API (vs custom endpoint like DeepSeek)
+export const IS_CUSTOM_OPENAI_API = !!OPENAI_BASE_URL;
+
 /**
  * GPT-5.2 supports custom temperature ONLY when reasoning_effort="none"
  * Based on: https://platform.openai.com/docs/guides/reasoning

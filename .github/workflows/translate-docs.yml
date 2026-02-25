@@ -51,6 +51,24 @@ jobs:
             exit 1
           fi
 
+          # Allow content branch to track generated directories (/docs/, /i18n/, /static/images/)
+          # Main's .gitignore ignores these because they're synced FROM content branch
+          # Content branch needs them NOT ignored so translations can be committed
+          echo "Adjusting .gitignore for content branch (allow generated content dirs)..."
+
+          # Remove the lines that ignore generated content directories and their associated comments
+          # This preserves all other .gitignore updates from main while allowing commits to these dirs
+          sed -i '/^# Generated content (synced from content branch)$/d; /^# These directories are populated by checking out from the content branch$/d; /^\/docs\/$/d; /^\/i18n\/$/d; /^\/static\/images\/$/d' .gitignore
+
+          # Only commit if .gitignore actually changed
+          if ! git diff --quiet .gitignore; then
+            git add .gitignore
+            git commit -m "chore: allow generated content dirs in .gitignore after merge from main"
+            echo "✅ Adjusted .gitignore to allow /docs/, /i18n/, /static/images/"
+          else
+            echo "ℹ️  .gitignore unchanged, no adjustment needed"
+          fi
+
       - name: Apply latest scripts from main
         run: |
           git fetch origin main --depth=1

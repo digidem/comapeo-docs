@@ -111,7 +111,7 @@ export interface JobOptions {
  * Default timeout for jobs (5 minutes) in milliseconds
  */
 const DEFAULT_JOB_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_FETCH_JOB_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+const DEFAULT_FETCH_JOB_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 
 /**
  * Time to wait after SIGTERM before sending SIGKILL (5 seconds)

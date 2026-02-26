@@ -30,5 +30,17 @@ vi.mock("openai", () => ({
 }));
 
 export const resetOpenAIMock = () => {
-  mockOpenAIChatCompletionCreate.mockClear();
+  mockOpenAIChatCompletionCreate.mockReset();
+  mockOpenAIChatCompletionCreate.mockResolvedValue({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            markdown: "# translated\n\nMock content",
+            title: "Mock Title",
+          }),
+        },
+      },
+    ],
+  });
 };

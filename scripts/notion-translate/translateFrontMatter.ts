@@ -26,6 +26,9 @@ const openai = new OpenAI({
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
+const DATA_URL_PLACEHOLDER_REGEX =
+  /\/images\/__data_url_placeholder_\d+__\.png/g;
+const MAX_PLACEHOLDER_INTEGRITY_RETRIES = 2;
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -55,6 +58,7 @@ You are a translation assistant, responsible for translating the text provided b
 - Do not translate URLs, paths, or any technical identifiers.
 - **Do not translate or modify any image URLs.**
 - **Do not modify any paths starting with /images/ - these are canonical asset references that must remain unchanged.**
+- **Do not modify placeholder image paths matching /images/__data_url_placeholder_<number>__.png.**
 - Preserve all markdown formatting, including headings, lists, code blocks, etc.
 
 ## Workflow
@@ -164,7 +168,7 @@ const classifyOpenAIError = (error: unknown): TranslationError => {
   // Token overflow: 400 with token limit message (must check before schema check)
   if (
     status === 400 &&
-    /tokens?\s+exceed|input.*tokens.*limit|configured\s+limit\s+of\s+\d+\s+tokens/i.test(
+    /tokens?\s+exceed|input.*tokens.*limit|configured\s+limit\s+of\s+\d+\s+tokens|maximum\s+context\s+length|you\s+requested\s+\d+\s+tokens|context\s+length\s+is/i.test(
       message
     )
   ) {
@@ -409,6 +413,66 @@ function splitByLines(text: string, maxChars: number): string[] {
   return chunks;
 }
 
+type DataUrlPlaceholderMap = Map<string, string>;
+
+function maskDataUrlImages(text: string): {
+  maskedText: string;
+  placeholders: DataUrlPlaceholderMap;
+} {
+  const dataUrlRegex = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=_-]+/gi;
+  const placeholders: DataUrlPlaceholderMap = new Map();
+  let index = 0;
+
+  const maskedText = text.replace(dataUrlRegex, (match) => {
+    const placeholder = `/images/__data_url_placeholder_${index}__.png`;
+    index++;
+    placeholders.set(placeholder, match);
+    return placeholder;
+  });
+
+  return { maskedText, placeholders };
+}
+
+function restoreDataUrlPlaceholders(
+  text: string,
+  placeholders: DataUrlPlaceholderMap
+): string {
+  if (placeholders.size === 0) {
+    return text;
+  }
+
+  let restored = text;
+  for (const [placeholder, dataUrl] of placeholders) {
+    restored = restored.split(placeholder).join(dataUrl);
+  }
+
+  return restored;
+}
+
+function extractDataUrlPlaceholders(text: string): string[] {
+  const matches = text.match(DATA_URL_PLACEHOLDER_REGEX) ?? [];
+  return Array.from(new Set(matches));
+}
+
+function getMissingPlaceholders(
+  text: string,
+  requiredPlaceholders: string[]
+): string[] {
+  return requiredPlaceholders.filter(
+    (placeholder) => !text.includes(placeholder)
+  );
+}
+
+function isPlaceholderIntegrityError(
+  error: unknown
+): error is TranslationError {
+  return (
+    error instanceof TranslationError &&
+    error.code === "schema_invalid" &&
+    /Data URL placeholder integrity check failed/.test(error.message)
+  );
+}
+
 /**
  * Translates a markdown file using OpenAI
  * @param filePath Path to the markdown file to translate
@@ -457,9 +521,15 @@ export async function translateMarkdownFile(
 async function translateTextSingleCall(
   text: string,
   title: string,
-  targetLanguage: string
+  targetLanguage: string,
+  requiredPlaceholders: string[] = [],
+  strictPlaceholderGuard = false
 ): Promise<{ markdown: string; title: string }> {
-  const textWithTitle = `title: ${title}\n\nmarkdown: ${text}`;
+  const placeholderGuard =
+    requiredPlaceholders.length > 0
+      ? `\n\n${strictPlaceholderGuard ? "CRITICAL REQUIREMENT" : "Placeholder paths to preserve exactly"}:\n${requiredPlaceholders.map((placeholder) => `- ${placeholder}`).join("\n")}\n`
+      : "";
+  const textWithTitle = `title: ${title}\n${placeholderGuard}\nmarkdown: ${text}`;
 
   // Create the prompt with the target language
   const prompt = TRANSLATION_PROMPT.replace("{targetLanguage}", targetLanguage);
@@ -509,7 +579,23 @@ async function translateTextSingleCall(
         );
       }
 
-      return parseTranslationPayload(content);
+      const parsed = parseTranslationPayload(content);
+
+      if (requiredPlaceholders.length > 0) {
+        const missingPlaceholders = getMissingPlaceholders(
+          parsed.markdown,
+          requiredPlaceholders
+        );
+        if (missingPlaceholders.length > 0) {
+          throw new TranslationError(
+            `Data URL placeholder integrity check failed: missing ${missingPlaceholders.length} placeholder(s): ${missingPlaceholders.slice(0, 3).join(", ")}`,
+            "schema_invalid",
+            true
+          );
+        }
+      }
+
+      return parsed;
     } catch (error) {
       const classifiedError =
         error instanceof TranslationError ? error : classifyOpenAIError(error);
@@ -532,6 +618,76 @@ async function translateTextSingleCall(
   );
 }
 
+async function translateChunkWithOverflowFallback(
+  text: string,
+  title: string,
+  targetLanguage: string,
+  placeholderGuardAttempt = 0
+): Promise<{ markdown: string; title: string }> {
+  const requiredPlaceholders = extractDataUrlPlaceholders(text);
+
+  try {
+    return await translateTextSingleCall(
+      text,
+      title,
+      targetLanguage,
+      requiredPlaceholders,
+      placeholderGuardAttempt > 0
+    );
+  } catch (err) {
+    if (
+      isPlaceholderIntegrityError(err) &&
+      placeholderGuardAttempt < MAX_PLACEHOLDER_INTEGRITY_RETRIES
+    ) {
+      return translateChunkWithOverflowFallback(
+        text,
+        title,
+        targetLanguage,
+        placeholderGuardAttempt + 1
+      );
+    }
+
+    if (!(err instanceof TranslationError) || err.code !== "token_overflow") {
+      throw err;
+    }
+
+    if (text.length < 2) {
+      throw err;
+    }
+
+    const splitTarget = Math.max(Math.floor(text.length / 2), 1);
+    let subChunks = splitMarkdownIntoChunks(text, splitTarget);
+    if (subChunks.length <= 1) {
+      const midpoint = Math.floor(text.length / 2);
+      if (midpoint < 1 || midpoint >= text.length) {
+        throw err;
+      }
+      subChunks = [text.slice(0, midpoint), text.slice(midpoint)];
+    }
+
+    let translatedTitle = title;
+    let translatedMarkdown = "";
+    for (const [index, chunk] of subChunks.entries()) {
+      const chunkTitle = index === 0 ? title : "";
+      const translated = await translateChunkWithOverflowFallback(
+        chunk,
+        chunkTitle,
+        targetLanguage,
+        0
+      );
+      if (index === 0) {
+        translatedTitle = translated.title;
+      }
+      translatedMarkdown += translated.markdown;
+    }
+
+    return {
+      markdown: translatedMarkdown,
+      title: translatedTitle,
+    };
+  }
+}
+
 /**
  * Translates text using OpenAI
  * @param text Text to translate
@@ -548,24 +704,33 @@ export async function translateText(
     typeof text === "string" && text.length > 0
       ? text
       : "# Empty Content\n\nThis page has no content to translate.";
+  const { maskedText, placeholders } = maskDataUrlImages(safeText);
 
   // Get model-specific chunk size
   const maxChunkChars = getMaxChunkChars(model);
 
   // Include system prompt overhead (~1800 chars) + title prefix + "markdown: " prefix
   const estimatedTotalChars =
-    TRANSLATION_PROMPT.length + title.length + 20 + safeText.length;
+    TRANSLATION_PROMPT.length + title.length + 20 + maskedText.length;
 
   if (estimatedTotalChars <= maxChunkChars) {
     // Fast path: content fits in a single call
-    return translateTextSingleCall(safeText, title, targetLanguage);
+    const translated = await translateChunkWithOverflowFallback(
+      maskedText,
+      title,
+      targetLanguage
+    );
+    return {
+      markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
+      title: restoreDataUrlPlaceholders(translated.title, placeholders),
+    };
   }
 
   // Slow path: content too large — split into chunks
   const contentBudget =
     maxChunkChars - TRANSLATION_PROMPT.length - title.length - 20;
   const chunks = splitMarkdownIntoChunks(
-    safeText,
+    maskedText,
     Math.max(contentBudget, 50_000)
   );
 
@@ -574,36 +739,11 @@ export async function translateText(
 
   for (const [i, chunk] of chunks.entries()) {
     const chunkTitle = i === 0 ? title : "";
-    let result: { markdown: string; title: string };
-
-    try {
-      result = await translateTextSingleCall(chunk, chunkTitle, targetLanguage);
-    } catch (err) {
-      // If a chunk still overflows, halve it and retry once (adaptive fallback)
-      if (err instanceof TranslationError && err.code === "token_overflow") {
-        const half = Math.floor(chunk.length / 2);
-        const firstHalf = chunk.slice(0, half);
-        const secondHalf = chunk.slice(half);
-
-        const r1 = await translateTextSingleCall(
-          firstHalf,
-          chunkTitle,
-          targetLanguage
-        );
-        const r2 = await translateTextSingleCall(
-          secondHalf,
-          "",
-          targetLanguage
-        );
-
-        result = {
-          markdown: r1.markdown + r2.markdown,
-          title: r1.title,
-        };
-      } else {
-        throw err;
-      }
-    }
+    const result = await translateChunkWithOverflowFallback(
+      chunk,
+      chunkTitle,
+      targetLanguage
+    );
 
     if (i === 0) {
       translatedTitle = result.title;
@@ -613,8 +753,11 @@ export async function translateText(
 
   // Sections already end with "\n"; join with "" to avoid extra blank lines
   return {
-    markdown: translatedChunks.join(""),
-    title: translatedTitle,
+    markdown: restoreDataUrlPlaceholders(
+      translatedChunks.join(""),
+      placeholders
+    ),
+    title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
   };
 }
 

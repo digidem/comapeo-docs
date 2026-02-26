@@ -58,10 +58,27 @@ describe("notion-translate translateFrontMatter", () => {
   it("classifies token overflow errors as non-critical token_overflow code", async () => {
     const { translateText } = await import("./translateFrontMatter");
 
-    mockOpenAIChatCompletionCreate.mockRejectedValueOnce({
+    mockOpenAIChatCompletionCreate.mockRejectedValue({
       status: 400,
       message:
         "Input tokens exceed the configured limit of 272000 tokens. Your messages resulted in 486881 tokens.",
+    });
+
+    await expect(translateText("# Body", "Title", "pt-BR")).rejects.toEqual(
+      expect.objectContaining({
+        code: "token_overflow",
+        isCritical: false,
+      })
+    );
+  });
+
+  it("classifies DeepSeek maximum-context errors as token_overflow", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    mockOpenAIChatCompletionCreate.mockRejectedValue({
+      status: 400,
+      message:
+        "This model's maximum context length is 131072 tokens. However, you requested 211994 tokens (211994 in the messages, 0 in the completion).",
     });
 
     await expect(translateText("# Body", "Title", "pt-BR")).rejects.toEqual(
@@ -109,6 +126,108 @@ describe("notion-translate translateFrontMatter", () => {
     expect(result.title).toBe("Mock Title"); // taken from first chunk
     expect(typeof result.markdown).toBe("string");
     expect(result.markdown.length).toBeGreaterThan(0);
+  });
+
+  it("retries the fast path with adaptive splitting on token overflow", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    mockOpenAIChatCompletionCreate
+      .mockRejectedValueOnce({
+        status: 400,
+        message:
+          "This model's maximum context length is 131072 tokens. However, you requested 211603 tokens (211603 in the messages, 0 in the completion).",
+      })
+      .mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: "translated chunk",
+                title: "Translated Title",
+              }),
+            },
+          },
+        ],
+      });
+
+    const result = await translateText(
+      "# Small page\n\nJust a paragraph.",
+      "Small",
+      "pt-BR"
+    );
+
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
+    expect(result.title).toBe("Translated Title");
+    expect(result.markdown.length).toBeGreaterThan(0);
+  });
+
+  it("masks and restores data URL images during translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    const dataUrl = `data:image/png;base64,${"A".repeat(6000)}`;
+    const placeholderPath = "/images/__data_url_placeholder_0__.png";
+
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown: `![image](${placeholderPath})\n\nTranslated`,
+              title: "Translated Title",
+            }),
+          },
+        },
+      ],
+    });
+
+    const source = `![image](${dataUrl})\n\nBody text`;
+    const result = await translateText(source, "Title", "pt-BR");
+
+    const firstCallArgs = mockOpenAIChatCompletionCreate.mock.calls[0][0] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    const userPrompt = firstCallArgs.messages?.[1]?.content ?? "";
+
+    expect(userPrompt).not.toContain(dataUrl);
+    expect(userPrompt).toContain(placeholderPath);
+    expect(result.markdown).toContain(dataUrl);
+  });
+
+  it("retries when placeholder integrity check fails", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    const dataUrl = `data:image/png;base64,${"B".repeat(6000)}`;
+    const placeholderPath = "/images/__data_url_placeholder_0__.png";
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: "![image](/images/changed-path.png)\n\nTranslated",
+                title: "Translated Title",
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: `![image](${placeholderPath})\n\nTranslated`,
+                title: "Translated Title",
+              }),
+            },
+          },
+        ],
+      });
+
+    const source = `![image](${dataUrl})\n\nBody text`;
+    const result = await translateText(source, "Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    expect(result.markdown).toContain(dataUrl);
   });
 
   it("splitMarkdownIntoChunks does not split on headings inside fenced code blocks", async () => {

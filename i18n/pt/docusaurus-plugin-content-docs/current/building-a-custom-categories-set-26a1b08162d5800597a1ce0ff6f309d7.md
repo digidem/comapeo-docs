@@ -6,13 +6,13 @@
 
 ### **O que é uma categoria no CoMapeo?**
 
-Uma categoria é um ícone, rótulo e perguntas de detalhes predeterminados para qualquer tipo de dado que está sendo coletado. Para cada observação feita com o CoMapeo, os participantes selecionam uma categoria para classificá-la e podem responder a perguntas ou a prompts para fornecer mais detalhes sobre o que está sendo documentado.
+Uma categoria é um ícone, rótulo e perguntas de detalhes predeterminados para qualquer tipo de dado sendo coletado. Para cada observação feita com o CoMapeo, os participantes selecionam uma categoria para classificá-la e podem responder a perguntas ou prompts para fornecer mais detalhes sobre o que está sendo documentado.
 
 **O que são Conjuntos de Categorias no CoMapeo?**
 
-Conjuntos de Categorias são arquivos que contêm e definem as Categorias distintas para um Projeto. Criar configurações costumava exigir habilidades de codificação que limitavam a possibilidade de as pessoas personalizarem suas próprias categorias. Agora tornamos isso mais acessível por meio de um modelo de planilha que explicamos nesta seção.
+Conjuntos de Categorias são arquivos que contêm e definem as Categorias distintas para um Projeto. Criar configurações costumava exigir habilidades de programação que limitavam a possibilidade de as pessoas personalizarem suas próprias categorias. Agora tornamos isso mais acessível por meio de um modelo de planilha que explicamos nesta seção.
 
-> 💡 Para aqueles familiarizados com o aplicativo predecessor Mapeo, os Conjuntos de Categorias eram anteriormente conhecidos como _Configurações._
+> 💡 Para aqueles familiarizados com o aplicativo antecessor Mapeo, os Conjuntos de Categorias eram anteriormente conhecidos como _Configurações._
 
 ---
 
@@ -29,45 +29,45 @@ Conjuntos de Categorias são arquivos que contêm e definem as Categorias distin
 
 O planejamento inicial e a consulta com os participantes do projeto são essenciais para projetar maneiras eficazes de organizar seus dados. Para iniciar o processo de personalização, os participantes do projeto devem refletir sobre os objetivos do projeto, que tipo de dados serão necessários e quais propriedades podem ser necessárias para as saídas de dados.
 
-Você precisará pensar sobre o que incluir para cada uma das **áreas-chave personalizáveis do CoMapeo.**
+Você precisará pensar no que incluir para cada uma das **áreas-chave personalizáveis do CoMapeo.**
 
 | Componente das Categorias | Descrição                                                                                                                                                                                                                          | Formato                                                                                                                                                                                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nome da Categoria**     | Ao coletar ou criar dados com o CoMapeo, os usuários atribuem uma categoria de nível superior a cada observação ou elemento no mapa                                                                                               | texto (recomendado menos de x caracteres para melhor exibição)                                                                                                                                                                                     |
-| **Ícone**                 | Cada Categoria que você incluir deve ter um ícone ou um pequeno gráfico para exibir aos usuários ao selecionar uma categoria.                                                                                                      | png, (máx. 100px)                                                                                                                                                                                                                                 |
-| **Cor**                   | A cor aparece como observações na visualização do mapa e na tela de seleção de Categoria. Ajuda a usar grupos temáticos ao definir cores funcionando como uma legenda do mapa.                                                     | [Código de cor hexadecimal](https://htmlcolorcodes.com/color-picker/)                                                                                                                                                                              |
-| **Campos de detalhes**    | Para cada Categoria em seu Conjunto de Categorias, você pode incluir um ou mais campos de dados estruturados (como um mini formulário ou questionário) que os usuários podem preencher opcionalmente ao criar uma nova observação ou elemento do mapa com essa categoria. | Prompt de texto e com campos que podem ser preenchidos com valores que são texto digitado, seleção única ou seleção múltipla. Os valores podem ser texto. Observe que as opções de seleção única podem ser preferidas para processamento de dados ao organizar ou fazer análise |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nome da Categoria**     | Ao coletar ou criar dados com o CoMapeo, os usuários atribuem uma categoria de nível superior a cada observação ou elemento no mapa                                                                                                 | texto (recomendado menos de x caracteres para melhor exibição)                                                                                                                                                                                         |
+| **Ícone**                 | Cada Categoria que você incluir deve ter um ícone ou um pequeno gráfico para exibir aos usuários ao selecionar uma categoria.                                                                                                       | png, (máx. 100px)                                                                                                                                                                                                                                  |
+| **Cor**                   | A cor aparece como observações na visualização do mapa e na tela de seleção de Categoria. Ajuda a usar grupos temáticos ao definir cores funcionando como uma legenda do mapa.                                                       | [Código de cor hexadecimal](https://htmlcolorcodes.com/color-picker/)                                                                                                                                                                                       |
+| **Campos de detalhes**    | Para cada Categoria em seu Conjunto de Categorias, você pode incluir um ou mais campos de dados estruturados (como um mini formulário ou questionário) que os usuários podem preencher opcionalmente ao criar uma nova observação ou elemento do mapa com essa categoria. | Prompt de texto e com campos que podem ser preenchidos com valores que são texto digitado, seleção única ou seleção múltipla. Os valores podem ser texto. Observe que opções de seleção única podem ser preferidas para processamento de dados ao organizar ou fazer análise |
 
 ## Usando a **Planilha Geradora de Categorias do CoMapeo**
 
-O Gerador de Categorias do CoMapeo é uma ferramenta em desenvolvimento ativo que é destinada a usuários avançados de tecnologia, ou no mínimo alguém muito confortável com ferramentas de planilha disposto a aprender sobre o uso de plug-ins do Google Sheets.
+A Planilha Geradora de Categorias do CoMapeo é uma ferramenta em desenvolvimento ativo que é destinada a usuários avançados de tecnologia, ou no mínimo alguém muito confortável com ferramentas de planilha disposto a aprender sobre o uso de plug-ins do Google Sheets.
 
-Espera-se que aprendamos sobre problemas técnicos que você encontrar ao usá-lo para nos ajudar a melhorá-lo.
+Espera-se que aprendamos sobre problemas técnicos que você encontrar ao usá-la para nos ajudar a melhorá-la.
 
 Esta ferramenta permitirá que você crie e edite Categorias, ícones, campos de detalhes e idioma, e exporte todas essas informações para um arquivo **.comapeocat**. Tudo isso é feito preenchendo um conjunto de planilhas com as informações necessárias.
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
-Vá para 🔗[https://lab.digital-democracy.org/comapeo-category-spreadsheet-plugin/](https://lab.digital-democracy.org/comapeo-category-spreadsheet-plugin/) para instruções completas
+Vá para 🔗[https://lab.digital-democracy.org/comapeo-category-spreadsheet-plugin/](https://lab.digital-democracy.org/comapeo-category-spreadsheet-plugin/) para instruções completas.
 
 ## **Testando novas categorias**
 
 Uma parte importante do processo é testar o conjunto de categorias personalizadas criado no CoMapeo Mobile. Pode ser útil incluir alguns colegas de equipe para ajudar a identificar quaisquer melhorias necessárias.
 
-Vá para 🔗 [**Alterando Conjunto de Categorias**](/docs/changing-categories-set) para instruções sobre como importar arquivos .comapeocat
+Vá para 🔗 [**Alterando Conjunto de Categorias**](/docs/changing-categories-set) para instruções sobre como importar arquivos .comapeocat.
 
-As revisões devem ser feitas no **Gerador de Categorias do CoMapeo.** Repita as etapas de exportação novamente e teste conforme necessário.
+Revisões devem ser feitas na **Planilha Geradora de Categorias do CoMapeo.** Repita as etapas de exportação novamente e teste conforme necessário.
 
 ## Conteúdo Relacionado
 
 Vá para 🔗 [**Nova Ferramenta: Gerador de Ícones do Mapeo**](https://www.earthdefenderstoolkit.com/new-tool-mapeo-icons-generator/) postagem de blog por Luandro Vieira.
 
-Vá para 🔗 [**Bem-vindo à Biblioteca de Categorias do CoMapeo**](https://www.earthdefenderstoolkit.com/welcome-to-the-comapeo-categories-library/) postagem de blog por María Alvarez
+Vá para 🔗 [**Bem-vindo à Biblioteca de Categorias do CoMapeo**](https://www.earthdefenderstoolkit.com/welcome-to-the-comapeo-categories-library/) postagem de blog por María Alvarez.
 
 ---
 
 ### Com Problemas?
 
-Vá para 🔗 [**Solução de Problemas: Configuração e Personalização → Problemas com Conjunto de Categorias Personalizadas**](/docs/troubleshooting-setup-and-customization/#custom-category-set-problems)
+Vá para 🔗 [**Solução de Problemas: Configuração e Personalização → Problemas com Conjunto de Categorias Personalizado**](/docs/troubleshooting-setup-and-customization/#custom-category-set-problems)
 
 ---

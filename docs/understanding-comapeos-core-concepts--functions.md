@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /understanding-comapeos-core-concepts--functions
 last_update:
-  date: 2/12/2026
+  date: 2/25/2026
   author: Awana Digital
 sidebar_custom_props:
   title: Preparing to Use CoMapeo

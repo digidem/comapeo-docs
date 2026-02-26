@@ -27,17 +27,17 @@ last_update:
 Essa documentação é para pessoas que já usam o CoMapeo ou que estão considerando como a equipe de mapeamento de sua comunidade pode usar o aplicativo. Esperamos que você ache prático e fácil de navegar. As Páginas de Ajuda oferecem uma introdução ao CoMapeo. Elas foram pensadas para serem usadas como recursos de treinamento para o CoMapeo Mobile, bem como para as ferramentas usadas em diferentes fluxos de trabalho.
 
 
-Navegue para tópicos específicos usando o <img src="/images/emojis/three-line-menu_351bd29be717f58f_80612477.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Menu Principal a qualquer momento. Cada página contém informações detalhadas e 👣 instruções passo a passo para cada recurso do CoMapeo. Há também um sumário interativo, chamado **Nesta página**, para pular para diferentes conteúdos na mesma página.
+Navegue para tópicos específicos usando o <img src="/images/emojis/three-line-menu_351bd29be717f58f_63067587.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Menu Principal a qualquer momento. Cada página contém informações detalhadas e 👣 instruções passo a passo para cada recurso do CoMapeo. Há também um sumário interativo, chamado **Nesta página**, para pular para diferentes conteúdos na mesma página.
 
 
-> Em um dispositivo móvel, “**Nesta página”** fica no topo 👆🏽 em um <img src="/images/emojis/screenshot_2025_b35b1e92faac791f_80612360.png" alt="down-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> alternador  
+> Em um dispositivo móvel, “**Nesta página”** fica no topo 👆🏽 em um <img src="/images/emojis/screenshot_2025_b35b1e92faac791f_63067624.png" alt="down-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> alternador  
 > Em um navegador amplo, “**Nesta página”** fica à direita 👉🏽
 
 
 ### Como as Páginas de Ajuda do CoMapeo estão organizadas
 
 
-As páginas foram divididas em etapas comuns de uso do CoMapeo. Cada etapa pode ser uma combinação de planejamento, referência técnica e instrução prática. Algumas páginas foram agrupadas por fluxo de trabalho. Todos os títulos de páginas em cada grupo podem ser vistos ao abrir os <img src="/images/emojis/screenshot_2025_7137da8bdb898dbb_80612349.png" alt="right-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> alternadores no <img src="/images/emojis/three-line-menu_351bd29be717f58f_80612477.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Menu Principal.
+As páginas foram divididas em etapas comuns de uso do CoMapeo. Cada etapa pode ser uma combinação de planejamento, referência técnica e instrução prática. Algumas páginas foram agrupadas por fluxo de trabalho. Todos os títulos de páginas em cada grupo podem ser vistos ao abrir os <img src="/images/emojis/screenshot_2025_7137da8bdb898dbb_63067573.png" alt="right-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> alternadores no <img src="/images/emojis/three-line-menu_351bd29be717f58f_63067587.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> Menu Principal.
 
 
 ---

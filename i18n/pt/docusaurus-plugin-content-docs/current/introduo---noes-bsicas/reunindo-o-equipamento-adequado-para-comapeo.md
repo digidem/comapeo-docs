@@ -11,11 +11,14 @@ keywords:
 tags: []
 slug: /reunindo-o-equipamento-adequado-para-comapeo
 last_update:
-  date: 2/24/2026
+  date: 2/25/2026
   author: Awana Digital
 ---
 
-<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+---
+
+
+[Insert content here]
 
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
@@ -39,7 +42,7 @@ O CoMapeo Mobile foi projetado para funcionar em uma variedade de dispositivos A
 ## Equipamento para CoMapeo Mobile
 
 
-O CoMapeo Mobile está atualmente construído para smartphones <img src="/images/emojis/android-head_3d_182d654c7a9e6c2b_80625337.png" alt="android" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> **Android**.  Até o momento, não funciona com iPhones.
+O CoMapeo Mobile está atualmente construído para smartphones <img src="/images/emojis/android-head_3d_182d654c7a9e6c2b_63077062.png" alt="android" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> **Android**.  Até o momento, não funciona com iPhones.
 
 
 **Recursos a serem considerados ao selecionar um dispositivo**
@@ -66,13 +69,13 @@ Os recursos que exigem uma conexão Wi-Fi, são aqueles para colaborar com uma e
 **Há três opções para escolher:**
 
 
-<img src="/images/emojis/right-arrow_241f861b8bb8e877_80625548.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Roteador convencional** instalado em um escritório ou centro de comunicações
+<img src="/images/emojis/right-arrow_241f861b8bb8e877_63077024.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Roteador convencional** instalado em um escritório ou centro de comunicações
 
 
-<img src="/images/emojis/right-arrow_241f861b8bb8e877_80625548.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Roteador portátil**
+<img src="/images/emojis/right-arrow_241f861b8bb8e877_63077024.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Roteador portátil**
 
 
-<img src="/images/emojis/right-arrow_241f861b8bb8e877_80625548.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Smartphone adicional** capaz de criar uma rede local offline ou hotspot.
+<img src="/images/emojis/right-arrow_241f861b8bb8e877_63077024.png" alt="right-arrow-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />**Smartphone adicional** capaz de criar uma rede local offline ou hotspot.
 
 
 ---
@@ -88,6 +91,18 @@ Vá para 🔗[**Configuração e Manutenção de Dispositivos para CoMapeo**](ht
 
 
 Vá para 🔗[**Solução de Problemas: Configuração e Personalização**](https://notion.so/docs/troubleshooting-setup-and-customization)
+
+
+<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+
+
+<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+
+
+<div class="notion-spacer" aria-hidden="true" role="presentation"></div>
+
+
+---
 
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>

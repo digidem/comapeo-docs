@@ -11,7 +11,7 @@ keywords:
 tags: []
 slug: /entendendo-os-conceitos-e-funes-principais-do-comapeo
 last_update:
-  date: 2/24/2026
+  date: 2/25/2026
   author: Awana Digital
 sidebar_custom_props:
   title: "Preparação para usar CoMapeo"

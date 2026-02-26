@@ -27,17 +27,17 @@ last_update:
 This is for people using CoMapeo or considering how their community mapping team might use CoMapeo. We hope you find it practical and  easy to navigate. The CoMapeo Help Pages provide an introduction to CoMapeo, They are intended to be used as  training resources for CoMapeo Mobile, as well as the tools used in different CoMapeo workflows.  
 
 
-Navigate to specific topics using the <img src="/images/emojis/three-line-menu_351bd29be717f58f_80612477.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />Main Menu at any time. Each page contains detailed information and 👣 step by step instructions for each CoMapeo feature. There is also an interactive table of contents, called **On this page**, to jump to different content in the same page. 
+Navigate to specific topics using the <img src="/images/emojis/three-line-menu_351bd29be717f58f_63067587.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />Main Menu at any time. Each page contains detailed information and 👣 step by step instructions for each CoMapeo feature. There is also an interactive table of contents, called **On this page**, to jump to different content in the same page. 
 
 
-> On a mobile device **On this page** is on the top 👆🏽 in a <img src="/images/emojis/screenshot_2025_b35b1e92faac791f_80612360.png" alt="down-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> toggle  
+> On a mobile device **On this page** is on the top 👆🏽 in a <img src="/images/emojis/screenshot_2025_b35b1e92faac791f_63067624.png" alt="down-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} /> toggle  
 > On a wide browser  **On this page** is on the right 👉🏽
 
 
 ### How CoMapeo Help Pages are Organized
 
 
-The pages have been divided into common stages of using CoMapeo. Each stage may be a combination of planning, technical reference and practical instruction.  Some pages have been grouped by workflow. All page titles in each group can be viewed by opening the <img src="/images/emojis/screenshot_2025_7137da8bdb898dbb_80612349.png" alt="right-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />toggles in the <img src="/images/emojis/three-line-menu_351bd29be717f58f_80612477.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />Main Menu.
+The pages have been divided into common stages of using CoMapeo. Each stage may be a combination of planning, technical reference and practical instruction.  Some pages have been grouped by workflow. All page titles in each group can be viewed by opening the <img src="/images/emojis/screenshot_2025_7137da8bdb898dbb_63067573.png" alt="right-toggle" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />toggles in the <img src="/images/emojis/three-line-menu_351bd29be717f58f_63067587.png" alt="three-line-menu-black" className="emoji" style={{display: "inline", height: "1.2em", width: "auto", verticalAlign: "text-bottom", margin: "0 0.1em"}} />Main Menu.
 
 
 ---

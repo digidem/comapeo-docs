@@ -654,6 +654,7 @@ function isNotionImageUrlFamily(url: string): boolean {
 export async function saveTranslatedContentToDisk(
   englishPage: NotionPage,
   translatedContent: string,
+  translatedTitle: string,
   config: TranslationConfig
 ): Promise<string> {
   try {
@@ -681,7 +682,7 @@ export async function saveTranslatedContentToDisk(
 
         // Create _category_.json file
         const categoryContent = {
-          label: title,
+          label: translatedTitle,
           position:
             (
               englishPage.properties[NOTION_PROPERTIES.ORDER] as
@@ -694,7 +695,7 @@ export async function saveTranslatedContentToDisk(
             type: "generated-index",
           },
           customProps: {
-            title: title,
+            title: translatedTitle,
           },
         };
 
@@ -1217,7 +1218,12 @@ async function processSinglePageTranslation({
   );
 
   // Save translated content to output directory
-  await saveTranslatedContentToDisk(englishPage, translatedContent, config);
+  await saveTranslatedContentToDisk(
+    englishPage,
+    translatedContent,
+    translatedTitle,
+    config
+  );
 
   // Update statistics
   if (translationPage) {

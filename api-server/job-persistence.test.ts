@@ -40,7 +40,7 @@ describe("job-persistence", () => {
     it("should save and load a job", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -55,7 +55,7 @@ describe("job-persistence", () => {
     it("should update an existing job", async () => {
       const job: PersistedJob = {
         id: "test-job-2",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -88,14 +88,14 @@ describe("job-persistence", () => {
     it("should save multiple jobs", async () => {
       const job1: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
 
       const job2: PersistedJob = {
         id: "test-job-2",
-        type: "notion:fetch-all",
+        type: "fetch-all",
         status: "completed",
         createdAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
@@ -123,7 +123,7 @@ describe("job-persistence", () => {
     it("should delete a job", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -146,14 +146,14 @@ describe("job-persistence", () => {
     it("should handle multiple deletes", async () => {
       const job1: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
 
       const job2: PersistedJob = {
         id: "test-job-2",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -274,7 +274,7 @@ describe("job-persistence", () => {
     it("should store job result with data", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "completed",
         createdAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
@@ -299,7 +299,7 @@ describe("job-persistence", () => {
     it("should store job result with error", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "failed",
         createdAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
@@ -323,7 +323,7 @@ describe("job-persistence", () => {
     it("should update job progress", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "running",
         createdAt: new Date().toISOString(),
         progress: {
@@ -355,7 +355,7 @@ describe("job-persistence", () => {
     it("should store GitHub context and status", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
         github: {
@@ -380,7 +380,7 @@ describe("job-persistence", () => {
     it("should update GitHub status reported", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "completed",
         createdAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
@@ -410,7 +410,7 @@ describe("job-persistence", () => {
     it("should not remove recently completed jobs", async () => {
       const job: PersistedJob = {
         id: "test-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "completed",
         createdAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
@@ -430,7 +430,7 @@ describe("job-persistence", () => {
 
       const job: PersistedJob = {
         id: "old-pending-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: oldDate,
       };
@@ -449,7 +449,7 @@ describe("job-persistence", () => {
 
       const job: PersistedJob = {
         id: "old-running-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "running",
         createdAt: oldDate,
         startedAt: oldDate,
@@ -469,7 +469,7 @@ describe("job-persistence", () => {
 
       const job: PersistedJob = {
         id: "old-failed-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "failed",
         createdAt: oldDate,
         completedAt: oldDate,
@@ -493,7 +493,7 @@ describe("job-persistence", () => {
       for (let i = 0; i < 10; i++) {
         const job: PersistedJob = {
           id: `test-job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),
@@ -506,7 +506,7 @@ describe("job-persistence", () => {
       for (let i = 0; i < 5; i++) {
         const job: PersistedJob = {
           id: `pending-job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: new Date().toISOString(),
         };
@@ -532,14 +532,14 @@ describe("job-persistence", () => {
       // Save 2 pending jobs
       saveJob({
         id: "pending-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       });
 
       saveJob({
         id: "pending-2",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       });
@@ -549,7 +549,7 @@ describe("job-persistence", () => {
       for (let i = 0; i < 5; i++) {
         saveJob({
           id: `completed-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: new Date(Date.now() - i * 1000).toISOString(),
           completedAt: new Date(Date.now() - i * 1000).toISOString(),

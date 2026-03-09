@@ -364,7 +364,7 @@ export async function assertCleanWorkingTree(force: boolean): Promise<void> {
 }
 
 export async function prepareContentBranchForFetch(
-  mode: "fetch-ready" | "fetch-all"
+  mode: "fetch-one" | "fetch-ready" | "fetch-all"
 ): Promise<{
   remoteRef: string;
 }> {
@@ -937,10 +937,9 @@ export async function runContentTask(
 
 export function isContentMutatingJob(jobType: string): boolean {
   return (
+    jobType === "fetch-one" ||
     jobType === "fetch-ready" ||
     jobType === "fetch-all" ||
-    jobType === "notion:fetch" ||
-    jobType === "notion:fetch-all" ||
     jobType === "notion:translate"
   );
 }

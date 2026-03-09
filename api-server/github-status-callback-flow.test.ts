@@ -47,7 +47,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
   describe("Idempotency - Race Conditions", () => {
     it("should handle concurrent status reporting attempts safely", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let apiCallCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -62,7 +62,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
       // Simulate concurrent completion callbacks
       const completionPromises = Array.from({ length: 5 }, () =>
-        reportJobCompletion(validGitHubContext, true, "notion:fetch", {
+        reportJobCompletion(validGitHubContext, true, "fetch-one", {
           duration: 100,
         })
       );
@@ -80,7 +80,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
     it("should handle check-then-act race condition in job executor", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -103,7 +103,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result1 = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
       expect(result1).not.toBeNull();
 
@@ -118,7 +118,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
     it("should handle rapid successive status updates", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -133,7 +133,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const promises = [];
       for (let i = 0; i < 10; i++) {
         promises.push(
-          reportJobCompletion(validGitHubContext, true, "notion:fetch", {
+          reportJobCompletion(validGitHubContext, true, "fetch-one", {
             duration: 100,
           })
         );
@@ -157,7 +157,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
         .mockImplementation(() => {});
 
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -174,7 +174,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null after retries are exhausted
@@ -205,7 +205,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null without retrying
@@ -241,7 +241,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const reportPromise = reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Fast forward through retries
@@ -269,7 +269,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null without crashing
@@ -284,14 +284,14 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
     it("should survive server restart during status reporting", async () => {
       // Create job and mark as reported
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ id: 1, state: "success" }),
       });
 
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch");
+      await reportJobCompletion(validGitHubContext, true, "fetch-one");
       tracker.markGitHubStatusReported(jobId);
 
       expect(tracker.isGitHubStatusReported(jobId)).toBe(true);
@@ -312,7 +312,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
     it("should allow retry after server restart if status not reported", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       // Simulate failed status report
       mockFetch.mockResolvedValue({
@@ -325,7 +325,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
         .spyOn(console, "error")
         .mockImplementation(() => {});
 
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch");
+      await reportJobCompletion(validGitHubContext, true, "fetch-one");
 
       // Flag should be false
       expect(tracker.isGitHubStatusReported(jobId)).toBe(false);
@@ -349,7 +349,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       expect(result).not.toBeNull();
@@ -361,7 +361,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
   describe("Clear and Retry Mechanism", () => {
     it("should allow manual retry via clearGitHubStatusReported", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       // First attempt fails
       mockFetch.mockResolvedValue({
@@ -377,7 +377,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result1 = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
       expect(result1).toBeNull();
       expect(tracker.isGitHubStatusReported(jobId)).toBe(false);
@@ -395,7 +395,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result2 = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       expect(result2).not.toBeNull();
@@ -413,7 +413,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
     it("should persist cleared flag across server restart", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       tracker.markGitHubStatusReported(jobId);
       expect(tracker.isGitHubStatusReported(jobId)).toBe(true);
@@ -432,7 +432,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
   describe("Edge Cases", () => {
     it("should handle job completion without GitHub context", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch"); // No GitHub context
+      const jobId = tracker.createJob("fetch-one"); // No GitHub context
 
       mockFetch.mockResolvedValue({
         ok: true,
@@ -458,7 +458,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should handle gracefully
@@ -519,7 +519,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const reportPromise = reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Fast forward through retries with exponential backoff
@@ -552,7 +552,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
       const reportPromise = reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Fast forward through all retries
@@ -573,7 +573,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
   describe("Status Update Race Conditions", () => {
     it("should not report status twice for same job completion", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -590,7 +590,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
         const result1 = await reportJobCompletion(
           validGitHubContext,
           true,
-          "notion:fetch"
+          "fetch-one"
         );
         if (result1 !== null) {
           tracker.markGitHubStatusReported(jobId);
@@ -602,7 +602,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
         const result2 = await reportJobCompletion(
           validGitHubContext,
           true,
-          "notion:fetch"
+          "fetch-one"
         );
         if (result2 !== null) {
           tracker.markGitHubStatusReported(jobId);
@@ -619,7 +619,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
   describe("Double-Checked Locking Pattern", () => {
     it("should implement double-checked locking for idempotency", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -641,7 +641,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
           const result = await reportJobCompletion(
             validGitHubContext,
             true,
-            "notion:fetch"
+            "fetch-one"
           );
           if (result !== null) {
             tracker.markGitHubStatusReported(jobId);
@@ -655,7 +655,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
 
     it("should handle race condition between check and mark", async () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch", validGitHubContext);
+      const jobId = tracker.createJob("fetch-one", validGitHubContext);
 
       let callCount = 0;
       mockFetch.mockImplementation(async () => {
@@ -674,7 +674,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
           const result = await reportJobCompletion(
             validGitHubContext,
             true,
-            "notion:fetch"
+            "fetch-one"
           );
           if (result !== null) {
             tracker.markGitHubStatusReported(jobId);
@@ -689,7 +689,7 @@ describe("GitHub Status Callback Flow - Idempotency and Failure Handling", () =>
           const result = await reportJobCompletion(
             validGitHubContext,
             true,
-            "notion:fetch"
+            "fetch-one"
           );
           if (result !== null) {
             tracker.markGitHubStatusReported(jobId);

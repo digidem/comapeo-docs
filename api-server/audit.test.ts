@@ -135,7 +135,7 @@ describe("AuditLogger", () => {
 
     it("should capture query parameters", () => {
       const req = new Request(
-        "http://localhost:3001/jobs?status=running&type=notion:fetch",
+        "http://localhost:3001/jobs?status=running&type=fetch-one",
         {
           method: "GET",
         }
@@ -147,7 +147,7 @@ describe("AuditLogger", () => {
       };
       const entry = audit.createEntry(req, authResult);
 
-      expect(entry.query).toBe("?status=running&type=notion:fetch");
+      expect(entry.query).toBe("?status=running&type=fetch-one");
     });
   });
 
@@ -616,7 +616,7 @@ describe("AuditLogger", () => {
       );
 
       const req = new Request(
-        "http://localhost:3001/jobs?status=running&type=notion:fetch",
+        "http://localhost:3001/jobs?status=running&type=fetch-one",
         { method: "GET" }
       );
 
@@ -633,7 +633,7 @@ describe("AuditLogger", () => {
       const logContents = readFileSync(logPath, "utf-8");
       const logEntry = JSON.parse(logContents.trim());
 
-      expect(logEntry.query).toBe("?status=running&type=notion:fetch");
+      expect(logEntry.query).toBe("?status=running&type=fetch-one");
     });
 
     it("should append multiple entries for multiple requests", async () => {

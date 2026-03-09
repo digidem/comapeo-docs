@@ -61,11 +61,11 @@ describe("API Server - Unit Tests", () => {
   describe("Job Type Validation", () => {
     it("should accept valid job types", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
       const job = tracker.getJob(jobId);
 
       expect(job).toBeDefined();
-      expect(job?.type).toBe("notion:fetch");
+      expect(job?.type).toBe("fetch-one");
     });
 
     it("should reject invalid job types", () => {
@@ -79,7 +79,7 @@ describe("API Server - Unit Tests", () => {
   describe("Job Creation Flow", () => {
     it("should create job with pending status", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       const job = tracker.getJob(jobId);
       expect(job?.status).toBe("pending");
@@ -89,7 +89,7 @@ describe("API Server - Unit Tests", () => {
 
     it("should transition job from pending to running", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch-all");
+      const jobId = tracker.createJob("fetch-all");
 
       tracker.updateJobStatus(jobId, "running");
 
@@ -118,7 +118,7 @@ describe("API Server - Unit Tests", () => {
   describe("Job Progress Tracking", () => {
     it("should track job progress", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch-all");
+      const jobId = tracker.createJob("fetch-all");
 
       tracker.updateJobProgress(jobId, 5, 10, "Processing page 5");
       tracker.updateJobProgress(jobId, 7, 10, "Processing page 7");
@@ -133,7 +133,7 @@ describe("API Server - Unit Tests", () => {
 
     it("should calculate completion percentage", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch-all");
+      const jobId = tracker.createJob("fetch-all");
 
       tracker.updateJobProgress(jobId, 5, 10, "Halfway there");
 
@@ -147,8 +147,8 @@ describe("API Server - Unit Tests", () => {
   describe("Job Filtering", () => {
     beforeEach(() => {
       const tracker = getJobTracker();
-      const job1 = tracker.createJob("notion:fetch");
-      const job2 = tracker.createJob("notion:fetch-all");
+      const job1 = tracker.createJob("fetch-one");
+      const job2 = tracker.createJob("fetch-all");
       const job3 = tracker.createJob("notion:translate");
 
       tracker.updateJobStatus(job1, "running");
@@ -171,8 +171,8 @@ describe("API Server - Unit Tests", () => {
     it("should filter jobs by type", () => {
       const tracker = getJobTracker();
 
-      const fetchJobs = tracker.getJobsByType("notion:fetch");
-      const fetchAllJobs = tracker.getJobsByType("notion:fetch-all");
+      const fetchJobs = tracker.getJobsByType("fetch-one");
+      const fetchAllJobs = tracker.getJobsByType("fetch-all");
 
       expect(fetchJobs).toHaveLength(1);
       expect(fetchAllJobs).toHaveLength(1);
@@ -182,7 +182,7 @@ describe("API Server - Unit Tests", () => {
   describe("Job Deletion", () => {
     it("should delete a job", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       expect(tracker.getJob(jobId)).toBeDefined();
 
@@ -203,8 +203,8 @@ describe("API Server - Unit Tests", () => {
   describe("Job Listing", () => {
     it("should return all jobs", () => {
       const tracker = getJobTracker();
-      tracker.createJob("notion:fetch");
-      tracker.createJob("notion:fetch-all");
+      tracker.createJob("fetch-one");
+      tracker.createJob("fetch-all");
       tracker.createJob("notion:translate");
 
       const jobs = tracker.getAllJobs();
@@ -223,7 +223,7 @@ describe("API Server - Unit Tests", () => {
   describe("Job Serialization", () => {
     it("should preserve job data through serialization", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       tracker.updateJobStatus(jobId, "running");
       tracker.updateJobProgress(jobId, 5, 10, "Processing");
@@ -232,7 +232,7 @@ describe("API Server - Unit Tests", () => {
       const serialized = JSON.parse(JSON.stringify(job));
 
       expect(serialized.id).toBe(jobId);
-      expect(serialized.type).toBe("notion:fetch");
+      expect(serialized.type).toBe("fetch-one");
       expect(serialized.status).toBe("running");
       expect(serialized.progress).toEqual({
         current: 5,
@@ -280,7 +280,7 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create job
-    const jobId = tracker.createJob("notion:fetch-all");
+    const jobId = tracker.createJob("fetch-all");
     let job = tracker.getJob(jobId);
     expect(job?.status).toBe("pending");
 
@@ -310,7 +310,7 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create job
-    const jobId = tracker.createJob("notion:fetch");
+    const jobId = tracker.createJob("fetch-one");
 
     // Start job
     tracker.updateJobStatus(jobId, "running");
@@ -331,8 +331,8 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     const jobIds = [
-      tracker.createJob("notion:fetch"),
-      tracker.createJob("notion:fetch-all"),
+      tracker.createJob("fetch-one"),
+      tracker.createJob("fetch-all"),
       tracker.createJob("notion:translate"),
     ];
 
@@ -367,7 +367,7 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create job
-    const jobId = tracker.createJob("notion:fetch");
+    const jobId = tracker.createJob("fetch-one");
     expect(tracker.getJob(jobId)?.status).toBe("pending");
 
     // Cancel job
@@ -385,7 +385,7 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create and start job
-    const jobId = tracker.createJob("notion:fetch-all");
+    const jobId = tracker.createJob("fetch-all");
     tracker.updateJobStatus(jobId, "running");
     expect(tracker.getJob(jobId)?.status).toBe("running");
 
@@ -404,8 +404,8 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create multiple jobs with different statuses
-    const job1 = tracker.createJob("notion:fetch");
-    const job2 = tracker.createJob("notion:fetch-all");
+    const job1 = tracker.createJob("fetch-one");
+    const job2 = tracker.createJob("fetch-all");
     const job3 = tracker.createJob("notion:translate");
 
     tracker.updateJobStatus(job1, "running");
@@ -432,17 +432,17 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create multiple jobs with different types
-    const job1 = tracker.createJob("notion:fetch");
-    const job2 = tracker.createJob("notion:fetch-all");
-    const job3 = tracker.createJob("notion:fetch");
+    const job1 = tracker.createJob("fetch-one");
+    const job2 = tracker.createJob("fetch-all");
+    const job3 = tracker.createJob("fetch-one");
 
     // Filter by type
     let jobs = tracker.getAllJobs();
-    jobs = jobs.filter((job) => job.type === "notion:fetch");
+    jobs = jobs.filter((job) => job.type === "fetch-one");
     expect(jobs).toHaveLength(2);
 
     jobs = tracker.getAllJobs();
-    jobs = jobs.filter((job) => job.type === "notion:fetch-all");
+    jobs = jobs.filter((job) => job.type === "fetch-all");
     expect(jobs).toHaveLength(1);
     expect(jobs[0].id).toBe(job2);
   });
@@ -451,9 +451,9 @@ describe("Job Lifecycle Integration", () => {
     const tracker = getJobTracker();
 
     // Create multiple jobs
-    const job1 = tracker.createJob("notion:fetch");
-    const job2 = tracker.createJob("notion:fetch");
-    const job3 = tracker.createJob("notion:fetch-all");
+    const job1 = tracker.createJob("fetch-one");
+    const job2 = tracker.createJob("fetch-one");
+    const job3 = tracker.createJob("fetch-all");
 
     tracker.updateJobStatus(job1, "running");
     tracker.updateJobStatus(job2, "completed");
@@ -461,14 +461,14 @@ describe("Job Lifecycle Integration", () => {
     // Filter by status AND type
     let jobs = tracker.getAllJobs();
     jobs = jobs.filter(
-      (job) => job.status === "running" && job.type === "notion:fetch"
+      (job) => job.status === "running" && job.type === "fetch-one"
     );
     expect(jobs).toHaveLength(1);
     expect(jobs[0].id).toBe(job1);
 
     jobs = tracker.getAllJobs();
     jobs = jobs.filter(
-      (job) => job.status === "completed" && job.type === "notion:fetch"
+      (job) => job.status === "completed" && job.type === "fetch-one"
     );
     expect(jobs).toHaveLength(1);
     expect(jobs[0].id).toBe(job2);

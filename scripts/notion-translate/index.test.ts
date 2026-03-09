@@ -1372,12 +1372,14 @@ describe("notion-translate index", () => {
       const filePath1 = await saveTranslatedContentToDisk(
         mockPage,
         "# Test Content",
+        "Test Page",
         mockConfig
       );
 
       const filePath2 = await saveTranslatedContentToDisk(
         mockPage,
         "# Test Content",
+        "Test Page",
         mockConfig
       );
 

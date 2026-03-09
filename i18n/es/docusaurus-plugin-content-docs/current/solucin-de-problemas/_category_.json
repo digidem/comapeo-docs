@@ -1,0 +1,12 @@
+{
+  "label": "Solución de problemas",
+  "position": 42,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": "Misceláneas"
+  }
+}

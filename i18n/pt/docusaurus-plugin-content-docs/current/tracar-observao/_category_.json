@@ -1,0 +1,12 @@
+{
+  "label": "Tracar Observao…",
+  "position": 23,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": null
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "label": "Solução de problemas",
+  "position": 41,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index"
+  },
+  "customProps": {
+    "title": "Variado"
+  }
+}

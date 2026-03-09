@@ -1,6 +1,7 @@
 import { NOTION_PROPERTIES } from "../constants";
 import { runFetchPipeline } from "../notion-fetch/runFetch";
 import { GenerateBlocksOptions } from "../notion-fetch/generateBlocks";
+import { notion } from "../notionClient";
 import {
   getStatusFromRawPage,
   selectPagesWithPriority,
@@ -24,6 +25,7 @@ export interface PageWithStatus {
 }
 
 export interface FetchAllOptions {
+  pageId?: string;
   includeRemoved?: boolean;
   sortBy?: "order" | "created" | "modified" | "title";
   sortDirection?: "asc" | "desc";
@@ -58,6 +60,7 @@ export async function fetchAllNotionData(
   options: FetchAllOptions = {}
 ): Promise<FetchAllResult> {
   const {
+    pageId,
     includeRemoved = false,
     sortBy = "order",
     sortDirection = "asc",
@@ -69,6 +72,19 @@ export async function fetchAllNotionData(
     progressLogger,
     generateOptions = {},
   } = options;
+
+  if (pageId) {
+    const rawPage = await notion.pages.retrieve({ page_id: pageId });
+    const page = transformPage(rawPage as any);
+
+    return {
+      pages: [page],
+      rawPages: [rawPage as Record<string, unknown>],
+      candidateIds: [],
+      fetchedCount: 1,
+      processedCount: 1,
+    };
+  }
 
   const filter = buildStatusFilter(includeRemoved, statusFilter);
 

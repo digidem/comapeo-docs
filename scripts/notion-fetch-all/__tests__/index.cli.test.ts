@@ -93,16 +93,23 @@ vi.mock("ora", () => ({
   })),
 }));
 
-vi.mock("chalk", () => ({
-  default: {
-    green: (text: string) => `[GREEN]${text}[/GREEN]`,
-    blue: (text: string) => `[BLUE]${text}[/BLUE]`,
-    yellow: (text: string) => `[YELLOW]${text}[/YELLOW]`,
-    red: (text: string) => `[RED]${text}[/RED]`,
-    cyan: (text: string) => `[CYAN]${text}[/CYAN]`,
-    gray: (text: string) => `[GRAY]${text}[/GRAY]`,
-  },
-}));
+vi.mock("chalk", () => {
+  const bold = Object.assign((text: string) => `[BOLD]${text}[/BOLD]`, {
+    cyan: (text: string) => `[BOLD_CYAN]${text}[/BOLD_CYAN]`,
+  });
+
+  return {
+    default: {
+      green: (text: string) => `[GREEN]${text}[/GREEN]`,
+      blue: (text: string) => `[BLUE]${text}[/BLUE]`,
+      yellow: (text: string) => `[YELLOW]${text}[/YELLOW]`,
+      red: (text: string) => `[RED]${text}[/RED]`,
+      cyan: (text: string) => `[CYAN]${text}[/CYAN]`,
+      gray: (text: string) => `[GRAY]${text}[/GRAY]`,
+      bold,
+    },
+  };
+});
 
 describe("CLI index", () => {
   let restoreEnv: () => void;
@@ -193,6 +200,57 @@ describe("CLI index", () => {
 
       // Runtime should be initialized
       expect(trackSpinner).toBeDefined();
+    });
+
+    it("should pass --page-id through to fetchAllNotionData", async () => {
+      const originalArgv = process.argv;
+      const rawPage = createMockNotionPage({ id: "page-123" });
+
+      process.argv = [
+        originalArgv[0] ?? "bun",
+        originalArgv[1] ?? "scripts/notion-fetch-all/index.ts",
+        "--page-id",
+        "page-123",
+        "--preview-only",
+        "--no-analysis",
+      ];
+
+      (fetchAllNotionData as Mock).mockResolvedValue({
+        pages: [
+          {
+            id: "page-123",
+            title: "Single Page",
+            status: "Draft",
+            elementType: "Page",
+            order: 0,
+            subItems: [],
+            lastEdited: new Date(),
+            createdTime: new Date(),
+            properties: {},
+            rawPage,
+          },
+        ],
+        rawPages: [rawPage],
+        candidateIds: [],
+        fetchedCount: 1,
+        processedCount: 1,
+      });
+      (PreviewGenerator.generatePreview as Mock).mockResolvedValue({
+        sections: [],
+      });
+
+      try {
+        const { main } = await import("../index");
+        await main();
+      } finally {
+        process.argv = originalArgv;
+      }
+
+      expect(fetchAllNotionData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pageId: "page-123",
+        })
+      );
     });
   });
 });

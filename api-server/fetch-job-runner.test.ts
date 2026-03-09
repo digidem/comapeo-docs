@@ -261,6 +261,27 @@ describe("fetch-job-runner", () => {
     expect(mockVerifyRemoteHeadMatchesLocal).not.toHaveBeenCalled();
   });
 
+  it("passes pageId and includeRemoved args for fetch-one", async () => {
+    const result = await runFetchJob({
+      type: "fetch-one",
+      jobId: "job-fetch-one",
+      options: { pageId: "page-123", includeRemoved: true, dryRun: true },
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(["--page-id", "page-123", "--include-removed"])
+    );
+    expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+    expect(mockVerifyRemoteHeadMatchesLocal).not.toHaveBeenCalled();
+  });
+
   it("returns CONTENT_GENERATION_FAILED when staging fails", async () => {
     mockStageGeneratedPaths.mockRejectedValue(
       new ContentRepoError(
@@ -442,6 +463,39 @@ describe("fetch-job-runner", () => {
     expect(mockSpawn.mock.calls[0]?.[0]).toBe("bun");
     expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
       expect.arrayContaining(["--force", "--dry-run"])
+    );
+  });
+
+  it("passes fetch-all statusFilter and includeRemoved args to generation script", async () => {
+    const result = await runFetchJob({
+      type: "fetch-all",
+      jobId: "job-fetch-all-options",
+      options: {
+        statusFilter: "Draft published",
+        includeRemoved: true,
+        dryRun: true,
+      },
+      onProgress: vi.fn(),
+      logger: createLogger(),
+      childEnv: process.env,
+      signal: new AbortController().signal,
+      timeoutMs: 20 * 60 * 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockSpawn.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining([
+        "--status-filter",
+        "Draft published",
+        "--include-removed",
+      ])
+    );
+    expect(mockSpawn.mock.calls[0]?.[1]).not.toEqual(
+      expect.arrayContaining([
+        "--status-filter",
+        NOTION_PROPERTIES.READY_TO_PUBLISH,
+      ])
     );
   });
 });

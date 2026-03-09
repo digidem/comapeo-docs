@@ -38,8 +38,11 @@ interface FetchJobLogger {
 
 interface FetchJobOptions {
   maxPages?: number;
+  pageId?: string;
+  statusFilter?: string;
   force?: boolean;
   dryRun?: boolean;
+  includeRemoved?: boolean;
 }
 
 interface FetchJobResult {
@@ -59,7 +62,7 @@ interface FetchJobResult {
 }
 
 interface RunFetchJobInput {
-  type: "fetch-ready" | "fetch-all";
+  type: "fetch-one" | "fetch-ready" | "fetch-all";
   jobId: string;
   options: FetchJobOptions;
   onProgress: (current: number, total: number, message: string) => void;
@@ -192,7 +195,7 @@ function parseCiFetchHoldMs(value: string | undefined): number {
 }
 
 async function runGenerationScript(
-  type: "fetch-ready" | "fetch-all",
+  type: "fetch-one" | "fetch-ready" | "fetch-all",
   options: FetchJobOptions,
   tempDir: string,
   childEnv: NodeJS.ProcessEnv,
@@ -201,11 +204,20 @@ async function runGenerationScript(
   timeoutMs: number
 ): Promise<string> {
   const args = ["scripts/notion-fetch-all"];
+  if (type === "fetch-one" && options.pageId) {
+    args.push("--page-id", options.pageId);
+  }
   if (type === "fetch-ready") {
     args.push("--status-filter", NOTION_PROPERTIES.READY_TO_PUBLISH);
   }
+  if (type === "fetch-all" && options.statusFilter) {
+    args.push("--status-filter", options.statusFilter);
+  }
   if (options.maxPages !== undefined && options.maxPages > 0) {
     args.push("--max-pages", String(options.maxPages));
+  }
+  if (options.includeRemoved) {
+    args.push("--include-removed");
   }
   if (options.force) {
     args.push("--force");
@@ -350,7 +362,7 @@ async function runGenerationScript(
 
 function parseTerminalSummary(
   output: string,
-  type: "fetch-ready" | "fetch-all"
+  type: "fetch-one" | "fetch-ready" | "fetch-all"
 ): { pagesProcessed: number; candidateIds: string[] } {
   const parsedOutput = extractLastJsonLine(output) as {
     candidateIds?: unknown;

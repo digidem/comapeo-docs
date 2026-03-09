@@ -434,8 +434,8 @@ describe("Docker Runtime Smoke Tests", () => {
 
         // Verify known job types are present
         const typeIds = body.data.types.map((t: { id: string }) => t.id);
-        expect(typeIds).toContain("notion:fetch");
-        expect(typeIds).toContain("notion:fetch-all");
+        expect(typeIds).toContain("fetch-one");
+        expect(typeIds).toContain("fetch-all");
       });
     });
 
@@ -457,7 +457,7 @@ describe("Docker Runtime Smoke Tests", () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ type: "notion:fetch-all" }),
+          body: JSON.stringify({ type: "fetch-all" }),
         });
 
         // Should require authentication
@@ -484,7 +484,7 @@ describe("Docker Runtime Smoke Tests", () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            type: "notion:fetch-all",
+            type: "fetch-all",
             options: { dryRun: true },
           }),
         });

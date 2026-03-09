@@ -32,7 +32,7 @@ describe("JobTracker", () => {
   describe("createJob", () => {
     it("should create a new job and return a job ID", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       expect(jobId).toBeTruthy();
       expect(typeof jobId).toBe("string");
@@ -40,15 +40,15 @@ describe("JobTracker", () => {
       const job = tracker.getJob(jobId);
       expect(job).toBeDefined();
       expect(job?.id).toBe(jobId);
-      expect(job?.type).toBe("notion:fetch");
+      expect(job?.type).toBe("fetch-one");
       expect(job?.status).toBe("pending");
       expect(job?.createdAt).toBeInstanceOf(Date);
     });
 
     it("should create unique job IDs", () => {
       const tracker = getJobTracker();
-      const jobId1 = tracker.createJob("notion:fetch");
-      const jobId2 = tracker.createJob("notion:fetch-all");
+      const jobId1 = tracker.createJob("fetch-one");
+      const jobId2 = tracker.createJob("fetch-all");
 
       expect(jobId1).not.toBe(jobId2);
     });
@@ -75,7 +75,7 @@ describe("JobTracker", () => {
   describe("updateJobStatus", () => {
     it("should update job status to running", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       tracker.updateJobStatus(jobId, "running");
 
@@ -86,7 +86,7 @@ describe("JobTracker", () => {
 
     it("should update job status to completed", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       tracker.updateJobStatus(jobId, "running");
       tracker.updateJobStatus(jobId, "completed", {
@@ -103,7 +103,7 @@ describe("JobTracker", () => {
 
     it("should update job status to failed", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       tracker.updateJobStatus(jobId, "running");
       tracker.updateJobStatus(jobId, "failed", {
@@ -130,7 +130,7 @@ describe("JobTracker", () => {
   describe("updateJobProgress", () => {
     it("should update job progress", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch-all");
+      const jobId = tracker.createJob("fetch-all");
 
       tracker.updateJobProgress(jobId, 5, 10, "Processing page 5");
 
@@ -154,10 +154,10 @@ describe("JobTracker", () => {
   describe("getAllJobs", () => {
     it("should return all jobs sorted by creation time (newest first)", async () => {
       const tracker = getJobTracker();
-      const jobId1 = tracker.createJob("notion:fetch");
+      const jobId1 = tracker.createJob("fetch-one");
       // Small delay to ensure different timestamps
       await new Promise((resolve) => setTimeout(resolve, 10));
-      const jobId2 = tracker.createJob("notion:fetch-all");
+      const jobId2 = tracker.createJob("fetch-all");
 
       const jobs = tracker.getAllJobs();
 
@@ -177,25 +177,23 @@ describe("JobTracker", () => {
   describe("getJobsByType", () => {
     it("should filter jobs by type", () => {
       const tracker = getJobTracker();
-      tracker.createJob("notion:fetch");
-      tracker.createJob("notion:fetch-all");
-      tracker.createJob("notion:fetch-all");
+      tracker.createJob("fetch-one");
+      tracker.createJob("fetch-all");
+      tracker.createJob("fetch-all");
       tracker.createJob("notion:translate");
 
-      const fetchAllJobs = tracker.getJobsByType("notion:fetch-all");
+      const fetchAllJobs = tracker.getJobsByType("fetch-all");
 
       expect(fetchAllJobs).toHaveLength(2);
-      expect(fetchAllJobs.every((job) => job.type === "notion:fetch-all")).toBe(
-        true
-      );
+      expect(fetchAllJobs.every((job) => job.type === "fetch-all")).toBe(true);
     });
   });
 
   describe("getJobsByStatus", () => {
     it("should filter jobs by status", () => {
       const tracker = getJobTracker();
-      const jobId1 = tracker.createJob("notion:fetch");
-      const jobId2 = tracker.createJob("notion:fetch-all");
+      const jobId1 = tracker.createJob("fetch-one");
+      const jobId2 = tracker.createJob("fetch-all");
       const jobId3 = tracker.createJob("notion:translate");
 
       tracker.updateJobStatus(jobId1, "running");
@@ -213,7 +211,7 @@ describe("JobTracker", () => {
   describe("deleteJob", () => {
     it("should delete a job", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       expect(tracker.getJob(jobId)).toBeDefined();
 
@@ -234,8 +232,8 @@ describe("JobTracker", () => {
   describe("cleanupOldJobs", () => {
     it("should persist jobs across tracker instances", async () => {
       const tracker = getJobTracker();
-      const jobId1 = tracker.createJob("notion:fetch");
-      const jobId2 = tracker.createJob("notion:fetch-all");
+      const jobId1 = tracker.createJob("fetch-one");
+      const jobId2 = tracker.createJob("fetch-all");
 
       // Mark jobs as completed
       tracker.updateJobStatus(jobId1, "completed", { success: true });

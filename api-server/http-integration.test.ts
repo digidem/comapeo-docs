@@ -94,8 +94,8 @@ describe("HTTP Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       const typeIds = body.data.types.map((t: { id: string }) => t.id);
-      expect(typeIds).toContain("notion:fetch");
-      expect(typeIds).toContain("notion:fetch-all");
+      expect(typeIds).toContain("fetch-one");
+      expect(typeIds).toContain("fetch-all");
       expect(typeIds).toContain("notion:count-pages");
       expect(typeIds).toContain("notion:translate");
     });
@@ -204,7 +204,7 @@ describe("HTTP Integration Tests", () => {
     it("should reject missing Content-Type", async () => {
       const res = await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
       expect(res.status).toBe(400);
     });
@@ -224,7 +224,7 @@ describe("HTTP Integration Tests", () => {
       const res = await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
       expect(res.status).toBe(201);
       const body = await res.json();
@@ -238,7 +238,7 @@ describe("HTTP Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "notion:fetch",
+          type: "fetch-one",
           options: { unknownKey: true },
         }),
       });
@@ -268,7 +268,7 @@ describe("HTTP Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "notion:fetch",
+          type: "fetch-one",
           options: { maxPages: 5, force: true },
         }),
       });
@@ -294,7 +294,7 @@ describe("HTTP Integration Tests", () => {
       const createRes = await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
       const createBody = await createRes.json();
       const jobId = createBody.data.jobId;
@@ -317,14 +317,14 @@ describe("HTTP Integration Tests", () => {
       await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
 
-      const res = await fetch(`${BASE_URL}/jobs?type=notion:fetch`);
+      const res = await fetch(`${BASE_URL}/jobs?type=fetch-one`);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.data.items.length).toBeGreaterThanOrEqual(1);
-      expect(body.data.items[0].type).toBe("notion:fetch");
+      expect(body.data.items[0].type).toBe("fetch-one");
     });
 
     it("should reject invalid status filter", async () => {
@@ -361,7 +361,7 @@ describe("HTTP Integration Tests", () => {
       const createRes = await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
       const createBody = await createRes.json();
       const jobId = createBody.data.jobId;
@@ -370,7 +370,7 @@ describe("HTTP Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.data.id).toBe(jobId);
-      expect(body.data.type).toBe("notion:fetch");
+      expect(body.data.type).toBe("fetch-one");
     });
   });
 
@@ -389,7 +389,7 @@ describe("HTTP Integration Tests", () => {
       const createRes = await fetch(`${BASE_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
       const createBody = await createRes.json();
       const jobId = createBody.data.jobId;
@@ -405,7 +405,7 @@ describe("HTTP Integration Tests", () => {
     it("should reject canceling a completed job", async () => {
       // Create and manually complete a job
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
       tracker.updateJobStatus(jobId, "completed", {
         success: true,
         data: {},

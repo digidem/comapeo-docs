@@ -31,8 +31,8 @@ function cleanupTestData(): void {
 
 describe("Input Validation - Job Type Validation", () => {
   it("should accept valid job types", () => {
-    expect(isValidJobType("notion:fetch")).toBe(true);
-    expect(isValidJobType("notion:fetch-all")).toBe(true);
+    expect(isValidJobType("fetch-one")).toBe(true);
+    expect(isValidJobType("fetch-all")).toBe(true);
     expect(isValidJobType("notion:translate")).toBe(true);
   });
 
@@ -40,7 +40,7 @@ describe("Input Validation - Job Type Validation", () => {
     expect(isValidJobType("invalid:type")).toBe(false);
     expect(isValidJobType("notion:invalid")).toBe(false);
     expect(isValidJobType("")).toBe(false);
-    expect(isValidJobType("notion:fetch-all-extra")).toBe(false);
+    expect(isValidJobType("fetch-all-extra")).toBe(false);
   });
 });
 
@@ -98,7 +98,7 @@ describe("Input Validation - POST /jobs Request Body", () => {
     });
 
     it("should validate job type", () => {
-      expect(isValidJobType("notion:fetch")).toBe(true);
+      expect(isValidJobType("fetch-one")).toBe(true);
       expect(isValidJobType("invalid:type")).toBe(false);
     });
   });
@@ -183,7 +183,7 @@ describe("Input Validation - GET /jobs Query Parameters", () => {
   });
 
   it("should validate type parameter", () => {
-    expect(isValidJobType("notion:fetch")).toBe(true);
+    expect(isValidJobType("fetch-one")).toBe(true);
     expect(isValidJobType("invalid:type")).toBe(false);
   });
 });
@@ -229,7 +229,7 @@ describe("Integration - Job Tracker with Validation", () => {
 
   it("should create job with valid type", () => {
     const tracker = getJobTracker();
-    const validType = "notion:fetch";
+    const validType = "fetch-one";
 
     expect(isValidJobType(validType)).toBe(true);
 
@@ -244,8 +244,8 @@ describe("Integration - Job Tracker with Validation", () => {
     const tracker = getJobTracker();
 
     // Create jobs with different statuses
-    const job1 = tracker.createJob("notion:fetch");
-    const job2 = tracker.createJob("notion:fetch-all");
+    const job1 = tracker.createJob("fetch-one");
+    const job2 = tracker.createJob("fetch-all");
     const job3 = tracker.createJob("notion:translate");
 
     tracker.updateJobStatus(job1, "running");
@@ -262,7 +262,7 @@ describe("Integration - Job Tracker with Validation", () => {
     expect(jobs[0].id).toBe(job1);
 
     // Test filtering by valid type
-    const typeFilter = "notion:fetch";
+    const typeFilter = "fetch-one";
     expect(isValidJobType(typeFilter)).toBe(true);
 
     jobs = tracker.getAllJobs();
@@ -277,7 +277,7 @@ describe("Integration - Job Tracker with Validation", () => {
 
   it("should validate job ID for status queries", () => {
     const tracker = getJobTracker();
-    const jobId = tracker.createJob("notion:fetch");
+    const jobId = tracker.createJob("fetch-one");
 
     // Valid job ID
     expect(isValidJobId(jobId)).toBe(true);
@@ -340,7 +340,7 @@ describe("Endpoint Input Schemas - Complete Coverage", () => {
     it("should validate all required fields", () => {
       // Valid request body
       const validBody = {
-        type: "notion:fetch",
+        type: "fetch-one",
         options: {
           maxPages: 10,
           statusFilter: "In Progress",
@@ -407,14 +407,14 @@ describe("Endpoint Input Schemas - Complete Coverage", () => {
         { status: "running" },
         { status: "completed" },
         { status: "failed" },
-        { type: "notion:fetch" },
-        { type: "notion:fetch-all" },
+        { type: "fetch-one" },
+        { type: "fetch-all" },
         { type: "notion:translate" },
         { type: "notion:status-translation" },
         { type: "notion:status-draft" },
         { type: "notion:status-publish" },
         { type: "notion:status-publish-production" },
-        { status: "pending", type: "notion:fetch" },
+        { status: "pending", type: "fetch-one" },
       ];
 
       for (const params of validParams) {
@@ -518,15 +518,15 @@ describe("Error Responses - Complete Coverage", () => {
       const errorResponse = {
         code: "INVALID_ENUM_VALUE",
         message:
-          "Invalid job type: 'invalid:type'. Valid types are: notion:fetch, notion:fetch-all, notion:translate, notion:status-translation, notion:status-draft, notion:status-publish, notion:status-publish-production",
+          "Invalid job type: 'invalid:type'. Valid types are: fetch-one, fetch-all, notion:translate, notion:status-translation, notion:status-draft, notion:status-publish, notion:status-publish-production",
         status: 400,
         requestId: "req_test_789",
         timestamp: new Date().toISOString(),
         details: {
           providedType: "invalid:type",
           validTypes: [
-            "notion:fetch",
-            "notion:fetch-all",
+            "fetch-one",
+            "fetch-all",
             "notion:translate",
             "notion:status-translation",
             "notion:status-draft",

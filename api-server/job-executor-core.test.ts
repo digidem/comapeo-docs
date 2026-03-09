@@ -4,7 +4,7 @@
  * Focused unit tests for core job execution logic including:
  * - parseProgressFromOutput function
  * - JOB_COMMANDS mapping
- * - buildArgs function for notion:fetch-all
+ * - buildArgs function for fetch-all
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
@@ -161,8 +161,8 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
   describe("job type configuration", () => {
     it("should have entries for all job types", () => {
       const jobTypes: JobType[] = [
-        "notion:fetch",
-        "notion:fetch-all",
+        "fetch-one",
+        "fetch-all",
         "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
@@ -183,12 +183,12 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
       }
     });
 
-    it("should configure notion:fetch with correct script and args", () => {
-      const config = JOB_COMMANDS["notion:fetch"];
+    it("should configure fetch-one with correct script and args", () => {
+      const config = JOB_COMMANDS["fetch-one"];
 
       expect(config.script).toBe("bun");
-      expect(config.args).toEqual(["scripts/notion-fetch/index.ts"]);
-      expect(config.buildArgs).toBeUndefined();
+      expect(config.args).toEqual(["scripts/notion-fetch-all"]);
+      expect(config.buildArgs).toBeDefined();
     });
 
     it("should configure notion:translate with correct script and args", () => {
@@ -236,8 +236,8 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
     });
   });
 
-  describe("notion:fetch-all buildArgs function", () => {
-    const buildArgs = JOB_COMMANDS["notion:fetch-all"].buildArgs!;
+  describe("fetch-all buildArgs function", () => {
+    const buildArgs = JOB_COMMANDS["fetch-all"].buildArgs!;
 
     it("should return empty array when no options provided", () => {
       const args = buildArgs({});
@@ -378,10 +378,9 @@ describe("Core Job Logic - JOB_COMMANDS mapping", () => {
     });
 
     describe("edge cases", () => {
-      it("should treat zero maxPages as falsy and not add argument", () => {
+      it("should include zero maxPages when provided", () => {
         const args = buildArgs({ maxPages: 0 });
-        // 0 is falsy in JavaScript, so the condition `if (options.maxPages)` is false
-        expect(args).toEqual([]);
+        expect(args).toEqual(["--max-pages", "0"]);
       });
 
       it("should handle very large maxPages", () => {

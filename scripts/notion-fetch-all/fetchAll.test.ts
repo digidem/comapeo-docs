@@ -14,6 +14,10 @@ import {
   type PageWithStatus,
 } from "./fetchAll";
 
+const { mockNotionPageRetrieve } = vi.hoisted(() => ({
+  mockNotionPageRetrieve: vi.fn(),
+}));
+
 // Mock sharp to avoid installation issues
 vi.mock("sharp", () => {
   const createPipeline = () => {
@@ -39,6 +43,11 @@ vi.mock("sharp", () => {
 
 // Mock notionClient to avoid environment variable requirements
 vi.mock("../notionClient", () => ({
+  notion: {
+    pages: {
+      retrieve: mockNotionPageRetrieve,
+    },
+  },
   enhancedNotion: {
     blocksChildrenList: vi.fn(),
   },
@@ -105,6 +114,36 @@ describe("fetchAll - Core Functions", () => {
   });
 
   describe("fetchAllNotionData", () => {
+    it("should retrieve a single page when pageId is provided", async () => {
+      const { runFetchPipeline } = await import("../notion-fetch/runFetch");
+      const mockPage = createMockNotionPage({
+        id: "page-123",
+        title: "Single Page",
+        status: "Draft",
+      });
+
+      mockNotionPageRetrieve.mockResolvedValue(mockPage);
+
+      const result = await fetchAllNotionData({
+        pageId: "page-123",
+        statusFilter: "Ready to publish",
+        maxPages: 10,
+      });
+
+      expect(mockNotionPageRetrieve).toHaveBeenCalledWith({
+        page_id: "page-123",
+      });
+      expect(runFetchPipeline).not.toHaveBeenCalled();
+      expect(result.pages).toHaveLength(1);
+      expect(result.pages[0].id).toBe("page-123");
+      expect(result.pages[0].title).toBe("Single Page");
+      expect(result.rawPages).toEqual([mockPage]);
+      expect(result.candidateIds).toEqual([]);
+      expect(result.fetchedCount).toBe(1);
+      expect(result.processedCount).toBe(1);
+      expect(result.metrics).toBeUndefined();
+    });
+
     it("should fetch and transform pages successfully", async () => {
       const { runFetchPipeline } = await import("../notion-fetch/runFetch");
       const mockPages = [

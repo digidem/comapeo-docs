@@ -7,7 +7,6 @@ import {
 import { translate } from "@docusaurus/Translate";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import type { I18nLocaleConfig } from "@docusaurus/types";
-import { useAlternatePageUtils } from "@docusaurus/theme-common/internal";
 import {
   mergeSearchStrings,
   useHistorySelector,
@@ -25,7 +24,6 @@ function useLocaleDropdownUtils() {
     siteConfig,
     i18n: { currentLocale, defaultLocale, localeConfigs },
   } = useDocusaurusContext();
-  const alternatePageUtils = useAlternatePageUtils();
   const { activeDoc } = useActiveDocContext(undefined);
   const activePluginAndVersion = useActivePluginAndVersion();
   const { pathname } = useLocation();
@@ -74,17 +72,31 @@ function useLocaleDropdownUtils() {
 
   const getBaseURLForLocale = (locale: string) => {
     const localeConfig = getLocaleConfig(locale);
+    const currentLocaleConfig = getLocaleConfig(currentLocale);
     const isSameDomain = localeConfig.url === siteConfig.url;
+
+    // useAlternatePageUtils.createUrl strips only the site-level baseUrl ("/")
+    // from pathname, leaving the current locale prefix (e.g. "es/") in the
+    // suffix. Strip the current locale's baseUrl instead to get the true doc
+    // path, then prepend the target locale's baseUrl.
+    const currentLocaleBaseUrl = currentLocaleConfig.baseUrl; // e.g. "/es/" or "/"
+    const pathSuffix = pathname.startsWith(currentLocaleBaseUrl)
+      ? pathname.slice(currentLocaleBaseUrl.length)
+      : pathname.replace(/^\//, "");
+
     if (isSameDomain) {
-      return `pathname://${alternatePageUtils.createUrl({
-        locale,
-        fullyQualified: false,
-      })}`;
+      const fullPath = `${localeConfig.baseUrl}${pathSuffix}`.replace(
+        /\/{2,}/g,
+        "/"
+      );
+      return `pathname://${fullPath}`;
     }
-    return alternatePageUtils.createUrl({
-      locale,
-      fullyQualified: true,
-    });
+    const fullPath =
+      `${localeConfig.url}${localeConfig.baseUrl}${pathSuffix}`.replace(
+        /\/{2,}/g,
+        "/"
+      );
+    return fullPath;
   };
 
   const hasLocalizedDocKey = (locale: string, key: string): boolean => {

@@ -1392,6 +1392,110 @@ describe("notion-translate index", () => {
     });
   });
 
+  describe("toggle _category_.json fallback behavior", () => {
+    const mockConfig = {
+      language: "pt-BR",
+      notionLangCode: "Portuguese",
+      outputDir: "/test/output",
+    };
+
+    it("falls back to English title when translatedTitle is empty string", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const togglePage = createMockNotionPage({
+        id: "toggle-abc123",
+        title: "English Toggle Title",
+        elementType: "Toggle",
+      });
+
+      await saveTranslatedContentToDisk(togglePage, "", "", mockConfig);
+
+      const writeCall = mockWriteFile.mock.calls.find((call: string[]) =>
+        call[0].endsWith("_category_.json")
+      );
+      expect(writeCall).toBeDefined();
+      const written = JSON.parse(writeCall[1] as string);
+      expect(written.label).toBe("English Toggle Title");
+      expect(written.customProps.title).toBe("English Toggle Title");
+    });
+
+    it("falls back to English title when translatedTitle is whitespace-only", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const togglePage = createMockNotionPage({
+        id: "toggle-def456",
+        title: "English Toggle Title",
+        elementType: "Toggle",
+      });
+
+      await saveTranslatedContentToDisk(togglePage, "", "   ", mockConfig);
+
+      const writeCall = mockWriteFile.mock.calls.find((call: string[]) =>
+        call[0].endsWith("_category_.json")
+      );
+      expect(writeCall).toBeDefined();
+      const written = JSON.parse(writeCall[1] as string);
+      expect(written.label).toBe("English Toggle Title");
+      expect(written.customProps.title).toBe("English Toggle Title");
+    });
+
+    it("uses translatedTitle when it is non-empty", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const togglePage = createMockNotionPage({
+        id: "toggle-ghi789",
+        title: "English Toggle Title",
+        elementType: "Toggle",
+      });
+
+      await saveTranslatedContentToDisk(
+        togglePage,
+        "",
+        "Título Traduzido",
+        mockConfig
+      );
+
+      const writeCall = mockWriteFile.mock.calls.find((call: string[]) =>
+        call[0].endsWith("_category_.json")
+      );
+      expect(writeCall).toBeDefined();
+      const written = JSON.parse(writeCall[1] as string);
+      expect(written.label).toBe("Título Traduzido");
+      expect(written.customProps.title).toBe("Título Traduzido");
+    });
+  });
+
+  describe("non-toggle page output regression", () => {
+    it("writes .mdx file and does not produce _category_.json for page-type content", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-regular123",
+        title: "Regular Page",
+        elementType: "Page",
+      });
+
+      const filePath = await saveTranslatedContentToDisk(
+        regularPage,
+        "# Translated Content",
+        "Translated Title",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      expect(filePath).toMatch(/\.md$/);
+      expect(filePath).not.toContain("_category_.json");
+
+      const categoryCall = mockWriteFile.mock.calls.find((call: string[]) =>
+        call[0].endsWith("_category_.json")
+      );
+      expect(categoryCall).toBeUndefined();
+    });
+  });
+
   describe("missing parent relation handling", () => {
     it("gracefully skips pages without Parent item relation and reports as non-critical failure", async () => {
       // Create a page WITHOUT parent relation

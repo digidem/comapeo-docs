@@ -42,11 +42,16 @@ img.emoji {
   background: transparent !important;
 }
 
-/* Custom navbar overflow containment - only clip vertically */
+/* Keep navbar overflow visible so dropdown menus can escape the bar */
 .navbar,
 nav.navbar {
-  overflow-x: visible; /* Allow horizontal overflow for dropdowns */
-  overflow-y: hidden; /* Clip vertical overflow (logo) within navbar bounds */
+  overflow: visible;
+}
+
+/* Clip the oversized logo inside the brand area without clipping navbar dropdowns */
+.navbar__brand {
+  overflow-x: visible;
+  overflow-y: hidden;
 }
 
 /* Fix language dropdown z-index - ensure navbar dropdowns appear above sticky TOC and breadcrumbs */
@@ -401,7 +406,7 @@ article {
   top: calc(
     var(--ifm-navbar-height, 60px) + 2px
   ); /* Small offset to show navbar shadow */
-  z-index: 200; /* Higher than navbar to prevent logo overflow interference */
+  z-index: 199; /* Keep breadcrumbs below the navbar dropdown stacking context */
   background-color: #ffffff;
   cursor: pointer;
 

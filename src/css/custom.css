@@ -49,6 +49,11 @@ nav.navbar {
   overflow-y: hidden; /* Clip vertical overflow (logo) within navbar bounds */
 }
 
+/* Fix language dropdown z-index - ensure navbar dropdowns appear above sticky TOC and breadcrumbs */
+.navbar .dropdown__menu {
+  z-index: 300;
+}
+
 .navbar__logo {
   margin-top: -100px;
   pointer-events: none; /* Prevent overflow from blocking clicks */
@@ -530,6 +535,7 @@ article {
 /* TOC wrapper with sticky positioning */
 .toc-wrapper {
   position: sticky;
+  z-index: 1;
   top: calc(var(--ifm-navbar-height, 60px) + 1rem);
   max-height: calc(100vh - var(--ifm-navbar-height, 60px) - 2rem);
   overflow-y: auto;

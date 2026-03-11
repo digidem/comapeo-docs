@@ -279,6 +279,71 @@ describe("Locale Output Verification", () => {
       ).toBeLessThanOrEqual(maxAllowedDiff);
     });
 
+    it("has non-empty label in translated toggle _category_.json files", async () => {
+      const locales = ["es", "pt"];
+      for (const locale of locales) {
+        const localeDocsDir = path.join(
+          i18nDir,
+          locale,
+          "docusaurus-plugin-content-docs",
+          "current"
+        );
+        let categoryFiles: string[];
+        try {
+          // Recursively find all _category_.json files under the locale docs dir
+          const findCategoryFiles = async (dir: string): Promise<string[]> => {
+            const results: string[] = [];
+            let entries;
+            try {
+              entries = await fs.readdir(dir, { withFileTypes: true });
+            } catch {
+              return results;
+            }
+            for (const entry of entries) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                results.push(...(await findCategoryFiles(fullPath)));
+              } else if (entry.name === "_category_.json") {
+                results.push(fullPath);
+              }
+            }
+            return results;
+          };
+          categoryFiles = await findCategoryFiles(localeDocsDir);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            "code" in error &&
+            (error as NodeJS.ErrnoException).code === "ENOENT"
+          ) {
+            console.log(
+              `${locale} locale docs directory not found - content branch may not have toggle pages`
+            );
+            continue;
+          }
+          throw error;
+        }
+
+        if (categoryFiles.length === 0) {
+          console.log(
+            `No _category_.json files found for locale ${locale} - may not have toggle pages`
+          );
+          continue;
+        }
+
+        for (const filePath of categoryFiles) {
+          const content = await fs.readFile(filePath, "utf8");
+          const category = JSON.parse(content);
+          expect(
+            category.label,
+            `_category_.json at ${filePath} has empty label`
+          ).toBeTruthy();
+          expect(typeof category.label).toBe("string");
+          expect(category.label.trim().length).toBeGreaterThan(0);
+        }
+      }
+    });
+
     it("does not have English locale directory (en/)", async () => {
       const enDir = path.join(i18nDir, "en");
 

@@ -681,8 +681,9 @@ export async function saveTranslatedContentToDisk(
         await fs.mkdir(sectionPath, { recursive: true });
 
         // Create _category_.json file
+        const effectiveTitle = translatedTitle?.trim() || title || "untitled";
         const categoryContent = {
-          label: translatedTitle,
+          label: effectiveTitle,
           position:
             (
               englishPage.properties[NOTION_PROPERTIES.ORDER] as
@@ -695,7 +696,7 @@ export async function saveTranslatedContentToDisk(
             type: "generated-index",
           },
           customProps: {
-            title: translatedTitle,
+            title: effectiveTitle,
           },
         };
 

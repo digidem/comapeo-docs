@@ -90,6 +90,30 @@ const ALL_DOC_PATHS = new Set<string>([
   ...DOC_ROUTE_INFO.explicitSlugs,
   ...DOC_ROUTE_INFO.docIds,
 ]);
+const LOCALIZED_DOC_KEYS_BY_LOCALE = Object.fromEntries(
+  ["pt", "es"].map((locale) => {
+    const localizedRouteInfo = collectDocRouteInfo(
+      path.join(
+        __dirname,
+        "i18n",
+        locale,
+        "docusaurus-plugin-content-docs",
+        "current"
+      )
+    );
+
+    return [
+      locale,
+      Array.from(
+        new Set([
+          ...localizedRouteInfo.docIds,
+          ...localizedRouteInfo.explicitSlugs,
+          ...localizedRouteInfo.relativePaths,
+        ])
+      ).sort(),
+    ];
+  })
+);
 
 const resolveDefaultDocsPage = (
   value: string | undefined,
@@ -156,6 +180,7 @@ const config: Config = {
   // Custom fields to pass environment variables to client-side code
   customFields: {
     defaultDocsPage: DEFAULT_DOCS_PAGE,
+    localizedDocKeysByLocale: LOCALIZED_DOC_KEYS_BY_LOCALE,
   },
 
   // Set the production url of your site here

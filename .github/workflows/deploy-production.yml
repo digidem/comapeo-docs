@@ -44,7 +44,8 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Promote content lock SHA
+      - name: Resolve requested content SHA
+        id: requested-content
         if: github.event_name == 'workflow_dispatch' && inputs.environment != 'test'
         run: |
           set -e
@@ -70,58 +71,54 @@ jobs:
           fi
 
           CURRENT=$(tr -d '[:space:]' < content-lock.sha 2>/dev/null || echo "")
-          if [ "$CURRENT" = "$SHA" ]; then
-            echo "ℹ️ content-lock.sha already at ${SHA:0:8} — skipping update"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            echo "${SHA}" > content-lock.sha
-            git add content-lock.sha
-            git commit -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
-            git push origin HEAD:main
-            echo "✅ Updated content-lock.sha → ${SHA:0:8}"
-          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
 
       - name: Resolve content lock SHA
         id: content-lock
         run: |
           set -e
 
-          LOCK_FILE="content-lock.sha"
+          if [ -n "${{ steps.requested-content.outputs.sha }}" ]; then
+            SHA="${{ steps.requested-content.outputs.sha }}"
+            echo "source=workflow-dispatch" >> "$GITHUB_OUTPUT"
+          else
+            LOCK_FILE="content-lock.sha"
 
-          if [ ! -f "$LOCK_FILE" ]; then
+            if [ ! -f "$LOCK_FILE" ]; then
             echo "::warning::content-lock.sha not found — falling back to origin/content HEAD (backward compat)"
             git fetch origin content
             SHA=$(git rev-parse origin/content)
             echo "source=branch-head-fallback" >> "$GITHUB_OUTPUT"
-          else
-            SHA=$(tr -d '[:space:]' < "$LOCK_FILE")
+            else
+              SHA=$(tr -d '[:space:]' < "$LOCK_FILE")
 
-            if [ -z "$SHA" ]; then
-              echo "::error::content-lock.sha is empty. Trigger this workflow via workflow_dispatch to update it."
-              exit 1
+              if [ -z "$SHA" ]; then
+                echo "::error::content-lock.sha is empty. Trigger this workflow via workflow_dispatch to update it."
+                exit 1
+              fi
+
+              if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
+                echo "::error::content-lock.sha contains an invalid SHA: '$SHA'. Expected a 40-character lowercase hex string."
+                exit 1
+              fi
+
+              git fetch origin content
+
+              if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
+                echo "::error::SHA $SHA from content-lock.sha does not exist in the repository."
+                echo "  This may happen after a force-push to the content branch."
+                echo "  Remediation: re-trigger this workflow via workflow_dispatch to update the lock."
+                exit 1
+              fi
+
+              CONTENT_HEAD=$(git rev-parse origin/content)
+              if ! git merge-base --is-ancestor "$SHA" "$CONTENT_HEAD" 2>/dev/null; then
+                echo "::warning::Locked SHA $SHA is not an ancestor of origin/content HEAD ($CONTENT_HEAD). The content branch may have been rebased."
+              fi
+
+              echo "source=lock-file" >> "$GITHUB_OUTPUT"
             fi
-
-            if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
-              echo "::error::content-lock.sha contains an invalid SHA: '$SHA'. Expected a 40-character lowercase hex string."
-              exit 1
-            fi
-
-            git fetch origin content
-
-            if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
-              echo "::error::SHA $SHA from content-lock.sha does not exist in the repository."
-              echo "  This may happen after a force-push to the content branch."
-              echo "  Remediation: re-trigger this workflow via workflow_dispatch to update the lock."
-              exit 1
-            fi
-
-            CONTENT_HEAD=$(git rev-parse origin/content)
-            if ! git merge-base --is-ancestor "$SHA" "$CONTENT_HEAD" 2>/dev/null; then
-              echo "::warning::Locked SHA $SHA is not an ancestor of origin/content HEAD ($CONTENT_HEAD). The content branch may have been rebased."
-            fi
-
-            echo "source=lock-file" >> "$GITHUB_OUTPUT"
           fi
 
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
@@ -189,6 +186,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Validate locale parity
+        run: bun run test:locale-parity
+
       - name: Build documentation
         env:
           # Only set IS_PRODUCTION=true for actual production deployments
@@ -209,6 +209,20 @@ jobs:
             pages deploy build --project-name comapeo-docs
             ${{ inputs.environment == 'test' && format('--branch {0}', inputs.branch_name) || '' }}
             ${{ inputs.environment == 'test' && '--commit-dirty=true' || '' }}
+
+      - name: Persist promoted content lock SHA
+        if: github.event_name == 'workflow_dispatch' && inputs.environment != 'test' && steps.requested-content.outputs.sha != '' && steps.requested-content.outputs.current != steps.requested-content.outputs.sha
+        run: |
+          set -e
+
+          SHA="${{ steps.requested-content.outputs.sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${SHA}" > content-lock.sha
+          git add content-lock.sha
+          git commit -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
+          git push origin HEAD:main
+          echo "✅ Updated content-lock.sha → ${SHA:0:8}"
 
       - name: Update Notion status to Published
         if: inputs.environment != 'test'

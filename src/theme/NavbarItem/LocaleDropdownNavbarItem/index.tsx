@@ -22,7 +22,7 @@ type LocalizedDocKeysByLocale = Record<string, string[]>;
 function useLocaleDropdownUtils() {
   const {
     siteConfig,
-    i18n: { currentLocale, defaultLocale, localeConfigs },
+    i18n: { currentLocale: contextLocale, defaultLocale, localeConfigs },
   } = useDocusaurusContext();
   const { activeDoc } = useActiveDocContext(undefined);
   const activePluginAndVersion = useActivePluginAndVersion();
@@ -37,6 +37,23 @@ function useLocaleDropdownUtils() {
     (siteConfig.customFields?.localizedDocKeysByLocale as
       | LocalizedDocKeysByLocale
       | undefined) ?? {};
+
+  // Derive current locale from pathname instead of relying on stale context.
+  // useDocusaurusContext().i18n.currentLocale doesn't update after client-side
+  // locale navigation, causing stale baseUrl and double-prefix bugs.
+  const getCurrentLocaleFromPathname = (): string => {
+    const locales = Object.keys(localeConfigs);
+    for (const locale of locales) {
+      if (locale === defaultLocale) continue; // Check default locale last
+      const localeConfig = localeConfigs[locale];
+      if (pathname.startsWith(localeConfig.baseUrl)) {
+        return locale;
+      }
+    }
+    return defaultLocale;
+  };
+
+  const currentLocale = getCurrentLocaleFromPathname();
 
   const getLocaleConfig = (locale: string): I18nLocaleConfig => {
     const localeConfig = localeConfigs[locale];
@@ -91,12 +108,10 @@ function useLocaleDropdownUtils() {
       );
       return `pathname://${fullPath}`;
     }
-    const fullPath =
-      `${localeConfig.url}${localeConfig.baseUrl}${pathSuffix}`.replace(
-        /\/{2,}/g,
-        "/"
-      );
-    return fullPath;
+    return `${localeConfig.url}${localeConfig.baseUrl}${pathSuffix}`.replace(
+      /\/{2,}/g,
+      "/"
+    );
   };
 
   const hasLocalizedDocKey = (locale: string, key: string): boolean => {

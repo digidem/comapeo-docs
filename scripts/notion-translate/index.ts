@@ -681,7 +681,7 @@ export async function saveTranslatedContentToDisk(
         await fs.mkdir(sectionPath, { recursive: true });
 
         // Create _category_.json file
-        const effectiveTitle = translatedTitle?.trim() || title || "Untitled";
+        const effectiveTitle = translatedTitle?.trim() || title || "untitled";
         const categoryContent = {
           label: effectiveTitle,
           position:

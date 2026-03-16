@@ -172,7 +172,7 @@ describe("API Documentation Validation", () => {
         items: [
           {
             id: "job-123",
-            type: "notion:fetch" as const,
+            type: "fetch-one" as const,
             status: "completed" as const,
             createdAt: "2025-02-06T10:00:00.000Z",
             startedAt: "2025-02-06T10:00:01.000Z",
@@ -215,7 +215,7 @@ describe("API Documentation Validation", () => {
 
       const jobWithProgress = {
         id: "job-123",
-        type: "notion:fetch-all" as const,
+        type: "fetch-all" as const,
         status: "running" as const,
         createdAt: "2025-02-06T12:00:00.000Z",
         startedAt: "2025-02-06T12:00:01.000Z",
@@ -418,7 +418,7 @@ describe("API Documentation Validation", () => {
   describe("Job Tracker Integration", () => {
     it("should produce data matching job schema", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       const job = tracker.getJob(jobId);
       expect(job).toBeDefined();

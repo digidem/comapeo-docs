@@ -79,7 +79,7 @@ describe("job-persistence - deterministic behavior", () => {
     it("should produce identical output for identical save/load cycles", async () => {
       const job: PersistedJob = {
         id: "deterministic-job-1",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: "2024-01-01T00:00:00.000Z",
         progress: { current: 5, total: 10, message: "Processing" },
@@ -102,19 +102,19 @@ describe("job-persistence - deterministic behavior", () => {
       const jobs: PersistedJob[] = [
         {
           id: "deterministic-job-order-1",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: "2024-01-01T00:00:00.000Z",
         },
         {
           id: "deterministic-job-order-2",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "running",
           createdAt: "2024-01-01T01:00:00.000Z",
         },
         {
           id: "deterministic-job-order-3",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: "2024-01-01T02:00:00.000Z",
         },
@@ -143,20 +143,20 @@ describe("job-persistence - deterministic behavior", () => {
       const updates: PersistedJob[] = [
         {
           id: jobId,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: "2024-01-01T00:00:00.000Z",
         },
         {
           id: jobId,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "running",
           createdAt: "2024-01-01T00:00:00.000Z",
           startedAt: "2024-01-01T00:01:00.000Z",
         },
         {
           id: jobId,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "running",
           createdAt: "2024-01-01T00:00:00.000Z",
           startedAt: "2024-01-01T00:01:00.000Z",
@@ -164,7 +164,7 @@ describe("job-persistence - deterministic behavior", () => {
         },
         {
           id: jobId,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: "2024-01-01T00:00:00.000Z",
           startedAt: "2024-01-01T00:01:00.000Z",
@@ -189,21 +189,21 @@ describe("job-persistence - deterministic behavior", () => {
       const jobs: PersistedJob[] = [
         {
           id: "old-completed",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
           completedAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
         },
         {
           id: "recent-completed",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "completed",
           createdAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
           completedAt: new Date(now - 1 * 60 * 60 * 1000).toISOString(),
         },
         {
           id: "old-pending",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
         },
@@ -382,7 +382,7 @@ describe("job-persistence - recoverable behavior", () => {
       // Should be able to save new jobs after corruption
       const newJob: PersistedJob = {
         id: "recovery-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -394,9 +394,7 @@ describe("job-persistence - recoverable behavior", () => {
 
     it("should recover from partially written jobs file", async () => {
       // Create a partially written file (simulating crash during write)
-      createCorruptedJobsFile(
-        '{"jobs": [{"id": "job-1", "type": "notion:fetch"'
-      );
+      createCorruptedJobsFile('{"jobs": [{"id": "job-1", "type": "fetch-one"');
 
       // Should handle gracefully
       const jobs = await loadAllJobs();
@@ -414,7 +412,7 @@ describe("job-persistence - recoverable behavior", () => {
       // Should be able to create new jobs
       const job: PersistedJob = {
         id: "after-empty",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -430,11 +428,11 @@ describe("job-persistence - recoverable behavior", () => {
           jobs: [
             {
               id: "valid-job",
-              type: "notion:fetch",
+              type: "fetch-one",
               status: "completed",
               createdAt: "2024-01-01T00:00:00.000Z",
             },
-            { id: "invalid-job", type: "notion:fetch" }, // Missing status
+            { id: "invalid-job", type: "fetch-one" }, // Missing status
             null, // Null entry
             "string-entry", // Invalid type
           ],
@@ -509,7 +507,7 @@ describe("job-persistence - recoverable behavior", () => {
       // Should create directory and save job
       const job: PersistedJob = {
         id: "no-dir-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -584,7 +582,7 @@ describe("job-persistence - recoverable behavior", () => {
     it("should handle deletion of non-existent job gracefully", async () => {
       const job: PersistedJob = {
         id: "real-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -603,7 +601,7 @@ describe("job-persistence - recoverable behavior", () => {
       const now = Date.now();
       const oldJob: PersistedJob = {
         id: "old-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "completed",
         createdAt: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
         completedAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
@@ -628,7 +626,7 @@ describe("job-persistence - recoverable behavior", () => {
       for (let i = 0; i < 10; i++) {
         const job: PersistedJob = {
           id: `concurrent-job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: new Date().toISOString(),
         };
@@ -652,7 +650,7 @@ describe("job-persistence - recoverable behavior", () => {
     it("should handle job with all optional fields populated", async () => {
       const fullJob: PersistedJob = {
         id: "full-job",
-        type: "notion:fetch-all",
+        type: "fetch-all",
         status: "completed",
         createdAt: "2024-01-01T00:00:00.000Z",
         startedAt: "2024-01-01T00:01:00.000Z",
@@ -680,7 +678,7 @@ describe("job-persistence - recoverable behavior", () => {
     it("should handle job with minimal fields", async () => {
       const minimalJob: PersistedJob = {
         id: "minimal-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -759,7 +757,7 @@ describe("job-persistence - recoverable behavior", () => {
     it("should handle repeated save operations idempotently", async () => {
       const job: PersistedJob = {
         id: "idempotent-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: "2024-01-01T00:00:00.000Z",
       };
@@ -802,7 +800,7 @@ describe("job-persistence - recoverable behavior", () => {
       const now = Date.now();
       const oldJob: PersistedJob = {
         id: "old-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "completed",
         createdAt: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
         completedAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(),

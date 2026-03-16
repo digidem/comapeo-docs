@@ -17,6 +17,7 @@ interface JobTypesData {
 
 // Job type descriptions (derived from VALID_JOB_TYPES single source of truth)
 const JOB_TYPE_DESCRIPTIONS: Record<JobType, string> = {
+  "fetch-one": "Fetch a single page from Notion by page ID",
   "fetch-ready":
     'Fetch pages with status "Ready to publish" and transition to "Draft published"',
   "fetch-all":

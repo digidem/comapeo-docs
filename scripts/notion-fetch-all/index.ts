@@ -31,6 +31,7 @@ interface CliOptions {
   verbose: boolean;
   outputFormat: "markdown" | "json" | "html";
   outputFile?: string;
+  pageId?: string;
   includeRemoved: boolean;
   sortBy: "order" | "created" | "modified" | "title";
   sortDirection: "asc" | "desc";
@@ -78,6 +79,9 @@ const parseArgs = (): CliOptions => {
       case "--output":
       case "-o":
         options.outputFile = args[++i];
+        break;
+      case "--page-id":
+        options.pageId = args[++i];
         break;
       case "--include-removed":
         options.includeRemoved = true;
@@ -153,6 +157,7 @@ const printHelp = () => {
     "  --output-format, -f        Output format: markdown, json, html (default: markdown)"
   );
   console.log("  --output, -o <file>        Output file path");
+  console.log("  --page-id <id>             Fetch a single Notion page by ID");
   console.log(
     '  --include-removed          Include pages with "Remove" status'
   );
@@ -233,6 +238,7 @@ async function main() {
       : undefined;
 
     const fetchOptions: FetchAllOptions = {
+      pageId: options.pageId,
       includeRemoved: options.includeRemoved,
       sortBy: options.sortBy,
       sortDirection: options.sortDirection,
@@ -248,7 +254,8 @@ async function main() {
         force: options.force,
         dryRun: options.dryRun,
         // Only enable deletion when we have the full dataset (no filters/limits)
-        enableDeletion: !options.maxPages && !options.statusFilter,
+        enableDeletion:
+          !options.pageId && !options.maxPages && !options.statusFilter,
       },
     };
 

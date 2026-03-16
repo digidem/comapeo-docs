@@ -56,12 +56,12 @@ describe("API Handler Integration Tests", () => {
         const tracker = getJobTracker();
 
         // Create job
-        const jobId = tracker.createJob("notion:fetch");
+        const jobId = tracker.createJob("fetch-one");
         expect(jobId).toBeTruthy();
 
         let job = tracker.getJob(jobId);
         expect(job?.status).toBe("pending");
-        expect(job?.type).toBe("notion:fetch");
+        expect(job?.type).toBe("fetch-one");
         expect(job?.createdAt).toBeInstanceOf(Date);
 
         // Start job
@@ -89,7 +89,7 @@ describe("API Handler Integration Tests", () => {
 
       it("should handle job failure workflow", () => {
         const tracker = getJobTracker();
-        const jobId = tracker.createJob("notion:fetch-all");
+        const jobId = tracker.createJob("fetch-all");
 
         // Start and fail job
         tracker.updateJobStatus(jobId, "running");
@@ -109,7 +109,7 @@ describe("API Handler Integration Tests", () => {
 
         // Create multiple jobs
         const jobIds = Array.from({ length: 10 }, () =>
-          tracker.createJob("notion:fetch")
+          tracker.createJob("fetch-one")
         );
 
         // Update all to running
@@ -144,9 +144,9 @@ describe("API Handler Integration Tests", () => {
 
         // Create test jobs with different types and statuses
         const jobs = [
-          { type: "notion:fetch" as JobType, status: "pending" },
-          { type: "notion:fetch" as JobType, status: "running" },
-          { type: "notion:fetch-all" as JobType, status: "completed" },
+          { type: "fetch-one" as JobType, status: "pending" },
+          { type: "fetch-one" as JobType, status: "running" },
+          { type: "fetch-all" as JobType, status: "completed" },
           { type: "notion:translate" as JobType, status: "failed" },
           { type: "notion:status-translation" as JobType, status: "pending" },
         ];
@@ -179,8 +179,8 @@ describe("API Handler Integration Tests", () => {
       it("should filter jobs by type", () => {
         const tracker = getJobTracker();
 
-        const fetchJobs = tracker.getJobsByType("notion:fetch");
-        const fetchAllJobs = tracker.getJobsByType("notion:fetch-all");
+        const fetchJobs = tracker.getJobsByType("fetch-one");
+        const fetchAllJobs = tracker.getJobsByType("fetch-all");
         const translateJobs = tracker.getJobsByType("notion:translate");
 
         expect(fetchJobs).toHaveLength(2);
@@ -192,7 +192,7 @@ describe("API Handler Integration Tests", () => {
         const tracker = getJobTracker();
 
         // Get all fetch jobs
-        const fetchJobs = tracker.getJobsByType("notion:fetch");
+        const fetchJobs = tracker.getJobsByType("fetch-one");
 
         // Filter to pending only
         const pendingFetch = fetchJobs.filter((j) => j.status === "pending");
@@ -207,8 +207,8 @@ describe("API Handler Integration Tests", () => {
       it("should delete jobs and update tracker state", () => {
         const tracker = getJobTracker();
 
-        const jobId1 = tracker.createJob("notion:fetch");
-        const jobId2 = tracker.createJob("notion:fetch-all");
+        const jobId1 = tracker.createJob("fetch-one");
+        const jobId2 = tracker.createJob("fetch-all");
 
         expect(tracker.getAllJobs()).toHaveLength(2);
 
@@ -391,7 +391,7 @@ describe("API Handler Integration Tests", () => {
 
     it("should handle invalid status transitions gracefully", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       // Try to set invalid status - the function accepts it but job status
       // should remain one of the valid values

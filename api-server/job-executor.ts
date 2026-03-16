@@ -101,6 +101,7 @@ export interface JobExecutionContext {
 
 export interface JobOptions {
   maxPages?: number;
+  pageId?: string;
   statusFilter?: string;
   force?: boolean;
   dryRun?: boolean;
@@ -191,8 +192,12 @@ function isJobCancelled(jobId: string): boolean {
 
 function isFetchJobType(
   jobType: JobType
-): jobType is "fetch-ready" | "fetch-all" {
-  return jobType === "fetch-ready" || jobType === "fetch-all";
+): jobType is "fetch-one" | "fetch-ready" | "fetch-all" {
+  return (
+    jobType === "fetch-one" ||
+    jobType === "fetch-ready" ||
+    jobType === "fetch-all"
+  );
 }
 
 export const JOB_COMMANDS: Record<
@@ -204,6 +209,20 @@ export const JOB_COMMANDS: Record<
     timeoutMs: number;
   }
 > = {
+  "fetch-one": {
+    script: "bun",
+    args: ["scripts/notion-fetch-all"],
+    buildArgs: (options) => {
+      const args: string[] = [];
+      if (options.pageId) {
+        args.push("--page-id", options.pageId);
+      }
+      if (options.force) args.push("--force");
+      if (options.dryRun) args.push("--dry-run");
+      return args;
+    },
+    timeoutMs: DEFAULT_FETCH_JOB_TIMEOUT_MS,
+  },
   "fetch-ready": {
     script: "bun",
     args: ["scripts/notion-fetch-all", "--status-filter", "Ready to publish"],
@@ -226,8 +245,12 @@ export const JOB_COMMANDS: Record<
       if (options.maxPages !== undefined) {
         args.push("--max-pages", String(options.maxPages));
       }
+      if (options.statusFilter) {
+        args.push("--status-filter", options.statusFilter);
+      }
       if (options.force) args.push("--force");
       if (options.dryRun) args.push("--dry-run");
+      if (options.includeRemoved) args.push("--include-removed");
       return args;
     },
     timeoutMs: DEFAULT_FETCH_JOB_TIMEOUT_MS,
@@ -242,9 +265,9 @@ export const JOB_COMMANDS: Record<
     args: ["scripts/notion-fetch-all"],
     buildArgs: (options) => {
       const args: string[] = [];
-      if (options.maxPages) args.push(`--max-pages`, String(options.maxPages));
+      if (options.maxPages) args.push("--max-pages", String(options.maxPages));
       if (options.statusFilter)
-        args.push(`--status-filter`, options.statusFilter);
+        args.push("--status-filter", options.statusFilter);
       if (options.force) args.push("--force");
       if (options.dryRun) args.push("--dry-run");
       if (options.includeRemoved) args.push("--include-removed");

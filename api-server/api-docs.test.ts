@@ -68,8 +68,8 @@ describe("API Documentation Endpoint", () => {
 
     it("should include all required paths", () => {
       const validJobTypes: JobType[] = [
-        "notion:fetch",
-        "notion:fetch-all",
+        "fetch-one",
+        "fetch-all",
         "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
@@ -353,8 +353,8 @@ describe("API Documentation Endpoint", () => {
 
     it("should define Job schema", () => {
       const validJobTypes: JobType[] = [
-        "notion:fetch",
-        "notion:fetch-all",
+        "fetch-one",
+        "fetch-all",
         "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
@@ -399,8 +399,8 @@ describe("API Documentation Endpoint", () => {
 
     it("should define CreateJobRequest schema", () => {
       const validJobTypes: JobType[] = [
-        "notion:fetch",
-        "notion:fetch-all",
+        "fetch-one",
+        "fetch-all",
         "notion:count-pages",
         "notion:translate",
         "notion:status-translation",

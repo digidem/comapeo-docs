@@ -85,7 +85,7 @@ describe("Audit Logging Integration", () => {
           authorization: `Bearer ${TEST_API_KEY}`,
           "x-forwarded-for": "192.168.1.100",
         },
-        body: JSON.stringify({ type: "notion:fetch" }),
+        body: JSON.stringify({ type: "fetch-one" }),
       });
 
       // Authenticate request

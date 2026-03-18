@@ -100,7 +100,7 @@ describe("Validation Schemas - Job Type", () => {
         "invalid:type",
         "notion:invalid",
         "",
-        "notion:fetch-all-extra",
+        "fetch-all-extra",
         "NOTION:FETCH", // Case sensitive
       ];
 
@@ -115,14 +115,14 @@ describe("Validation Schemas - Job Type", () => {
       expect(result.success).toBe(false);
       if (!result.success && result.error) {
         expect(result.error.issues[0].message).toContain("Invalid option");
-        expect(result.error.issues[0].message).toContain("notion:fetch");
+        expect(result.error.issues[0].message).toContain("fetch-one");
       }
     });
   });
 
   describe("validateJobType function", () => {
     it("should return validated job type for valid input", () => {
-      expect(validateJobType("notion:fetch")).toBe("notion:fetch");
+      expect(validateJobType("fetch-one")).toBe("fetch-one");
     });
 
     it("should throw ZodError for invalid input", () => {
@@ -266,18 +266,18 @@ describe("Validation Schemas - Create Job Request", () => {
   describe("createJobRequestSchema", () => {
     it("should accept valid request with type only", () => {
       const result = createJobRequestSchema.safeParse({
-        type: "notion:fetch",
+        type: "fetch-ready",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.type).toBe("notion:fetch");
+        expect(result.data.type).toBe("fetch-ready");
         expect(result.data.options).toBeUndefined();
       }
     });
 
     it("should accept valid request with options", () => {
       const result = createJobRequestSchema.safeParse({
-        type: "notion:fetch-all",
+        type: "fetch-all",
         options: {
           maxPages: 10,
           statusFilter: "In Progress",
@@ -286,7 +286,7 @@ describe("Validation Schemas - Create Job Request", () => {
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.type).toBe("notion:fetch-all");
+        expect(result.data.type).toBe("fetch-all");
         expect(result.data.options).toBeDefined();
         expect(result.data.options?.maxPages).toBe(10);
       }
@@ -309,7 +309,7 @@ describe("Validation Schemas - Create Job Request", () => {
 
     it("should reject invalid options", () => {
       const result = createJobRequestSchema.safeParse({
-        type: "notion:fetch",
+        type: "fetch-one",
         options: { maxPages: "not a number" },
       });
       expect(result.success).toBe(false);
@@ -318,7 +318,7 @@ describe("Validation Schemas - Create Job Request", () => {
 
   describe("validateCreateJobRequest function", () => {
     it("should return validated request for valid input", () => {
-      const input = { type: "notion:fetch" as const };
+      const input = { type: "fetch-ready" as const };
       const result = validateCreateJobRequest(input);
       expect(result).toEqual(input);
     });
@@ -331,13 +331,13 @@ describe("Validation Schemas - Create Job Request", () => {
   describe("TypeScript type inference", () => {
     it("should correctly infer CreateJobRequest type", () => {
       const request: CreateJobRequest = {
-        type: "notion:fetch",
+        type: "fetch-one",
         options: {
           maxPages: 10,
           force: true,
         },
       };
-      expect(request.type).toBe("notion:fetch");
+      expect(request.type).toBe("fetch-one");
     });
   });
 });
@@ -372,7 +372,7 @@ describe("Validation Schemas - Jobs Query Parameters", () => {
     it("should accept both status and type filters", () => {
       const result = jobsQuerySchema.safeParse({
         status: "completed",
-        type: "notion:fetch",
+        type: "fetch-one",
       });
       expect(result.success).toBe(true);
     });
@@ -403,7 +403,7 @@ describe("Validation Schemas - Jobs Query Parameters", () => {
     it("should correctly infer JobsQuery type", () => {
       const query: JobsQuery = {
         status: "running",
-        type: "notion:fetch",
+        type: "fetch-one",
       };
       expect(query.status).toBe("running");
     });
@@ -412,10 +412,10 @@ describe("Validation Schemas - Jobs Query Parameters", () => {
 
 describe("Validation Helpers - safeValidate", () => {
   it("should return success with data for valid input", () => {
-    const result = safeValidate(jobTypeSchema, "notion:fetch");
+    const result = safeValidate(jobTypeSchema, "fetch-one");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data).toBe("notion:fetch");
+      expect(result.data).toBe("fetch-one");
     }
   });
 
@@ -607,7 +607,7 @@ describe("Validation Schemas - Edge Cases", () => {
 describe("Validation Schemas - Integration", () => {
   it("should validate complete create job request", () => {
     const request = {
-      type: "notion:fetch-all",
+      type: "fetch-all",
       options: {
         maxPages: 50,
         statusFilter: "In Progress",
@@ -663,7 +663,8 @@ describe("Validation Schemas - Constants", () => {
     expect(VALID_JOB_STATUSES).toBeDefined();
     expect(MAX_JOB_ID_LENGTH).toBeDefined();
 
-    expect(VALID_JOB_TYPES.length).toBeGreaterThanOrEqual(10);
+    expect(VALID_JOB_TYPES.length).toBeGreaterThanOrEqual(9);
+    expect(VALID_JOB_TYPES).toContain("fetch-one");
     expect(VALID_JOB_TYPES).toContain("fetch-ready");
     expect(VALID_JOB_TYPES).toContain("fetch-all");
     expect(VALID_JOB_STATUSES).toHaveLength(4);

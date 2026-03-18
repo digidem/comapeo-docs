@@ -191,9 +191,14 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should accept all valid job types", () => {
       for (const jobType of VALID_JOB_TYPES) {
-        const result = safeValidate(createJobRequestSchema, {
-          type: jobType,
-        });
+        const request =
+          jobType === "fetch-one"
+            ? {
+                type: jobType,
+                options: { pageId: "page-123" },
+              }
+            : { type: jobType };
+        const result = safeValidate(createJobRequestSchema, request);
         expect(result.success).toBe(true);
       }
     });
@@ -202,7 +207,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
   describe("Request body validation - options field", () => {
     it("should reject invalid options type", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: "not-an-object",
       });
       expect(result.success).toBe(false);
@@ -215,7 +220,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should reject unknown option keys", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: {
           unknownOption: "value",
         },
@@ -228,7 +233,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should reject invalid maxPages type", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: {
           maxPages: "not-a-number",
         },
@@ -245,7 +250,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should allow zero maxPages", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: {
           maxPages: 0,
         },
@@ -258,7 +263,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should reject non-integer maxPages", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: {
           maxPages: 10.5,
         },
@@ -274,7 +279,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should reject empty statusFilter", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
         options: {
           statusFilter: "",
         },
@@ -293,7 +298,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
       for (const option of booleanOptions) {
         const result = safeValidate(createJobRequestSchema, {
-          type: "notion:fetch",
+          type: "fetch-ready",
           options: {
             [option]: "not-a-boolean",
           },
@@ -311,18 +316,18 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
     it("should accept valid request with minimal fields", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch",
+        type: "fetch-ready",
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.type).toBe("notion:fetch");
+        expect(result.data.type).toBe("fetch-ready");
         expect(result.data.options).toBeUndefined();
       }
     });
 
     it("should accept valid request with all options", () => {
       const result = safeValidate(createJobRequestSchema, {
-        type: "notion:fetch-all",
+        type: "fetch-all",
         options: {
           maxPages: 10,
           statusFilter: "In Progress",
@@ -333,7 +338,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.type).toBe("notion:fetch-all");
+        expect(result.data.type).toBe("fetch-all");
         expect(result.data.options?.maxPages).toBe(10);
       }
     });
@@ -391,12 +396,12 @@ describe("Endpoint Schema Validation - GET /jobs", () => {
     it("should accept both filters together", () => {
       const result = safeValidate(jobsQuerySchema, {
         status: "completed",
-        type: "notion:fetch",
+        type: "fetch-one",
       });
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.status).toBe("completed");
-        expect(result.data.type).toBe("notion:fetch");
+        expect(result.data.type).toBe("fetch-one");
       }
     });
 
@@ -659,7 +664,7 @@ describe("Endpoint Schema Validation - Response Schemas", () => {
       items: [
         {
           id: "job-123",
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "running",
           createdAt: new Date().toISOString(),
           startedAt: new Date().toISOString(),
@@ -681,7 +686,7 @@ describe("Endpoint Schema Validation - Response Schemas", () => {
   it("should validate create job response schema", () => {
     const createJobResponse = {
       jobId: "job-123",
-      type: "notion:fetch",
+      type: "fetch-one",
       status: "pending",
       message: "Job created successfully",
       _links: {

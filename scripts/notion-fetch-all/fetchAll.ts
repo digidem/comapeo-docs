@@ -1,6 +1,10 @@
 import { NOTION_PROPERTIES } from "../constants";
-import { runFetchPipeline } from "../notion-fetch/runFetch";
+import {
+  runContentGeneration,
+  runFetchPipeline,
+} from "../notion-fetch/runFetch";
 import { GenerateBlocksOptions } from "../notion-fetch/generateBlocks";
+import { notion } from "../notionClient";
 import {
   getStatusFromRawPage,
   selectPagesWithPriority,
@@ -30,6 +34,7 @@ export interface FetchAllOptions {
   includeSubPages?: boolean;
   statusFilter?: string;
   maxPages?: number;
+  pageId?: string;
   exportFiles?: boolean;
   fetchSpinnerText?: string;
   generateSpinnerText?: string;
@@ -63,12 +68,65 @@ export async function fetchAllNotionData(
     sortDirection = "asc",
     statusFilter,
     maxPages,
+    pageId,
     exportFiles = true,
     fetchSpinnerText,
     generateSpinnerText,
     progressLogger,
     generateOptions = {},
   } = options;
+
+  // Single-page fetch uses a direct page retrieval, then generation-only path
+  // to avoid a full database query.
+  if (pageId) {
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    const fetchedCount = 1;
+    let candidateIds: string[] = [];
+    const basePage = page as Record<string, unknown>;
+
+    if (statusFilter && getStatusFromRawPage(basePage) === statusFilter) {
+      candidateIds = [(basePage as any).id];
+    }
+
+    const transformedPages = applyFetchAllTransform([basePage], {
+      statusFilter,
+      maxPages,
+      includeRemoved,
+    });
+    const rawData = Array.isArray(transformedPages) ? transformedPages : [];
+
+    let metrics: FetchAllResult["metrics"] | undefined;
+    if (exportFiles) {
+      const generationResult = await runContentGeneration({
+        pages: rawData,
+        generateSpinnerText:
+          generateSpinnerText ?? "Exporting pages to markdown files",
+        onProgress: progressLogger,
+        generateOptions,
+      });
+      metrics = generationResult.metrics;
+    }
+
+    const defensivelyFiltered = rawData.filter((p) => {
+      const status = getStatusFromRawPage(p);
+      if (!includeRemoved && status === "Remove") return false;
+      return true;
+    });
+
+    const pages = defensivelyFiltered.map((rawPage) => transformPage(rawPage));
+    const sortedPages = sortPages(pages, sortBy, sortDirection);
+
+    logStatusSummary(sortedPages);
+
+    return {
+      pages: sortedPages,
+      rawPages: defensivelyFiltered,
+      candidateIds,
+      metrics,
+      fetchedCount,
+      processedCount: sortedPages.length,
+    };
+  }
 
   const filter = buildStatusFilter(includeRemoved, statusFilter);
 

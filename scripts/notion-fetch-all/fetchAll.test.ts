@@ -14,6 +14,10 @@ import {
   type PageWithStatus,
 } from "./fetchAll";
 
+const { mockPageRetrieve } = vi.hoisted(() => ({
+  mockPageRetrieve: vi.fn(),
+}));
+
 // Mock sharp to avoid installation issues
 vi.mock("sharp", () => {
   const createPipeline = () => {
@@ -42,11 +46,17 @@ vi.mock("../notionClient", () => ({
   enhancedNotion: {
     blocksChildrenList: vi.fn(),
   },
+  notion: {
+    pages: {
+      retrieve: mockPageRetrieve,
+    },
+  },
 }));
 
 // Mock dependencies
 vi.mock("../notion-fetch/runFetch", () => ({
   runFetchPipeline: vi.fn(),
+  runContentGeneration: vi.fn(),
 }));
 
 vi.mock("../notionPageUtils", () => ({
@@ -129,6 +139,51 @@ describe("fetchAll - Core Functions", () => {
 
       expect(result.pages).toHaveLength(2);
       expect(result.processedCount).toBe(2);
+      expect(result.metrics).toBeDefined();
+    });
+
+    it("should run content generation for single page fetches", async () => {
+      const { runFetchPipeline, runContentGeneration } = await import(
+        "../notion-fetch/runFetch"
+      );
+      const mockPage = createMockNotionPage({
+        id: "single-page-id",
+        title: "Single Page",
+        status: "Ready to publish",
+      });
+
+      mockPageRetrieve.mockResolvedValue(mockPage);
+
+      vi.mocked(runContentGeneration).mockResolvedValue({
+        metrics: {
+          totalSaved: 1,
+          sectionCount: 1,
+          titleSectionCount: 1,
+          emojiCount: 0,
+        },
+      });
+
+      const result = await fetchAllNotionData({
+        pageId: "single-page-id",
+        exportFiles: true,
+      });
+
+      expect(mockPageRetrieve).toHaveBeenCalledWith({
+        page_id: "single-page-id",
+      });
+      expect(runFetchPipeline).not.toHaveBeenCalled();
+      expect(runContentGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pages: [mockPage],
+          generateSpinnerText: "Exporting pages to markdown files",
+          onProgress: undefined,
+          generateOptions: {},
+        })
+      );
+      expect(result.pages).toHaveLength(1);
+      expect(result.pages[0].id).toBe("single-page-id");
+      expect(result.fetchedCount).toBe(1);
+      expect(result.processedCount).toBe(1);
       expect(result.metrics).toBeDefined();
     });
 

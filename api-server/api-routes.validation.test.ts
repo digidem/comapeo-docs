@@ -53,8 +53,8 @@ describe("API Routes - Validation", () => {
 
   describe("Job Types Validation", () => {
     const validJobTypes: JobType[] = [
-      "notion:fetch",
-      "notion:fetch-all",
+      "fetch-one",
+      "fetch-all",
       "notion:count-pages",
       "notion:translate",
       "notion:status-translation",
@@ -84,8 +84,7 @@ describe("API Routes - Validation", () => {
       const expectedDescriptions: Record<JobType, string> = {
         "fetch-ready": "Fetch ready pages from Notion",
         "fetch-all": "Fetch all pages from Notion",
-        "notion:fetch": "Fetch pages from Notion",
-        "notion:fetch-all": "Fetch all pages from Notion",
+        "fetch-one": "Fetch pages from Notion",
         "notion:count-pages": "Count pages from Notion",
         "notion:translate": "Translate content",
         "notion:status-translation": "Update status for translation workflow",
@@ -126,7 +125,7 @@ describe("API Routes - Validation", () => {
 
     it("should return correct job list response shape", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       const jobs = tracker.getAllJobs();
 
@@ -159,7 +158,7 @@ describe("API Routes - Validation", () => {
 
     it("should return correct job creation response shape", () => {
       const tracker = getJobTracker();
-      const jobType: JobType = "notion:fetch-all";
+      const jobType: JobType = "fetch-all";
       const jobId = tracker.createJob(jobType);
 
       const expectedResponse = {
@@ -257,7 +256,7 @@ describe("API Routes - Validation", () => {
       ] as const;
 
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch");
+      const jobId = tracker.createJob("fetch-one");
 
       // Test each status transition
       tracker.updateJobStatus(jobId, "running");
@@ -272,7 +271,7 @@ describe("API Routes - Validation", () => {
 
     it("should handle failed job status with error result", () => {
       const tracker = getJobTracker();
-      const jobId = tracker.createJob("notion:fetch-all");
+      const jobId = tracker.createJob("fetch-all");
 
       tracker.updateJobStatus(jobId, "running");
       tracker.updateJobStatus(jobId, "failed", {
@@ -290,8 +289,8 @@ describe("API Routes - Validation", () => {
   describe("Request Validation", () => {
     it("should validate job type in request body", () => {
       const validJobTypes: JobType[] = [
-        "notion:fetch",
-        "notion:fetch-all",
+        "fetch-one",
+        "fetch-all",
         "notion:count-pages",
         "notion:translate",
         "notion:status-translation",
@@ -305,14 +304,14 @@ describe("API Routes - Validation", () => {
         return validJobTypes.includes(type as JobType);
       };
 
-      expect(isValidJobType("notion:fetch")).toBe(true);
+      expect(isValidJobType("fetch-one")).toBe(true);
       expect(isValidJobType("invalid:type")).toBe(false);
       expect(isValidJobType("")).toBe(false);
     });
 
     it("should accept optional options in request body", () => {
       const requestBody = {
-        type: "notion:fetch-all" as JobType,
+        type: "fetch-all" as JobType,
         options: {
           maxPages: 10,
           statusFilter: "In Progress",

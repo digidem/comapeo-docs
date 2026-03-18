@@ -82,10 +82,10 @@ describe("GitHub Status - Idempotency and Integration", () => {
       });
 
       // Report the same job completion twice - function itself is not idempotent
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch", {
+      await reportJobCompletion(validGitHubContext, true, "fetch-one", {
         duration: 1000,
       });
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch", {
+      await reportJobCompletion(validGitHubContext, true, "fetch-one", {
         duration: 1000,
       });
 
@@ -99,7 +99,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
         json: async () => ({ id: 1, state: "success" }),
       });
 
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch");
+      await reportJobCompletion(validGitHubContext, true, "fetch-one");
       await reportJobCompletion(validGitHubContext, true, "notion:translate");
 
       // Different job types should result in different status updates
@@ -108,7 +108,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       // Verify the contexts differ
       const firstCall = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       const secondCall = JSON.parse(mockFetch.mock.calls[1][1]?.body as string);
-      expect(firstCall.description).toContain("notion:fetch");
+      expect(firstCall.description).toContain("fetch-one");
       expect(secondCall.description).toContain("notion:translate");
     });
   });
@@ -290,11 +290,11 @@ describe("GitHub Status - Idempotency and Integration", () => {
         json: async () => ({ id: 1, state: "success" }),
       });
 
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch-all");
+      await reportJobCompletion(validGitHubContext, true, "fetch-all");
 
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1]?.body as string);
-      expect(body.description).toContain("notion:fetch-all");
+      expect(body.description).toContain("fetch-all");
     });
 
     it("should include duration in status description", async () => {
@@ -303,7 +303,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
         json: async () => ({ id: 1, state: "success" }),
       });
 
-      await reportJobCompletion(validGitHubContext, true, "notion:fetch", {
+      await reportJobCompletion(validGitHubContext, true, "fetch-one", {
         duration: 1234,
       });
 
@@ -318,7 +318,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
         json: async () => ({ id: 1, state: "failure" }),
       });
 
-      await reportJobCompletion(validGitHubContext, false, "notion:fetch", {
+      await reportJobCompletion(validGitHubContext, false, "fetch-one", {
         error: "Connection timeout",
       });
 
@@ -334,7 +334,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       });
 
       const longError = "x".repeat(200);
-      await reportJobCompletion(validGitHubContext, false, "notion:fetch", {
+      await reportJobCompletion(validGitHubContext, false, "fetch-one", {
         error: longError,
       });
 
@@ -355,7 +355,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null and not throw
@@ -372,7 +372,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null and not throw
@@ -385,7 +385,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       const result = await reportJobCompletion(
         validGitHubContext,
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       // Should return null and not throw
@@ -420,7 +420,7 @@ describe("GitHub Status - Idempotency and Integration", () => {
       await reportJobCompletion(
         { ...validGitHubContext, targetUrl: "https://example.com/job/123" },
         true,
-        "notion:fetch"
+        "fetch-one"
       );
 
       const callArgs = mockFetch.mock.calls[0];

@@ -40,6 +40,7 @@ interface CliOptions {
   exportFiles: boolean;
   statusFilter?: string;
   maxPages?: number;
+  pageId?: string;
   force: boolean;
   dryRun: boolean;
 }
@@ -121,6 +122,9 @@ const parseArgs = (): CliOptions => {
       case "--max-pages":
         options.maxPages = parseInt(args[++i]);
         break;
+      case "--page-id":
+        options.pageId = args[++i];
+        break;
       case "--force":
         options.force = true;
         break;
@@ -175,6 +179,7 @@ const printHelp = () => {
   );
   console.log("  --status-filter <status>   Filter by specific status");
   console.log("  --max-pages <number>       Limit number of pages to process");
+  console.log("  --page-id <id>             Fetch single page by ID");
   console.log("  --force                    Force full rebuild, ignore cache");
   console.log(
     "  --dry-run                  Show what would be processed without doing it"
@@ -238,6 +243,7 @@ async function main() {
       sortDirection: options.sortDirection,
       statusFilter: options.statusFilter,
       maxPages: options.maxPages,
+      pageId: options.pageId,
       exportFiles: options.exportFiles,
       fetchSpinnerText: options.statusFilter
         ? `Fetching database to filter by "${options.statusFilter}" and resolve children...`

@@ -21,8 +21,7 @@ const JOB_TYPE_DESCRIPTIONS: Record<JobType, string> = {
     'Fetch pages with status "Ready to publish" and transition to "Draft published"',
   "fetch-all":
     'Fetch all pages except status "Remove" and sync generated artifacts',
-  "notion:fetch": "Fetch pages from Notion",
-  "notion:fetch-all": "Fetch all pages from Notion",
+  "fetch-one": "Fetch a specific page from Notion by page ID",
   "notion:count-pages": "Count pages in Notion database",
   "notion:translate": "Translate content",
   "notion:status-translation": "Update status for translation workflow",

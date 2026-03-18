@@ -30,7 +30,7 @@ describe("job-persistence race conditions", () => {
       for (let i = 0; i < 10; i++) {
         const job: PersistedJob = {
           id: `job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "running",
           createdAt: new Date().toISOString(),
           startedAt: new Date().toISOString(),
@@ -94,7 +94,7 @@ describe("job-persistence race conditions", () => {
     it("should handle rapid sequential updates to the same job", async () => {
       const job: PersistedJob = {
         id: "rapid-update-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -159,7 +159,7 @@ describe("job-persistence race conditions", () => {
       for (let i = 0; i < 20; i++) {
         const job: PersistedJob = {
           id: `multi-job-${i}`,
-          type: i % 2 === 0 ? "notion:fetch" : "notion:fetch-all",
+          type: i % 2 === 0 ? "fetch-one" : "fetch-all",
           status: "pending",
           createdAt: new Date().toISOString(),
         };
@@ -255,7 +255,7 @@ describe("job-persistence race conditions", () => {
       for (let i = 0; i < 10; i++) {
         const job: PersistedJob = {
           id: `existing-job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: new Date().toISOString(),
         };
@@ -294,7 +294,7 @@ describe("job-persistence race conditions", () => {
             setTimeout(() => {
               const newJob: PersistedJob = {
                 id: `new-job-${i}`,
-                type: "notion:fetch-all",
+                type: "fetch-all",
                 status: "pending",
                 createdAt: new Date().toISOString(),
               };
@@ -338,7 +338,7 @@ describe("job-persistence race conditions", () => {
       for (let i = 0; i < jobCount; i++) {
         const job: PersistedJob = {
           id: `stress-job-${i}`,
-          type: "notion:fetch",
+          type: "fetch-one",
           status: "pending",
           createdAt: new Date().toISOString(),
         };
@@ -403,7 +403,7 @@ describe("job-persistence race conditions", () => {
     it("should use temp file and atomic rename", async () => {
       const job: PersistedJob = {
         id: "atomic-test-job",
-        type: "notion:fetch",
+        type: "fetch-one",
         status: "pending",
         createdAt: new Date().toISOString(),
       };

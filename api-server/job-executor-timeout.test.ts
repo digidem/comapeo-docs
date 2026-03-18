@@ -24,8 +24,8 @@ vi.mock("node:child_process", () => ({
 // Mock content-repo integration to keep timeout tests focused on process lifecycle
 vi.mock("./content-repo", () => ({
   isContentMutatingJob: (jobType: string) =>
-    jobType === "notion:fetch" ||
-    jobType === "notion:fetch-all" ||
+    jobType === "fetch-one" ||
+    jobType === "fetch-all" ||
     jobType === "notion:translate",
   runContentTask: async (
     _taskName: string,
@@ -184,12 +184,12 @@ describe("job-executor - timeout behavior", () => {
   });
 
   describe("timeout configuration", () => {
-    it("should use job-specific timeout for notion:fetch", () => {
-      expect(JOB_COMMANDS["notion:fetch"].timeoutMs).toBe(5 * 60 * 1000); // 5 minutes
+    it("should use job-specific timeout for fetch-one", () => {
+      expect(JOB_COMMANDS["fetch-one"].timeoutMs).toBe(60 * 60 * 1000); // 60 minutes
     });
 
-    it("should use longer timeout for notion:fetch-all", () => {
-      expect(JOB_COMMANDS["notion:fetch-all"].timeoutMs).toBe(60 * 60 * 1000); // 60 minutes
+    it("should use longer timeout for fetch-all", () => {
+      expect(JOB_COMMANDS["fetch-all"].timeoutMs).toBe(60 * 60 * 1000); // 60 minutes
     });
 
     it("should use medium timeout for notion:translate", () => {
@@ -567,23 +567,8 @@ describe("job-executor - timeout behavior", () => {
   });
 
   describe("different job type timeouts", () => {
-    it("should use longer timeout for notion:fetch-all jobs", async () => {
-      const tracker = getJobTracker();
-      const mockChild = createMockChildProcess();
-
-      mockSpawn.mockReturnValue(mockChild.process);
-
-      // Don't set JOB_TIMEOUT_MS - should use job-specific timeout
-      const jobId = tracker.createJob("notion:fetch-all");
-      executeJobAsync("notion:fetch-all", jobId, {});
-
-      await vi.waitFor(() => {
-        expect(mockSpawn).toHaveBeenCalled();
-      });
-
-      // The default timeout for fetch-all is 60 minutes (3600000ms)
-      // Verify it was configured correctly (we can't wait that long in a test)
-      expect(JOB_COMMANDS["notion:fetch-all"].timeoutMs).toBe(60 * 60 * 1000);
+    it("should use longer timeout for fetch-all jobs", () => {
+      expect(JOB_COMMANDS["fetch-all"].timeoutMs).toBe(60 * 60 * 1000);
     });
 
     it("should use shorter timeout for notion:status-draft jobs", async () => {

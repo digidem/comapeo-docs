@@ -346,11 +346,7 @@ describe("github-status", () => {
         json: async () => ({ id: 1, state: "success" }),
       });
 
-      const result = await reportJobCompletion(
-        validOptions,
-        true,
-        "notion:fetch"
-      );
+      const result = await reportJobCompletion(validOptions, true, "fetch-one");
 
       expect(result).toBeDefined();
       expect(result?.state).toBe("success");
@@ -365,7 +361,7 @@ describe("github-status", () => {
       const result = await reportJobCompletion(
         validOptions,
         false,
-        "notion:fetch"
+        "fetch-one"
       );
 
       expect(result).toBeDefined();
@@ -378,7 +374,7 @@ describe("github-status", () => {
         json: async () => ({ id: 3, state: "success" }),
       });
 
-      await reportJobCompletion(validOptions, true, "notion:fetch", {
+      await reportJobCompletion(validOptions, true, "fetch-one", {
         duration: 1500,
       });
 
@@ -393,7 +389,7 @@ describe("github-status", () => {
         json: async () => ({ id: 4, state: "failure" }),
       });
 
-      await reportJobCompletion(validOptions, false, "notion:fetch", {
+      await reportJobCompletion(validOptions, false, "fetch-one", {
         error: "Connection failed",
       });
 
@@ -414,11 +410,7 @@ describe("github-status", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
 
-      const result = await reportJobCompletion(
-        validOptions,
-        true,
-        "notion:fetch"
-      );
+      const result = await reportJobCompletion(validOptions, true, "fetch-one");
 
       expect(result).toBeNull();
       expect(consoleErrorSpy).toHaveBeenCalled();
@@ -432,11 +424,7 @@ describe("github-status", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
 
-      const result = await reportJobCompletion(
-        validOptions,
-        true,
-        "notion:fetch"
-      );
+      const result = await reportJobCompletion(validOptions, true, "fetch-one");
 
       expect(result).toBeNull();
       expect(consoleErrorSpy).toHaveBeenCalled();

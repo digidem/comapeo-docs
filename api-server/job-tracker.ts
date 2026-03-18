@@ -12,10 +12,9 @@ import {
 import type { FetchJobError, FetchJobWarning } from "./response-schemas";
 
 export type JobType =
+  | "fetch-one"
   | "fetch-ready"
   | "fetch-all"
-  | "notion:fetch"
-  | "notion:fetch-all"
   | "notion:count-pages"
   | "notion:translate"
   | "notion:status-translation"
@@ -77,8 +76,12 @@ export interface Job {
 
 function isFetchJobType(
   jobType: JobType
-): jobType is "fetch-ready" | "fetch-all" {
-  return jobType === "fetch-ready" || jobType === "fetch-all";
+): jobType is "fetch-one" | "fetch-ready" | "fetch-all" {
+  return (
+    jobType === "fetch-one" ||
+    jobType === "fetch-ready" ||
+    jobType === "fetch-all"
+  );
 }
 
 function createLostJobTerminal(type: JobType): Job["terminal"] {

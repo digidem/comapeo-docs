@@ -115,7 +115,11 @@ export const jobIdSchema = z
  * - Derived from JOB_COMMANDS keys (single source of truth)
  */
 export const jobTypeSchema = z.enum(VALID_JOB_TYPES as [string, ...string[]]);
-export const createJobFetchTypeSchema = z.enum(["fetch-ready", "fetch-all"]);
+export const createJobFetchTypeSchema = z.enum([
+  "fetch-one",
+  "fetch-ready",
+  "fetch-all",
+]);
 export const createJobTypeSchema = z.union([
   jobTypeSchema,
   createJobFetchTypeSchema,
@@ -146,6 +150,7 @@ export const jobOptionsSchema = z
       .min(0, "maxPages must be greater than or equal to 0")
       .optional(),
     statusFilter: z.string().min(1, "statusFilter cannot be empty").optional(),
+    pageId: z.string().min(1, "pageId cannot be empty").optional(),
     force: z.boolean().optional(),
     dryRun: z.boolean().optional(),
     includeRemoved: z.boolean().optional(),
@@ -156,11 +161,24 @@ export const jobOptionsSchema = z
  * Request body validation schema for POST /jobs
  * - type is required and must be a valid job type
  * - options is optional and must match jobOptionsSchema
+ * - fetch-one requires pageId in options
  */
-export const createJobRequestSchema = z.object({
-  type: createJobTypeSchema,
-  options: jobOptionsSchema.optional(),
-});
+export const createJobRequestSchema = z
+  .object({
+    type: createJobTypeSchema,
+    options: jobOptionsSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "fetch-one") {
+      if (!data.options?.pageId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "pageId is required for fetch-one job type",
+          path: ["options", "pageId"],
+        });
+      }
+    }
+  });
 
 // =============================================================================
 // Query Parameter Schemas

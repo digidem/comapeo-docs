@@ -479,6 +479,7 @@ function isPlaceholderIntegrityError(
 type MarkdownStructureMetrics = {
   headingCount: number;
   fencedCodeBlockCount: number;
+  admonitionCount: number;
   bulletListCount: number;
   numberedListCount: number;
   tableLineCount: number;
@@ -490,18 +491,31 @@ function collectMarkdownStructureMetrics(
 ): MarkdownStructureMetrics {
   // ATX headings: "# Heading"
   const atxHeadingMatches = markdown.match(/^#{1,6}\s.+$/gm) ?? [];
-  // Setext H1 headings only ("===" underline): unambiguous because "=" has no
-  // other CommonMark meaning. We deliberately skip "---" underlines (setext H2)
-  // since they are indistinguishable from thematic breaks without a full parser.
-  const setextHeadingMatches = markdown.match(/^.+\n=+\s*$/gm) ?? [];
+  // Setext H1 headings ("===" underline): unambiguous — "=" has no other
+  // CommonMark meaning, so these can never be confused with thematic breaks.
+  const setextH1Matches = markdown.match(/^.+\n=+\s*$/gm) ?? [];
+  // Setext H2 headings ("---" underline): a thematic break uses the same
+  // syntax, but only when the preceding line is a block-level marker (list
+  // item, blockquote, ATX heading, etc.). A setext H2 content line is a
+  // plain paragraph — so we exclude lines starting with list/block markers.
+  const setextH2Matches =
+    markdown.match(/^(?![ \t]*(?:[-*+]|\d+\.)\s|[ \t]*[>#]).+\n-{2,}\s*$/gm) ??
+    [];
+  // Fenced code blocks (backtick or tilde, opening + closing = pairs)
   const fencedCodeMatches = markdown.match(/^(`{3,}|~{3,})/gm) ?? [];
+  // Docusaurus / MDX admonition markers (:::type … :::)
+  const admonitionMatches = markdown.match(/^:::/gm) ?? [];
   const bulletListMatches = markdown.match(/^\s*[-*+]\s+/gm) ?? [];
   const numberedListMatches = markdown.match(/^\s*\d+\.\s+/gm) ?? [];
   const tableLineMatches = markdown.match(/^\|.*\|\s*$/gm) ?? [];
 
   return {
-    headingCount: atxHeadingMatches.length + setextHeadingMatches.length,
+    headingCount:
+      atxHeadingMatches.length +
+      setextH1Matches.length +
+      setextH2Matches.length,
     fencedCodeBlockCount: Math.floor(fencedCodeMatches.length / 2),
+    admonitionCount: Math.floor(admonitionMatches.length / 2),
     bulletListCount: bulletListMatches.length,
     numberedListCount: numberedListMatches.length,
     tableLineCount: tableLineMatches.length,
@@ -528,6 +542,9 @@ function isSuspiciouslyIncompleteTranslation(
   const fencedBlockLoss =
     sourceMetrics.fencedCodeBlockCount > 0 &&
     translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount;
+  const admonitionLoss =
+    sourceMetrics.admonitionCount > 0 &&
+    translatedMetrics.admonitionCount < sourceMetrics.admonitionCount;
   const bulletListLoss =
     sourceMetrics.bulletListCount >= 3 &&
     translatedMetrics.bulletListCount === 0;
@@ -542,6 +559,7 @@ function isSuspiciouslyIncompleteTranslation(
   return (
     headingLoss ||
     fencedBlockLoss ||
+    admonitionLoss ||
     bulletListLoss ||
     numberedListLoss ||
     tableLoss ||

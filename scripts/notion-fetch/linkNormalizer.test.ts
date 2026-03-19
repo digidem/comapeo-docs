@@ -51,10 +51,24 @@ describe("linkNormalizer", () => {
       expect(result).toBe(input);
     });
 
-    it("should normalize each path segment in a nested docs path and add a locale prefix", () => {
+    it("should flatten a nested docs path to only the last segment (slug shape)", () => {
       const input = "[link](/docs/Category Name/Sub Page)";
       const result = normalizeInternalDocLinks(input, "pt");
-      expect(result).toBe("[link](/pt/docs/category-name/sub-page)");
+      // buildFrontmatter() writes slug: /${safeSlug} (single level), so the
+      // public URL is /pt/docs/sub-page, not /pt/docs/category-name/sub-page.
+      expect(result).toBe("[link](/pt/docs/sub-page)");
+    });
+
+    it("should not rewrite links inside a fenced code block", () => {
+      const input = "```\n[example](/docs/Guía Rápida)\n```";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe(input);
+    });
+
+    it("should not rewrite links inside inline code", () => {
+      const input = "Use `[link](/docs/Guía Rápida)` as an example.";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe(input);
     });
 
     it("should normalize multiple docs links on a single line", () => {

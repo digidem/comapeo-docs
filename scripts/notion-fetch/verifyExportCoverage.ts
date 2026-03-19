@@ -4,17 +4,13 @@ import path from "node:path";
 import { glob } from "glob";
 
 import { NOTION_PROPERTIES } from "../constants";
+import { createSafeSlug } from "./slugUtils";
 
 type NotionPage = Record<string, any>;
 
 const EXPORT_FILENAME = "notion_db.json";
 
-const slugify = (title: string): string =>
-  title
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .trim();
+const slugify = (title: string): string => createSafeSlug(title);
 
 const getTitle = (page: NotionPage): string | undefined =>
   page?.properties?.[NOTION_PROPERTIES.TITLE]?.title?.[0]?.plain_text;
@@ -50,14 +46,12 @@ export interface VerificationResult {
 export function verifyExportCoverage(
   exportPath: string = path.resolve(process.cwd(), EXPORT_FILENAME)
 ): VerificationResult {
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   if (!fs.existsSync(exportPath)) {
     throw new Error(
       `Notion export file not found at ${exportPath}. Run bun notion:export first.`
     );
   }
 
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   const payload = JSON.parse(fs.readFileSync(exportPath, "utf8"));
   const results: NotionPage[] = payload.results ?? [];
   const readyPages = results.filter(isReadyToPublish);

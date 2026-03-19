@@ -500,7 +500,7 @@ function stripFencedCodeContent(markdown: string): string {
 
   for (const line of lines) {
     if (!inFence) {
-      const match = line.match(/^(`{3,}|~{3,})/);
+      const match = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
       if (match) {
         inFence = true;
         fenceMarker = match[1];
@@ -509,7 +509,7 @@ function stripFencedCodeContent(markdown: string): string {
         result.push(line);
       }
     } else {
-      if (line.startsWith(fenceMarker)) {
+      if (line.trimStart().startsWith(fenceMarker)) {
         inFence = false;
         fenceMarker = "";
         result.push(line); // keep closing marker
@@ -551,9 +551,9 @@ function collectMarkdownStructureMetrics(
   // table and work regardless of whether the model uses outer pipes or not.
   // A separator line contains only "-", ":", "|", space, and tab characters,
   // and must include both a "|" (distinguishes from thematic break) and a "-".
-  const tableMatches = (stripped.match(/^[ \t:|-]+\s*$/gm) ?? []).filter(
-    (line) => line.includes("|") && line.includes("-")
-  );
+  const tableMatches = (
+    (stripped.match(/^[ \t:|-]+\s*$/gm) ?? []) as string[]
+  ).filter((line) => line.includes("|") && line.includes("-"));
 
   return {
     headingCount:

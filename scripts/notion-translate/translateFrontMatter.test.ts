@@ -276,8 +276,12 @@ describe("notion-translate translateFrontMatter", () => {
       "\n\n# Section Three\n\n" +
       "Gamma ".repeat(60);
 
+    // chunkLimit is the *total* request budget (prompt overhead + markdown).
+    // Prompt overhead is ~2.6 K chars; a 3_200 limit leaves ~587 chars of
+    // markdown per chunk, which fits one 375-char section but not two — so
+    // the three sections produce exactly three API calls.
     const result = await translateText(source, "Original Title", "pt-BR", {
-      chunkLimit: 500,
+      chunkLimit: 3_200,
     });
 
     expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);

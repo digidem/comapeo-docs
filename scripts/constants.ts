@@ -190,8 +190,14 @@ export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
 export const TRANSLATION_CHUNK_MAX_CHARS = 120_000;
 /** Smallest total-budget chunk size used when retrying incomplete translations. */
 export const TRANSLATION_MIN_CHUNK_MAX_CHARS = 8_000;
-/** Maximum times to retry with smaller chunks after completeness checks fail. */
-export const TRANSLATION_COMPLETENESS_MAX_RETRIES = 2;
+/**
+ * Maximum times to retry with smaller chunks after completeness checks fail.
+ * Each retry halves the chunk limit. Starting from 120 K chars:
+ *   120k → 60k → 30k → 15k → 8k (floor)
+ * Four halvings are needed to descend from the default cap to the 8k floor,
+ * so this must be at least 4.
+ */
+export const TRANSLATION_COMPLETENESS_MAX_RETRIES = 4;
 
 // URL handling
 export const INVALID_URL_PLACEHOLDER =

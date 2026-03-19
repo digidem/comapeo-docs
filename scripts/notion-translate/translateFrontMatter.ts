@@ -549,15 +549,11 @@ function getProactiveChunkCharLimit(modelName: string): number {
 }
 
 function getChunkContentBudget(totalChunkLimit: number, title: string): number {
-  const minimumBudget = Math.min(
-    totalChunkLimit,
-    TRANSLATION_MIN_CHUNK_MAX_CHARS
-  );
-
-  return Math.max(
-    totalChunkLimit - TRANSLATION_PROMPT.length - title.length - 20,
-    minimumBudget
-  );
+  // Subtract prompt overhead so the *total* request stays within totalChunkLimit.
+  // The minimum content budget is 1; the retry-level floor (TRANSLATION_MIN_CHUNK_MAX_CHARS)
+  // is enforced as a total-request budget by the caller, not as a markdown payload floor.
+  const overhead = TRANSLATION_PROMPT.length + title.length + 20;
+  return Math.max(totalChunkLimit - overhead, 1);
 }
 
 function splitMarkdownForTranslation(

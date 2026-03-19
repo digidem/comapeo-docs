@@ -117,9 +117,15 @@ export function injectExplicitHeadingIds(content: string): string {
   const lines = maskedContent.split("\n");
   const updatedLines = lines.map((line) => {
     if (
-      codeBlockPlaceholders.some((placeholder) => line.includes(placeholder)) ||
-      /\s\{#[^}]+\}\s*$/.test(line)
+      codeBlockPlaceholders.some((placeholder) => line.includes(placeholder))
     ) {
+      return line;
+    }
+
+    const explicitIdMatch = line.match(/\s\{#([^}]+)\}\s*$/);
+    if (explicitIdMatch) {
+      const explicitId = explicitIdMatch[1];
+      headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
       return line;
     }
 

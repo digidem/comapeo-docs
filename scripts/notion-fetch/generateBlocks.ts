@@ -894,7 +894,7 @@ export async function generateBlocks(
           ? sectionTypeRaw.trim()
           : String(sectionTypeRaw ?? "").trim();
       const normalizedSectionType = sectionTypeString.toLowerCase();
-      const filename = createSafeSlug(title);
+      const filename = createSafeSlug(title) || "untitled";
 
       const orderedLocales = getOrderedLocales(Object.keys(pageByLang.content));
       for (const lang of orderedLocales) {

@@ -287,9 +287,9 @@ fi
 # Test 5: Create a job (dry run to avoid actual Notion call)
 log_section "Test 5: Create Job (Dry Run)"
 if [ -n "$AUTH_HEADER" ]; then
-  response=$(eval "http_post '/jobs' '{\"type\":\"notion:fetch\",\"options\":{\"dryRun\":true,\"maxPages\":1}}' \"$AUTH_HEADER\"")
+  response=$(eval "http_post '/jobs' '{\"type\":\"fetch-ready\",\"options\":{\"dryRun\":true,\"maxPages\":1}}' \"$AUTH_HEADER\"")
 else
-  response=$(http_post "/jobs" '{"type":"notion:fetch","options":{"dryRun":true,"maxPages":1}}')
+  response=$(http_post "/jobs" '{"type":"fetch-ready","options":{"dryRun":true,"maxPages":1}}')
 fi
 http_code=$(echo "$response" | tail -n1)
 body=$(echo "$response" | head -n -1)
@@ -310,7 +310,7 @@ fi
 if [ "$http_code" = "201" ]; then
   echo "$body" | jq '.' >"$TEST_RESULTS_DIR/job-created.json"
   assert_json_has_key "$body" "data.jobId" "Create job response has jobId"
-  assert_json_value "$body" "data.type" "notion:fetch" "Created job type is correct"
+  assert_json_value "$body" "data.type" "fetch-ready" "Created job type is correct"
   assert_json_value "$body" "data.status" "pending" "Created job status is pending"
   JOB_ID=$(echo "$body" | jq -r '.data.jobId')
   log_info "Created job ID: $JOB_ID"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test notion:fetch-all via docker compose API service
+# Test fetch-all via docker compose API service
 #
 # Usage:
 #   ./scripts/test-docker/test-compose-fetch.sh [--all] [--max-pages N] [--dry-run] [--include-removed] [--no-cleanup]
@@ -227,7 +227,7 @@ if [[ "$INCLUDE_REMOVED" == true ]]; then
   JOB_OPTIONS=$(echo "$JOB_OPTIONS" | jq '. + {"includeRemoved": true}')
 fi
 
-PAYLOAD=$(jq -cn --arg type "notion:fetch-all" --argjson options "$JOB_OPTIONS" '{type: $type, options: $options}')
+PAYLOAD=$(jq -cn --arg type "fetch-all" --argjson options "$JOB_OPTIONS" '{type: $type, options: $options}')
 
 echo -e "${BLUE}Creating job...${NC}"
 CREATE_RESPONSE=$(api_request "POST" "$API_BASE_URL/jobs" "$PAYLOAD")

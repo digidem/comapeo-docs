@@ -191,7 +191,7 @@ cancel_job() {
 }
 
 # Build job options using jq for reliable JSON construction
-JOB_TYPE="notion:fetch-all"
+JOB_TYPE="fetch-all"
 JOB_OPTIONS="{}"
 
 if [ "$DRY_RUN" = true ]; then

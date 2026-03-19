@@ -204,7 +204,7 @@ test_job_cancellation() {
   # Create a long-running job (fetch-all without maxPages)
   CREATE_RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
     -H "Content-Type: application/json" \
-    -d '{"type":"notion:fetch-all"}')
+    -d '{"type":"fetch-all"}')
 
   JOB_ID=$(echo "$CREATE_RESPONSE" | jq -r '.data.jobId')
 
@@ -348,7 +348,7 @@ test_concurrent_jobs() {
 
   curl -s -X POST "$API_BASE_URL/jobs" \
     -H "Content-Type: application/json" \
-    -d "{\"type\":\"notion:fetch-all\",\"options\":$JOB_OPTIONS}" \
+    -d "{\"type\":\"fetch-all\",\"options\":$JOB_OPTIONS}" \
     > /tmp/job1.json &
   PID1=$!
 
@@ -360,7 +360,7 @@ test_concurrent_jobs() {
 
   curl -s -X POST "$API_BASE_URL/jobs" \
     -H "Content-Type: application/json" \
-    -d "{\"type\":\"notion:fetch-all\",\"options\":$JOB_OPTIONS}" \
+    -d "{\"type\":\"fetch-all\",\"options\":$JOB_OPTIONS}" \
     > /tmp/job3.json &
   PID3=$!
 
@@ -425,7 +425,7 @@ test_dry_run_mode() {
   # Create dry-run job
   CREATE_RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
     -H "Content-Type: application/json" \
-    -d '{"type":"notion:fetch-all","options":{"maxPages":3,"dryRun":true}}')
+    -d '{"type":"fetch-all","options":{"maxPages":3,"dryRun":true}}')
 
   JOB_ID=$(echo "$CREATE_RESPONSE" | jq -r '.data.jobId')
 
@@ -476,7 +476,7 @@ test_unknown_options() {
 
   RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE_URL/jobs" \
     -H "Content-Type: application/json" \
-    -d '{"type":"notion:fetch","options":{"unknownKey":true,"invalidOption":"value"}}')
+    -d '{"type":"fetch-ready","options":{"unknownKey":true,"invalidOption":"value"}}')
 
   HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 

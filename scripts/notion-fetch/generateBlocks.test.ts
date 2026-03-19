@@ -490,7 +490,7 @@ describe("generateBlocks", () => {
       );
       expect(englishOutput?.[1]).toContain("[relative](./Guía Local#Título)");
       expect(portugueseOutput?.[1]).toContain(
-        "[nested](/pt/docs/category-name/sub-pagina#titulo-dos)"
+        "[nested](/pt/docs/sub-pagina#titulo-dos)"
       );
       expect(spanishOutput?.[1]).toContain(
         "[doc](/es/docs/guia-rapida#titulo-uno)"

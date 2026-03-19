@@ -24,5 +24,7 @@ test(
   () => {
     runVitest();
   },
-  { timeout: 120_000 }
+  // The full Vitest suite can take just under two minutes on this repo, and
+  // Bun's own test harness adds enough overhead that 120s is too tight.
+  { timeout: 300_000 }
 );

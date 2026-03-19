@@ -93,6 +93,7 @@ vi.mock("../imageProcessor", () => ({
 
 vi.mock("../utils", () => ({
   sanitizeMarkdownContent: vi.fn((content) => content),
+  injectExplicitHeadingIds: vi.fn((content) => content),
   compressImageToFileWithFallback: vi.fn().mockResolvedValue({
     finalSize: 512,
     usedFallback: false,

@@ -32,7 +32,7 @@ const eslintConfig = [
   // Docusaurus specific configurations
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
-    ignores: ["scripts/**", "api-server/**"], // Ignore scripts and api-server directories for docusaurus rules
+    ignores: ["scripts/**", "api-server/**", "bun-tests/**"], // Ignore non-Docusaurus runtime directories for docusaurus/react rules
     plugins: {
       "@docusaurus": docusaurusPlugin,
       react: pluginReact,

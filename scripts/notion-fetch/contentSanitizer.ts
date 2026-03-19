@@ -79,7 +79,7 @@ function maskCodeFences(content: string): {
   const codeBlockPlaceholders: string[] = [];
 
   const maskedContent = content.replace(
-    /^```[^\n]*\n[\s\S]*?^```/gm,
+    /^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```/gm,
     (match) => {
       codeBlocks.push(match);
       const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
@@ -157,7 +157,7 @@ export function sanitizeMarkdownContent(content: string): string {
   const codeSpans: string[] = [];
   const codeBlockPlaceholders: string[] = [];
 
-  content = content.replace(/^```[^\n]*\n[\s\S]*?^```/gm, (m) => {
+  content = content.replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```/gm, (m) => {
     codeBlocks.push(m);
     const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
     codeBlockPlaceholders.push(placeholder);

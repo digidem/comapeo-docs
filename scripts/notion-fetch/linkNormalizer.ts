@@ -21,7 +21,7 @@ function maskCode(content: string): {
   const codeSpans: string[] = [];
 
   const maskedBlocks = content.replace(
-    /^```[^\n]*\n[\s\S]*?^```/gm,
+    /^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```/gm,
     (match) => {
       codeBlocks.push(match);
       return `__LINK_NORMALIZER_CODEBLOCK_${codeBlocks.length - 1}__`;

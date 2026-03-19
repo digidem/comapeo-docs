@@ -65,6 +65,12 @@ describe("linkNormalizer", () => {
       expect(result).toBe(input);
     });
 
+    it("should not rewrite links inside an indented fenced code block", () => {
+      const input = "  ```\n  [example](/docs/Guía Rápida)\n  ```";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe(input);
+    });
+
     it("should not rewrite links inside inline code", () => {
       const input = "Use `[link](/docs/Guía Rápida)` as an example.";
       const result = normalizeInternalDocLinks(input, "en");

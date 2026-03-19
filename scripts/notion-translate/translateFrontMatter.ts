@@ -488,14 +488,17 @@ type MarkdownStructureMetrics = {
 function collectMarkdownStructureMetrics(
   markdown: string
 ): MarkdownStructureMetrics {
-  const headingMatches = markdown.match(/^#{1,6}\s.+$/gm) ?? [];
+  // ATX headings: "# Heading"
+  const atxHeadingMatches = markdown.match(/^#{1,6}\s.+$/gm) ?? [];
+  // Setext headings: a non-empty line followed by a "===" or "---" underline
+  const setextHeadingMatches = markdown.match(/^.+\n[=\-]{2,}\s*$/gm) ?? [];
   const fencedCodeMatches = markdown.match(/^(`{3,}|~{3,})/gm) ?? [];
   const bulletListMatches = markdown.match(/^\s*[-*+]\s+/gm) ?? [];
   const numberedListMatches = markdown.match(/^\s*\d+\.\s+/gm) ?? [];
   const tableLineMatches = markdown.match(/^\|.*\|\s*$/gm) ?? [];
 
   return {
-    headingCount: headingMatches.length,
+    headingCount: atxHeadingMatches.length + setextHeadingMatches.length,
     fencedCodeBlockCount: Math.floor(fencedCodeMatches.length / 2),
     bulletListCount: bulletListMatches.length,
     numberedListCount: numberedListMatches.length,

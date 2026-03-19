@@ -12,6 +12,44 @@ function safeDecode(s: string): string {
   }
 }
 
+function maskCode(content: string): {
+  maskedContent: string;
+  codeBlocks: string[];
+  codeSpans: string[];
+} {
+  const codeBlocks: string[] = [];
+  const codeSpans: string[] = [];
+
+  const maskedBlocks = content.replace(
+    /^```[^\n]*\n[\s\S]*?^```/gm,
+    (match) => {
+      codeBlocks.push(match);
+      return `__LINK_NORMALIZER_CODEBLOCK_${codeBlocks.length - 1}__`;
+    }
+  );
+
+  const maskedContent = maskedBlocks.replace(/`[^`\n]*`/g, (match) => {
+    codeSpans.push(match);
+    return `__LINK_NORMALIZER_CODESPAN_${codeSpans.length - 1}__`;
+  });
+
+  return { maskedContent, codeBlocks, codeSpans };
+}
+
+function restoreCode(
+  content: string,
+  codeBlocks: string[],
+  codeSpans: string[]
+): string {
+  return content
+    .replace(/__LINK_NORMALIZER_CODESPAN_(\d+)__/g, (_match, index) => {
+      return codeSpans[Number(index)];
+    })
+    .replace(/__LINK_NORMALIZER_CODEBLOCK_(\d+)__/g, (_match, index) => {
+      return codeBlocks[Number(index)];
+    });
+}
+
 function normalizeDocPathname(pathname: string): string {
   const hasTrailingSlash = pathname.endsWith("/") && pathname !== "/docs/";
   const rawSegments = pathname
@@ -51,20 +89,9 @@ export function normalizeInternalDocLinks(
     return content;
   }
 
-  // Mask code fences and inline code so links inside literal examples are not
-  // rewritten. Uses the same placeholder strategy as sanitizeMarkdownContent.
-  const codeBlocks: string[] = [];
-  const codeSpans: string[] = [];
-  let masked = content.replace(/^```[^\n]*\n[\s\S]*?^```/gm, (m) => {
-    codeBlocks.push(m);
-    return `__CODEBLOCK_${codeBlocks.length - 1}__`;
-  });
-  masked = masked.replace(/`[^`\n]*`/g, (m) => {
-    codeSpans.push(m);
-    return `__CODESPAN_${codeSpans.length - 1}__`;
-  });
+  const { maskedContent, codeBlocks, codeSpans } = maskCode(content);
 
-  const result = masked.replace(
+  const normalizedContent = maskedContent.replace(
     MARKDOWN_LINK_REGEX,
     (match, prefix: string, text: string, rawTarget: string) => {
       const trimmedTarget = rawTarget.trim();
@@ -80,7 +107,5 @@ export function normalizeInternalDocLinks(
     }
   );
 
-  return result
-    .replace(/__CODESPAN_(\d+)__/g, (_, i) => codeSpans[parseInt(i, 10)])
-    .replace(/__CODEBLOCK_(\d+)__/g, (_, i) => codeBlocks[parseInt(i, 10)]);
+  return restoreCode(normalizedContent, codeBlocks, codeSpans);
 }

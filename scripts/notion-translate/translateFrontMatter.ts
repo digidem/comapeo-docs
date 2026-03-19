@@ -490,8 +490,10 @@ function collectMarkdownStructureMetrics(
 ): MarkdownStructureMetrics {
   // ATX headings: "# Heading"
   const atxHeadingMatches = markdown.match(/^#{1,6}\s.+$/gm) ?? [];
-  // Setext headings: a non-empty line followed by a "===" or "---" underline
-  const setextHeadingMatches = markdown.match(/^.+\n[=\-]{2,}\s*$/gm) ?? [];
+  // Setext H1 headings only ("===" underline): unambiguous because "=" has no
+  // other CommonMark meaning. We deliberately skip "---" underlines (setext H2)
+  // since they are indistinguishable from thematic breaks without a full parser.
+  const setextHeadingMatches = markdown.match(/^.+\n=+\s*$/gm) ?? [];
   const fencedCodeMatches = markdown.match(/^(`{3,}|~{3,})/gm) ?? [];
   const bulletListMatches = markdown.match(/^\s*[-*+]\s+/gm) ?? [];
   const numberedListMatches = markdown.match(/^\s*\d+\.\s+/gm) ?? [];

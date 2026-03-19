@@ -115,15 +115,6 @@ export const jobIdSchema = z
  * - Derived from JOB_COMMANDS keys (single source of truth)
  */
 export const jobTypeSchema = z.enum(VALID_JOB_TYPES as [string, ...string[]]);
-export const createJobFetchTypeSchema = z.enum([
-  "fetch-one",
-  "fetch-ready",
-  "fetch-all",
-]);
-export const createJobTypeSchema = z.union([
-  jobTypeSchema,
-  createJobFetchTypeSchema,
-]);
 
 /**
  * Job status validation schema
@@ -165,7 +156,7 @@ export const jobOptionsSchema = z
  */
 export const createJobRequestSchema = z
   .object({
-    type: createJobTypeSchema,
+    type: jobTypeSchema,
     options: jobOptionsSchema.optional(),
   })
   .superRefine((data, ctx) => {
@@ -191,7 +182,7 @@ export const createJobRequestSchema = z
  */
 export const jobsQuerySchema = z.object({
   status: jobStatusSchema.optional(),
-  type: createJobTypeSchema.optional(),
+  type: jobTypeSchema.optional(),
 });
 
 // =============================================================================
@@ -222,7 +213,7 @@ export const jobResultSchema = z.object({
  */
 export const jobSchema = z.object({
   id: z.string(),
-  type: createJobTypeSchema,
+  type: jobTypeSchema,
   status: jobStatusSchema,
   createdAt: z.string().datetime(),
   startedAt: z.string().datetime().nullable(),

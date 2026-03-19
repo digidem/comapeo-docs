@@ -157,7 +157,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
       if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_123");
-        validateZodErrorFormat(formatted, ErrorCode.VALIDATION_ERROR);
+        validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toBeDefined();
       }
     });
@@ -170,7 +170,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
       if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_456");
-        validateZodErrorFormat(formatted, ErrorCode.VALIDATION_ERROR);
+        validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toBeDefined();
       }
     });
@@ -183,7 +183,7 @@ describe("Endpoint Schema Validation - POST /jobs", () => {
 
       if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_789");
-        validateZodErrorFormat(formatted, ErrorCode.VALIDATION_ERROR);
+        validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         // Zod reports the error - just verify it's formatted
         expect(formatted.message).toBeDefined();
       }
@@ -368,7 +368,7 @@ describe("Endpoint Schema Validation - GET /jobs", () => {
 
       if (result.success === false) {
         const formatted = formatZodError(result.error, "req_test_type");
-        validateZodErrorFormat(formatted, ErrorCode.VALIDATION_ERROR);
+        validateZodErrorFormat(formatted, ErrorCode.INVALID_ENUM_VALUE);
         expect(formatted.message).toBeDefined();
       }
     });

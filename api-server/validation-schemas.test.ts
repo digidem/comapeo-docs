@@ -296,7 +296,7 @@ describe("Validation Schemas - Create Job Request", () => {
       const result = createJobRequestSchema.safeParse({});
       expect(result.success).toBe(false);
       if (!result.success && result.error) {
-        expect(result.error.issues[0].message).toContain("Invalid input");
+        expect(result.error.issues[0].message).toContain("Invalid option");
       }
     });
 

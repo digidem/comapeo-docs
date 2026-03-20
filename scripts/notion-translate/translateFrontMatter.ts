@@ -497,6 +497,7 @@ function stripFencedCodeContent(markdown: string): string {
   const result: string[] = [];
   let inFence = false;
   let fenceMarker = "";
+  let fenceBuffer: string[] = [];
 
   for (const line of lines) {
     if (!inFence) {
@@ -505,6 +506,7 @@ function stripFencedCodeContent(markdown: string): string {
         inFence = true;
         fenceMarker = match[1];
         result.push(line); // keep opening marker
+        fenceBuffer = [];
       } else {
         result.push(line);
       }
@@ -513,9 +515,16 @@ function stripFencedCodeContent(markdown: string): string {
         inFence = false;
         fenceMarker = "";
         result.push(line); // keep closing marker
+        fenceBuffer = [];
+      } else {
+        fenceBuffer.push(line);
       }
-      // drop content lines inside the fence
     }
+  }
+
+  // Failsafe: restore lines if the block was never closed
+  if (inFence && fenceBuffer.length > 0) {
+    result.push(...fenceBuffer);
   }
 
   return result.join("\n");
@@ -601,7 +610,7 @@ function isSuspiciouslyIncompleteTranslation(
     translatedMetrics.contentLength / Math.max(sourceMetrics.contentLength, 1);
   const headingLoss =
     sourceMetrics.headingCount > 0 &&
-    translatedMetrics.headingCount < sourceMetrics.headingCount;
+    translatedMetrics.headingCount < sourceMetrics.headingCount - 1;
   const fencedBlockLoss =
     sourceMetrics.fencedCodeBlockCount > 0 &&
     translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount;

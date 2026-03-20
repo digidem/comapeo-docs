@@ -132,7 +132,9 @@ describe("notion-translate translateFrontMatter", () => {
       "# Section Two\n\n" +
       "Beta paragraph.\n\n" +
       "# Section Three\n\n" +
-      "Gamma paragraph.";
+      "Gamma paragraph.\n\n" +
+      "# Section Four\n\n" +
+      "Delta paragraph.";
 
     mockOpenAIChatCompletionCreate
       .mockResolvedValueOnce({
@@ -141,7 +143,7 @@ describe("notion-translate translateFrontMatter", () => {
             message: {
               content: JSON.stringify({
                 markdown:
-                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Três\n\nParágrafo gama.",
+                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Quatro\n\nParágrafo delta.",
                 title: "Título Traduzido",
               }),
             },
@@ -154,7 +156,7 @@ describe("notion-translate translateFrontMatter", () => {
             message: {
               content: JSON.stringify({
                 markdown:
-                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Dois\n\nParágrafo beta.\n\n# Seção Três\n\nParágrafo gama.",
+                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Dois\n\nParágrafo beta.\n\n# Seção Três\n\nParágrafo gama.\n\n# Seção Quatro\n\nParágrafo delta.",
                 title: "Título Traduzido",
               }),
             },
@@ -180,7 +182,9 @@ describe("notion-translate translateFrontMatter", () => {
       "# Section Two\n\n" +
       "Beta paragraph.\n\n" +
       "# Section Three\n\n" +
-      "Gamma paragraph.";
+      "Gamma paragraph.\n\n" +
+      "# Section Four\n\n" +
+      "Delta paragraph.";
 
     mockOpenAIChatCompletionCreate.mockImplementation(async () => ({
       choices: [
@@ -188,7 +192,7 @@ describe("notion-translate translateFrontMatter", () => {
           message: {
             content: JSON.stringify({
               markdown:
-                "# Seção Um\n\nParágrafo alfa.\n\n# Seção Três\n\nParágrafo gama.",
+                "# Seção Um\n\nParágrafo alfa.\n\n# Seção Quatro\n\nParágrafo delta.",
               title: "Título Traduzido",
             }),
           },

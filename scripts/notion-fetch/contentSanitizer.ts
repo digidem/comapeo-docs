@@ -79,7 +79,7 @@ function maskCodeFences(content: string): {
   const codeBlockPlaceholders: string[] = [];
 
   const maskedContent = content.replace(
-    /^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```/gm,
+    /^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm,
     (match) => {
       codeBlocks.push(match);
       const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
@@ -119,6 +119,21 @@ export function injectExplicitHeadingIds(content: string): string {
     if (
       codeBlockPlaceholders.some((placeholder) => line.includes(placeholder))
     ) {
+      return line;
+    }
+
+    const fullMatch = line.match(
+      /^(\s{0,3})(#{1,6})\s+(.+?)\s*\{#([^}]+)\}\s*$/
+    );
+    if (fullMatch) {
+      const [, , , headingText, explicitId] = fullMatch;
+      const baseId = createSafeSlug(headingText);
+      if (baseId) {
+        headingCounts.set(baseId, (headingCounts.get(baseId) ?? 0) + 1);
+      }
+      if (explicitId !== baseId) {
+        headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
+      }
       return line;
     }
 
@@ -163,7 +178,7 @@ export function sanitizeMarkdownContent(content: string): string {
   const codeSpans: string[] = [];
   const codeBlockPlaceholders: string[] = [];
 
-  content = content.replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```/gm, (m) => {
+  content = content.replace(/^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm, (m) => {
     codeBlocks.push(m);
     const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
     codeBlockPlaceholders.push(placeholder);

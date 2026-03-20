@@ -12,6 +12,9 @@ import {
   OPENAI_BASE_URL,
   IS_CUSTOM_OPENAI_API,
   getMaxChunkChars,
+  TRANSLATION_CHUNK_MAX_CHARS,
+  TRANSLATION_MIN_CHUNK_MAX_CHARS,
+  TRANSLATION_COMPLETENESS_MAX_RETRIES,
 } from "../constants.js";
 
 // Load environment variables
@@ -473,6 +476,192 @@ function isPlaceholderIntegrityError(
   );
 }
 
+type MarkdownStructureMetrics = {
+  headingCount: number;
+  fencedCodeBlockCount: number;
+  admonitionCount: number;
+  bulletListCount: number;
+  numberedListCount: number;
+  tableCount: number;
+  contentLength: number;
+};
+
+/**
+ * Returns a copy of the markdown with the *content* of fenced code blocks
+ * removed (the opening/closing fence markers are kept so that fenced block
+ * counts remain accurate). This prevents structural markers inside code
+ * samples — headings, list items, table rows, etc. — from inflating counts.
+ */
+function stripFencedCodeContent(markdown: string): string {
+  const lines = markdown.split("\n");
+  const result: string[] = [];
+  let inFence = false;
+  let fenceMarker = "";
+  let fenceBuffer: string[] = [];
+
+  for (const line of lines) {
+    if (!inFence) {
+      const match = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+      if (match) {
+        inFence = true;
+        fenceMarker = match[1];
+        result.push(line); // keep opening marker
+        fenceBuffer = [];
+      } else {
+        result.push(line);
+      }
+    } else {
+      if (line.trimStart().startsWith(fenceMarker)) {
+        inFence = false;
+        fenceMarker = "";
+        result.push(line); // keep closing marker
+        fenceBuffer = [];
+      } else {
+        fenceBuffer.push(line);
+      }
+    }
+  }
+
+  // Failsafe: restore lines if the block was never closed
+  if (inFence && fenceBuffer.length > 0) {
+    result.push(...fenceBuffer);
+  }
+
+  return result.join("\n");
+}
+
+function stripYamlFrontmatter(markdown: string): string {
+  if (markdown.startsWith("---\n") || markdown.startsWith("---\r\n")) {
+    const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+    if (endFrontmatterIndex !== -1) {
+      const endOfLineIndex = markdown.indexOf("\n", endFrontmatterIndex + 1);
+      if (endOfLineIndex !== -1) {
+        return markdown.substring(endOfLineIndex + 1);
+      }
+      return "";
+    }
+  }
+  return markdown;
+}
+
+function collectMarkdownStructureMetrics(
+  markdown: string
+): MarkdownStructureMetrics {
+  // Remove frontmatter before stripping fenced code content
+  const withoutFrontmatter = stripYamlFrontmatter(markdown);
+
+  // Fenced code blocks must be counted on raw markdown (before stripping).
+  const fencedCodeMatches = withoutFrontmatter.match(/^(`{3,}|~{3,})/gm) ?? [];
+
+  // All other structural markers are measured on the stripped version so that
+  // examples inside code blocks do not inflate the counts.
+  const stripped = stripFencedCodeContent(withoutFrontmatter);
+
+  // ATX headings: "# Heading"
+  const atxHeadingMatches = stripped.match(/^#{1,6}\s.+$/gm) ?? [];
+  // Setext H1 headings ("===" underline): unambiguous — "=" has no other
+  // CommonMark meaning, so these can never be confused with thematic breaks.
+  const setextH1Matches = stripped.match(/^.+\n=+\s*$/gm) ?? [];
+  // Setext H2 headings ("---" underline): a thematic break uses the same
+  // syntax, but only when the preceding line is a block-level marker (list
+  // item, blockquote, ATX heading, etc.). A setext H2 content line is a
+  // plain paragraph — so we exclude lines starting with list/block markers.
+  const setextH2Matches =
+    stripped.match(/^(?![ \t]*(?:[-*+]|\d+\.)\s|[ \t]*[>#]).+\n-{2,}\s*$/gm) ??
+    [];
+  // Docusaurus / MDX admonition markers (:::type … :::)
+  const admonitionMatches = stripped.match(/^:::/gm) ?? [];
+  const bulletListMatches = stripped.match(/^\s*[-*+]\s+/gm) ?? [];
+  const numberedListMatches = stripped.match(/^\s*\d+\.\s+/gm) ?? [];
+  // GFM table separator rows (---|---|---) are the unambiguous indicator of a
+  // table and work regardless of whether the model uses outer pipes or not.
+  // A separator line contains only "-", ":", "|", space, and tab characters,
+  // and must include both a "|" (distinguishes from thematic break) and a "-".
+  const tableMatches = (
+    (stripped.match(/^[ \t:|-]+\s*$/gm) ?? []) as string[]
+  ).filter((line) => line.includes("|") && line.includes("-"));
+
+  return {
+    headingCount:
+      atxHeadingMatches.length +
+      setextH1Matches.length +
+      setextH2Matches.length,
+    fencedCodeBlockCount: Math.floor(fencedCodeMatches.length / 2),
+    admonitionCount: Math.floor(admonitionMatches.length / 2),
+    bulletListCount: bulletListMatches.length,
+    numberedListCount: numberedListMatches.length,
+    tableCount: tableMatches.length,
+    contentLength: withoutFrontmatter.trim().length,
+  };
+}
+
+function isSuspiciouslyIncompleteTranslation(
+  sourceMarkdown: string,
+  translatedMarkdown: string
+): boolean {
+  const sourceMetrics = collectMarkdownStructureMetrics(sourceMarkdown);
+  const translatedMetrics = collectMarkdownStructureMetrics(translatedMarkdown);
+
+  if (sourceMetrics.contentLength === 0) {
+    return false;
+  }
+
+  const lengthRatio =
+    translatedMetrics.contentLength / Math.max(sourceMetrics.contentLength, 1);
+  const headingLoss =
+    sourceMetrics.headingCount > 0 &&
+    translatedMetrics.headingCount < sourceMetrics.headingCount - 1;
+  const fencedBlockLoss =
+    sourceMetrics.fencedCodeBlockCount > 0 &&
+    translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount;
+  const admonitionLoss =
+    sourceMetrics.admonitionCount > 0 &&
+    translatedMetrics.admonitionCount < sourceMetrics.admonitionCount;
+  const bulletListLoss =
+    sourceMetrics.bulletListCount >= 3 &&
+    translatedMetrics.bulletListCount === 0;
+  const numberedListLoss =
+    sourceMetrics.numberedListCount >= 3 &&
+    translatedMetrics.numberedListCount === 0;
+  const tableLoss =
+    sourceMetrics.tableCount >= 1 && translatedMetrics.tableCount === 0;
+  const severeLengthShrinkage =
+    sourceMetrics.contentLength >= 4_000 && lengthRatio < 0.55;
+
+  return (
+    headingLoss ||
+    fencedBlockLoss ||
+    admonitionLoss ||
+    bulletListLoss ||
+    numberedListLoss ||
+    tableLoss ||
+    severeLengthShrinkage
+  );
+}
+
+function getProactiveChunkCharLimit(modelName: string): number {
+  return Math.min(getMaxChunkChars(modelName), TRANSLATION_CHUNK_MAX_CHARS);
+}
+
+function getChunkContentBudget(totalChunkLimit: number, title: string): number {
+  // Subtract prompt overhead so the *total* request stays within totalChunkLimit.
+  // The minimum content budget is 1; the retry-level floor (TRANSLATION_MIN_CHUNK_MAX_CHARS)
+  // is enforced as a total-request budget by the caller, not as a markdown payload floor.
+  const overhead = TRANSLATION_PROMPT.length + title.length + 20;
+  return Math.max(totalChunkLimit - overhead, 1);
+}
+
+function splitMarkdownForTranslation(
+  markdown: string,
+  title: string,
+  totalChunkLimit: number
+): string[] {
+  return splitMarkdownIntoChunks(
+    markdown,
+    getChunkContentBudget(totalChunkLimit, title)
+  );
+}
+
 /**
  * Translates a markdown file using OpenAI
  * @param filePath Path to the markdown file to translate
@@ -622,7 +811,8 @@ async function translateChunkWithOverflowFallback(
   text: string,
   title: string,
   targetLanguage: string,
-  placeholderGuardAttempt = 0
+  placeholderGuardAttempt = 0,
+  chunkBudgetForRetry = getProactiveChunkCharLimit(model)
 ): Promise<{ markdown: string; title: string }> {
   const requiredPlaceholders = extractDataUrlPlaceholders(text);
 
@@ -655,8 +845,11 @@ async function translateChunkWithOverflowFallback(
       throw err;
     }
 
-    const splitTarget = Math.max(Math.floor(text.length / 2), 1);
-    let subChunks = splitMarkdownIntoChunks(text, splitTarget);
+    const splitTarget = Math.max(
+      Math.floor(Math.min(text.length, chunkBudgetForRetry) / 2),
+      TRANSLATION_MIN_CHUNK_MAX_CHARS
+    );
+    let subChunks = splitMarkdownForTranslation(text, title, splitTarget);
     if (subChunks.length <= 1) {
       const midpoint = Math.floor(text.length / 2);
       if (midpoint < 1 || midpoint >= text.length) {
@@ -688,6 +881,11 @@ async function translateChunkWithOverflowFallback(
   }
 }
 
+type TranslateTextOptions = {
+  chunkLimit?: number;
+  completenessRetryDepth?: number;
+};
+
 /**
  * Translates text using OpenAI
  * @param text Text to translate
@@ -698,7 +896,8 @@ async function translateChunkWithOverflowFallback(
 export async function translateText(
   text: string,
   title: string,
-  targetLanguage: string
+  targetLanguage: string,
+  options: TranslateTextOptions = {}
 ): Promise<{ markdown: string; title: string }> {
   const safeText =
     typeof text === "string" && text.length > 0
@@ -706,59 +905,119 @@ export async function translateText(
       : "# Empty Content\n\nThis page has no content to translate.";
   const { maskedText, placeholders } = maskDataUrlImages(safeText);
 
-  // Get model-specific chunk size
-  const maxChunkChars = getMaxChunkChars(model);
+  const effectiveChunkLimit =
+    options.chunkLimit ?? getProactiveChunkCharLimit(model);
+  const completenessRetryDepth = options.completenessRetryDepth ?? 0;
+
+  const translateAndValidate = async (
+    sourceMarkdown: string,
+    translatedChunk: Promise<{ markdown: string; title: string }>
+  ) => {
+    const translated = await translatedChunk;
+    if (
+      isSuspiciouslyIncompleteTranslation(sourceMarkdown, translated.markdown)
+    ) {
+      throw new TranslationError(
+        "Translated markdown appears incomplete compared to source structure",
+        "unexpected_error",
+        false
+      );
+    }
+    return translated;
+  };
 
   // Include system prompt overhead (~1800 chars) + title prefix + "markdown: " prefix
   const estimatedTotalChars =
     TRANSLATION_PROMPT.length + title.length + 20 + maskedText.length;
 
-  if (estimatedTotalChars <= maxChunkChars) {
-    // Fast path: content fits in a single call
-    const translated = await translateChunkWithOverflowFallback(
+  try {
+    if (estimatedTotalChars <= effectiveChunkLimit) {
+      // Fast path: content fits in a single call
+      const translated = await translateAndValidate(
+        maskedText,
+        translateChunkWithOverflowFallback(
+          maskedText,
+          title,
+          targetLanguage,
+          0,
+          effectiveChunkLimit
+        )
+      );
+      return {
+        markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
+        title: restoreDataUrlPlaceholders(translated.title, placeholders),
+      };
+    }
+
+    // Slow path: content too large — split into chunks
+    const chunks = splitMarkdownForTranslation(
       maskedText,
       title,
-      targetLanguage
-    );
-    return {
-      markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
-      title: restoreDataUrlPlaceholders(translated.title, placeholders),
-    };
-  }
-
-  // Slow path: content too large — split into chunks
-  const contentBudget =
-    maxChunkChars - TRANSLATION_PROMPT.length - title.length - 20;
-  const chunks = splitMarkdownIntoChunks(
-    maskedText,
-    Math.max(contentBudget, 50_000)
-  );
-
-  let translatedTitle = title;
-  const translatedChunks: string[] = [];
-
-  for (const [i, chunk] of chunks.entries()) {
-    const chunkTitle = i === 0 ? title : "";
-    const result = await translateChunkWithOverflowFallback(
-      chunk,
-      chunkTitle,
-      targetLanguage
+      effectiveChunkLimit
     );
 
-    if (i === 0) {
-      translatedTitle = result.title;
+    let translatedTitle = title;
+    const translatedChunks: string[] = [];
+
+    for (const [i, chunk] of chunks.entries()) {
+      const chunkTitle = i === 0 ? title : "";
+      const result = await translateAndValidate(
+        chunk,
+        translateChunkWithOverflowFallback(
+          chunk,
+          chunkTitle,
+          targetLanguage,
+          0,
+          effectiveChunkLimit
+        )
+      );
+
+      if (i === 0) {
+        translatedTitle = result.title;
+      }
+      translatedChunks.push(result.markdown);
     }
-    translatedChunks.push(result.markdown);
-  }
 
-  // Sections already end with "\n"; join with "" to avoid extra blank lines
-  return {
-    markdown: restoreDataUrlPlaceholders(
-      translatedChunks.join(""),
-      placeholders
-    ),
-    title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
-  };
+    const joinedMarkdown = translatedChunks.join("");
+    if (isSuspiciouslyIncompleteTranslation(maskedText, joinedMarkdown)) {
+      throw new TranslationError(
+        "Translated markdown appears incomplete after chunk reassembly",
+        "unexpected_error",
+        false
+      );
+    }
+
+    // Sections already end with "\n"; join with "" to avoid extra blank lines
+    return {
+      markdown: restoreDataUrlPlaceholders(joinedMarkdown, placeholders),
+      title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
+    };
+  } catch (error) {
+    const isRecoverableCompletenessFailure =
+      error instanceof TranslationError &&
+      error.code === "unexpected_error" &&
+      error.isCritical === false &&
+      /incomplete/.test(error.message);
+
+    if (
+      isRecoverableCompletenessFailure &&
+      completenessRetryDepth < TRANSLATION_COMPLETENESS_MAX_RETRIES
+    ) {
+      const nextChunkLimit = Math.max(
+        Math.floor(effectiveChunkLimit / 2),
+        TRANSLATION_MIN_CHUNK_MAX_CHARS
+      );
+
+      if (nextChunkLimit < effectiveChunkLimit) {
+        return translateText(text, title, targetLanguage, {
+          chunkLimit: nextChunkLimit,
+          completenessRetryDepth: completenessRetryDepth + 1,
+        });
+      }
+    }
+
+    throw error;
+  }
 }
 
 /**

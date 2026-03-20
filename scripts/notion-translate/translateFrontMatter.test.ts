@@ -5,6 +5,58 @@ import {
 } from "./test-openai-mock";
 import { installTestNotionEnv } from "../test-utils";
 
+type MockOpenAIRequest = {
+  messages?: Array<{ role: string; content: string }>;
+};
+
+function extractPromptMarkdown(request: MockOpenAIRequest): {
+  title: string;
+  markdown: string;
+} {
+  const userPrompt =
+    request.messages?.find((message) => message.role === "user")?.content ?? "";
+  const titleMatch = userPrompt.match(/^title:\s*(.*)$/m);
+  const markdownMarker = "\nmarkdown: ";
+  const markdownIndex = userPrompt.indexOf(markdownMarker);
+
+  return {
+    title: titleMatch?.[1] ?? "",
+    markdown:
+      markdownIndex >= 0
+        ? userPrompt.slice(markdownIndex + markdownMarker.length)
+        : "",
+  };
+}
+
+function installStructuredTranslationMock(
+  mapResponse?: (payload: { title: string; markdown: string }) => {
+    title: string;
+    markdown: string;
+  }
+) {
+  mockOpenAIChatCompletionCreate.mockImplementation(
+    async (request: MockOpenAIRequest) => {
+      const payload = extractPromptMarkdown(request);
+      const translated = mapResponse
+        ? mapResponse(payload)
+        : {
+            title: payload.title ? `Translated ${payload.title}` : "",
+            markdown: payload.markdown,
+          };
+
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(translated),
+            },
+          },
+        ],
+      };
+    }
+  );
+}
+
 describe("notion-translate translateFrontMatter", () => {
   let restoreEnv: () => void;
 
@@ -55,7 +107,235 @@ describe("notion-translate translateFrontMatter", () => {
     );
   });
 
-  it("classifies token overflow errors as non-critical token_overflow code", async () => {
+  it("chunks long-form content proactively below model-derived maximums", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    installStructuredTranslationMock();
+
+    const largeContent =
+      "# Section One\n\n" +
+      "word ".repeat(14_000) +
+      "\n# Section Two\n\n" +
+      "word ".repeat(14_000);
+
+    const result = await translateText(largeContent, "Large Page", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
+    expect(result.markdown).toContain("# Section Two");
+  });
+
+  it("retries with smaller chunks when a valid response omits a section", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Section One\n\n" +
+      "Alpha paragraph.\n\n" +
+      "# Section Two\n\n" +
+      "Beta paragraph.\n\n" +
+      "# Section Three\n\n" +
+      "Gamma paragraph.\n\n" +
+      "# Section Four\n\n" +
+      "Delta paragraph.";
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Quatro\n\nParágrafo delta.",
+                title: "Título Traduzido",
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "# Seção Um\n\nParágrafo alfa.\n\n# Seção Dois\n\nParágrafo beta.\n\n# Seção Três\n\nParágrafo gama.\n\n# Seção Quatro\n\nParágrafo delta.",
+                title: "Título Traduzido",
+              }),
+            },
+          },
+        ],
+      });
+
+    const result = await translateText(source, "Original Title", "pt-BR", {
+      chunkLimit: 8_500,
+    });
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    expect(result.markdown).toContain("# Seção Dois");
+    expect(result.title).toBe("Título Traduzido");
+  });
+
+  it("fails when repeated completeness retries still return incomplete content", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Section One\n\n" +
+      "Alpha paragraph.\n\n" +
+      "# Section Two\n\n" +
+      "Beta paragraph.\n\n" +
+      "# Section Three\n\n" +
+      "Gamma paragraph.\n\n" +
+      "# Section Four\n\n" +
+      "Delta paragraph.";
+
+    mockOpenAIChatCompletionCreate.mockImplementation(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "# Seção Um\n\nParágrafo alfa.\n\n# Seção Quatro\n\nParágrafo delta.",
+              title: "Título Traduzido",
+            }),
+          },
+        },
+      ],
+    }));
+
+    await expect(
+      translateText(source, "Original Title", "pt-BR", {
+        chunkLimit: 8_500,
+      })
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: "unexpected_error",
+        isCritical: false,
+      })
+    );
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("does not count bullet lists inside YAML frontmatter towards structure validation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: Page\n" +
+      "keywords:\n" +
+      "  - one\n" +
+      "  - two\n" +
+      "  - three\n" +
+      "  - four\n" +
+      "---\n\n" +
+      "# Section One\n\n" +
+      "Body paragraph.";
+
+    // The translated version turns the keywords list into an inline array
+    mockOpenAIChatCompletionCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Page\n" +
+                "keywords: [one, two, three, four]\n" +
+                "---\n\n" +
+                "# Seção Um\n\n" +
+                "Parágrafo do corpo.",
+              title: "Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
+    expect(result.markdown).toContain("Seção Um");
+  });
+
+  it("treats heavy structural shrinkage as incomplete long-form translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Long Section\n\n" +
+      Array.from(
+        { length: 160 },
+        (_, index) => `Paragraph ${index} with repeated explanatory content.`
+      ).join("\n\n");
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: "# Seção Longa\n\nResumo curto.",
+                title: "Título Traduzido",
+              }),
+            },
+          },
+        ],
+      })
+      .mockImplementation(async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown.replace(/Paragraph/g, "Parágrafo"),
+                  title: "Título Traduzido",
+                }),
+              },
+            },
+          ],
+        };
+      });
+
+    const result = await translateText(source, "Original Title", "pt-BR", {
+      chunkLimit: 25_000,
+    });
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    expect(result.markdown.length).toBeGreaterThan(4_000);
+  });
+
+  it("preserves complete heading structures when chunking by sections", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    installStructuredTranslationMock(({ title, markdown }) => ({
+      title: title ? `Translated ${title}` : "",
+      markdown: markdown
+        .replace("# Section One", "# Seção Um")
+        .replace("# Section Two", "# Seção Dois")
+        .replace("# Section Three", "# Seção Três")
+        .replace(/Alpha/g, "Alfa")
+        .replace(/Gamma/g, "Gama"),
+    }));
+
+    const source =
+      "# Section One\n\n" +
+      "Alpha ".repeat(60) +
+      "\n\n# Section Two\n\n" +
+      "Beta ".repeat(60) +
+      "\n\n# Section Three\n\n" +
+      "Gamma ".repeat(60);
+
+    // chunkLimit is the *total* request budget (prompt overhead + markdown).
+    // Prompt overhead is ~2.6 K chars; a 3_200 limit leaves ~587 chars of
+    // markdown per chunk, which fits one 375-char section but not two — so
+    // the three sections produce exactly three API calls.
+    const result = await translateText(source, "Original Title", "pt-BR", {
+      chunkLimit: 3_200,
+    });
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);
+    expect(result.markdown).toContain("# Seção Um");
+    expect(result.markdown).toContain("# Seção Dois");
+    expect(result.markdown).toContain("# Seção Três");
+  });
+
+  it("continues to classify token overflow errors as non-critical token_overflow code", async () => {
     const { translateText } = await import("./translateFrontMatter");
 
     mockOpenAIChatCompletionCreate.mockRejectedValue({
@@ -91,6 +371,7 @@ describe("notion-translate translateFrontMatter", () => {
 
   it("takes the single-call fast path for small content", async () => {
     const { translateText } = await import("./translateFrontMatter");
+    installStructuredTranslationMock();
 
     const result = await translateText(
       "# Small page\n\nJust a paragraph.",
@@ -99,14 +380,15 @@ describe("notion-translate translateFrontMatter", () => {
     );
 
     expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
-    expect(result.title).toBe("Mock Title");
-    expect(result.markdown).toBe("# translated\n\nMock content");
+    expect(result.title).toBe("Translated Small");
+    expect(result.markdown).toBe("# Small page\n\nJust a paragraph.");
   });
 
   it("chunks large content and calls the API once per chunk", async () => {
     const { translateText, splitMarkdownIntoChunks } = await import(
       "./translateFrontMatter"
     );
+    installStructuredTranslationMock();
 
     // Build content that is larger than the chunk threshold
     const bigSection1 = "# Section One\n\n" + "word ".repeat(100_000);
@@ -123,8 +405,8 @@ describe("notion-translate translateFrontMatter", () => {
     expect(
       mockOpenAIChatCompletionCreate.mock.calls.length
     ).toBeGreaterThanOrEqual(2);
-    expect(result.title).toBe("Mock Title"); // taken from first chunk
-    expect(typeof result.markdown).toBe("string");
+    expect(result.title).toBe("Translated Big Page");
+    expect(result.markdown).toContain("# Section Two");
     expect(result.markdown.length).toBeGreaterThan(0);
   });
 
@@ -137,17 +419,20 @@ describe("notion-translate translateFrontMatter", () => {
         message:
           "This model's maximum context length is 131072 tokens. However, you requested 211603 tokens (211603 in the messages, 0 in the completion).",
       })
-      .mockResolvedValue({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                markdown: "translated chunk",
-                title: "Translated Title",
-              }),
+      .mockImplementation(async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Translated Title",
+                }),
+              },
             },
-          },
-        ],
+          ],
+        };
       });
 
     const result = await translateText(
@@ -158,7 +443,7 @@ describe("notion-translate translateFrontMatter", () => {
 
     expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
     expect(result.title).toBe("Translated Title");
-    expect(result.markdown.length).toBeGreaterThan(0);
+    expect(result.markdown).toContain("Just a paragraph.");
   });
 
   it("masks and restores data URL images during translation", async () => {

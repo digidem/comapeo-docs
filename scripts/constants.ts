@@ -182,10 +182,22 @@ export const ENGLISH_DIR_SAVE_ERROR =
 // Translation retry configuration
 export const TRANSLATION_MAX_RETRIES = 3;
 export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
-/** Max characters per translation chunk.
- *  Targets ~143K tokens (500K chars / 3.5 chars per token).
- *  Leaves generous buffer within OpenAI's 272K structured-output limit. */
-export const TRANSLATION_CHUNK_MAX_CHARS = 500_000;
+/**
+ * Reliability-oriented cap for proactive markdown translation chunking.
+ * This keeps long-form docs away from the model's theoretical context ceiling,
+ * even when the model advertises a much larger maximum context window.
+ */
+export const TRANSLATION_CHUNK_MAX_CHARS = 120_000;
+/** Smallest total-budget chunk size used when retrying incomplete translations. */
+export const TRANSLATION_MIN_CHUNK_MAX_CHARS = 8_000;
+/**
+ * Maximum times to retry with smaller chunks after completeness checks fail.
+ * Each retry halves the chunk limit. Starting from 120 K chars:
+ *   120k → 60k → 30k → 15k → 8k (floor)
+ * Four halvings are needed to descend from the default cap to the 8k floor,
+ * so this must be at least 4.
+ */
+export const TRANSLATION_COMPLETENESS_MAX_RETRIES = 4;
 
 // URL handling
 export const INVALID_URL_PLACEHOLDER =

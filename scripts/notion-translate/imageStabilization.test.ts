@@ -906,7 +906,7 @@ describe("image stabilization in translation pipeline", () => {
 
       expect(mockProcessAndReplaceImages).toHaveBeenCalledWith(
         expect.any(String),
-        "hllo-wrld-pageid1"
+        "hello-world-pageid1"
       );
     });
 

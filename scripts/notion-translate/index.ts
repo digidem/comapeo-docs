@@ -38,6 +38,7 @@ import {
   validateAndFixRemainingImages,
   extractImageMatches,
 } from "../notion-fetch/imageReplacer.js";
+import { createSafeSlug } from "../notion-fetch/slugUtils.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
@@ -584,11 +585,7 @@ const NOTION_IMAGE_URL_FAMILY_REGEX = new RegExp(
  * image filenames remain consistent with markdown filenames.
  */
 function generateSafeFilename(title: string, pageId: string): string {
-  const baseSlug = title
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .substring(0, MAX_SLUG_LENGTH);
+  const baseSlug = createSafeSlug(title).substring(0, MAX_SLUG_LENGTH);
   const stablePageId = pageId.toLowerCase().replace(/[^a-z0-9]/g, "");
   const deterministicBase = baseSlug || "untitled";
   return `${deterministicBase}-${stablePageId}`;

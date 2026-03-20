@@ -6,7 +6,10 @@ import { compressImage } from "./imageCompressor";
 import { withTimeoutFallback } from "./timeoutUtils";
 
 // Re-export sanitize so callers have a single utils entrypoint
-export { sanitizeMarkdownContent } from "./contentSanitizer";
+export {
+  sanitizeMarkdownContent,
+  injectExplicitHeadingIds,
+} from "./contentSanitizer";
 
 // Fail-open toggle: defaults to true unless explicitly set to 'false'
 export const SOFT_FAIL: boolean =

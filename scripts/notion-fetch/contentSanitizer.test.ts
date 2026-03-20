@@ -226,4 +226,50 @@ echo "# Not a heading"
       });
     });
   });
+
+  describe("injectExplicitHeadingIds", () => {
+    it("should normalize accented headings and append stable duplicate suffixes", () => {
+      const input = [
+        "# Título Único",
+        "## Título Único",
+        "### Niño & Acción",
+      ].join("\n");
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("# Título Único {#titulo-unico}");
+      expect(result).toContain("## Título Único {#titulo-unico-1}");
+      expect(result).toContain("### Niño & Acción {#nino-accion}");
+    });
+
+    it("should preserve existing explicit heading ids and code fences", () => {
+      const input = [
+        "# Encabezado {#custom-id}",
+        "```md",
+        "## Código Único",
+        "```",
+        "## Otro Título",
+      ].join("\n");
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("# Encabezado {#custom-id}");
+      expect(result).toContain("```md\n## Código Único\n```");
+      expect(result).toContain("## Otro Título {#otro-titulo}");
+      expect(result).not.toContain("## Código Único {#codigo-unico}");
+    });
+
+    it("should avoid collisions between auto-incremented and explicit IDs", () => {
+      const input = ["## Título", "## Heading {#titulo-1}", "## Título"].join(
+        "\n"
+      );
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("## Título {#titulo}");
+      expect(result).toContain("## Heading {#titulo-1}");
+      // The second "Título" must NOT get titulo-1 (already claimed), should get titulo-2
+      expect(result).toContain("## Título {#titulo-2}");
+    });
+  });
 });

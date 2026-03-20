@@ -9,7 +9,9 @@ import type {
 import { n2m } from "../notionClient";
 import { NOTION_PROPERTIES } from "../constants";
 import chalk from "chalk";
-import { sanitizeMarkdownContent } from "./utils";
+import { sanitizeMarkdownContent, injectExplicitHeadingIds } from "./utils";
+import { createSafeSlug } from "./slugUtils";
+import { normalizeInternalDocLinks } from "./linkNormalizer";
 import config from "../../docusaurus.config";
 import SpinnerManager from "./spinnerManager";
 import { convertCalloutToAdmonition, isCalloutBlock } from "./calloutProcessor";
@@ -528,6 +530,10 @@ async function processSinglePage(
       emojiCount += result.fallbackEmojiCount;
       contentHasS3 = result.containsS3;
 
+      markdownString.parent = normalizeInternalDocLinks(
+        markdownString.parent,
+        lang
+      );
       markdownString.parent = sanitizeMarkdownContent(markdownString.parent);
 
       markdownString.parent = ensureBlankLineAfterStandaloneBold(
@@ -538,18 +544,19 @@ async function processSinglePage(
         markdownString.parent,
         pageTitle
       );
+      const finalContentBody = injectExplicitHeadingIds(contentBody);
 
       const sectionFolderForWrite: Record<string, string | undefined> = {};
 
       sectionFolderForWrite[lang] = currentSectionFolderForLang;
 
-      const finalDiagnostics = getImageDiagnostics(markdownString.parent ?? "");
+      const finalDiagnostics = getImageDiagnostics(finalContentBody ?? "");
       contentHasS3 = finalDiagnostics.s3Matches > 0;
 
       writeMarkdownFile(
         filePath,
         frontmatter,
-        contentBody,
+        finalContentBody,
         pageTitle,
         pageProcessingIndex - 1,
         totalPages,
@@ -887,10 +894,7 @@ export async function generateBlocks(
           ? sectionTypeRaw.trim()
           : String(sectionTypeRaw ?? "").trim();
       const normalizedSectionType = sectionTypeString.toLowerCase();
-      const filename = title
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "");
+      const filename = createSafeSlug(title) || "untitled";
 
       const orderedLocales = getOrderedLocales(Object.keys(pageByLang.content));
       for (const lang of orderedLocales) {

@@ -3,6 +3,8 @@
  * that cause MDX compilation errors in Docusaurus.
  */
 
+import { createSafeSlug } from "./slugUtils";
+
 const EMOJI_STYLE_MARKERS = ["display:", "height:", "margin:"];
 
 const isEmojiStyleObject = (snippet: string): boolean =>
@@ -68,6 +70,110 @@ function fixHeadingHierarchy(
   return fixedLines.join("\n");
 }
 
+function maskCodeFences(content: string): {
+  content: string;
+  codeBlocks: string[];
+  codeBlockPlaceholders: string[];
+} {
+  const codeBlocks: string[] = [];
+  const codeBlockPlaceholders: string[] = [];
+
+  const maskedContent = content.replace(
+    /^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm,
+    (match) => {
+      codeBlocks.push(match);
+      const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
+      codeBlockPlaceholders.push(placeholder);
+      return placeholder;
+    }
+  );
+
+  return {
+    content: maskedContent,
+    codeBlocks,
+    codeBlockPlaceholders,
+  };
+}
+
+function restoreCodeFences(content: string, codeBlocks: string[]): string {
+  return content.replace(
+    /__CODEBLOCK_(\d+)__/g,
+    (_match, index) => codeBlocks[Number(index)]
+  );
+}
+
+export function injectExplicitHeadingIds(content: string): string {
+  if (!content) {
+    return content;
+  }
+
+  const {
+    content: maskedContent,
+    codeBlocks,
+    codeBlockPlaceholders,
+  } = maskCodeFences(content);
+  const headingCounts = new Map<string, number>();
+
+  const lines = maskedContent.split("\n");
+  const updatedLines = lines.map((line) => {
+    if (
+      codeBlockPlaceholders.some((placeholder) => line.includes(placeholder))
+    ) {
+      return line;
+    }
+
+    const fullMatch = line.match(
+      /^(\s{0,3})(#{1,6})\s+(.+?)\s*\{#([^}]+)\}\s*$/
+    );
+    if (fullMatch) {
+      const [, , , headingText, explicitId] = fullMatch;
+      const baseId = createSafeSlug(headingText);
+      if (baseId) {
+        headingCounts.set(baseId, (headingCounts.get(baseId) ?? 0) + 1);
+      }
+      if (explicitId !== baseId) {
+        headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
+      }
+      return line;
+    }
+
+    const explicitIdMatch = line.match(/\s\{#([^}]+)\}\s*$/);
+    if (explicitIdMatch) {
+      const explicitId = explicitIdMatch[1];
+      headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
+      return line;
+    }
+
+    const headingMatch = line.match(/^(\s{0,3})(#{1,6})\s+(.+?)\s*$/);
+    if (!headingMatch) {
+      return line;
+    }
+
+    const [, leadingWhitespace, hashes, headingText] = headingMatch;
+    const baseId = createSafeSlug(headingText);
+    if (!baseId) {
+      return line;
+    }
+
+    let counter = headingCounts.get(baseId) ?? 0;
+    let headingId = counter === 0 ? baseId : `${baseId}-${counter}`;
+    // Skip IDs already claimed by explicit headings or natural slugs
+    while (counter > 0 && headingCounts.has(headingId)) {
+      counter++;
+      headingId = `${baseId}-${counter}`;
+    }
+    headingCounts.set(baseId, counter + 1);
+    // Also register the generated ID so future headings won't collide with it
+    if (headingId !== baseId) {
+      headingCounts.set(headingId, (headingCounts.get(headingId) ?? 0) + 1);
+    }
+
+    return `${leadingWhitespace}${hashes} ${headingText} {#${headingId}}`;
+  });
+
+  return restoreCodeFences(updatedLines.join("\n"), codeBlocks);
+}
+
 /**
  * Sanitizes markdown content to fix malformed HTML/JSX tags that cause MDX compilation errors
  * @param content - The markdown content string
@@ -81,7 +187,7 @@ export function sanitizeMarkdownContent(content: string): string {
   const codeSpans: string[] = [];
   const codeBlockPlaceholders: string[] = [];
 
-  content = content.replace(/```[\s\S]*?```/g, (m) => {
+  content = content.replace(/^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm, (m) => {
     codeBlocks.push(m);
     const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
     codeBlockPlaceholders.push(placeholder);

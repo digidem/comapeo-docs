@@ -112,6 +112,7 @@ vi.mock("./imageProcessor", () => ({
 
 vi.mock("./utils", () => ({
   sanitizeMarkdownContent: vi.fn((content) => content),
+  injectExplicitHeadingIds: vi.fn((content) => content),
   compressImageToFileWithFallback: vi.fn(),
   detectFormatFromBuffer: vi.fn(() => "jpeg"),
   formatFromContentType: vi.fn(() => "jpeg"),
@@ -198,6 +199,7 @@ describe("generateBlocks", () => {
   let fetchNotionBlocks: Mock;
   let processImage: Mock;
   let compressImageToFileWithFallback: Mock;
+  let injectExplicitHeadingIds: Mock;
 
   beforeEach(async () => {
     restoreEnv = installTestNotionEnv();
@@ -223,6 +225,7 @@ describe("generateBlocks", () => {
     const utils = await import("./utils");
     compressImageToFileWithFallback =
       utils.compressImageToFileWithFallback as Mock;
+    injectExplicitHeadingIds = utils.injectExplicitHeadingIds as Mock;
 
     // Setup default mock implementations
     processImage.mockResolvedValue(mockProcessedImageResult);
@@ -374,6 +377,155 @@ describe("generateBlocks", () => {
       // Key should be English "Introduction", not Spanish "Introducción"
       expect(esCodeJson).toHaveProperty("Introduction");
       expect(esCodeJson.Introduction.message).toBe("Introducción");
+    });
+  });
+
+  describe("Localized slug and link normalization", () => {
+    it("should derive the shared ASCII slug from the grouped title for every locale", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const mainPage = createMockNotionPage({
+        id: "main-accented",
+        title: "Título con acentos",
+        elementType: "Page",
+        subItems: ["en-accented", "es-accented", "pt-accented"],
+      });
+      const englishPage = createMockNotionPage({
+        id: "en-accented",
+        title: "Título con acentos",
+        language: "English",
+        elementType: "Page",
+      });
+      const spanishPage = createMockNotionPage({
+        id: "es-accented",
+        title: "Título con acentos",
+        language: "Spanish",
+        elementType: "Page",
+      });
+      const portuguesePage = createMockNotionPage({
+        id: "pt-accented",
+        title: "Título con acentos",
+        language: "Portuguese",
+        elementType: "Page",
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Body content" });
+
+      await generateBlocks(
+        [mainPage, englishPage, spanishPage, portuguesePage],
+        vi.fn()
+      );
+
+      const markdownPaths = mockWriteFileSync.mock.calls
+        .map((call) => call[0])
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.endsWith(".md")
+        );
+
+      expect(markdownPaths).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("titulo-con-acentos.md"),
+          expect.stringContaining(
+            "i18n/pt/docusaurus-plugin-content-docs/current/titulo-con-acentos.md"
+          ),
+          expect.stringContaining(
+            "i18n/es/docusaurus-plugin-content-docs/current/titulo-con-acentos.md"
+          ),
+        ])
+      );
+    });
+
+    it("should normalize localized internal docs links before writing markdown", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const pageFamily = createMockPageFamily("Página de prueba", "Page");
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString
+        .mockReturnValueOnce({
+          parent:
+            "[doc](/docs/Guía Rápida#Título Uno) [external](https://example.com/Árbol) [relative](./Guía Local#Título)",
+        })
+        .mockReturnValueOnce({
+          parent:
+            "[doc](/docs/Guía Rápida#Título Uno) [nested](/docs/Category Name/Sub Página#Título Dos)",
+        })
+        .mockReturnValueOnce({
+          parent: "[doc](/docs/Guía Rápida#Título Uno)",
+        });
+
+      await generateBlocks(pageFamily.pages, vi.fn());
+
+      const markdownWrites = mockWriteFileSync.mock.calls.filter(
+        (call) => typeof call[0] === "string" && call[0].endsWith(".md")
+      );
+
+      const englishOutput = markdownWrites.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          !call[0].includes("/i18n/") &&
+          call[1].includes("/docs/guia-rapida#titulo-uno")
+      );
+      const portugueseOutput = markdownWrites.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/i18n/pt/") &&
+          call[1].includes("/pt/docs/guia-rapida#titulo-uno")
+      );
+      const spanishOutput = markdownWrites.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/i18n/es/") &&
+          call[1].includes("/es/docs/guia-rapida#titulo-uno")
+      );
+
+      expect(englishOutput?.[1]).toContain(
+        "[doc](/docs/guia-rapida#titulo-uno)"
+      );
+      expect(englishOutput?.[1]).toContain(
+        "[external](https://example.com/Árbol)"
+      );
+      expect(englishOutput?.[1]).toContain("[relative](./Guía Local#Título)");
+      expect(portugueseOutput?.[1]).toContain(
+        "[nested](/pt/docs/sub-pagina#titulo-dos)"
+      );
+      expect(spanishOutput?.[1]).toContain(
+        "[doc](/es/docs/guia-rapida#titulo-uno)"
+      );
+    });
+
+    it("should pass the de-duplicated content through heading ID injection before writing", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const mockWriteFileSync = fs.writeFileSync as Mock;
+
+      const page = createMockNotionPage({
+        id: "heading-page",
+        title: "Heading Title",
+        elementType: "Page",
+        language: "English",
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "# Heading Title\n\n## Título Único\nContent body",
+      });
+      injectExplicitHeadingIds.mockImplementation(
+        (content: string) => `${content}\n<!-- ids injected -->`
+      );
+
+      await generateBlocks([page], vi.fn());
+
+      expect(injectExplicitHeadingIds).toHaveBeenCalledWith(
+        "## Título Único\nContent body"
+      );
+
+      const markdownWrite = mockWriteFileSync.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].endsWith(".md")
+      );
+      expect(markdownWrite?.[1]).toContain("<!-- ids injected -->");
     });
   });
 

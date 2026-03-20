@@ -209,6 +209,47 @@ describe("notion-translate translateFrontMatter", () => {
     expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
   });
 
+  it("does not count bullet lists inside YAML frontmatter towards structure validation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: Page\n" +
+      "keywords:\n" +
+      "  - one\n" +
+      "  - two\n" +
+      "  - three\n" +
+      "  - four\n" +
+      "---\n\n" +
+      "# Section One\n\n" +
+      "Body paragraph.";
+
+    // The translated version turns the keywords list into an inline array
+    mockOpenAIChatCompletionCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Page\n" +
+                "keywords: [one, two, three, four]\n" +
+                "---\n\n" +
+                "# Seção Um\n\n" +
+                "Parágrafo do corpo.",
+              title: "Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
+    expect(result.markdown).toContain("Seção Um");
+  });
+
   it("treats heavy structural shrinkage as incomplete long-form translation", async () => {
     const { translateText } = await import("./translateFrontMatter");
 

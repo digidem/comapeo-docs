@@ -521,15 +521,32 @@ function stripFencedCodeContent(markdown: string): string {
   return result.join("\n");
 }
 
+function stripYamlFrontmatter(markdown: string): string {
+  if (markdown.startsWith("---\n") || markdown.startsWith("---\r\n")) {
+    const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+    if (endFrontmatterIndex !== -1) {
+      const endOfLineIndex = markdown.indexOf("\n", endFrontmatterIndex + 1);
+      if (endOfLineIndex !== -1) {
+        return markdown.substring(endOfLineIndex + 1);
+      }
+      return "";
+    }
+  }
+  return markdown;
+}
+
 function collectMarkdownStructureMetrics(
   markdown: string
 ): MarkdownStructureMetrics {
+  // Remove frontmatter before stripping fenced code content
+  const withoutFrontmatter = stripYamlFrontmatter(markdown);
+
   // Fenced code blocks must be counted on raw markdown (before stripping).
-  const fencedCodeMatches = markdown.match(/^(`{3,}|~{3,})/gm) ?? [];
+  const fencedCodeMatches = withoutFrontmatter.match(/^(`{3,}|~{3,})/gm) ?? [];
 
   // All other structural markers are measured on the stripped version so that
   // examples inside code blocks do not inflate the counts.
-  const stripped = stripFencedCodeContent(markdown);
+  const stripped = stripFencedCodeContent(withoutFrontmatter);
 
   // ATX headings: "# Heading"
   const atxHeadingMatches = stripped.match(/^#{1,6}\s.+$/gm) ?? [];
@@ -565,7 +582,7 @@ function collectMarkdownStructureMetrics(
     bulletListCount: bulletListMatches.length,
     numberedListCount: numberedListMatches.length,
     tableCount: tableMatches.length,
-    contentLength: markdown.trim().length,
+    contentLength: withoutFrontmatter.trim().length,
   };
 }
 

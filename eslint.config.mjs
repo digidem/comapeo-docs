@@ -74,7 +74,11 @@ const eslintConfig = [
 
   // Scripts and API server specific configurations
   {
-    files: ["scripts/**/*.{js,mjs,cjs,ts}", "api-server/**/*.{js,mjs,cjs,ts}"],
+    files: [
+      "scripts/**/*.{js,mjs,cjs,ts}",
+      "api-server/**/*.{js,mjs,cjs,ts}",
+      "bun-tests/**/*.{js,mjs,cjs,ts}",
+    ],
     plugins: {
       import: importPlugin,
       promise: promisePlugin,

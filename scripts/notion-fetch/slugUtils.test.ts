@@ -43,12 +43,12 @@ describe("slugUtils", () => {
       expect(createSafeSlug("--hello--")).toBe("hello");
     });
 
-    it("should produce an empty string for CJK-only input (known limitation)", () => {
-      expect(createSafeSlug("安装指南")).toBe("");
+    it("should preserve CJK input", () => {
+      expect(createSafeSlug("安装指南")).toBe("安装指南");
     });
 
-    it("should extract only the Latin portion from mixed CJK and Latin input", () => {
-      expect(createSafeSlug("安装 Setup 指南")).toBe("setup");
+    it("should extract both CJK and Latin from mixed input", () => {
+      expect(createSafeSlug("安装 Setup 指南")).toBe("安装-setup-指南");
     });
   });
 });

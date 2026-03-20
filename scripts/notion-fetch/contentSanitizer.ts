@@ -155,9 +155,18 @@ export function injectExplicitHeadingIds(content: string): string {
       return line;
     }
 
-    const currentCount = headingCounts.get(baseId) ?? 0;
-    headingCounts.set(baseId, currentCount + 1);
-    const headingId = currentCount === 0 ? baseId : `${baseId}-${currentCount}`;
+    let counter = headingCounts.get(baseId) ?? 0;
+    let headingId = counter === 0 ? baseId : `${baseId}-${counter}`;
+    // Skip IDs already claimed by explicit headings or natural slugs
+    while (counter > 0 && headingCounts.has(headingId)) {
+      counter++;
+      headingId = `${baseId}-${counter}`;
+    }
+    headingCounts.set(baseId, counter + 1);
+    // Also register the generated ID so future headings won't collide with it
+    if (headingId !== baseId) {
+      headingCounts.set(headingId, (headingCounts.get(headingId) ?? 0) + 1);
+    }
 
     return `${leadingWhitespace}${hashes} ${headingText} {#${headingId}}`;
   });

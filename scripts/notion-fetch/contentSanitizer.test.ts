@@ -258,5 +258,18 @@ echo "# Not a heading"
       expect(result).toContain("## Otro Título {#otro-titulo}");
       expect(result).not.toContain("## Código Único {#codigo-unico}");
     });
+
+    it("should avoid collisions between auto-incremented and explicit IDs", () => {
+      const input = ["## Título", "## Heading {#titulo-1}", "## Título"].join(
+        "\n"
+      );
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("## Título {#titulo}");
+      expect(result).toContain("## Heading {#titulo-1}");
+      // The second "Título" must NOT get titulo-1 (already claimed), should get titulo-2
+      expect(result).toContain("## Título {#titulo-2}");
+    });
   });
 });

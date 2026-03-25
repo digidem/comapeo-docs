@@ -610,7 +610,7 @@ function isSuspiciouslyIncompleteTranslation(
     translatedMetrics.contentLength / Math.max(sourceMetrics.contentLength, 1);
   const headingLoss =
     sourceMetrics.headingCount > 0 &&
-    translatedMetrics.headingCount < sourceMetrics.headingCount - 1;
+    translatedMetrics.headingCount < sourceMetrics.headingCount;
   const fencedBlockLoss =
     sourceMetrics.fencedCodeBlockCount > 0 &&
     translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount;

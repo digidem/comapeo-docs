@@ -759,7 +759,17 @@ async function translateTextSingleCall(
         ...modelParams,
       });
 
-      const content = response.choices[0]?.message?.content;
+      const choice = response.choices[0];
+      const finishReason = choice?.finish_reason;
+      if (finishReason === "length") {
+        throw new TranslationError(
+          "OpenAI output was truncated (finish_reason: length) — chunk too large for model output budget",
+          "token_overflow",
+          false
+        );
+      }
+
+      const content = choice?.message?.content;
       if (!content) {
         throw new TranslationError(
           "OpenAI returned an empty translation response",

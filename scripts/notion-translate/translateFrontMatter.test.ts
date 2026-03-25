@@ -369,6 +369,70 @@ describe("notion-translate translateFrontMatter", () => {
     );
   });
 
+  it("classifies finish_reason:length as non-critical token_overflow", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "length",
+          message: {
+            content: '{"markdown":"partial content',
+          },
+        },
+      ],
+    });
+
+    await expect(translateText("# Body", "Title", "pt-BR")).rejects.toEqual(
+      expect.objectContaining({
+        code: "token_overflow",
+        isCritical: false,
+      })
+    );
+  });
+
+  it("retries with smaller chunks when finish_reason:length is returned", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            finish_reason: "length",
+            message: {
+              content: '{"markdown":"partial content',
+            },
+          },
+        ],
+      })
+      .mockImplementation(async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        return {
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Translated Title",
+                }),
+              },
+            },
+          ],
+        };
+      });
+
+    const result = await translateText(
+      "# Small page\n\nJust a paragraph.",
+      "Small",
+      "pt-BR"
+    );
+
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
+    expect(result.title).toBe("Translated Title");
+    expect(result.markdown).toContain("Just a paragraph.");
+  });
+
   it("takes the single-call fast path for small content", async () => {
     const { translateText } = await import("./translateFrontMatter");
     installStructuredTranslationMock();

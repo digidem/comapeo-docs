@@ -206,6 +206,51 @@ describe("translateNotionBlocksDirectly", () => {
     expect(callout.rich_text[0].text.content).toBe("static/images/block.png");
   });
 
+  it("keeps short rich-text paragraph translation intact", async () => {
+    mockBlocksChildrenList.mockResolvedValue(
+      blocksResponse([
+        {
+          id: "b7",
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Short paragraph content" },
+                plain_text: "Short paragraph content",
+              },
+            ],
+          },
+          has_children: false,
+        },
+      ])
+    );
+
+    mockTranslateText.mockResolvedValue({
+      markdown: "Parágrafo curto traduzido",
+      title: "",
+    });
+
+    const { translateNotionBlocksDirectly } = await import("./translateBlocks");
+    const result = await translateNotionBlocksDirectly("page-id", "pt-BR");
+
+    const block = result[0] as Record<string, unknown>;
+    expect(block.type).toBe("paragraph");
+    const paragraph = block.paragraph as {
+      rich_text: Array<{ text: { content: string }; plain_text: string }>;
+    };
+    expect(paragraph.rich_text[0].text.content).toBe(
+      "Parágrafo curto traduzido"
+    );
+    expect(paragraph.rich_text[0].plain_text).toBe("Parágrafo curto traduzido");
+    expect(mockTranslateText).toHaveBeenCalledTimes(1);
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      "Short paragraph content",
+      "",
+      "pt-BR"
+    );
+  });
+
   it("strips Notion-internal metadata fields from output blocks", async () => {
     mockBlocksChildrenList.mockResolvedValue(
       blocksResponse([

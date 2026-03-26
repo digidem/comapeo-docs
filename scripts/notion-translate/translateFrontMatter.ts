@@ -31,7 +31,11 @@ const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 const DATA_URL_PLACEHOLDER_REGEX =
   /\/images\/__data_url_placeholder_\d+__\.png/g;
+const CANONICAL_IMAGE_PATH_REGEX = /\/images\/[^\s)"'<>]+/g;
 const MAX_PLACEHOLDER_INTEGRITY_RETRIES = 2;
+
+const isDataUrlPlaceholderPath = (path: string): boolean =>
+  /\/images\/__data_url_placeholder_\d+__\.png/.test(path);
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -457,22 +461,30 @@ function extractDataUrlPlaceholders(text: string): string[] {
   return Array.from(new Set(matches));
 }
 
-function getMissingPlaceholders(
-  text: string,
-  requiredPlaceholders: string[]
-): string[] {
-  return requiredPlaceholders.filter(
-    (placeholder) => !text.includes(placeholder)
+function extractCanonicalImagePaths(text: string): string[] {
+  const matches = text.match(CANONICAL_IMAGE_PATH_REGEX) ?? [];
+
+  return Array.from(
+    new Set(matches.filter((match) => !isDataUrlPlaceholderPath(match)))
   );
 }
 
-function isPlaceholderIntegrityError(
+function getMissingProtectedPaths(
+  text: string,
+  requiredPaths: string[]
+): string[] {
+  return requiredPaths.filter((requiredPath) => !text.includes(requiredPath));
+}
+
+function isProtectedPathIntegrityError(
   error: unknown
 ): error is TranslationError {
   return (
     error instanceof TranslationError &&
     error.code === "schema_invalid" &&
-    /Data URL placeholder integrity check failed/.test(error.message)
+    /(Data URL placeholder|Canonical image path) integrity check failed/.test(
+      error.message
+    )
   );
 }
 
@@ -711,12 +723,12 @@ async function translateTextSingleCall(
   text: string,
   title: string,
   targetLanguage: string,
-  requiredPlaceholders: string[] = [],
+  requiredProtectedPaths: string[] = [],
   strictPlaceholderGuard = false
 ): Promise<{ markdown: string; title: string }> {
   const placeholderGuard =
-    requiredPlaceholders.length > 0
-      ? `\n\n${strictPlaceholderGuard ? "CRITICAL REQUIREMENT" : "Placeholder paths to preserve exactly"}:\n${requiredPlaceholders.map((placeholder) => `- ${placeholder}`).join("\n")}\n`
+    requiredProtectedPaths.length > 0
+      ? `\n\n${strictPlaceholderGuard ? "CRITICAL REQUIREMENT" : "Image paths to preserve exactly"}:\n${requiredProtectedPaths.map((requiredPath) => `- ${requiredPath}`).join("\n")}\n`
       : "";
   const textWithTitle = `title: ${title}\n${placeholderGuard}\nmarkdown: ${text}`;
 
@@ -780,14 +792,29 @@ async function translateTextSingleCall(
 
       const parsed = parseTranslationPayload(content);
 
-      if (requiredPlaceholders.length > 0) {
-        const missingPlaceholders = getMissingPlaceholders(
+      if (requiredProtectedPaths.length > 0) {
+        const missingProtectedPaths = getMissingProtectedPaths(
           parsed.markdown,
-          requiredPlaceholders
+          requiredProtectedPaths
         );
-        if (missingPlaceholders.length > 0) {
+        if (missingProtectedPaths.length > 0) {
+          const missingPlaceholderPaths = missingProtectedPaths.filter(
+            isDataUrlPlaceholderPath
+          );
+          const missingCanonicalImagePaths = missingProtectedPaths.filter(
+            (path) => !isDataUrlPlaceholderPath(path)
+          );
+
+          if (missingPlaceholderPaths.length > 0) {
+            throw new TranslationError(
+              `Data URL placeholder integrity check failed: missing ${missingPlaceholderPaths.length} placeholder(s): ${missingPlaceholderPaths.slice(0, 3).join(", ")}`,
+              "schema_invalid",
+              true
+            );
+          }
+
           throw new TranslationError(
-            `Data URL placeholder integrity check failed: missing ${missingPlaceholders.length} placeholder(s): ${missingPlaceholders.slice(0, 3).join(", ")}`,
+            `Canonical image path integrity check failed: missing ${missingCanonicalImagePaths.length} path(s): ${missingCanonicalImagePaths.slice(0, 3).join(", ")}`,
             "schema_invalid",
             true
           );
@@ -824,19 +851,24 @@ async function translateChunkWithOverflowFallback(
   placeholderGuardAttempt = 0,
   chunkBudgetForRetry = getProactiveChunkCharLimit(model)
 ): Promise<{ markdown: string; title: string }> {
-  const requiredPlaceholders = extractDataUrlPlaceholders(text);
+  const requiredProtectedPaths = Array.from(
+    new Set([
+      ...extractDataUrlPlaceholders(text),
+      ...extractCanonicalImagePaths(text),
+    ])
+  );
 
   try {
     return await translateTextSingleCall(
       text,
       title,
       targetLanguage,
-      requiredPlaceholders,
+      requiredProtectedPaths,
       placeholderGuardAttempt > 0
     );
   } catch (err) {
     if (
-      isPlaceholderIntegrityError(err) &&
+      isProtectedPathIntegrityError(err) &&
       placeholderGuardAttempt < MAX_PLACEHOLDER_INTEGRITY_RETRIES
     ) {
       return translateChunkWithOverflowFallback(

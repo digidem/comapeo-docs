@@ -301,6 +301,110 @@ describe("notion-translate translateFrontMatter", () => {
     expect(result.markdown.length).toBeGreaterThan(4_000);
   });
 
+  it("does not count marker-like text inside fenced code blocks toward completeness checks", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Section One\n\n" +
+      "```md\n" +
+      "# not a real heading\n" +
+      "- fake bullet\n" +
+      "1. fake number\n" +
+      ":::note\n" +
+      "table | row\n" +
+      "```\n\n" +
+      "Plain paragraph.";
+
+    mockOpenAIChatCompletionCreate.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "# Seção Um\n\n```md\n" +
+                "not a real heading\n" +
+                "fake bullet\n" +
+                "fake number\n" +
+                ":::note\n" +
+                "table | row\n" +
+                "```\n\n" +
+                "Parágrafo simples.",
+              title: "Título Traduzido",
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
+    expect(result.markdown).toContain("Parágrafo simples.");
+    expect(result.markdown).toContain("not a real heading");
+  });
+
+  it("retries chunked translations when the reassembled markdown is structurally incomplete", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Section One\n\n" +
+      "- Item one A\n" +
+      "- Item one B\n\n" +
+      "Alpha ".repeat(500) +
+      "\n\n# Section Two\n\n" +
+      "- Item two A\n" +
+      "- Item two B\n\n" +
+      "Beta ".repeat(500);
+
+    let callCount = 0;
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        callCount++;
+        const payload = extractPromptMarkdown(request);
+        const translated =
+          callCount <= 2
+            ? {
+                title: "Título Traduzido",
+                markdown: payload.markdown
+                  .replace("# Section One", "# Seção Um")
+                  .replace("# Section Two", "# Seção Dois")
+                  .replace(/^- /gm, "")
+                  .replace(/Alpha/g, "Alfa")
+                  .replace(/Beta/g, "Beta")
+                  .replace(/Gamma/g, "Gama"),
+              }
+            : {
+                title: "Título Traduzido",
+                markdown: payload.markdown
+                  .replace("# Section One", "# Seção Um")
+                  .replace("# Section Two", "# Seção Dois")
+                  .replace(/Alpha/g, "Alfa")
+                  .replace(/Beta/g, "Beta")
+                  .replace(/Gamma/g, "Gama"),
+              };
+
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(translated),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "Original Title", "pt-BR", {
+      chunkLimit: 8_500,
+    });
+
+    expect(callCount).toBeGreaterThan(2);
+    expect(result.markdown).toContain("Item one A");
+    expect(result.markdown).toContain("Item two B");
+    expect(result.markdown).toContain("# Seção Dois");
+  });
+
   it("preserves complete heading structures when chunking by sections", async () => {
     const { translateText } = await import("./translateFrontMatter");
     installStructuredTranslationMock(({ title, markdown }) => ({
@@ -577,6 +681,43 @@ describe("notion-translate translateFrontMatter", () => {
 
     expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
     expect(result.markdown).toContain(dataUrl);
+  });
+
+  it("retries when a canonical /images path is rewritten", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    const canonicalImagePath = "/images/example.png";
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: "![image](/images/changed-path.png)\n\nTranslated",
+                title: "Translated Title",
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown: `![image](${canonicalImagePath})\n\nTranslated`,
+                title: "Translated Title",
+              }),
+            },
+          },
+        ],
+      });
+
+    const source = `![image](${canonicalImagePath})\n\nBody text`;
+    const result = await translateText(source, "Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    expect(result.markdown).toContain(canonicalImagePath);
   });
 
   it("splitMarkdownIntoChunks does not split on headings inside fenced code blocks", async () => {

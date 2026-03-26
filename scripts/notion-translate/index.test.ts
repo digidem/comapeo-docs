@@ -1,3 +1,4 @@
+import path from "path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createMockNotionPage, installTestNotionEnv } from "../test-utils";
 
@@ -685,8 +686,16 @@ describe("notion-translate index", () => {
   it("exits with failure on partial doc translation failures and reports counts", async () => {
     mockTranslateText.mockImplementation(
       async (_markdown: string, _title: string, targetLanguage: string) => {
-        if (targetLanguage === "es") {
-          throw new Error("es translation failed");
+        if (targetLanguage === "pt-BR") {
+          throw Object.assign(
+            new Error(
+              "Translated markdown appears incomplete after chunk reassembly"
+            ),
+            {
+              code: "unexpected_error",
+              isCritical: false,
+            }
+          );
         }
         return {
           markdown: "# translated",
@@ -708,10 +717,37 @@ describe("notion-translate index", () => {
       totalEnglishPages: 1,
       processedLanguages: 2,
       failedTranslations: 1,
+      newTranslations: 1,
+      updatedTranslations: 0,
+      skippedTranslations: 0,
       codeJsonFailures: 0,
       themeFailures: 0,
     });
     expect(loggedSummary.failures).toHaveLength(1);
+    expect(loggedSummary.failures[0]).toMatchObject({
+      language: "pt-BR",
+      title: "Hello World",
+      pageId: "english-page-1",
+      error: "Translated markdown appears incomplete after chunk reassembly",
+      isCritical: false,
+    });
+
+    const failedDocPath = path.join(
+      "i18n",
+      "pt",
+      "docusaurus-plugin-content-docs",
+      "current",
+      "hello-world-englishpage1.md"
+    );
+    expect(
+      mockNotionPagesCreate.mock.calls.length +
+        mockNotionPagesUpdate.mock.calls.length
+    ).toBe(1);
+    expect(
+      mockWriteFile.mock.calls.some(
+        ([filePath]) => String(filePath) === failedDocPath
+      )
+    ).toBe(false);
   });
 
   it("does not block translation for generic signed amazonaws links outside Notion image URL families", async () => {

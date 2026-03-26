@@ -273,11 +273,7 @@ export function injectExplicitHeadingIds(content: string): string {
       /^(\s{0,3})(#{1,6})\s+(.+?)\s*\{#([^}]+)\}\s*$/
     );
     if (fullMatch) {
-      const [, , , headingText, explicitId] = fullMatch;
-      const baseId = createSafeSlug(headingText);
-      if (baseId) {
-        reservedIds.add(baseId);
-      }
+      const [, , , , explicitId] = fullMatch;
       if (explicitId) {
         reservedIds.add(explicitId);
       }

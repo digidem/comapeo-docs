@@ -304,5 +304,14 @@ echo "# Not a heading"
       expect(result).toContain("## My Id {#my-id-1}");
       expect(result).toContain("## Custom {#my-id}");
     });
+
+    it("should not reserve a natural slug when a later explicit id is custom", () => {
+      const input = ["## My Id", "## My Id {#custom}"].join("\n");
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("## My Id {#my-id}");
+      expect(result).toContain("## My Id {#custom}");
+    });
   });
 });

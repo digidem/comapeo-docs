@@ -58,7 +58,8 @@ function maskFencedCodeBlocks(content: string): {
   }
 
   if (inFence) {
-    output.push(fencedBlock.join("\n"));
+    codeBlocks.push(fencedBlock.join("\n"));
+    output.push(`__LINK_NORMALIZER_CODEBLOCK_${codeBlocks.length - 1}__`);
   }
 
   return { maskedContent: output.join("\n"), codeBlocks };

@@ -2,7 +2,7 @@ import config from "../../docusaurus.config";
 import { createSafeSlug } from "./slugUtils";
 
 const DEFAULT_LOCALE = config.i18n.defaultLocale;
-const MARKDOWN_LINK_REGEX = /(^|[^!])\[([^\]]+)\]\(([^)\n]+)\)/gm;
+const MARKDOWN_LINK_REGEX = /(?<![!])\[([^\]]+)\]\(([^)\n]+)\)/gm;
 
 function safeDecode(s: string): string {
   try {
@@ -186,17 +186,21 @@ export function normalizeInternalDocLinks(
 
   const normalizedContent = maskedContent.replace(
     MARKDOWN_LINK_REGEX,
-    (match, prefix: string, text: string, rawTarget: string) => {
+    (match, text: string, rawTarget: string) => {
       const trimmedTarget = rawTarget.trim();
       const titleMatch = trimmedTarget.match(/^(\/docs\/[^\n]*?)(\s+"[^"]*")$/);
       const target = titleMatch ? titleMatch[1] : trimmedTarget;
       const titleSuffix = titleMatch?.[2] ?? "";
 
-      if (!target.startsWith("/docs/")) {
+      if (
+        target !== "/docs" &&
+        !target.startsWith("/docs/") &&
+        !target.startsWith("/docs#")
+      ) {
         return match;
       }
 
-      return `${prefix}[${text}](${normalizeDocTarget(target, lang)}${titleSuffix})`;
+      return `[${text}](${normalizeDocTarget(target, lang)}${titleSuffix})`;
     }
   );
 

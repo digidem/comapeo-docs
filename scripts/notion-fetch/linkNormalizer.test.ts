@@ -107,6 +107,12 @@ describe("linkNormalizer", () => {
       expect(result).toBe("[a](/docs/foo) and [b](/docs/bar)");
     });
 
+    it("should normalize both links when two docs links are directly adjacent (no separator)", () => {
+      const input = "[Link 1](/docs/Foo)[Link 2](/docs/Bar)";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe("[Link 1](/docs/foo)[Link 2](/docs/bar)");
+    });
+
     it("should return empty string for empty content", () => {
       const result = normalizeInternalDocLinks("", "en");
       expect(result).toBe("");
@@ -116,6 +122,30 @@ describe("linkNormalizer", () => {
       const input = "plain text with [link](https://example.com)";
       const result = normalizeInternalDocLinks(input, "en");
       expect(result).toBe(input);
+    });
+
+    it("should normalize a link to exactly /docs (en, no locale prefix)", () => {
+      const input = "[link](/docs)";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe("[link](/docs)");
+    });
+
+    it("should normalize a link to exactly /docs with locale prefix (es)", () => {
+      const input = "[link](/docs)";
+      const result = normalizeInternalDocLinks(input, "es");
+      expect(result).toBe("[link](/es/docs)");
+    });
+
+    it("should normalize a link to /docs#fragment (en, no locale prefix)", () => {
+      const input = "[link](/docs#Sección Uno)";
+      const result = normalizeInternalDocLinks(input, "en");
+      expect(result).toBe("[link](/docs#seccion-uno)");
+    });
+
+    it("should normalize a link to /docs#fragment with locale prefix (pt)", () => {
+      const input = "[link](/docs#Sección Uno)";
+      const result = normalizeInternalDocLinks(input, "pt");
+      expect(result).toBe("[link](/pt/docs#seccion-uno)");
     });
   });
 });

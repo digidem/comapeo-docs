@@ -12,28 +12,113 @@ function safeDecode(s: string): string {
   }
 }
 
-function maskCode(content: string): {
+function maskFencedCodeBlocks(content: string): {
   maskedContent: string;
   codeBlocks: string[];
-  codeSpans: string[];
 } {
   const codeBlocks: string[] = [];
-  const codeSpans: string[] = [];
+  const lines = content.split("\n");
+  const output: string[] = [];
 
-  const maskedBlocks = content.replace(
-    /^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm,
-    (match) => {
-      codeBlocks.push(match);
-      return `__LINK_NORMALIZER_CODEBLOCK_${codeBlocks.length - 1}__`;
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+  let fencedBlock: string[] = [];
+
+  for (const line of lines) {
+    if (!inFence) {
+      const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (openMatch) {
+        inFence = true;
+        fenceChar = openMatch[1][0];
+        fenceLength = openMatch[1].length;
+        fencedBlock = [line];
+        continue;
+      }
+
+      output.push(line);
+      continue;
     }
-  );
 
-  const maskedContent = maskedBlocks.replace(/`[^`\n]*`/g, (match) => {
-    codeSpans.push(match);
-    return `__LINK_NORMALIZER_CODESPAN_${codeSpans.length - 1}__`;
-  });
+    fencedBlock.push(line);
 
-  return { maskedContent, codeBlocks, codeSpans };
+    const closeMatch = /^ {0,3}([`~]{3,})\s*$/.exec(line);
+    if (
+      closeMatch &&
+      closeMatch[1][0] === fenceChar &&
+      closeMatch[1].length >= fenceLength
+    ) {
+      codeBlocks.push(fencedBlock.join("\n"));
+      output.push(`__LINK_NORMALIZER_CODEBLOCK_${codeBlocks.length - 1}__`);
+      inFence = false;
+      fenceChar = "";
+      fenceLength = 0;
+      fencedBlock = [];
+    }
+  }
+
+  if (inFence) {
+    output.push(fencedBlock.join("\n"));
+  }
+
+  return { maskedContent: output.join("\n"), codeBlocks };
+}
+
+function maskInlineCode(content: string): {
+  maskedContent: string;
+  codeSpans: string[];
+} {
+  const codeSpans: string[] = [];
+  const output: string[] = [];
+
+  let index = 0;
+
+  while (index < content.length) {
+    const char = content.charAt(index);
+    if (char !== "`") {
+      output.push(char);
+      index++;
+      continue;
+    }
+
+    let openerLength = 1;
+    while (content.charAt(index + openerLength) === "`") {
+      openerLength++;
+    }
+
+    let cursor = index + openerLength;
+    let closingIndex = -1;
+    while (cursor < content.length) {
+      if (content.charAt(cursor) !== "`") {
+        cursor++;
+        continue;
+      }
+
+      let runLength = 1;
+      while (content.charAt(cursor + runLength) === "`") {
+        runLength++;
+      }
+
+      if (runLength === openerLength) {
+        closingIndex = cursor;
+        break;
+      }
+
+      cursor += runLength;
+    }
+
+    if (closingIndex === -1) {
+      output.push(content.slice(index));
+      break;
+    }
+
+    const codeSpan = content.slice(index, closingIndex + openerLength);
+    codeSpans.push(codeSpan);
+    output.push(`__LINK_NORMALIZER_CODESPAN_${codeSpans.length - 1}__`);
+    index = closingIndex + openerLength;
+  }
+
+  return { maskedContent: output.join(""), codeSpans };
 }
 
 function restoreCode(
@@ -41,12 +126,17 @@ function restoreCode(
   codeBlocks: string[],
   codeSpans: string[]
 ): string {
+  const restoreByIndex = (values: string[], rawIndex: string) => {
+    const index = Number(rawIndex);
+    return Number.isInteger(index) ? (values.at(index) ?? "") : "";
+  };
+
   return content
     .replace(/__LINK_NORMALIZER_CODESPAN_(\d+)__/g, (_match, index) => {
-      return codeSpans[Number(index)];
+      return restoreByIndex(codeSpans, index);
     })
     .replace(/__LINK_NORMALIZER_CODEBLOCK_(\d+)__/g, (_match, index) => {
-      return codeBlocks[Number(index)];
+      return restoreByIndex(codeBlocks, index);
     });
 }
 
@@ -89,7 +179,9 @@ export function normalizeInternalDocLinks(
     return content;
   }
 
-  const { maskedContent, codeBlocks, codeSpans } = maskCode(content);
+  const { maskedContent: maskedBlocks, codeBlocks } =
+    maskFencedCodeBlocks(content);
+  const { maskedContent, codeSpans } = maskInlineCode(maskedBlocks);
 
   const normalizedContent = maskedContent.replace(
     MARKDOWN_LINK_REGEX,

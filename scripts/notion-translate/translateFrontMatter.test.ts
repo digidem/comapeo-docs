@@ -846,4 +846,204 @@ describe("notion-translate translateFrontMatter", () => {
     }
     expect(chunks.join("")).toBe(longLine);
   });
+
+  // parseFrontmatterKeys unit tests
+
+  it("parseFrontmatterKeys returns empty array when no frontmatter is present", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    expect(parseFrontmatterKeys("# Heading\n\nBody.")).toEqual([]);
+  });
+
+  it("parseFrontmatterKeys extracts top-level keys from frontmatter", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    const md =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Body";
+    expect(parseFrontmatterKeys(md)).toEqual([
+      "title",
+      "slug",
+      "sidebar_position",
+    ]);
+  });
+
+  it("parseFrontmatterKeys ignores indented lines (nested values)", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    const md =
+      "---\n" +
+      "title: My Page\n" +
+      "keywords:\n" +
+      "  - one\n" +
+      "  - two\n" +
+      "---\n\n" +
+      "# Body";
+    expect(parseFrontmatterKeys(md)).toEqual(["title", "keywords"]);
+  });
+
+  it("parseFrontmatterKeys returns empty array when frontmatter closing marker is missing", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    const md = "---\ntitle: My Page\n# Body";
+    expect(parseFrontmatterKeys(md)).toEqual([]);
+  });
+
+  // Frontmatter integrity integration tests
+
+  it("fails when a critical frontmatter field is dropped by translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Body\n\nSome content.";
+
+    // Translation drops slug from the frontmatter
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Minha Página\n" +
+                "sidebar_position: 2\n" +
+                "---\n\n" +
+                "# Corpo\n\nAlgum conteúdo.",
+              title: "Minha Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    await expect(
+      translateText(source, "My Page", "pt-BR")
+    ).rejects.toMatchObject({
+      code: "schema_invalid",
+      isCritical: false,
+      message: expect.stringContaining("slug"),
+    });
+  });
+
+  it("fails when a non-critical frontmatter key is dropped by translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "description: A description\n" +
+      "---\n\n" +
+      "# Body\n\nSome content.";
+
+    // Translation drops description
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Minha Página\n" +
+                "---\n\n" +
+                "# Corpo\n\nAlgum conteúdo.",
+              title: "Minha Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    await expect(
+      translateText(source, "My Page", "pt-BR")
+    ).rejects.toMatchObject({
+      code: "schema_invalid",
+      isCritical: false,
+      message: expect.stringContaining("description"),
+    });
+  });
+
+  it("fails when translation adds an unexpected critical frontmatter field", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source = "---\ntitle: My Page\n---\n\n# Body\n\nSome content.";
+
+    // Translation invents a slug field
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Minha Página\n" +
+                "slug: /invented\n" +
+                "---\n\n" +
+                "# Corpo\n\nAlgum conteúdo.",
+              title: "Minha Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    await expect(
+      translateText(source, "My Page", "pt-BR")
+    ).rejects.toMatchObject({
+      code: "schema_invalid",
+      isCritical: false,
+      message: expect.stringContaining("slug"),
+    });
+  });
+
+  it("passes when all frontmatter keys are preserved in translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Body\n\nSome content.";
+
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              markdown:
+                "---\n" +
+                "title: Minha Página\n" +
+                "slug: /my-page\n" +
+                "sidebar_position: 2\n" +
+                "---\n\n" +
+                "# Corpo\n\nAlgum conteúdo.",
+              title: "Minha Página",
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await translateText(source, "My Page", "pt-BR");
+    expect(result.markdown).toContain("slug: /my-page");
+    expect(result.markdown).toContain("sidebar_position: 2");
+  });
+
+  it("passes when markdown has no frontmatter and translation has none either", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+    installStructuredTranslationMock();
+
+    const result = await translateText(
+      "# No Frontmatter\n\nJust body.",
+      "Title",
+      "pt-BR"
+    );
+    expect(result).toBeDefined();
+  });
 });

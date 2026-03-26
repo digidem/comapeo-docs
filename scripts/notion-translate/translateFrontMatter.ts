@@ -297,15 +297,33 @@ function splitBySections(markdown: string): string[] {
   const lastIdx = lines.length - 1;
   let current = "";
   let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
 
   for (const [idx, line] of lines.entries()) {
     // Reconstruct original text: all lines except the last trailing empty get "\n" appended
     const lineWithNewline =
       idx < lastIdx ? line + "\n" : line.length > 0 ? line : "";
 
-    // Toggle fence state on fenced code markers, including up to 3 leading spaces.
-    if (/^[ \t]{0,3}(`{3,}|~{3,})/.test(line)) {
-      inFence = !inFence;
+    // Track fence state per CommonMark spec: a fence of N backticks/tildes is closed
+    // only by a closing fence of >= N of the same character (and no info string on close).
+    const fenceMatch = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const ch = fenceMatch[1][0];
+      const len = fenceMatch[1].length;
+      if (!inFence) {
+        inFence = true;
+        fenceChar = ch;
+        fenceLen = len;
+      } else if (ch === fenceChar && len >= fenceLen) {
+        // Closing fence: same character, at least as long, no info string
+        const afterFence = line.trimStart().slice(len);
+        if (/^\s*$/.test(afterFence)) {
+          inFence = false;
+          fenceChar = "";
+          fenceLen = 0;
+        }
+      }
     }
     // Start a new section before any ATX heading (outside fences)
     if (!inFence && /^#{1,6}\s/.test(line) && current.length > 0) {
@@ -488,6 +506,90 @@ function isProtectedPathIntegrityError(
   );
 }
 
+const CRITICAL_FRONTMATTER_FIELDS = new Set([
+  "slug",
+  "sidebar_position",
+  "sidebar_label",
+  "id",
+  "title",
+]);
+
+/**
+ * Extracts the top-level YAML keys from a frontmatter block.
+ * Only recognises simple `key:` entries (no nested parsing) — enough to
+ * detect dropped or added keys without pulling in a YAML parser dependency.
+ * @internal exported for testing
+ */
+export function parseFrontmatterKeys(markdown: string): string[] {
+  if (!markdown.startsWith("---\n") && !markdown.startsWith("---\r\n")) {
+    return [];
+  }
+  const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+  if (endFrontmatterIndex === -1) {
+    return [];
+  }
+  const frontmatterBody = markdown.slice(4, endFrontmatterIndex);
+  const keys: string[] = [];
+  for (const line of frontmatterBody.split("\n")) {
+    // Top-level keys: start at column 0, followed by optional spaces and ":"
+    const match = line.match(/^([A-Za-z_][\w-]*)[\s]*:/);
+    if (match) {
+      keys.push(match[1]);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Checks that the translated markdown preserves all frontmatter keys that
+ * were present in the source, and that no critical routing/sidebar fields
+ * have been added or removed.
+ *
+ * Throws a non-critical `TranslationError` when an integrity violation is
+ * detected so the caller can retry (same pattern as completeness checks).
+ */
+function assertFrontmatterIntegrity(
+  sourceMarkdown: string,
+  translatedMarkdown: string
+): void {
+  const sourceKeys = parseFrontmatterKeys(sourceMarkdown);
+  if (sourceKeys.length === 0) {
+    // No frontmatter in source — nothing to validate.
+    return;
+  }
+
+  const translatedKeys = new Set(parseFrontmatterKeys(translatedMarkdown));
+
+  const missingKeys = sourceKeys.filter((key) => !translatedKeys.has(key));
+  if (missingKeys.length > 0) {
+    const criticalMissing = missingKeys.filter((key) =>
+      CRITICAL_FRONTMATTER_FIELDS.has(key)
+    );
+    const label =
+      criticalMissing.length > 0
+        ? `critical frontmatter key(s) missing: ${criticalMissing.join(", ")}`
+        : `frontmatter key(s) missing: ${missingKeys.join(", ")}`;
+    throw new TranslationError(
+      `Frontmatter integrity check failed — ${label}`,
+      "schema_invalid",
+      false
+    );
+  }
+
+  // Also flag if the translation invented new critical keys not in the source
+  const sourceKeySet = new Set(sourceKeys);
+  const addedCriticalKeys = [...translatedKeys].filter(
+    (key) => CRITICAL_FRONTMATTER_FIELDS.has(key) && !sourceKeySet.has(key)
+  );
+  if (addedCriticalKeys.length > 0) {
+    throw new TranslationError(
+      `Frontmatter integrity check failed — unexpected critical key(s) added: ${addedCriticalKeys.join(", ")}`,
+      "schema_invalid",
+      false
+    );
+  }
+}
+
 type MarkdownStructureMetrics = {
   headingCount: number;
   fencedCodeBlockCount: number;
@@ -508,7 +610,8 @@ function stripFencedCodeContent(markdown: string): string {
   const lines = markdown.split("\n");
   const result: string[] = [];
   let inFence = false;
-  let fenceMarker = "";
+  let fenceChar = "";
+  let fenceLen = 0;
   let fenceBuffer: string[] = [];
 
   for (const line of lines) {
@@ -516,16 +619,25 @@ function stripFencedCodeContent(markdown: string): string {
       const match = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
       if (match) {
         inFence = true;
-        fenceMarker = match[1];
+        fenceChar = match[1][0];
+        fenceLen = match[1].length;
         result.push(line); // keep opening marker
         fenceBuffer = [];
       } else {
         result.push(line);
       }
     } else {
-      if (line.trimStart().startsWith(fenceMarker)) {
+      // Closing fence per CommonMark spec: same character, >= opening length, no info string
+      const closeMatch = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+      if (
+        closeMatch &&
+        closeMatch[1][0] === fenceChar &&
+        closeMatch[1].length >= fenceLen &&
+        /^\s*$/.test(line.trimStart().slice(closeMatch[1].length))
+      ) {
         inFence = false;
-        fenceMarker = "";
+        fenceChar = "";
+        fenceLen = 0;
         result.push(line); // keep closing marker
         fenceBuffer = [];
       } else {
@@ -967,6 +1079,7 @@ export async function translateText(
         false
       );
     }
+    assertFrontmatterIntegrity(sourceMarkdown, translated.markdown);
     return translated;
   };
 

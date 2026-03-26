@@ -303,8 +303,8 @@ function splitBySections(markdown: string): string[] {
     const lineWithNewline =
       idx < lastIdx ? line + "\n" : line.length > 0 ? line : "";
 
-    // Toggle fence state on ``` or ~~~ lines
-    if (/^(`{3,}|~{3,})/.test(line)) {
+    // Toggle fence state on fenced code markers, including up to 3 leading spaces.
+    if (/^[ \t]{0,3}(`{3,}|~{3,})/.test(line)) {
       inFence = !inFence;
     }
     // Start a new section before any ATX heading (outside fences)
@@ -563,7 +563,9 @@ function collectMarkdownStructureMetrics(
   const withoutFrontmatter = stripYamlFrontmatter(markdown);
 
   // Fenced code blocks must be counted on raw markdown (before stripping).
-  const fencedCodeMatches = withoutFrontmatter.match(/^(`{3,}|~{3,})/gm) ?? [];
+  // Allow up to 3 leading spaces so the metric matches CommonMark fence rules.
+  const fencedCodeMatches =
+    withoutFrontmatter.match(/^[ \t]{0,3}(`{3,}|~{3,})/gm) ?? [];
 
   // All other structural markers are measured on the stripped version so that
   // examples inside code blocks do not inflate the counts.

@@ -343,6 +343,57 @@ describe("notion-translate translateFrontMatter", () => {
     expect(result.markdown).toContain("not a real heading");
   });
 
+  it("retries when an indented fenced block is dropped during translation", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "# Section One\n\n" +
+      "- Item one\n\n" +
+      "  ```js\n" +
+      "  console.log('keep me');\n" +
+      "  ```\n\n" +
+      "Plain paragraph.";
+
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "# Seção Um\n\n" + "- Item um\n\n" + "Plain paragraph.",
+                title: "Título Traduzido",
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "# Seção Um\n\n" +
+                  "- Item um\n\n" +
+                  "  ```js\n" +
+                  "  console.log('keep me');\n" +
+                  "  ```\n\n" +
+                  "Parágrafo simples.",
+                title: "Título Traduzido",
+              }),
+            },
+          },
+        ],
+      });
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    expect(result.markdown).toContain("console.log('keep me');");
+    expect(result.markdown).toContain("Parágrafo simples.");
+  });
+
   it("retries chunked translations when the reassembled markdown is structurally incomplete", async () => {
     const { translateText } = await import("./translateFrontMatter");
 
@@ -733,6 +784,27 @@ describe("notion-translate translateFrontMatter", () => {
     const joined = chunks.join("");
     expect(joined).toBe(content); // round-trip must be lossless
     const fenceChunk = chunks.find((c) => c.includes("```"));
+    expect(fenceChunk).toBeDefined();
+    expect(fenceChunk).toContain("# not a heading");
+  });
+
+  it("splitMarkdownIntoChunks does not split on headings inside indented fenced code blocks", async () => {
+    const { splitMarkdownIntoChunks } = await import("./translateFrontMatter");
+
+    const content =
+      "# Real Heading\n\n" +
+      "- Item one\n\n" +
+      "  ```\n" +
+      "  # not a heading\n" +
+      "  ```\n\n" +
+      "# Another Heading\n\n" +
+      "text\n";
+
+    const chunks = splitMarkdownIntoChunks(content, 55);
+
+    const joined = chunks.join("");
+    expect(joined).toBe(content);
+    const fenceChunk = chunks.find((c) => c.includes("  ```"));
     expect(fenceChunk).toBeDefined();
     expect(fenceChunk).toContain("# not a heading");
   });

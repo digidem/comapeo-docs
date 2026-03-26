@@ -70,36 +70,182 @@ function fixHeadingHierarchy(
   return fixedLines.join("\n");
 }
 
-function maskCodeFences(content: string): {
+function createCodeBlockMasker(content: string): {
   content: string;
   codeBlocks: string[];
   codeBlockPlaceholders: string[];
 } {
+  const lines = content.split("\n");
   const codeBlocks: string[] = [];
   const codeBlockPlaceholders: string[] = [];
+  const maskedLines: string[] = [];
 
-  const maskedContent = content.replace(
-    /^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm,
-    (match) => {
-      codeBlocks.push(match);
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+  let blockLines: string[] = [];
+
+  for (const line of lines) {
+    if (!inFence) {
+      const openingMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+
+      if (!openingMatch) {
+        maskedLines.push(line);
+        continue;
+      }
+
+      const fence = openingMatch[1];
+      fenceChar = fence[0];
+      fenceLength = fence.length;
+      blockLines = [line];
+      inFence = true;
+      continue;
+    }
+
+    blockLines.push(line);
+
+    if (isClosingFenceLine(line, fenceChar, fenceLength)) {
+      codeBlocks.push(blockLines.join("\n"));
       const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
       codeBlockPlaceholders.push(placeholder);
-      return placeholder;
+      maskedLines.push(placeholder);
+      inFence = false;
+      blockLines = [];
     }
-  );
+  }
+
+  if (inFence) {
+    codeBlocks.push(blockLines.join("\n"));
+    const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
+    codeBlockPlaceholders.push(placeholder);
+    maskedLines.push(placeholder);
+  }
 
   return {
-    content: maskedContent,
+    content: maskedLines.join("\n"),
     codeBlocks,
     codeBlockPlaceholders,
   };
 }
 
+function isClosingFenceLine(
+  line: string,
+  fenceChar: string,
+  fenceLength: number
+): boolean {
+  let i = 0;
+
+  while (i < line.length && line.charAt(i) === " ") {
+    i++;
+  }
+
+  if (i > 3) {
+    return false;
+  }
+
+  let fenceCount = 0;
+  while (i < line.length && line.charAt(i) === fenceChar) {
+    fenceCount++;
+    i++;
+  }
+
+  if (fenceCount < fenceLength) {
+    return false;
+  }
+
+  while (i < line.length) {
+    if (line.charAt(i) !== " " && line.charAt(i) !== "\t") {
+      return false;
+    }
+    i++;
+  }
+
+  return true;
+}
+
+function maskCodeFences(content: string): {
+  content: string;
+  codeBlocks: string[];
+  codeBlockPlaceholders: string[];
+} {
+  return createCodeBlockMasker(content);
+}
+
 function restoreCodeFences(content: string, codeBlocks: string[]): string {
-  return content.replace(
-    /__CODEBLOCK_(\d+)__/g,
-    (_match, index) => codeBlocks[Number(index)]
-  );
+  let restoredContent = content;
+  for (const [index, codeBlock] of codeBlocks.entries()) {
+    restoredContent = restoredContent.replaceAll(
+      `__CODEBLOCK_${index}__`,
+      codeBlock
+    );
+  }
+  return restoredContent;
+}
+
+function maskInlineCodeSpans(content: string): {
+  content: string;
+  codeSpans: string[];
+} {
+  const codeSpans: string[] = [];
+  const output: string[] = [];
+
+  let i = 0;
+  while (i < content.length) {
+    const currentChar = content.charAt(i);
+    if (currentChar !== "`") {
+      output.push(currentChar);
+      i++;
+      continue;
+    }
+
+    let openingLength = 0;
+    while (
+      i + openingLength < content.length &&
+      content.charAt(i + openingLength) === "`"
+    ) {
+      openingLength++;
+    }
+
+    let scanIndex = i + openingLength;
+    let closingIndex = -1;
+    while (scanIndex < content.length) {
+      const nextBacktick = content.indexOf("`", scanIndex);
+      if (nextBacktick === -1) {
+        break;
+      }
+
+      let closingLength = 0;
+      while (
+        nextBacktick + closingLength < content.length &&
+        content.charAt(nextBacktick + closingLength) === "`"
+      ) {
+        closingLength++;
+      }
+
+      if (closingLength === openingLength) {
+        closingIndex = nextBacktick;
+        break;
+      }
+
+      scanIndex = nextBacktick + closingLength;
+    }
+
+    if (closingIndex === -1) {
+      output.push(content.slice(i, i + openingLength));
+      i += openingLength;
+      continue;
+    }
+
+    const codeSpan = content.slice(i, closingIndex + openingLength);
+    codeSpans.push(codeSpan);
+    output.push(`__CODESPAN_${codeSpans.length - 1}__`);
+    i = closingIndex + openingLength;
+  }
+
+  return {
+    content: output.join(""),
+    codeSpans,
+  };
 }
 
 export function injectExplicitHeadingIds(content: string): string {
@@ -112,14 +258,15 @@ export function injectExplicitHeadingIds(content: string): string {
     codeBlocks,
     codeBlockPlaceholders,
   } = maskCodeFences(content);
+  const reservedIds = new Set<string>();
   const headingCounts = new Map<string, number>();
 
   const lines = maskedContent.split("\n");
-  const updatedLines = lines.map((line) => {
+  for (const line of lines) {
     if (
       codeBlockPlaceholders.some((placeholder) => line.includes(placeholder))
     ) {
-      return line;
+      continue;
     }
 
     const fullMatch = line.match(
@@ -129,18 +276,32 @@ export function injectExplicitHeadingIds(content: string): string {
       const [, , , headingText, explicitId] = fullMatch;
       const baseId = createSafeSlug(headingText);
       if (baseId) {
-        headingCounts.set(baseId, (headingCounts.get(baseId) ?? 0) + 1);
+        reservedIds.add(baseId);
       }
-      if (explicitId !== baseId) {
-        headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
+      if (explicitId) {
+        reservedIds.add(explicitId);
       }
-      return line;
+      continue;
     }
 
     const explicitIdMatch = line.match(/\s\{#([^}]+)\}\s*$/);
     if (explicitIdMatch) {
       const explicitId = explicitIdMatch[1];
-      headingCounts.set(explicitId, (headingCounts.get(explicitId) ?? 0) + 1);
+      reservedIds.add(explicitId);
+    }
+  }
+
+  const updatedLines = lines.map((line) => {
+    if (
+      codeBlockPlaceholders.some((placeholder) => line.includes(placeholder))
+    ) {
+      return line;
+    }
+
+    const explicitHeadingMatch = line.match(
+      /^(\s{0,3})(#{1,6})\s+(.+?)\s*\{#([^}]+)\}\s*$/
+    );
+    if (explicitHeadingMatch) {
       return line;
     }
 
@@ -157,15 +318,13 @@ export function injectExplicitHeadingIds(content: string): string {
 
     let counter = headingCounts.get(baseId) ?? 0;
     let headingId = counter === 0 ? baseId : `${baseId}-${counter}`;
-    // Skip IDs already claimed by explicit headings or natural slugs
-    while (counter > 0 && headingCounts.has(headingId)) {
+    while (reservedIds.has(headingId) || headingCounts.has(headingId)) {
       counter++;
       headingId = `${baseId}-${counter}`;
     }
     headingCounts.set(baseId, counter + 1);
-    // Also register the generated ID so future headings won't collide with it
     if (headingId !== baseId) {
-      headingCounts.set(headingId, (headingCounts.get(headingId) ?? 0) + 1);
+      headingCounts.set(headingId, 1);
     }
 
     return `${leadingWhitespace}${hashes} ${headingText} {#${headingId}}`;
@@ -183,20 +342,14 @@ export function sanitizeMarkdownContent(content: string): string {
   // Fix specific malformed patterns that cause MDX errors
 
   // 0. Mask code fences (```...```) and inline code (`...`) to avoid altering them
-  const codeBlocks: string[] = [];
-  const codeSpans: string[] = [];
-  const codeBlockPlaceholders: string[] = [];
-
-  content = content.replace(/^ {0,3}```[^\n]*\n[\s\S]*?^ {0,3}```/gm, (m) => {
-    codeBlocks.push(m);
-    const placeholder = `__CODEBLOCK_${codeBlocks.length - 1}__`;
-    codeBlockPlaceholders.push(placeholder);
-    return placeholder;
-  });
-  content = content.replace(/`[^`\n]*`/g, (m) => {
-    codeSpans.push(m);
-    return `__CODESPAN_${codeSpans.length - 1}__`;
-  });
+  const {
+    content: maskedContent,
+    codeBlocks,
+    codeBlockPlaceholders,
+  } = maskCodeFences(content);
+  const { content: maskedWithCodeSpans, codeSpans } =
+    maskInlineCodeSpans(maskedContent);
+  content = maskedWithCodeSpans;
 
   // 1. Fix heading hierarchy for proper TOC generation (after masking code blocks)
   content = fixHeadingHierarchy(content, codeBlockPlaceholders);
@@ -263,14 +416,15 @@ export function sanitizeMarkdownContent(content: string): string {
   }
 
   // 9. Restore masked code blocks and inline code
-  content = content.replace(
-    /__CODEBLOCK_(\d+)__/g,
-    (_m, i) => codeBlocks[Number(i)]
-  );
-  content = content.replace(
-    /__CODESPAN_(\d+)__/g,
-    (_m, i) => codeSpans[Number(i)]
-  );
+  content = restoreCodeFences(content, codeBlocks);
+  let restoredContent = content;
+  for (const [index, codeSpan] of codeSpans.entries()) {
+    restoredContent = restoredContent.replaceAll(
+      `__CODESPAN_${index}__`,
+      codeSpan
+    );
+  }
+  content = restoredContent;
 
   return content;
 }

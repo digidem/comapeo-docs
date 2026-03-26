@@ -50,6 +50,18 @@ describe("contentSanitizer", () => {
       expect(result).toBe(input); // Should remain unchanged
     });
 
+    it("should preserve tilde fenced code blocks", () => {
+      const input = "~~~md\nconst obj = { key: 'value' };\n~~~";
+      const result = scriptModule.sanitizeMarkdownContent(input);
+      expect(result).toBe(input);
+    });
+
+    it("should preserve multi-backtick inline code spans", () => {
+      const input = "Use ``<link to section.>`` and ``{foo}``.";
+      const result = scriptModule.sanitizeMarkdownContent(input);
+      expect(result).toBe(input);
+    });
+
     it("should fix malformed <link to section.> patterns", () => {
       const input = "Check <link to section.> for details.";
       const result = scriptModule.sanitizeMarkdownContent(input);
@@ -259,6 +271,18 @@ echo "# Not a heading"
       expect(result).not.toContain("## Código Único {#codigo-unico}");
     });
 
+    it("should preserve headings inside tilde fenced code blocks", () => {
+      const input = ["~~~md", "## Código Único", "~~~", "## Otro Título"].join(
+        "\n"
+      );
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("~~~md\n## Código Único\n~~~");
+      expect(result).toContain("## Otro Título {#otro-titulo}");
+      expect(result).not.toContain("## Código Único {#codigo-unico}");
+    });
+
     it("should avoid collisions between auto-incremented and explicit IDs", () => {
       const input = ["## Título", "## Heading {#titulo-1}", "## Título"].join(
         "\n"
@@ -270,6 +294,15 @@ echo "# Not a heading"
       expect(result).toContain("## Heading {#titulo-1}");
       // The second "Título" must NOT get titulo-1 (already claimed), should get titulo-2
       expect(result).toContain("## Título {#titulo-2}");
+    });
+
+    it("should reserve later explicit ids before assigning earlier auto-generated headings", () => {
+      const input = ["## My Id", "## Custom {#my-id}"].join("\n");
+
+      const result = scriptModule.injectExplicitHeadingIds(input);
+
+      expect(result).toContain("## My Id {#my-id-1}");
+      expect(result).toContain("## Custom {#my-id}");
     });
   });
 });

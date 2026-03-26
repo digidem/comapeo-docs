@@ -1000,6 +1000,57 @@ describe("notion-translate translateFrontMatter", () => {
     });
   });
 
+  it("retries and succeeds when frontmatter integrity fails on first attempt but passes on retry", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "---\n\n" +
+      "# Body\n\nSome content.";
+
+    // First call drops slug (integrity failure); second call preserves it.
+    mockOpenAIChatCompletionCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "---\n" +
+                  "title: Minha Página\n" +
+                  "---\n\n" +
+                  "# Corpo\n\nAlgum conteúdo.",
+                title: "Minha Página",
+              }),
+            },
+          },
+        ],
+      })
+      .mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                markdown:
+                  "---\n" +
+                  "title: Minha Página\n" +
+                  "slug: /my-page\n" +
+                  "---\n\n" +
+                  "# Corpo\n\nAlgum conteúdo.",
+                title: "Minha Página",
+              }),
+            },
+          },
+        ],
+      });
+
+    const result = await translateText(source, "My Page", "pt-BR");
+    expect(result.markdown).toContain("slug: /my-page");
+    expect(result.markdown).toContain("title: Minha Página");
+  });
+
   it("passes when all frontmatter keys are preserved in translation", async () => {
     const { translateText } = await import("./translateFrontMatter");
 

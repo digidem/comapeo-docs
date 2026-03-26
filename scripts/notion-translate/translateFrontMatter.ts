@@ -1152,9 +1152,11 @@ export async function translateText(
   } catch (error) {
     const isRecoverableCompletenessFailure =
       error instanceof TranslationError &&
-      error.code === "unexpected_error" &&
       error.isCritical === false &&
-      /incomplete/.test(error.message);
+      ((error.code === "unexpected_error" &&
+        /incomplete/.test(error.message)) ||
+        (error.code === "schema_invalid" &&
+          /Frontmatter integrity check failed/.test(error.message)));
 
     if (
       isRecoverableCompletenessFailure &&

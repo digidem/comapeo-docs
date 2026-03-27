@@ -1040,6 +1040,7 @@ async function translateChunkWithOverflowFallback(
 type TranslateTextOptions = {
   chunkLimit?: number;
   completenessRetryDepth?: number;
+  forceChunking?: boolean;
 };
 
 /**
@@ -1064,6 +1065,7 @@ export async function translateText(
   const effectiveChunkLimit =
     options.chunkLimit ?? getProactiveChunkCharLimit(model);
   const completenessRetryDepth = options.completenessRetryDepth ?? 0;
+  const forceChunking = options.forceChunking ?? false;
 
   const translateAndValidate = async (
     sourceMarkdown: string,
@@ -1088,7 +1090,7 @@ export async function translateText(
     TRANSLATION_PROMPT.length + title.length + 20 + maskedText.length;
 
   try {
-    if (estimatedTotalChars <= effectiveChunkLimit) {
+    if (!forceChunking && estimatedTotalChars <= effectiveChunkLimit) {
       // Fast path: content fits in a single call
       const translated = await translateAndValidate(
         maskedText,
@@ -1107,11 +1109,25 @@ export async function translateText(
     }
 
     // Slow path: content too large — split into chunks
-    const chunks = splitMarkdownForTranslation(
+    let chunks = splitMarkdownForTranslation(
       maskedText,
       title,
       effectiveChunkLimit
     );
+    if (forceChunking && chunks.length <= 1 && maskedText.length > 1) {
+      chunks = splitMarkdownForTranslation(
+        maskedText,
+        title,
+        Math.max(estimatedTotalChars - 1, 1)
+      );
+      if (chunks.length <= 1) {
+        throw new TranslationError(
+          "Unable to force chunked retry for translated markdown",
+          "unexpected_error",
+          false
+        );
+      }
+    }
 
     let translatedTitle = title;
     const translatedChunks: string[] = [];
@@ -1136,6 +1152,7 @@ export async function translateText(
     }
 
     const joinedMarkdown = translatedChunks.join("");
+    assertFrontmatterIntegrity(maskedText, joinedMarkdown);
     if (isSuspiciouslyIncompleteTranslation(maskedText, joinedMarkdown)) {
       throw new TranslationError(
         "Translated markdown appears incomplete after chunk reassembly",
@@ -1171,6 +1188,7 @@ export async function translateText(
         return translateText(text, title, targetLanguage, {
           chunkLimit: nextChunkLimit,
           completenessRetryDepth: completenessRetryDepth + 1,
+          forceChunking: true,
         });
       }
     }

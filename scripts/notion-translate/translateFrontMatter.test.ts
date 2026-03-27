@@ -4,58 +4,11 @@ import {
   resetOpenAIMock,
 } from "./test-openai-mock";
 import { installTestNotionEnv } from "../test-utils";
-
-type MockOpenAIRequest = {
-  messages?: Array<{ role: string; content: string }>;
-};
-
-function extractPromptMarkdown(request: MockOpenAIRequest): {
-  title: string;
-  markdown: string;
-} {
-  const userPrompt =
-    request.messages?.find((message) => message.role === "user")?.content ?? "";
-  const titleMatch = userPrompt.match(/^title:\s*(.*)$/m);
-  const markdownMarker = "\nmarkdown: ";
-  const markdownIndex = userPrompt.indexOf(markdownMarker);
-
-  return {
-    title: titleMatch?.[1] ?? "",
-    markdown:
-      markdownIndex >= 0
-        ? userPrompt.slice(markdownIndex + markdownMarker.length)
-        : "",
-  };
-}
-
-function installStructuredTranslationMock(
-  mapResponse?: (payload: { title: string; markdown: string }) => {
-    title: string;
-    markdown: string;
-  }
-) {
-  mockOpenAIChatCompletionCreate.mockImplementation(
-    async (request: MockOpenAIRequest) => {
-      const payload = extractPromptMarkdown(request);
-      const translated = mapResponse
-        ? mapResponse(payload)
-        : {
-            title: payload.title ? `Translated ${payload.title}` : "",
-            markdown: payload.markdown,
-          };
-
-      return {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(translated),
-            },
-          },
-        ],
-      };
-    }
-  );
-}
+import {
+  extractPromptMarkdown,
+  installStructuredTranslationMock,
+} from "./test-translation-utils";
+import type { MockOpenAIRequest } from "./test-translation-utils";
 
 describe("notion-translate translateFrontMatter", () => {
   let restoreEnv: () => void;
@@ -168,9 +121,203 @@ describe("notion-translate translateFrontMatter", () => {
       chunkLimit: 8_500,
     });
 
-    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    const payloads = mockOpenAIChatCompletionCreate.mock.calls.map(
+      (call) => extractPromptMarkdown(call[0] as MockOpenAIRequest).markdown
+    );
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(payloads[2]).not.toBe(payloads[1]);
     expect(result.markdown).toContain("# Seção Dois");
     expect(result.title).toBe("Título Traduzido");
+  });
+
+  it("forces smaller payloads after a fast-path completeness failure", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source = [
+      "# Section One",
+      "",
+      "Alpha paragraph with enough text to be meaningful.",
+      "",
+      "# Section Two",
+      "",
+      "Beta paragraph with enough text to be meaningful.",
+      "",
+      "# Section Three",
+      "",
+      "Gamma paragraph with enough text to be meaningful.",
+      "",
+      "# Section Four",
+      "",
+      "Delta paragraph with enough text to be meaningful.",
+    ].join("\n");
+
+    const payloads: string[] = [];
+    let callCount = 0;
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        payloads.push(payload.markdown);
+        callCount++;
+
+        if (callCount === 1) {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    markdown: "# Seção Um\n\nParágrafo alfa.",
+                    title: "Título Traduzido",
+                  }),
+                },
+              },
+            ],
+          };
+        }
+
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Título Traduzido",
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(payloads.length).toBeGreaterThan(1);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(result.markdown).toContain("# Section Four");
+    expect(result.title).toBe("Título Traduzido");
+  });
+
+  it("forces smaller payloads after a fast-path frontmatter integrity failure", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source = [
+      "---",
+      "title: Original Title",
+      "sidebar_position: 3",
+      "---",
+      "",
+      "# Main Content",
+      "",
+      "Body paragraph one.",
+      "",
+      "## Sub Section",
+      "",
+      "Body paragraph two.",
+    ].join("\n");
+
+    const payloads: string[] = [];
+    let callCount = 0;
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        payloads.push(payload.markdown);
+        callCount++;
+
+        if (callCount === 1) {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    markdown:
+                      "# Conteúdo Principal\n\nParágrafo um.\n\n## Sub Seção\n\nParágrafo dois.",
+                    title: "Título Traduzido",
+                  }),
+                },
+              },
+            ],
+          };
+        }
+
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Título Traduzido",
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(payloads.length).toBe(3);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(result.markdown).toContain("sidebar_position: 3");
+    expect(result.title).toBe("Título Traduzido");
+  });
+
+  it("forces chunking for fast-path retries on single-block content", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source = "word ".repeat(1_800).trim();
+    const payloads: string[] = [];
+    let callCount = 0;
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        payloads.push(payload.markdown);
+        callCount++;
+
+        if (callCount === 1) {
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    markdown: "word ".repeat(50).trim(),
+                    title: "Título Traduzido",
+                  }),
+                },
+              },
+            ],
+          };
+        }
+
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Título Traduzido",
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "Original Title", "pt-BR");
+
+    expect(payloads.length).toBe(3);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(result.markdown).toBe(source);
   });
 
   it("fails when repeated completeness retries still return incomplete content", async () => {
@@ -297,7 +444,14 @@ describe("notion-translate translateFrontMatter", () => {
       chunkLimit: 25_000,
     });
 
-    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    const payloads = mockOpenAIChatCompletionCreate.mock.calls.map(
+      (call) => extractPromptMarkdown(call[0] as MockOpenAIRequest).markdown
+    );
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(payloads[2]).not.toBe(payloads[1]);
     expect(result.markdown.length).toBeGreaterThan(4_000);
   });
 
@@ -389,7 +543,14 @@ describe("notion-translate translateFrontMatter", () => {
 
     const result = await translateText(source, "Original Title", "pt-BR");
 
-    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(2);
+    const payloads = mockOpenAIChatCompletionCreate.mock.calls.map(
+      (call) => extractPromptMarkdown(call[0] as MockOpenAIRequest).markdown
+    );
+
+    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);
+    expect(payloads[1]).not.toBe(payloads[0]);
+    expect(payloads[1].length).toBeLessThan(payloads[0].length);
+    expect(payloads[2]).not.toBe(payloads[1]);
     expect(result.markdown).toContain("console.log('keep me');");
     expect(result.markdown).toContain("Parágrafo simples.");
   });

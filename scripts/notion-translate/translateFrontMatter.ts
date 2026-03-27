@@ -6,6 +6,7 @@ import ora from "ora";
 import chalk from "chalk";
 import {
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_MAX_TOKENS,
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
@@ -883,6 +884,9 @@ async function translateTextSingleCall(
         ],
         response_format: responseFormat,
         ...modelParams,
+        ...(IS_CUSTOM_OPENAI_API
+          ? { max_tokens: DEFAULT_OPENAI_MAX_TOKENS }
+          : {}),
       });
 
       const choice = response.choices[0];

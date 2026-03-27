@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   mockOpenAIChatCompletionCreate,
   resetOpenAIMock,
 } from "./test-openai-mock";
+import { DEFAULT_OPENAI_MAX_TOKENS } from "../constants";
 import { installTestNotionEnv } from "../test-utils";
 import {
   extractPromptMarkdown,
@@ -42,6 +43,70 @@ describe("notion-translate translateFrontMatter", () => {
       markdown: "# translated\n\nMock content",
       title: "Mock Title",
     });
+  });
+
+  it("omits max_tokens for the standard OpenAI backend", async () => {
+    vi.doMock("../constants.js", async () => {
+      const actual =
+        await vi.importActual<typeof import("../constants.js")>(
+          "../constants.js"
+        );
+      return {
+        ...actual,
+        OPENAI_BASE_URL: undefined,
+        IS_CUSTOM_OPENAI_API: false,
+      };
+    });
+
+    try {
+      vi.resetModules();
+      const { translateText } = await import("./translateFrontMatter");
+
+      await translateText("# Body", "Title", "pt-BR");
+
+      expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
+      const request = mockOpenAIChatCompletionCreate.mock.calls[0]?.[0] as {
+        max_tokens?: number;
+        response_format?: { type?: string };
+      };
+      expect(request).not.toHaveProperty("max_tokens");
+      expect(request.response_format?.type).toBe("json_schema");
+    } finally {
+      vi.doUnmock("../constants.js");
+      vi.resetModules();
+    }
+  });
+
+  it("includes max_tokens only for custom OpenAI-compatible backends", async () => {
+    vi.doMock("../constants.js", async () => {
+      const actual =
+        await vi.importActual<typeof import("../constants.js")>(
+          "../constants.js"
+        );
+      return {
+        ...actual,
+        OPENAI_BASE_URL: "https://custom.example/v1",
+        IS_CUSTOM_OPENAI_API: true,
+      };
+    });
+
+    try {
+      vi.resetModules();
+      const { translateText } = await import("./translateFrontMatter");
+
+      await translateText("# Body", "Title", "pt-BR");
+
+      expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(1);
+      const request = mockOpenAIChatCompletionCreate.mock.calls[0]?.[0] as {
+        max_tokens?: number;
+        response_format?: { type?: string };
+      };
+      expect(request.max_tokens).toBe(DEFAULT_OPENAI_MAX_TOKENS);
+      expect(request.response_format?.type).toBe("json_object");
+    } finally {
+      vi.doUnmock("../constants.js");
+      vi.resetModules();
+    }
   });
 
   it("classifies OpenAI quota errors as critical translation errors", async () => {

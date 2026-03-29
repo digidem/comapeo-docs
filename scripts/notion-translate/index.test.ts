@@ -17,6 +17,7 @@ const mockReaddir = vi.fn();
 const mockStat = vi.fn();
 const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
+const mockResolveCanonicalDocsRelativePath = vi.fn();
 const mockNotionDataSourcesQuery = vi.fn();
 const mockNotionPagesCreate = vi.fn();
 const mockNotionPagesUpdate = vi.fn();
@@ -73,6 +74,10 @@ vi.mock("../notionClient", () => ({
 vi.mock("../fetchNotionData.js", () => ({
   fetchNotionData: mockFetchNotionData,
   sortAndExpandNotionData: mockSortAndExpandNotionData,
+}));
+
+vi.mock("../notion-fetch/pageMetadataCache.js", () => ({
+  resolveCanonicalDocsRelativePath: mockResolveCanonicalDocsRelativePath,
 }));
 
 vi.mock("./translateFrontMatter", () => ({
@@ -140,6 +145,7 @@ describe("notion-translate index", () => {
     mockStat.mockReset();
     mockBlocksChildrenList.mockReset();
     mockPagesRetrieve.mockReset();
+    mockResolveCanonicalDocsRelativePath.mockReset();
     mockNotionDataSourcesQuery.mockReset();
     mockNotionPagesCreate.mockReset();
     mockNotionPagesUpdate.mockReset();
@@ -168,17 +174,19 @@ describe("notion-translate index", () => {
     mockN2m.toMarkdownString.mockReturnValue({
       parent: "# Hello\n\nEnglish markdown",
     });
-    mockProcessAndReplaceImages.mockResolvedValue({
-      markdown: "# Hello\n\nEnglish markdown",
-      stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
-      metrics: {
-        totalProcessed: 0,
-        skippedSmallSize: 0,
-        skippedAlreadyOptimized: 0,
-        skippedResize: 0,
-        fullyProcessed: 0,
-      },
-    });
+    mockProcessAndReplaceImages.mockImplementation(
+      async (markdown: string) => ({
+        markdown,
+        stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
+        metrics: {
+          totalProcessed: 0,
+          skippedSmallSize: 0,
+          skippedAlreadyOptimized: 0,
+          skippedResize: 0,
+          fullyProcessed: 0,
+        },
+      })
+    );
     mockGetImageDiagnostics.mockReturnValue({
       totalMatches: 0,
       markdownMatches: 0,
@@ -225,8 +233,53 @@ describe("notion-translate index", () => {
     mockGetLanguageName.mockImplementation((lang: string) =>
       lang === "pt" ? "Portuguese" : "Spanish"
     );
+    mockResolveCanonicalDocsRelativePath.mockImplementation(
+      (pageId: string) => {
+        if (pageId.startsWith("toggle-")) {
+          return null;
+        }
+        if (
+          pageId === "abc123def456" ||
+          pageId === "page-regular123" ||
+          pageId === "missing-canonical-page"
+        ) {
+          return null;
+        }
+
+        return "getting-started-essentials/installing-comapeo.md";
+      }
+    );
     mockCreateNotionPageFromMarkdown.mockResolvedValue("translation-page-id");
-    mockReadFile.mockResolvedValue('{"hello":{"message":"Hello"}}');
+    mockReadFile.mockImplementation(async (filePath: string) => {
+      if (
+        String(filePath).endsWith(
+          path.join(
+            "docs",
+            "getting-started-essentials",
+            "installing-comapeo.md"
+          )
+        )
+      ) {
+        return [
+          "---",
+          'title: "Installing CoMapeo & Onboarding"',
+          'sidebar_label: "Installing CoMapeo & Onboarding"',
+          "sidebar_position: 1",
+          'pagination_label: "Installing CoMapeo & Onboarding"',
+          "custom_edit_url: https://github.com/digidem/comapeo-docs/edit/main/docs/getting-started-essentials/installing-comapeo.md",
+          'slug: "/installing-comapeo--onboarding"',
+          "last_update:",
+          "  date: 2/25/2026",
+          "  author: Awana Digital",
+          "---",
+          "",
+          "# Installing CoMapeo & Onboarding",
+          "",
+          "English markdown",
+        ].join("\n");
+      }
+      return '{"hello":{"message":"Hello"}}';
+    });
     mockWriteFile.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined);
     mockAccess.mockRejectedValue(
@@ -348,6 +401,102 @@ describe("notion-translate index", () => {
     vi.restoreAllMocks();
   });
 
+  describe("fetchPublishedEnglishPages", () => {
+    it("fetches a requested page directly without dataset-wide expansion", async () => {
+      const targetPage = createMockNotionPage({
+        id: "2641b08162d580359153cac75e4f09f2",
+        title: "Target Page",
+        status: "Ready for translation",
+        language: "English",
+      });
+      mockPagesRetrieve.mockResolvedValue(targetPage);
+
+      const { fetchPublishedEnglishPages } = await import("./index");
+      const pages = await fetchPublishedEnglishPages(targetPage.id);
+
+      expect(pages).toEqual([targetPage]);
+      expect(mockPagesRetrieve).toHaveBeenCalledWith({
+        page_id: targetPage.id,
+      });
+      expect(mockFetchNotionData).not.toHaveBeenCalled();
+      expect(mockSortAndExpandNotionData).not.toHaveBeenCalled();
+    });
+
+    it("keeps the dataset fetch-and-expand flow for default multi-page runs", async () => {
+      const englishPage = createMockNotionPage({
+        id: "english-page-1",
+        title: "Hello World",
+        status: "Ready for translation",
+        language: "English",
+      });
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [englishPage];
+        }
+        return [];
+      });
+      mockSortAndExpandNotionData.mockResolvedValue([englishPage]);
+
+      const { fetchPublishedEnglishPages } = await import("./index");
+      const pages = await fetchPublishedEnglishPages();
+
+      expect(pages).toEqual([englishPage]);
+      expect(mockFetchNotionData).toHaveBeenCalledWith({
+        and: [
+          {
+            property: "Publish Status",
+            select: {
+              equals: "Ready for translation",
+            },
+          },
+        ],
+      });
+      expect(mockSortAndExpandNotionData).toHaveBeenCalledWith([englishPage]);
+      expect(mockPagesRetrieve).not.toHaveBeenCalled();
+    });
+
+    it("filters non-English pages out of the expanded multi-page result", async () => {
+      const englishPage = createMockNotionPage({
+        id: "english-page-1",
+        title: "Hello World",
+        status: "Ready for translation",
+        language: "English",
+      });
+      const spanishPage = createMockNotionPage({
+        id: "spanish-page-1",
+        title: "Hola Mundo",
+        status: "Ready for translation",
+        language: "Spanish",
+      });
+      mockFetchNotionData.mockResolvedValue([englishPage, spanishPage]);
+      mockSortAndExpandNotionData.mockResolvedValue([spanishPage, englishPage]);
+
+      const { fetchPublishedEnglishPages } = await import("./index");
+      const pages = await fetchPublishedEnglishPages();
+
+      expect(pages).toEqual([englishPage]);
+      expect(mockFetchNotionData).toHaveBeenCalledWith({
+        and: [
+          {
+            property: "Publish Status",
+            select: {
+              equals: "Ready for translation",
+            },
+          },
+        ],
+      });
+      expect(mockSortAndExpandNotionData).toHaveBeenCalledWith([
+        englishPage,
+        spanishPage,
+      ]);
+    });
+  });
+
   it("returns an accurate success summary and logs TRANSLATION_SUMMARY", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -437,6 +586,17 @@ describe("notion-translate index", () => {
       ).toEqual({
         pageId: "2641b08162d580359153cac75e4f09f2",
       });
+
+      expect(
+        parseCliOptions([
+          "--local-only",
+          "--page-id",
+          "2641b081-62d5-8035-9153-cac75e4f09f2",
+        ])
+      ).toEqual({
+        pageId: "2641b08162d580359153cac75e4f09f2",
+        localOnly: true,
+      });
     });
 
     it("throws a clear error for invalid --page-id values", async () => {
@@ -458,28 +618,8 @@ describe("notion-translate index", () => {
         elementType: "Page",
         lastEdited: "2026-02-01T00:00:00.000Z",
       });
-      const otherPage = createMockNotionPage({
-        id: "2641b08162d5813a9fcecb1deca11158",
-        title: "Other Page",
-        status: "Ready for translation",
-        language: "English",
-        order: 8,
-        parentItem: "parent-2",
-        elementType: "Page",
-        lastEdited: "2026-02-01T00:00:00.000Z",
-      });
-
-      mockFetchNotionData.mockImplementation(async (filter) => {
-        if (
-          filter?.and?.some(
-            (condition: { property?: string }) =>
-              condition.property === "Publish Status"
-          )
-        ) {
-          return [targetPage, otherPage];
-        }
-        return [];
-      });
+      mockPagesRetrieve.mockResolvedValue(targetPage);
+      mockFetchNotionData.mockResolvedValue([]);
 
       const { main } = await import("./index");
       const summary = await main({
@@ -488,12 +628,11 @@ describe("notion-translate index", () => {
 
       expect(summary.totalEnglishPages).toBe(1);
       expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
-      // Markdown conversion is cached per source page and reused across languages.
-      expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(1);
-      expect(mockN2m.pageToMarkdown).toHaveBeenNthCalledWith(
-        1,
-        "2641b08162d580359153cac75e4f09f2"
-      );
+      expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
+      expect(mockPagesRetrieve).toHaveBeenCalledWith({
+        page_id: "2641b08162d580359153cac75e4f09f2",
+      });
+      expect(mockSortAndExpandNotionData).not.toHaveBeenCalled();
     });
 
     it("bypasses missing Parent item relation for --page-id and looks up translation by source page id", async () => {
@@ -519,15 +658,8 @@ describe("notion-translate index", () => {
         lastEdited: "2026-01-01T00:00:00.000Z",
       });
 
+      mockPagesRetrieve.mockResolvedValue(englishPage);
       mockFetchNotionData.mockImplementation(async (filter) => {
-        if (
-          filter?.and?.some(
-            (condition: { property?: string }) =>
-              condition.property === "Publish Status"
-          )
-        ) {
-          return [englishPage];
-        }
         const hasParentItem = filter?.and?.some(
           (condition: {
             property?: string;
@@ -627,15 +759,8 @@ describe("notion-translate index", () => {
         lastEdited: "2026-02-05T00:00:00.000Z",
       });
 
+      mockPagesRetrieve.mockResolvedValue(englishPage);
       mockFetchNotionData.mockImplementation(async (filter) => {
-        if (
-          filter?.and?.some(
-            (condition: { property?: string }) =>
-              condition.property === "Publish Status"
-          )
-        ) {
-          return [englishPage];
-        }
         if (
           filter?.and?.some(
             (condition: {
@@ -680,6 +805,278 @@ describe("notion-translate index", () => {
       );
       expect(queriedByParentRelation).toBe(true);
       expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(0);
+    });
+
+    it("writes local markdown artifacts in --local-only mode without performing Notion writes", async () => {
+      const sourcePageId = "2641b08162d580359153cac75e4f09f2";
+      const englishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "Local Only Page",
+        status: "Draft",
+        language: "English",
+        order: 4,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockPagesRetrieve.mockResolvedValue(englishPage);
+
+      const { main } = await import("./index");
+      const summary = await main({
+        pageId: sourcePageId,
+        localOnly: true,
+      });
+
+      expect(summary.failedTranslations).toBe(0);
+      expect(summary.newTranslations).toBe(2);
+      expect(summary.updatedTranslations).toBe(0);
+      expect(mockTranslateText).toHaveBeenCalledTimes(2);
+      expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
+      expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+      expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+      expect(mockNotionBlocksChildrenAppend).not.toHaveBeenCalled();
+      expect(mockNotionBlocksDelete).not.toHaveBeenCalled();
+      expect(mockBlocksChildrenList).not.toHaveBeenCalled();
+      expect(mockFetchNotionData).not.toHaveBeenCalled();
+      expect(mockSortAndExpandNotionData).not.toHaveBeenCalled();
+
+      const canonicalRelativePath = path.join(
+        "getting-started-essentials",
+        "installing-comapeo.md"
+      );
+      const ptWrite = mockWriteFile.mock.calls.find(([filePath]) =>
+        String(filePath).endsWith(
+          path.join(
+            "i18n",
+            "pt",
+            "docusaurus-plugin-content-docs",
+            "current",
+            canonicalRelativePath
+          )
+        )
+      );
+      const esWrite = mockWriteFile.mock.calls.find(([filePath]) =>
+        String(filePath).endsWith(
+          path.join(
+            "i18n",
+            "es",
+            "docusaurus-plugin-content-docs",
+            "current",
+            canonicalRelativePath
+          )
+        )
+      );
+      expect(ptWrite).toBeDefined();
+      expect(esWrite).toBeDefined();
+      expect(
+        mockMkdir.mock.calls.some(([dirPath]) =>
+          String(dirPath).includes(
+            path.join(
+              "i18n",
+              "pt",
+              "docusaurus-plugin-content-docs",
+              "current",
+              "getting-started-essentials"
+            )
+          )
+        )
+      ).toBe(true);
+    });
+
+    it("uses the normal multi-page fetch path for --local-only without --page-id and still skips Notion writes", async () => {
+      const relationlessEnglishPage = createMockNotionPage({
+        id: "local-only-multi-page",
+        title: "Local Only Multi Page",
+        status: "Ready for translation",
+        language: "English",
+        order: 3,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+      const nonEnglishPage = createMockNotionPage({
+        id: "local-only-spanish-page",
+        title: "Pagina en Espanol",
+        status: "Ready for translation",
+        language: "Spanish",
+        order: 4,
+        parentItem: "parent-spanish",
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockFetchNotionData.mockResolvedValue([
+        relationlessEnglishPage,
+        nonEnglishPage,
+      ]);
+      mockSortAndExpandNotionData.mockResolvedValue([
+        nonEnglishPage,
+        relationlessEnglishPage,
+      ]);
+
+      const { main } = await import("./index");
+      const summary = await main({
+        localOnly: true,
+      });
+
+      expect(summary.totalEnglishPages).toBe(1);
+      expect(summary.failedTranslations).toBe(0);
+      expect(summary.skippedTranslations).toBe(0);
+      expect(summary.newTranslations).toBe(2);
+      expect(mockFetchNotionData).toHaveBeenCalledWith({
+        and: [
+          {
+            property: "Publish Status",
+            select: {
+              equals: "Ready for translation",
+            },
+          },
+        ],
+      });
+      expect(mockSortAndExpandNotionData).toHaveBeenCalledWith([
+        relationlessEnglishPage,
+        nonEnglishPage,
+      ]);
+      expect(mockPagesRetrieve).not.toHaveBeenCalled();
+      expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+      expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+      expect(mockNotionBlocksChildrenAppend).not.toHaveBeenCalled();
+      expect(mockNotionBlocksDelete).not.toHaveBeenCalled();
+      expect(mockTranslateText).toHaveBeenCalledTimes(2);
+    });
+
+    it("uses canonical English markdown with frontmatter for single-page local output", async () => {
+      const sourcePageId = "2641b08162d580359153cac75e4f09f2";
+      const englishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "Installing CoMapeo & Onboarding",
+        status: "Draft",
+        language: "English",
+        order: 1,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockPagesRetrieve.mockResolvedValue(englishPage);
+      mockTranslateText.mockImplementation(async (markdown: string) => ({
+        markdown: markdown
+          .replace(
+            'title: "Installing CoMapeo & Onboarding"',
+            'title: "Instalando o CoMapeo e Integração"'
+          )
+          .replace(
+            'sidebar_label: "Installing CoMapeo & Onboarding"',
+            'sidebar_label: "Instalando o CoMapeo e Integração"'
+          )
+          .replace(
+            "# Installing CoMapeo & Onboarding",
+            "# Instalando o CoMapeo e Integração"
+          )
+          .replace("date: 2/25/2026", "date: 25/02/2026"),
+        title: "Instalando o CoMapeo e Integração",
+      }));
+
+      const { main } = await import("./index");
+      const summary = await main({
+        pageId: sourcePageId,
+        localOnly: true,
+      });
+
+      expect(summary.failedTranslations).toBe(0);
+      expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
+      expect(mockTranslateText).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'sidebar_label: "Installing CoMapeo & Onboarding"'
+        ),
+        "Installing CoMapeo & Onboarding",
+        "pt-BR"
+      );
+
+      const ptWrite = mockWriteFile.mock.calls.find(([filePath]) =>
+        String(filePath).endsWith(
+          path.join(
+            "i18n",
+            "pt",
+            "docusaurus-plugin-content-docs",
+            "current",
+            "getting-started-essentials",
+            "installing-comapeo.md"
+          )
+        )
+      );
+      expect(ptWrite).toBeDefined();
+      expect(String(ptWrite?.[1])).toContain(
+        "title: Instalando o CoMapeo e Integração"
+      );
+      expect(String(ptWrite?.[1])).toContain(
+        "sidebar_label: Instalando o CoMapeo e Integração"
+      );
+      expect(String(ptWrite?.[1])).toContain("date: 2/25/2026");
+      expect(String(ptWrite?.[1])).not.toContain("date: 25/02/2026");
+    });
+
+    it("fails clearly when --page-id cannot resolve a canonical output path", async () => {
+      mockResolveCanonicalDocsRelativePath.mockReturnValueOnce(null);
+
+      const sourcePageId = "missing-canonical-page";
+      const englishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "Missing Canonical Path",
+        status: "Draft",
+        language: "English",
+        order: 4,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockPagesRetrieve.mockResolvedValue(englishPage);
+
+      const { main } = await import("./index");
+      await expect(
+        main({
+          pageId: sourcePageId,
+          localOnly: true,
+        })
+      ).rejects.toThrow(
+        "Unable to resolve canonical docs path for page missing-canonical-page"
+      );
+
+      const docsWrites = mockWriteFile.mock.calls.filter(([filePath]) =>
+        String(filePath).includes("docusaurus-plugin-content-docs/current")
+      );
+      expect(docsWrites).toHaveLength(0);
+    });
+
+    it("bypasses the ready-for-translation filter for --page-id in --local-only mode", async () => {
+      const sourcePageId = "2641b08162d580359153cac75e4f09f2";
+      const draftEnglishPage = createMockNotionPage({
+        id: sourcePageId,
+        title: "Draft Page",
+        status: "Draft",
+        language: "English",
+        order: 4,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockPagesRetrieve.mockResolvedValue(draftEnglishPage);
+
+      const { main } = await import("./index");
+      const summary = await main({
+        pageId: sourcePageId,
+        localOnly: true,
+      });
+
+      expect(summary.totalEnglishPages).toBe(1);
+      expect(summary.failedTranslations).toBe(0);
+      expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+      expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+      expect(mockFetchNotionData).not.toHaveBeenCalled();
+      expect(mockSortAndExpandNotionData).not.toHaveBeenCalled();
     });
   });
 
@@ -1392,6 +1789,7 @@ describe("notion-translate index", () => {
 
     it("generates deterministic filenames using stable page ID", async () => {
       const { saveTranslatedContentToDisk } = await import("./index");
+      mockResolveCanonicalDocsRelativePath.mockReturnValueOnce(null);
 
       const mockPage = createMockNotionPage({
         id: "abc123def456", // Stable ID
@@ -1530,9 +1928,187 @@ describe("notion-translate index", () => {
       );
       expect(categoryCall).toBeUndefined();
     });
+
+    it("reuses canonical English frontmatter and localizes title fields", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-with-canonical-frontmatter",
+        title: "Installing CoMapeo & Onboarding",
+        elementType: "Page",
+      });
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        "# Instalando o CoMapeo e Integração",
+        "Instalando o CoMapeo e Integração",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+
+      expect(markdownWriteCall).toBeDefined();
+      expect(markdownWriteCall?.[1]).toContain(
+        "title: Instalando o CoMapeo e Integração"
+      );
+      expect(markdownWriteCall?.[1]).toContain(
+        "sidebar_label: Instalando o CoMapeo e Integração"
+      );
+      expect(markdownWriteCall?.[1]).toContain(
+        "pagination_label: Instalando o CoMapeo e Integração"
+      );
+      expect(markdownWriteCall?.[1]).toContain("sidebar_position: 1");
+      expect(markdownWriteCall?.[1]).toContain(
+        'slug: "/installing-comapeo--onboarding"'
+      );
+      expect(markdownWriteCall?.[1]).toContain(
+        "---\n\n# Instalando o CoMapeo e Integração"
+      );
+      expect(markdownWriteCall?.[1]).toContain(
+        "# Instalando o CoMapeo e Integração"
+      );
+    });
   });
 
   describe("missing parent relation handling", () => {
+    it("keeps the normal ready-filtered multi-page path in --local-only mode and still processes pages without Parent item relation", async () => {
+      const pageWithParent = createMockNotionPage({
+        id: "ready-with-parent",
+        title: "Page With Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 1,
+        parentItem: "parent-1",
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      const pageWithoutParent = createMockNotionPage({
+        id: "ready-no-parent",
+        title: "Page Without Parent",
+        status: "Ready for translation",
+        language: "English",
+        order: 2,
+        parentItem: undefined,
+        elementType: "Page",
+        lastEdited: "2026-02-01T00:00:00.000Z",
+      });
+
+      mockFetchNotionData.mockImplementation(async (filter) => {
+        if (
+          filter?.and?.some(
+            (condition: { property?: string }) =>
+              condition.property === "Publish Status"
+          )
+        ) {
+          return [pageWithParent, pageWithoutParent];
+        }
+        return [];
+      });
+      mockSortAndExpandNotionData.mockResolvedValue([
+        pageWithParent,
+        pageWithoutParent,
+      ]);
+      mockResolveCanonicalDocsRelativePath.mockImplementation(
+        (pageId: string) => {
+          if (pageId === "ready-with-parent") {
+            return "guides/page-with-parent.md";
+          }
+          if (pageId === "ready-no-parent") {
+            return null;
+          }
+          if (pageId.startsWith("toggle-")) {
+            return null;
+          }
+          if (
+            pageId === "abc123def456" ||
+            pageId === "page-regular123" ||
+            pageId === "missing-canonical-page"
+          ) {
+            return null;
+          }
+
+          return "getting-started-essentials/installing-comapeo.md";
+        }
+      );
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const { main } = await import("./index");
+      const summary = await main({ localOnly: true });
+
+      expect(mockFetchNotionData).toHaveBeenCalledWith({
+        and: [
+          {
+            property: "Publish Status",
+            select: {
+              equals: "Ready for translation",
+            },
+          },
+        ],
+      });
+      expect(mockSortAndExpandNotionData).toHaveBeenCalledWith([
+        pageWithParent,
+        pageWithoutParent,
+      ]);
+      expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+      expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
+      expect(mockNotionBlocksChildrenAppend).not.toHaveBeenCalled();
+      expect(mockNotionBlocksDelete).not.toHaveBeenCalled();
+      expect(mockBlocksChildrenList).not.toHaveBeenCalled();
+
+      expect(summary).toMatchObject({
+        totalEnglishPages: 2,
+        processedLanguages: 2,
+        newTranslations: 4,
+        updatedTranslations: 0,
+        skippedTranslations: 0,
+        failedTranslations: 0,
+      });
+      expect(
+        summary.failures.some(
+          (failure) => failure.error === "Missing required Parent item relation"
+        )
+      ).toBe(false);
+
+      const docsWrites = mockWriteFile.mock.calls
+        .map(([filePath]) => String(filePath))
+        .filter((filePath) =>
+          filePath.includes("docusaurus-plugin-content-docs/current")
+        );
+      expect(docsWrites).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            path.join(
+              "i18n",
+              "pt",
+              "docusaurus-plugin-content-docs",
+              "current",
+              "page-without-parent-readynoparent.md"
+            )
+          ),
+          expect.stringContaining(
+            path.join(
+              "i18n",
+              "es",
+              "docusaurus-plugin-content-docs",
+              "current",
+              "page-without-parent-readynoparent.md"
+            )
+          ),
+        ])
+      );
+
+      const loggedSummary = findSummaryLog(logSpy);
+      expect(loggedSummary).toEqual(summary);
+    });
+
     it("gracefully skips pages without Parent item relation and reports as non-critical failure", async () => {
       // Create a page WITHOUT parent relation
       const pageWithoutParent = createMockNotionPage({

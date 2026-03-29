@@ -254,7 +254,10 @@ export async function processMarkdownWithRetry(
     warnIfS3("Image processing stage", workingContent);
 
     if (rawBlocks && rawBlocks.length > 0) {
-      workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
+      workingContent = await processCalloutsInMarkdown(
+        workingContent,
+        rawBlocks
+      );
       console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
     }
 
@@ -606,7 +609,7 @@ export async function processMarkdownSinglePass(
 
   // Process callouts
   if (rawBlocks && rawBlocks.length > 0) {
-    workingContent = processCalloutsInMarkdown(workingContent, rawBlocks);
+    workingContent = await processCalloutsInMarkdown(workingContent, rawBlocks);
     console.log(chalk.blue(`  ↳ Processed callouts in markdown content`));
   }
 

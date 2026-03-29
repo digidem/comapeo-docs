@@ -11,7 +11,17 @@ import {
 
 vi.mock("../notionClient", () => ({
   n2m: {
-    toMarkdownString: vi.fn().mockReturnValue({ parent: "" }),
+    blocksToMarkdown: vi.fn(async () => []),
+    toMarkdownString: vi.fn().mockImplementation((blocks: any) => ({
+      parent: Array.isArray(blocks)
+        ? blocks
+            .map((block) =>
+              block && typeof block.parent === "string" ? block.parent : ""
+            )
+            .filter(Boolean)
+            .join("\n")
+        : "",
+    })),
   },
 }));
 
@@ -338,13 +348,13 @@ describe("markdownTransform", () => {
   });
 
   describe("processCalloutsInMarkdown", () => {
-    it("should return content unchanged if no blocks", () => {
+    it("should return content unchanged if no blocks", async () => {
       const content = "> Some blockquote\n> text";
-      const result = processCalloutsInMarkdown(content, []);
+      const result = await processCalloutsInMarkdown(content, []);
       expect(result).toBe(content);
     });
 
-    it("should return content unchanged if empty content", () => {
+    it("should return content unchanged if empty content", async () => {
       const blocks = [
         {
           type: "callout",
@@ -353,11 +363,11 @@ describe("markdownTransform", () => {
           },
         } as any,
       ];
-      const result = processCalloutsInMarkdown("", blocks);
+      const result = await processCalloutsInMarkdown("", blocks);
       expect(result).toBe("");
     });
 
-    it("should not process callouts inside code fences", () => {
+    it("should not process callouts inside code fences", async () => {
       const content = `\`\`\`
 > This is a blockquote in code
 \`\`\``;
@@ -369,12 +379,12 @@ describe("markdownTransform", () => {
           },
         } as any,
       ];
-      const result = processCalloutsInMarkdown(content, blocks);
+      const result = await processCalloutsInMarkdown(content, blocks);
       expect(result).toContain("```");
       expect(result).toContain("> This is a blockquote in code");
     });
 
-    it("should not process callouts inside existing admonitions", () => {
+    it("should not process callouts inside existing admonitions", async () => {
       const content = `:::note
 > This is a blockquote in admonition
 :::`;
@@ -386,12 +396,12 @@ describe("markdownTransform", () => {
           },
         } as any,
       ];
-      const result = processCalloutsInMarkdown(content, blocks);
+      const result = await processCalloutsInMarkdown(content, blocks);
       expect(result).toContain(":::note");
       expect(result).toContain("> This is a blockquote in admonition");
     });
 
-    it("should handle nested callout blocks", () => {
+    it("should handle nested callout blocks", async () => {
       const parentBlock = {
         type: "callout",
         callout: {
@@ -408,13 +418,13 @@ describe("markdownTransform", () => {
       } as any;
 
       const content = "> Parent callout\n> Child callout";
-      const result = processCalloutsInMarkdown(content, [parentBlock]);
+      const result = await processCalloutsInMarkdown(content, [parentBlock]);
 
       // Should process both callouts
       expect(result).toBeTruthy();
     });
 
-    it("should preserve leading whitespace in admonitions", () => {
+    it("should preserve leading whitespace in admonitions", async () => {
       const content = "  > Indented blockquote";
       const blocks = [
         {
@@ -425,19 +435,16 @@ describe("markdownTransform", () => {
           },
         } as any,
       ];
-      const result = processCalloutsInMarkdown(content, blocks);
+      const result = await processCalloutsInMarkdown(content, blocks);
 
       // Check that some indentation is preserved
       expect(result).toMatch(/^\s+/);
     });
 
-    it("should process callout with paragraph child", () => {
-      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
-        if (blocks?.[0]?.type === "paragraph") {
-          return { parent: "Child paragraph content" };
-        }
-        return { parent: "" };
-      });
+    it("should process callout with paragraph child", async () => {
+      vi.mocked(n2m.blocksToMarkdown).mockResolvedValueOnce([
+        { parent: "Child paragraph content" },
+      ] as any);
 
       const parentBlock = {
         type: "callout",
@@ -457,19 +464,18 @@ describe("markdownTransform", () => {
       } as any;
 
       const content = "> Main callout content";
-      const result = processCalloutsInMarkdown(content, [parentBlock]);
+      const result = await processCalloutsInMarkdown(content, [parentBlock]);
 
       expect(result).toContain(":::tip");
       expect(result).toContain("Child paragraph content");
     });
 
-    it("should process callout with nested list children", () => {
-      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
-        if (blocks?.[0]?.type === "bulleted_list_item") {
-          return { parent: "- List item 1\n- List item 2\n- List item 3" };
-        }
-        return { parent: "" };
-      });
+    it("should process callout with nested list children", async () => {
+      vi.mocked(n2m.blocksToMarkdown).mockResolvedValueOnce([
+        { parent: "- List item 1" },
+        { parent: "- List item 2" },
+        { parent: "- List item 3" },
+      ] as any);
 
       const parentBlock = {
         type: "callout",
@@ -500,7 +506,7 @@ describe("markdownTransform", () => {
       } as any;
 
       const content = "> Important warning";
-      const result = processCalloutsInMarkdown(content, [parentBlock]);
+      const result = await processCalloutsInMarkdown(content, [parentBlock]);
 
       expect(result).toContain(":::warning");
       expect(result).toContain("List item 1");
@@ -508,16 +514,13 @@ describe("markdownTransform", () => {
       expect(result).toContain("List item 3");
     });
 
-    it("should process callout with mixed children", () => {
-      vi.mocked(n2m.toMarkdownString).mockImplementation((blocks: any) => {
-        if (blocks?.[0]?.type === "paragraph") {
-          return {
-            parent:
-              "First paragraph\n\n1. Numbered item 1\n2. Numbered item 2\n\nSecond paragraph",
-          };
-        }
-        return { parent: "" };
-      });
+    it("should process callout with mixed children", async () => {
+      vi.mocked(n2m.blocksToMarkdown).mockResolvedValueOnce([
+        {
+          parent:
+            "First paragraph\n\n1. Numbered item 1\n2. Numbered item 2\n\nSecond paragraph",
+        },
+      ] as any);
 
       const parentBlock = {
         type: "callout",
@@ -555,11 +558,47 @@ describe("markdownTransform", () => {
       } as any;
 
       const content = "> Main content";
-      const result = processCalloutsInMarkdown(content, [parentBlock]);
+      const result = await processCalloutsInMarkdown(content, [parentBlock]);
 
       expect(result).toContain(":::info");
       expect(result).toContain("First paragraph");
       expect(result).toContain("Second paragraph");
+    });
+
+    it("serializes raw child blocks instead of stringifying them as objects", async () => {
+      vi.mocked(n2m.blocksToMarkdown).mockResolvedValueOnce([
+        { parent: "[VIDEO WALKTHROUGH](https://example.com)" },
+        { parent: "Follow-up line" },
+      ] as any);
+
+      const parentBlock = {
+        type: "callout",
+        callout: {
+          rich_text: [{ plain_text: "Main callout content" }],
+          color: "blue_background",
+        },
+        children: [
+          {
+            type: "bookmark",
+            bookmark: {
+              url: "https://example.com",
+            },
+          },
+          {
+            type: "paragraph",
+            paragraph: {
+              rich_text: [{ plain_text: "Follow-up line" }],
+            },
+          },
+        ],
+      } as any;
+
+      const content = "> Main callout content";
+      const result = await processCalloutsInMarkdown(content, [parentBlock]);
+
+      expect(result).toContain("[VIDEO WALKTHROUGH](https://example.com)");
+      expect(result).toContain("Follow-up line");
+      expect(result).not.toContain("[object Object]");
     });
   });
 });

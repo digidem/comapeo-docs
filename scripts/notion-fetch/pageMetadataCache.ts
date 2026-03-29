@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizePageId } from "../utils/normalizePageId.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,6 +142,82 @@ export function loadPageMetadataCache(): PageMetadataCache | null {
   } catch {
     return null;
   }
+}
+
+const DOCS_ROOT = path.join(PROJECT_ROOT, "docs");
+
+function toPosixPath(filePath: string): string {
+  return filePath.split(path.sep).join("/");
+}
+
+function normalizeDocsRelativePath(outputPath: string): string | null {
+  const absolutePath = normalizePath(outputPath);
+  if (!absolutePath) {
+    return null;
+  }
+
+  const relativeToDocsRoot = path.relative(DOCS_ROOT, absolutePath);
+  if (!relativeToDocsRoot || relativeToDocsRoot.startsWith("..")) {
+    return null;
+  }
+
+  const normalizedRelativePath = toPosixPath(relativeToDocsRoot);
+  const extension = path.extname(normalizedRelativePath).toLowerCase();
+  const fileName = path.posix.basename(normalizedRelativePath);
+  const isMarkdownPath = extension === ".md" || extension === ".mdx";
+  const isCategoryPath = fileName === "_category_.json";
+
+  if (!isMarkdownPath && !isCategoryPath) {
+    return null;
+  }
+
+  return normalizedRelativePath;
+}
+
+/**
+ * Resolve the canonical docs-relative output path for a page from the cache.
+ *
+ * Preference order:
+ * 1. docs-relative markdown path
+ * 2. docs-relative category index path
+ *
+ * Returns null when the cache is missing or contains no usable docs output.
+ */
+export function resolveCanonicalDocsRelativePath(
+  pageId: string,
+  cache: PageMetadataCache | null = loadPageMetadataCache()
+): string | null {
+  const page = Object.entries(cache?.pages ?? {}).find(
+    ([candidatePageId]) =>
+      candidatePageId === pageId ||
+      normalizePageId(candidatePageId) === normalizePageId(pageId)
+  )?.[1];
+  if (!page) {
+    return null;
+  }
+
+  const normalizedOutputs = (page.outputPaths ?? [])
+    .map(normalizeDocsRelativePath)
+    .filter((outputPath): outputPath is string => Boolean(outputPath));
+
+  const markdownPath = normalizedOutputs.find((outputPath) => {
+    const extension = path.extname(outputPath).toLowerCase();
+    return extension === ".md" || extension === ".mdx";
+  });
+  if (markdownPath) {
+    return markdownPath;
+  }
+
+  const categoryPath = normalizedOutputs.find(
+    (outputPath) =>
+      outputPath.endsWith("/_category_.json") ||
+      outputPath === "_category_.json"
+  );
+  if (categoryPath) {
+    return categoryPath;
+  }
+
+  return normalizedOutputs[0] ?? null;
 }
 
 /**
@@ -315,6 +392,7 @@ export function hasMissingOutputs(
     return false;
   }
 
+  // eslint-disable-next-line security/detect-object-injection -- pageId is a trusted Notion page identifier used as a cache key
   const cached = cache.pages[pageId];
   if (!cached || !cached.outputPaths) {
     return false;
@@ -355,6 +433,7 @@ export function updatePageInCache(
   outputPaths: string[],
   containsS3?: boolean
 ): void {
+  // eslint-disable-next-line security/detect-object-injection -- pageId is a trusted Notion page identifier used as a cache key
   const existing = cache.pages[pageId];
   const mergedOutputs = new Set<string>();
 
@@ -387,6 +466,7 @@ export function updatePageInCache(
       ? existing.lastEdited
       : lastEdited;
 
+  // eslint-disable-next-line security/detect-object-injection -- pageId is a trusted Notion page identifier used as a cache key
   cache.pages[pageId] = {
     lastEdited: latestLastEdited,
     outputPaths: Array.from(mergedOutputs),
@@ -405,6 +485,7 @@ export function removePageFromCache(
   cache: PageMetadataCache,
   pageId: string
 ): void {
+  // eslint-disable-next-line security/detect-object-injection -- pageId is a trusted Notion page identifier used as a cache key
   delete cache.pages[pageId];
 }
 

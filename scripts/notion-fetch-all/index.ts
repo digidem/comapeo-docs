@@ -253,8 +253,9 @@ async function main() {
       generateOptions: {
         force: options.force,
         dryRun: options.dryRun,
-        // Only enable deletion when we have the full dataset (no filters/limits)
-        enableDeletion: !options.maxPages && !options.statusFilter,
+        // Only enable deletion when we have the full dataset (no filters/limits/page-id)
+        enableDeletion:
+          !options.maxPages && !options.statusFilter && !options.pageId,
       },
     };
 

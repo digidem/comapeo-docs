@@ -13,6 +13,7 @@ import {
   loadPageMetadataCache,
   normalizePath,
 } from "./notion-fetch/pageMetadataCache";
+import { normalizePageId } from "./utils/normalizePageId";
 
 dotenv.config({ override: true });
 
@@ -40,10 +41,6 @@ function parseArgs(): CliOptions {
   }
 
   return options;
-}
-
-function normalizePageId(pageId: string): string {
-  return pageId.replace(/-/g, "").toLowerCase();
 }
 
 function resolveDataSourceId(): string | undefined {

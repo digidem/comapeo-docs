@@ -13,7 +13,7 @@ import { BackupManager } from "./utils/backupManager";
 import { ConfigError, logError, logWarning } from "../shared/errors";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

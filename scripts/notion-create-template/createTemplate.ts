@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;

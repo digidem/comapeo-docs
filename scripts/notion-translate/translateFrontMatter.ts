@@ -19,7 +19,7 @@ import {
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 // Initialize OpenAI client
 const openai = new OpenAI({

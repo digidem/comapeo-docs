@@ -15,7 +15,7 @@ import {
 } from "./notion-fetch/pageMetadataCache";
 import { normalizePageId } from "./utils/normalizePageId";
 
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const TARGET_STATUS = "Auto translation generated";
 const LANGUAGE_EN = "English";

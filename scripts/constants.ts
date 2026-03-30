@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 // Load environment variables and override system variables
 // so local .env values take precedence
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 // Main language configuration
 export const MAIN_LANGUAGE = "English";

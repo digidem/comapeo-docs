@@ -3,7 +3,10 @@ import {
   mockOpenAIChatCompletionCreate,
   resetOpenAIMock,
 } from "./test-openai-mock";
-import { DEFAULT_OPENAI_MAX_TOKENS } from "../constants";
+import {
+  DEFAULT_OPENAI_MAX_TOKENS,
+  CUSTOM_API_MAX_OUTPUT_TOKENS,
+} from "../constants";
 import { installTestNotionEnv } from "../test-utils";
 import {
   extractPromptMarkdown,
@@ -103,6 +106,48 @@ describe("notion-translate translateFrontMatter", () => {
       };
       expect(request.max_tokens).toBe(DEFAULT_OPENAI_MAX_TOKENS);
       expect(request.response_format?.type).toBe("json_object");
+    } finally {
+      vi.doUnmock("../constants.js");
+      vi.resetModules();
+    }
+  });
+
+  it("scales max_tokens proportionally to input text length for custom API", async () => {
+    vi.doMock("../constants.js", async () => {
+      const actual =
+        await vi.importActual<typeof import("../constants.js")>(
+          "../constants.js"
+        );
+      return {
+        ...actual,
+        OPENAI_BASE_URL: "https://custom.example/v1",
+        IS_CUSTOM_OPENAI_API: true,
+      };
+    });
+
+    try {
+      vi.resetModules();
+      const { translateText } = await import("./translateFrontMatter");
+
+      // Use structured mock that echoes content back to pass completeness checks
+      installStructuredTranslationMock();
+
+      // Use text small enough to fit in a single chunk for custom API
+      // (CUSTOM_API_CHUNK_MAX_CHARS = 12_000, minus prompt overhead ~2_600 = ~9_400 budget)
+      const textLength = 8_000;
+      const longText = "A".repeat(textLength);
+      await translateText(longText, "Title", "pt-BR");
+
+      expect(mockOpenAIChatCompletionCreate).toHaveBeenCalled();
+      const request = mockOpenAIChatCompletionCreate.mock.calls[0]?.[0] as {
+        max_tokens?: number;
+      };
+      expect(request.max_tokens).toBe(
+        Math.min(
+          CUSTOM_API_MAX_OUTPUT_TOKENS,
+          Math.max(DEFAULT_OPENAI_MAX_TOKENS, Math.ceil(textLength / 2))
+        )
+      );
     } finally {
       vi.doUnmock("../constants.js");
       vi.resetModules();
@@ -412,16 +457,32 @@ describe("notion-translate translateFrontMatter", () => {
       ],
     }));
 
-    await expect(
-      translateText(source, "Original Title", "pt-BR", {
+    const translationPromise = translateText(
+      source,
+      "Original Title",
+      "pt-BR",
+      {
         chunkLimit: 8_500,
-      })
-    ).rejects.toEqual(
-      expect.objectContaining({
-        code: "unexpected_error",
-        isCritical: false,
-      })
+      }
     );
+
+    await expect(translationPromise).rejects.toMatchObject({
+      code: "completeness_check_failed",
+      isCritical: false,
+      details: {
+        completeness: {
+          stage: "chunk",
+          failedChecks: expect.arrayContaining(["heading loss: 3 → 2"]),
+          metrics: expect.objectContaining({
+            source: expect.objectContaining({ headingCount: 3 }),
+            translated: expect.objectContaining({ headingCount: 2 }),
+            lengthRatio: expect.any(Number),
+          }),
+        },
+      },
+    });
+
+    await expect(translationPromise).rejects.toThrow(/metrics:/);
     expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
   });
 
@@ -1322,5 +1383,35 @@ describe("notion-translate translateFrontMatter", () => {
       "pt-BR"
     );
     expect(result).toBeDefined();
+  });
+
+  it("throws token_overflow when max recursion depth is exhausted", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    // Always return finish_reason: "length" to trigger recursive splitting
+    // until maxDepth (default 10) is exhausted.
+    mockOpenAIChatCompletionCreate.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "length",
+          message: {
+            content: '{"markdown":"partial',
+          },
+        },
+      ],
+    });
+
+    const longText = "A".repeat(10_000);
+    await expect(translateText(longText, "Title", "pt-BR")).rejects.toEqual(
+      expect.objectContaining({
+        code: "token_overflow",
+        isCritical: false,
+      })
+    );
+
+    // Verify the recursion was bounded — with default maxDepth=10,
+    // the first branch makes 11 calls (one per level) before throwing.
+    // The total should be well under 100.
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeLessThan(100);
   });
 });

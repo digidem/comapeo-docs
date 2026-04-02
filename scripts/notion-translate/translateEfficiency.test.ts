@@ -393,6 +393,70 @@ describe("translation efficiency", () => {
     expect(payloads[1].length).toBeLessThan(payloads[0].length);
     expect(result.markdown).toBe(source);
   });
+
+  it("reassembly completeness failures expose actionable diagnostics", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source = [
+      "# Section One",
+      "",
+      "- Item one A",
+      "- Item one B",
+      "",
+      `${"Alpha ".repeat(500).trim()}`,
+      "",
+      "# Section Two",
+      "",
+      "- Item two A",
+      "- Item two B",
+      "",
+      `${"Beta ".repeat(500).trim()}`,
+    ].join("\n");
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const { markdown, title } = extractPromptMarkdown(request);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  title: title ? `Translated ${title}` : "",
+                  markdown: markdown
+                    .replace("# Section One", "# Seção Um")
+                    .replace("# Section Two", "# Seção Dois")
+                    .replace(/^- /gm, "")
+                    .replace(/Alpha/g, "Alfa")
+                    .replace(/Beta/g, "Beta"),
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    await expect(
+      translateText(source, "Diagnostic Page", "pt-BR", {
+        chunkLimit: 8_500,
+      })
+    ).rejects.toMatchObject({
+      code: "completeness_check_failed",
+      isCritical: false,
+      details: {
+        completeness: {
+          stage: "reassembly",
+          failedChecks: expect.arrayContaining(["bullet list loss: 4 → 0"]),
+          metrics: expect.objectContaining({
+            source: expect.objectContaining({ bulletListCount: 4 }),
+            translated: expect.objectContaining({ bulletListCount: 0 }),
+            lengthRatio: expect.any(Number),
+          }),
+        },
+      },
+      message: expect.stringContaining("metrics:"),
+    });
+  });
 });
 
 describe("translation correctness", () => {

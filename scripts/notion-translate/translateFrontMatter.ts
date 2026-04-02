@@ -7,11 +7,13 @@ import chalk from "chalk";
 import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_OPENAI_MAX_TOKENS,
+  CUSTOM_API_MAX_OUTPUT_TOKENS,
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
   OPENAI_BASE_URL,
   IS_CUSTOM_OPENAI_API,
+  CUSTOM_API_CHUNK_MAX_CHARS,
   getMaxChunkChars,
   TRANSLATION_CHUNK_MAX_CHARS,
   TRANSLATION_MIN_CHUNK_MAX_CHARS,
@@ -25,6 +27,7 @@ dotenv.config({ override: true, quiet: true });
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: OPENAI_BASE_URL,
+  timeout: 120_000,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
@@ -93,6 +96,16 @@ type TranslationPayload = {
   title: string;
 };
 
+type CompletenessFailureStage = "single_call" | "chunk" | "reassembly";
+
+type TranslationErrorDetails = {
+  completeness?: {
+    stage: CompletenessFailureStage;
+    failedChecks: string[];
+    metrics: CompletenessDiagnostics["metrics"];
+  };
+};
+
 export class TranslationError extends Error {
   code:
     | "quota_exceeded"
@@ -100,21 +113,25 @@ export class TranslationError extends Error {
     | "schema_invalid"
     | "token_overflow"
     | "transient_api_error"
+    | "completeness_check_failed"
     | "unexpected_error";
   isCritical: boolean;
   status?: number;
+  details?: TranslationErrorDetails;
 
   constructor(
     message: string,
     code: TranslationError["code"],
     isCritical: boolean,
-    status?: number
+    status?: number,
+    details?: TranslationErrorDetails
   ) {
     super(message);
     this.name = "TranslationError";
     this.code = code;
     this.isCritical = isCritical;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -722,52 +739,156 @@ function collectMarkdownStructureMetrics(
   };
 }
 
-function isSuspiciouslyIncompleteTranslation(
+/**
+ * Structured result from translation completeness evaluation.
+ * When `isIncomplete` is true, `failedChecks` lists which structural
+ * checks failed and `metrics` contains the compared values so callers
+ * can produce diagnostic-rich error messages.
+ */
+export interface CompletenessDiagnostics {
+  isIncomplete: boolean;
+  failedChecks: string[];
+  metrics: {
+    source: MarkdownStructureMetrics;
+    translated: MarkdownStructureMetrics;
+    lengthRatio: number;
+  };
+}
+
+function evaluateTranslationCompleteness(
   sourceMarkdown: string,
   translatedMarkdown: string
-): boolean {
+): CompletenessDiagnostics {
   const sourceMetrics = collectMarkdownStructureMetrics(sourceMarkdown);
   const translatedMetrics = collectMarkdownStructureMetrics(translatedMarkdown);
+  const failedChecks: string[] = [];
 
   if (sourceMetrics.contentLength === 0) {
-    return false;
+    return {
+      isIncomplete: false,
+      failedChecks: [],
+      metrics: {
+        source: sourceMetrics,
+        translated: translatedMetrics,
+        lengthRatio: 1,
+      },
+    };
   }
 
   const lengthRatio =
     translatedMetrics.contentLength / Math.max(sourceMetrics.contentLength, 1);
-  const headingLoss =
-    sourceMetrics.headingCount > 0 &&
-    translatedMetrics.headingCount < sourceMetrics.headingCount;
-  const fencedBlockLoss =
-    sourceMetrics.fencedCodeBlockCount > 0 &&
-    translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount;
-  const admonitionLoss =
-    sourceMetrics.admonitionCount > 0 &&
-    translatedMetrics.admonitionCount < sourceMetrics.admonitionCount;
-  const bulletListLoss =
-    sourceMetrics.bulletListCount >= 3 &&
-    translatedMetrics.bulletListCount === 0;
-  const numberedListLoss =
-    sourceMetrics.numberedListCount >= 3 &&
-    translatedMetrics.numberedListCount === 0;
-  const tableLoss =
-    sourceMetrics.tableCount >= 1 && translatedMetrics.tableCount === 0;
-  const severeLengthShrinkage =
-    sourceMetrics.contentLength >= 4_000 && lengthRatio < 0.55;
 
-  return (
-    headingLoss ||
-    fencedBlockLoss ||
-    admonitionLoss ||
-    bulletListLoss ||
-    numberedListLoss ||
-    tableLoss ||
-    severeLengthShrinkage
+  if (
+    sourceMetrics.headingCount > 0 &&
+    translatedMetrics.headingCount < sourceMetrics.headingCount
+  ) {
+    failedChecks.push(
+      `heading loss: ${sourceMetrics.headingCount} → ${translatedMetrics.headingCount}`
+    );
+  }
+  if (
+    sourceMetrics.fencedCodeBlockCount > 0 &&
+    translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount
+  ) {
+    failedChecks.push(
+      `fenced code block loss: ${sourceMetrics.fencedCodeBlockCount} → ${translatedMetrics.fencedCodeBlockCount}`
+    );
+  }
+  if (
+    sourceMetrics.admonitionCount > 0 &&
+    translatedMetrics.admonitionCount < sourceMetrics.admonitionCount
+  ) {
+    failedChecks.push(
+      `admonition loss: ${sourceMetrics.admonitionCount} → ${translatedMetrics.admonitionCount}`
+    );
+  }
+  if (
+    sourceMetrics.bulletListCount >= 3 &&
+    translatedMetrics.bulletListCount === 0
+  ) {
+    failedChecks.push(`bullet list loss: ${sourceMetrics.bulletListCount} → 0`);
+  }
+  if (
+    sourceMetrics.numberedListCount >= 3 &&
+    translatedMetrics.numberedListCount === 0
+  ) {
+    failedChecks.push(
+      `numbered list loss: ${sourceMetrics.numberedListCount} → 0`
+    );
+  }
+  if (sourceMetrics.tableCount >= 1 && translatedMetrics.tableCount === 0) {
+    failedChecks.push(`table loss: ${sourceMetrics.tableCount} → 0`);
+  }
+  if (sourceMetrics.contentLength >= 4_000 && lengthRatio < 0.55) {
+    failedChecks.push(
+      `severe length shrinkage: ratio ${lengthRatio.toFixed(2)} (${sourceMetrics.contentLength} → ${translatedMetrics.contentLength} chars)`
+    );
+  }
+
+  return {
+    isIncomplete: failedChecks.length > 0,
+    failedChecks,
+    metrics: {
+      source: sourceMetrics,
+      translated: translatedMetrics,
+      lengthRatio,
+    },
+  };
+}
+
+function formatCompletenessMetrics(
+  diagnostics: CompletenessDiagnostics
+): string {
+  const { source, translated, lengthRatio } = diagnostics.metrics;
+
+  return [
+    `headings ${translated.headingCount}/${source.headingCount}`,
+    `fencedCodeBlocks ${translated.fencedCodeBlockCount}/${source.fencedCodeBlockCount}`,
+    `admonitions ${translated.admonitionCount}/${source.admonitionCount}`,
+    `bulletLists ${translated.bulletListCount}/${source.bulletListCount}`,
+    `numberedLists ${translated.numberedListCount}/${source.numberedListCount}`,
+    `tables ${translated.tableCount}/${source.tableCount}`,
+    `lengthRatio ${lengthRatio.toFixed(2)}`,
+  ].join(", ");
+}
+
+function createCompletenessError(
+  stage: CompletenessFailureStage,
+  diagnostics: CompletenessDiagnostics
+): TranslationError {
+  const stageDescription =
+    stage === "reassembly"
+      ? "after chunk reassembly"
+      : stage === "chunk"
+        ? "within a translated chunk"
+        : "after translation";
+
+  return new TranslationError(
+    `Translated markdown appears incomplete ${stageDescription}: ${diagnostics.failedChecks.join("; ")} | metrics: ${formatCompletenessMetrics(diagnostics)}`,
+    "completeness_check_failed",
+    false,
+    undefined,
+    {
+      completeness: {
+        stage,
+        failedChecks: [...diagnostics.failedChecks],
+        metrics: diagnostics.metrics,
+      },
+    }
   );
 }
 
 function getProactiveChunkCharLimit(modelName: string): number {
-  return Math.min(getMaxChunkChars(modelName), TRANSLATION_CHUNK_MAX_CHARS);
+  const contextBasedLimit = Math.min(
+    getMaxChunkChars(modelName),
+    TRANSLATION_CHUNK_MAX_CHARS
+  );
+  // Custom APIs (e.g., DeepSeek) have lower output-token limits and slower
+  // response times, so use a smaller chunk size to keep API calls fast.
+  if (IS_CUSTOM_OPENAI_API) {
+    return Math.min(contextBasedLimit, CUSTOM_API_CHUNK_MAX_CHARS);
+  }
+  return contextBasedLimit;
 }
 
 function getChunkContentBudget(totalChunkLimit: number, title: string): number {
@@ -885,7 +1006,12 @@ async function translateTextSingleCall(
         response_format: responseFormat,
         ...modelParams,
         ...(IS_CUSTOM_OPENAI_API
-          ? { max_tokens: DEFAULT_OPENAI_MAX_TOKENS }
+          ? {
+              max_tokens: Math.min(
+                CUSTOM_API_MAX_OUTPUT_TOKENS,
+                Math.max(DEFAULT_OPENAI_MAX_TOKENS, Math.ceil(text.length / 2))
+              ),
+            }
           : {}),
       });
 
@@ -967,7 +1093,8 @@ async function translateChunkWithOverflowFallback(
   title: string,
   targetLanguage: string,
   placeholderGuardAttempt = 0,
-  chunkBudgetForRetry = getProactiveChunkCharLimit(model)
+  chunkBudgetForRetry = getProactiveChunkCharLimit(model),
+  maxDepth = 10
 ): Promise<{ markdown: string; title: string }> {
   const requiredProtectedPaths = Array.from(
     new Set([
@@ -993,12 +1120,22 @@ async function translateChunkWithOverflowFallback(
         text,
         title,
         targetLanguage,
-        placeholderGuardAttempt + 1
+        placeholderGuardAttempt + 1,
+        chunkBudgetForRetry,
+        maxDepth
       );
     }
 
     if (!(err instanceof TranslationError) || err.code !== "token_overflow") {
       throw err;
+    }
+
+    if (maxDepth <= 0) {
+      throw new TranslationError(
+        "Max recursion depth exhausted during chunk overflow splitting",
+        "token_overflow",
+        false
+      );
     }
 
     if (text.length < 2) {
@@ -1026,7 +1163,9 @@ async function translateChunkWithOverflowFallback(
         chunk,
         chunkTitle,
         targetLanguage,
-        0
+        0,
+        chunkBudgetForRetry,
+        maxDepth - 1
       );
       if (index === 0) {
         translatedTitle = translated.title;
@@ -1073,17 +1212,16 @@ export async function translateText(
 
   const translateAndValidate = async (
     sourceMarkdown: string,
-    translatedChunk: Promise<{ markdown: string; title: string }>
+    translatedChunk: Promise<{ markdown: string; title: string }>,
+    stage: CompletenessFailureStage
   ) => {
     const translated = await translatedChunk;
-    if (
-      isSuspiciouslyIncompleteTranslation(sourceMarkdown, translated.markdown)
-    ) {
-      throw new TranslationError(
-        "Translated markdown appears incomplete compared to source structure",
-        "unexpected_error",
-        false
-      );
+    const completeness = evaluateTranslationCompleteness(
+      sourceMarkdown,
+      translated.markdown
+    );
+    if (completeness.isIncomplete) {
+      throw createCompletenessError(stage, completeness);
     }
     assertFrontmatterIntegrity(sourceMarkdown, translated.markdown);
     return translated;
@@ -1104,7 +1242,8 @@ export async function translateText(
           targetLanguage,
           0,
           effectiveChunkLimit
-        )
+        ),
+        "single_call"
       );
       return {
         markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
@@ -1146,7 +1285,8 @@ export async function translateText(
           targetLanguage,
           0,
           effectiveChunkLimit
-        )
+        ),
+        "chunk"
       );
 
       if (i === 0) {
@@ -1157,12 +1297,12 @@ export async function translateText(
 
     const joinedMarkdown = translatedChunks.join("");
     assertFrontmatterIntegrity(maskedText, joinedMarkdown);
-    if (isSuspiciouslyIncompleteTranslation(maskedText, joinedMarkdown)) {
-      throw new TranslationError(
-        "Translated markdown appears incomplete after chunk reassembly",
-        "unexpected_error",
-        false
-      );
+    const reassemblyCompleteness = evaluateTranslationCompleteness(
+      maskedText,
+      joinedMarkdown
+    );
+    if (reassemblyCompleteness.isIncomplete) {
+      throw createCompletenessError("reassembly", reassemblyCompleteness);
     }
 
     // Sections already end with "\n"; join with "" to avoid extra blank lines
@@ -1174,8 +1314,7 @@ export async function translateText(
     const isRecoverableCompletenessFailure =
       error instanceof TranslationError &&
       error.isCritical === false &&
-      ((error.code === "unexpected_error" &&
-        /incomplete/.test(error.message)) ||
+      (error.code === "completeness_check_failed" ||
         (error.code === "schema_invalid" &&
           /Frontmatter integrity check failed/.test(error.message)));
 

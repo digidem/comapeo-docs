@@ -8,7 +8,6 @@ const mockTranslateText = vi.fn();
 const mockTranslateJson = vi.fn();
 const mockExtractTranslatableText = vi.fn();
 const mockGetLanguageName = vi.fn();
-const mockCreateNotionPageFromMarkdown = vi.fn();
 const mockReadFile = vi.fn();
 const mockWriteFile = vi.fn();
 const mockMkdir = vi.fn();
@@ -24,9 +23,6 @@ const mockNotionPagesUpdate = vi.fn();
 const mockNotionBlocksChildrenList = vi.fn();
 const mockNotionBlocksChildrenAppend = vi.fn();
 const mockNotionBlocksDelete = vi.fn();
-const mockProcessAndReplaceImages = vi.fn();
-const mockGetImageDiagnostics = vi.fn();
-const mockValidateAndFixRemainingImages = vi.fn();
 
 const mockN2m = {
   pageToMarkdown: vi.fn(),
@@ -93,17 +89,6 @@ vi.mock("./translateCodeJson", () => ({
   getLanguageName: mockGetLanguageName,
 }));
 
-vi.mock("./markdownToNotion", () => ({
-  createNotionPageFromMarkdown: mockCreateNotionPageFromMarkdown,
-}));
-
-vi.mock("../notion-fetch/imageReplacer", () => ({
-  processAndReplaceImages: mockProcessAndReplaceImages,
-  getImageDiagnostics: mockGetImageDiagnostics,
-  validateAndFixRemainingImages: mockValidateAndFixRemainingImages,
-  extractImageMatches: vi.fn().mockReturnValue([]),
-}));
-
 function findSummaryLog(logSpy: ReturnType<typeof vi.spyOn>) {
   const summaryLine = logSpy.mock.calls
     .map((args) => args.map(String).join(" "))
@@ -136,7 +121,6 @@ describe("notion-translate index", () => {
     mockTranslateJson.mockReset();
     mockExtractTranslatableText.mockReset();
     mockGetLanguageName.mockReset();
-    mockCreateNotionPageFromMarkdown.mockReset();
     mockReadFile.mockReset();
     mockWriteFile.mockReset();
     mockMkdir.mockReset();
@@ -154,9 +138,6 @@ describe("notion-translate index", () => {
     mockNotionBlocksDelete.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
-    mockProcessAndReplaceImages.mockReset();
-    mockGetImageDiagnostics.mockReset();
-    mockValidateAndFixRemainingImages.mockReset();
 
     mockFetchNotionData.mockImplementation(async (filter) => {
       if (
@@ -174,29 +155,6 @@ describe("notion-translate index", () => {
     mockN2m.toMarkdownString.mockReturnValue({
       parent: "# Hello\n\nEnglish markdown",
     });
-    mockProcessAndReplaceImages.mockImplementation(
-      async (markdown: string) => ({
-        markdown,
-        stats: { successfulImages: 0, totalFailures: 0, totalSaved: 0 },
-        metrics: {
-          totalProcessed: 0,
-          skippedSmallSize: 0,
-          skippedAlreadyOptimized: 0,
-          skippedResize: 0,
-          fullyProcessed: 0,
-        },
-      })
-    );
-    mockGetImageDiagnostics.mockReturnValue({
-      totalMatches: 0,
-      markdownMatches: 0,
-      htmlMatches: 0,
-      s3Matches: 0,
-      s3Samples: [],
-    });
-    mockValidateAndFixRemainingImages.mockImplementation(
-      async (content) => content
-    );
     mockBlocksChildrenList.mockResolvedValue({
       results: [
         {
@@ -249,7 +207,6 @@ describe("notion-translate index", () => {
         return "getting-started-essentials/installing-comapeo.md";
       }
     );
-    mockCreateNotionPageFromMarkdown.mockResolvedValue("translation-page-id");
     mockReadFile.mockImplementation(async (filePath: string) => {
       if (
         String(filePath).endsWith(
@@ -607,7 +564,6 @@ describe("notion-translate index", () => {
       "utf8"
     );
     expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
-    expect(mockProcessAndReplaceImages).not.toHaveBeenCalled();
     expect(mockTranslateText).toHaveBeenCalledWith(
       expect.stringContaining("[Image: Screenshot]"),
       "Hello World",
@@ -853,7 +809,6 @@ describe("notion-translate index", () => {
           )
       );
       expect(queriedByParentRelation).toBe(true);
-      expect(mockCreateNotionPageFromMarkdown).toHaveBeenCalledTimes(0);
     });
 
     it("writes local markdown artifacts in --local-only mode without performing Notion writes", async () => {
@@ -1194,63 +1149,6 @@ describe("notion-translate index", () => {
         ([filePath]) => String(filePath) === failedDocPath
       )
     ).toBe(false);
-  });
-
-  it("does not block translation for generic signed amazonaws links outside Notion image URL families", async () => {
-    const genericSignedUrl =
-      "https://s3.amazonaws.com/example-bucket/file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600";
-    mockTranslateText.mockResolvedValue({
-      markdown: `Link: ${genericSignedUrl}`,
-      title: "translated title",
-    });
-    mockGetImageDiagnostics.mockReturnValue({
-      totalMatches: 1,
-      markdownMatches: 1,
-      htmlMatches: 0,
-      s3Matches: 1,
-      s3Samples: [genericSignedUrl],
-    });
-
-    const { main } = await import("./index");
-    const summary = await main();
-
-    expect(summary.failedTranslations).toBe(0);
-    expect(mockValidateAndFixRemainingImages).not.toHaveBeenCalled();
-  });
-
-  it("uses full raw Notion URL match count in blocking errors while capping sample output", async () => {
-    const notionUrls = Array.from(
-      { length: 7 },
-      (_, index) =>
-        `https://prod-files-secure.s3.us-west-2.amazonaws.com/image-${index}.png`
-    );
-    mockTranslateText.mockResolvedValue({
-      markdown: notionUrls.join("\n"),
-      title: "translated title",
-    });
-    mockGetImageDiagnostics.mockReturnValue({
-      totalMatches: 1,
-      markdownMatches: 1,
-      htmlMatches: 0,
-      s3Matches: 1,
-      s3Samples: [notionUrls[0]],
-    });
-    mockValidateAndFixRemainingImages.mockImplementation(
-      async (content) => content
-    );
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { main } = await import("./index");
-
-    await expect(main()).rejects.toThrow(
-      "Translation workflow completed with failures"
-    );
-
-    const errorLogLines = errorSpy.mock.calls.map((args) => args.join(" "));
-    expect(
-      errorLogLines.some((line) =>
-        line.includes("still contains 7 Notion/S3 URLs")
-      )
-    ).toBe(true);
   });
 
   it("exits with failure on total code/theme translation failures and reports counts", async () => {
@@ -2253,7 +2151,6 @@ describe("notion-translate index", () => {
       });
       mockN2m.pageToMarkdown.mockResolvedValue([]);
       mockN2m.toMarkdownString.mockReturnValue({ parent: "# Test" });
-      mockCreateNotionPageFromMarkdown.mockResolvedValue("new-page-id");
       mockExtractTranslatableText.mockReturnValue({});
       mockGetLanguageName.mockReturnValue("Portuguese");
       mockReadFile.mockRejectedValue(new Error("ENOENT"));

@@ -3,7 +3,6 @@ import chalk from "chalk";
 import {
   processAndReplaceImages,
   validateAndFixRemainingImages,
-  hasS3Urls,
   getImageDiagnostics,
   type ImageProcessingStats,
 } from "./imageReplacer";
@@ -64,6 +63,31 @@ function debugS3(message: string): void {
   }
 }
 
+function formatRemainingImageDiagnostics(
+  diagnostics: ReturnType<typeof getImageDiagnostics>
+): string {
+  const s3Matches = diagnostics.s3Matches ?? 0;
+  const dataUrlMatches = diagnostics.dataUrlMatches ?? 0;
+  const parts: string[] = [];
+
+  if (s3Matches > 0) {
+    parts.push(`${s3Matches} S3 URL${s3Matches === 1 ? "" : "s"}`);
+  }
+  if (dataUrlMatches > 0) {
+    parts.push(`${dataUrlMatches} data URL${dataUrlMatches === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" and ") || "0 unresolved image references";
+}
+
+function hasRemainingImageReferences(
+  diagnostics: ReturnType<typeof getImageDiagnostics>
+): boolean {
+  return (
+    (diagnostics.s3Matches ?? 0) > 0 || (diagnostics.dataUrlMatches ?? 0) > 0
+  );
+}
+
 /**
  * Log diagnostic information for a retry attempt to help debug image processing issues.
  * Consolidates repeated diagnostic logging patterns throughout the retry loop.
@@ -75,23 +99,31 @@ function logRetryAttemptDiagnostics(
   context?: { pageTitle?: string; showSamples?: boolean }
 ): void {
   const { showSamples = true, pageTitle = "" } = context ?? {};
+  const s3Samples = diagnostics.s3Samples ?? [];
+  const dataUrlSamples = diagnostics.dataUrlSamples ?? [];
 
   // Only log if there are issues or we're past the first attempt
   if (
-    diagnostics.s3Matches > 0 ||
+    hasRemainingImageReferences(diagnostics) ||
     imageStats.totalFailures > 0 ||
     attemptNumber > 1
   ) {
     const prefix = pageTitle ? `[${pageTitle}] ` : "";
     console.info(
       chalk.gray(
-        `     ${prefix}Attempt ${attemptNumber}: images=${diagnostics.totalMatches} (md=${diagnostics.markdownMatches}, html=${diagnostics.htmlMatches}), remaining S3=${diagnostics.s3Matches}, successes=${imageStats.successfulImages}, failures=${imageStats.totalFailures}`
+        `     ${prefix}Attempt ${attemptNumber}: images=${diagnostics.totalMatches} (md=${diagnostics.markdownMatches}, html=${diagnostics.htmlMatches}), remaining=${formatRemainingImageDiagnostics(diagnostics)}, successes=${imageStats.successfulImages}, failures=${imageStats.totalFailures}`
       )
     );
 
-    if (showSamples && diagnostics.s3Samples.length > 0) {
+    if (showSamples && s3Samples.length > 0) {
       console.info(
-        chalk.gray(`       Sample S3 URLs: ${diagnostics.s3Samples.join(", ")}`)
+        chalk.gray(`       Sample S3 URLs: ${s3Samples.join(", ")}`)
+      );
+    }
+
+    if (showSamples && dataUrlSamples.length > 0) {
+      console.info(
+        chalk.gray(`       Sample data URLs: ${dataUrlSamples.join(", ")}`)
       );
     }
   }
@@ -102,6 +134,7 @@ interface RetryAttemptStats {
   markdownMatches: number;
   htmlMatches: number;
   remainingS3: number;
+  remainingDataUrls: number;
   successfulImages: number;
   failedImages: number;
 }
@@ -211,14 +244,15 @@ export async function processMarkdownWithRetry(
     fallbackEmojiCount: number;
     imageStats: ImageProcessingStats;
   }> => {
-    const warnIfS3 = (stage: string, content: string): boolean => {
-      const containsS3 = hasS3Urls(content);
-      if (containsS3) {
+    const warnIfUnresolvedImages = (stage: string, content: string): void => {
+      const diagnostics = getImageDiagnostics(content);
+      if (hasRemainingImageReferences(diagnostics)) {
         console.warn(
-          chalk.yellow(`  ⚠️  ${stage} still contains expiring S3 image URLs`)
+          chalk.yellow(
+            `  ⚠️  ${stage} still contains ${formatRemainingImageDiagnostics(diagnostics)}`
+          )
         );
       }
-      return containsS3;
     };
 
     let workingContent = initialContent;
@@ -230,7 +264,7 @@ export async function processMarkdownWithRetry(
       const beforeDiagnostics = getImageDiagnostics(workingContent);
       console.log(
         chalk.magenta(
-          `[s3-debug] BEFORE image processing: ${beforeDiagnostics.totalMatches} images (S3: ${beforeDiagnostics.s3Matches})`
+          `[s3-debug] BEFORE image processing: ${beforeDiagnostics.totalMatches} images (S3: ${beforeDiagnostics.s3Matches}, data URLs: ${beforeDiagnostics.dataUrlMatches ?? 0})`
         )
       );
 
@@ -251,7 +285,7 @@ export async function processMarkdownWithRetry(
     );
     workingContent = imageResult.markdown;
     savedDelta += imageResult.stats.totalSaved;
-    warnIfS3("Image processing stage", workingContent);
+    warnIfUnresolvedImages("Image processing stage", workingContent);
 
     if (rawBlocks && rawBlocks.length > 0) {
       workingContent = await processCalloutsInMarkdown(
@@ -289,6 +323,7 @@ export async function processMarkdownWithRetry(
       workingContent,
       attemptLabel
     );
+    warnIfUnresolvedImages("Final validation stage", workingContent);
 
     return {
       content: workingContent,
@@ -326,7 +361,7 @@ export async function processMarkdownWithRetry(
         `  currentSource type: ${typeof currentSource}, length: ${currentSource?.length ?? 0}`
       );
       debugS3(
-        `  currentSource S3 URLs BEFORE pipeline: ${beforeDiagnostics.s3Matches}`
+        `  currentSource unresolved image refs BEFORE pipeline: ${formatRemainingImageDiagnostics(beforeDiagnostics)}`
       );
       debugS3(
         `  currentSource first 100 chars: "${String(currentSource).substring(0, 100)}"`
@@ -347,7 +382,7 @@ export async function processMarkdownWithRetry(
         `  attemptContent type: ${typeof attemptContent}, length: ${attemptContent?.length ?? 0}`
       );
       debugS3(
-        `  attemptContent S3 URLs AFTER pipeline: ${afterDiagnostics.s3Matches}`
+        `  attemptContent unresolved image refs AFTER pipeline: ${formatRemainingImageDiagnostics(afterDiagnostics)}`
       );
     }
 
@@ -357,6 +392,7 @@ export async function processMarkdownWithRetry(
       markdownMatches: diagnostics.markdownMatches,
       htmlMatches: diagnostics.htmlMatches,
       remainingS3: diagnostics.s3Matches,
+      remainingDataUrls: diagnostics.dataUrlMatches ?? 0,
       successfulImages: imageStats.successfulImages,
       failedImages: imageStats.totalFailures,
     });
@@ -367,15 +403,16 @@ export async function processMarkdownWithRetry(
     // Accumulate bytes saved from this attempt
     cumulativeSavedBytes += savedDelta;
 
-    const remainingS3 = diagnostics.s3Matches > 0;
+    const remainingS3 = (diagnostics.s3Matches ?? 0) > 0;
+    const remainingDataUrl = (diagnostics.dataUrlMatches ?? 0) > 0;
 
-    if (!remainingS3) {
+    if (!remainingS3 && !remainingDataUrl) {
       processedContent = attemptContent;
       processedSavedDelta = cumulativeSavedBytes; // Use cumulative total
       processedFallbackEmojiCount = fallbackEmojiCount;
       console.log(
         chalk.green(
-          `  ✅ Successfully replaced all S3 URLs after ${attempt + 1} attempt(s)`
+          `  ✅ Successfully replaced all unresolved image references after ${attempt + 1} attempt(s)`
         )
       );
 
@@ -396,7 +433,7 @@ export async function processMarkdownWithRetry(
     if (attempt >= MAX_IMAGE_REFRESH_ATTEMPTS) {
       console.warn(
         chalk.yellow(
-          `  ⚠️  Some images in ${pageTitle} still reference expiring URLs after ${MAX_IMAGE_REFRESH_ATTEMPTS} attempts.`
+          `  ⚠️  Some images in ${pageTitle} still contain ${formatRemainingImageDiagnostics(diagnostics)} after ${MAX_IMAGE_REFRESH_ATTEMPTS} attempts.`
         )
       );
       console.warn(
@@ -425,7 +462,7 @@ export async function processMarkdownWithRetry(
         `  currentSource === attemptContent: ${currentSource === attemptContent}`
       );
       debugS3(
-        `  Next iteration will use currentSource, which is currently: ${typeof currentSource} with ${getImageDiagnostics(currentSource).s3Matches} S3 URLs`
+        `  Next iteration will use currentSource, which is currently: ${typeof currentSource} with ${formatRemainingImageDiagnostics(getImageDiagnostics(currentSource))}`
       );
     }
 
@@ -444,7 +481,7 @@ export async function processMarkdownWithRetry(
     if (DEBUG_S3_IMAGES) {
       const beforeUpdateDiagnostics = getImageDiagnostics(currentSource);
       debugS3(
-        `  BEFORE potential update: currentSource has ${beforeUpdateDiagnostics.s3Matches} S3 URLs`
+        `  BEFORE potential update: currentSource has ${formatRemainingImageDiagnostics(beforeUpdateDiagnostics)}`
       );
     }
 
@@ -473,7 +510,7 @@ export async function processMarkdownWithRetry(
     if (DEBUG_S3_IMAGES) {
       const afterUpdateDiagnostics = getImageDiagnostics(currentSource);
       debugS3(
-        `  AFTER update: currentSource has ${afterUpdateDiagnostics.s3Matches} S3 URLs`
+        `  AFTER update: currentSource has ${formatRemainingImageDiagnostics(afterUpdateDiagnostics)}`
       );
       debugS3(
         `  currentSource was updated: ${currentSource === attemptContent ? "YES" : "NO"}`
@@ -481,16 +518,17 @@ export async function processMarkdownWithRetry(
     }
   }
 
-  // Log retry telemetry if S3 URLs persist
+  // Log retry telemetry if unresolved image references persist
   if (
     retryTelemetry.length > 0 &&
-    retryTelemetry[retryTelemetry.length - 1].remainingS3 > 0
+    (retryTelemetry[retryTelemetry.length - 1].remainingS3 > 0 ||
+      retryTelemetry[retryTelemetry.length - 1].remainingDataUrls > 0)
   ) {
     console.warn(chalk.yellow(`  🧪 Retry telemetry for ${pageTitle}:`));
     for (const entry of retryTelemetry) {
       console.warn(
         chalk.yellow(
-          `     Attempt ${entry.attempt}: remaining S3=${entry.remainingS3}, successes=${entry.successfulImages}, failures=${entry.failedImages}`
+          `     Attempt ${entry.attempt}: remaining S3=${entry.remainingS3}, remaining data URLs=${entry.remainingDataUrls}, successes=${entry.successfulImages}, failures=${entry.failedImages}`
         )
       );
     }
@@ -498,7 +536,7 @@ export async function processMarkdownWithRetry(
 
   if (!processedContent) {
     throw new Error(
-      `Failed to process markdown content for ${pageTitle}; expiring URLs persist.`
+      `Failed to process markdown content for ${pageTitle}; unresolved image references persist.`
     );
   }
 
@@ -521,9 +559,10 @@ export async function processMarkdownWithRetry(
   //
   // The success path breaks BEFORE the increment, so attempt is correct.
   // The max attempts and no-progress paths break AFTER the increment, so we need (attempt - 1).
-  // We can detect this by checking if we exited with S3 URLs remaining.
-  const exitedWithS3 = finalDiagnostics.s3Matches > 0;
-  const actualRetryCount = exitedWithS3 ? attempt - 1 : attempt;
+  // We can detect this by checking if we exited with unresolved image references remaining.
+  const exitedWithUnresolvedImages =
+    finalDiagnostics.s3Matches > 0 || finalDiagnostics.dataUrlMatches > 0;
+  const actualRetryCount = exitedWithUnresolvedImages ? attempt - 1 : attempt;
 
   return {
     content: processedContent,
@@ -647,11 +686,18 @@ export async function processMarkdownSinglePass(
 
   const finalDiagnostics = getImageDiagnostics(workingContent);
 
-  // Warn if S3 URLs remain (but don't retry in single-pass mode)
-  if (finalDiagnostics.s3Matches > 0) {
+  // Warn if S3 URLs or data: image references remain (but don't retry in single-pass mode)
+  if (finalDiagnostics.s3Matches > 0 || finalDiagnostics.dataUrlMatches > 0) {
+    const parts: string[] = [];
+    if (finalDiagnostics.s3Matches > 0) {
+      parts.push(`${finalDiagnostics.s3Matches} S3 URL(s)`);
+    }
+    if (finalDiagnostics.dataUrlMatches > 0) {
+      parts.push(`${finalDiagnostics.dataUrlMatches} data: image reference(s)`);
+    }
     console.warn(
       chalk.yellow(
-        `  ⚠️  ${finalDiagnostics.s3Matches} S3 URL(s) remain in ${pageTitle} (single-pass mode, no retries)`
+        `  ⚠️  ${parts.join(" and ")} remain in ${pageTitle} (single-pass mode, no retries)`
       )
     );
     console.warn(

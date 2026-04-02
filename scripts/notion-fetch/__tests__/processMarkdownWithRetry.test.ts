@@ -49,6 +49,29 @@ function generateRealisticS3Url(
   return `https://prod-files-secure.s3.us-west-2.amazonaws.com/${workspaceId}/${fileId}/${filename}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=${encodeURIComponent(credential)}&X-Amz-Date=${date}&X-Amz-Expires=${expires}&X-Amz-Signature=${signature}&X-Amz-SignedHeaders=host`;
 }
 
+function createImageDiagnostics(
+  overrides: Partial<{
+    totalMatches: number;
+    markdownMatches: number;
+    htmlMatches: number;
+    s3Matches: number;
+    s3Samples: string[];
+    dataUrlMatches: number;
+    dataUrlSamples: string[];
+  }> = {}
+) {
+  return {
+    totalMatches: 0,
+    markdownMatches: 0,
+    htmlMatches: 0,
+    s3Matches: 0,
+    s3Samples: [],
+    dataUrlMatches: 0,
+    dataUrlSamples: [],
+    ...overrides,
+  };
+}
+
 describe("processMarkdownWithRetry", () => {
   let restoreEnv: () => void;
   let processAndReplaceImages: Mock;
@@ -201,6 +224,77 @@ describe("processMarkdownWithRetry", () => {
       expect(result.containsS3).toBe(false);
       expect(result.retryAttempts).toBe(1); // 1 retry (2 total attempts)
       expect(processAndReplaceImages).toHaveBeenCalledTimes(2);
+    });
+
+    it("should retry when data URLs remain after the first attempt", async () => {
+      expect(processMarkdownWithRetry).toBeDefined();
+
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const initialContent = "# Test\n\n![inline](data:image/png;base64,AAA)";
+      const partiallyFixedContent =
+        "# Test\n\n![inline](data:image/png;base64,BBB)";
+      const fullyFixedContent = "# Test\n\n![local](/images/fixed-inline.png)";
+
+      const pageContext = {
+        pageId: "retry-data-url-page-id",
+        pageTitle: "Retry Data URL Page",
+        safeFilename: "retry-data-url-page",
+      };
+      const rawBlocks: any[] = [];
+      const emojiMap = new Map<string, string>();
+
+      let attemptCount = 0;
+      processAndReplaceImages.mockImplementation(async () => {
+        attemptCount += 1;
+        return {
+          markdown:
+            attemptCount === 1 ? partiallyFixedContent : fullyFixedContent,
+          stats: {
+            successfulImages: attemptCount === 1 ? 0 : 1,
+            totalFailures: 0,
+            totalSaved: attemptCount === 1 ? 0 : 512,
+          },
+        };
+      });
+
+      validateAndFixRemainingImages.mockImplementation(
+        async (content: string) => {
+          return content;
+        }
+      );
+
+      getImageDiagnostics.mockImplementation((content: string) => {
+        const hasDataUrl = content.includes("data:image/png;base64");
+        return createImageDiagnostics({
+          totalMatches: 1,
+          markdownMatches: 1,
+          dataUrlMatches: hasDataUrl ? 1 : 0,
+          dataUrlSamples: hasDataUrl ? ["data:..."] : [],
+        });
+      });
+
+      const result = await processMarkdownWithRetry(
+        initialContent,
+        pageContext,
+        rawBlocks,
+        emojiMap
+      );
+
+      expect(result.content).toBe(fullyFixedContent);
+      expect(result.containsS3).toBe(false);
+      expect(result.retryAttempts).toBe(1);
+      expect(processAndReplaceImages).toHaveBeenCalledTimes(2);
+      expect(
+        warnSpy.mock.calls.some((args) =>
+          String(args[0]).includes("still contains 1 data URL")
+        )
+      ).toBe(true);
+      expect(
+        infoSpy.mock.calls.some((args) =>
+          String(args[0]).includes("remaining=1 data URL")
+        )
+      ).toBe(true);
     });
 
     it("should stop retrying when content is identical (no progress)", async () => {

@@ -593,7 +593,7 @@ async function processSinglePage(
             if (postWriteDiagnostics.dataUrlSamples.length > 0) {
               console.warn(
                 chalk.gray(
-                  `     Sample data: URLs: ${postWriteDiagnostics.dataUrlSamples.join(", ")}`
+                  `     Sample data URLs: ${postWriteDiagnostics.dataUrlSamples.join(", ")}`
                 )
               );
             }

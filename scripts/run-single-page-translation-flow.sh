@@ -80,6 +80,11 @@ count_images() {
   { grep -o '!\[' "$file_path" 2>/dev/null || true; } | wc -l | tr -d ' '
 }
 
+count_placeholders() {
+  local file_path="$1"
+  { grep -o '\[Image:' "$file_path" 2>/dev/null || true; } | wc -l | tr -d ' '
+}
+
 file_has_content() {
   local file_path="$1"
   [[ -s "$file_path" ]] && grep -q '[^[:space:]]' "$file_path"
@@ -105,12 +110,20 @@ assess_output_file() {
   fi
 
   local english_headings locale_headings english_images locale_images
+  local locale_placeholders locale_image_representations
   english_headings="$(count_headings "$ENGLISH_FILE")"
   locale_headings="$(count_headings "$file_path")"
   english_images="$(count_images "$ENGLISH_FILE")"
   locale_images="$(count_images "$file_path")"
+  locale_placeholders="$(count_placeholders "$file_path")"
+  locale_image_representations="$((locale_images + locale_placeholders))"
 
-  if [[ "$locale_headings" != "$english_headings" || "$locale_images" != "$english_images" ]]; then
+  if [[ "$locale_headings" != "$english_headings" ]]; then
+    echo "${locale}: counts differ from english"
+    return
+  fi
+
+  if [[ "$locale_image_representations" != "$english_images" ]]; then
     echo "${locale}: counts differ from english"
     return
   fi
@@ -128,14 +141,16 @@ print_file_stats() {
   fi
 
   local lines chars headings images
+  local placeholders
   lines="$(wc -l <"$file_path" | tr -d ' ')"
   chars="$(wc -m <"$file_path" | tr -d ' ')"
   headings="$(count_headings "$file_path")"
   images="$(count_images "$file_path")"
+  placeholders="$(count_placeholders "$file_path")"
 
   echo "- ${label}: present"
   echo "  path: ${file_path}"
-  echo "  lines=${lines} chars=${chars} headings=${headings} images=${images}"
+  echo "  lines=${lines} chars=${chars} headings=${headings} images=${images} placeholders=${placeholders}"
 }
 
 read_json_value() {

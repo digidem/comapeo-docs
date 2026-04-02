@@ -1,9 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockBlocksChildrenList = vi.fn();
 const mockTranslateText = vi.fn();
-const mockExistsSync = vi.fn();
-const mockExtractImageMatches = vi.fn();
 
 vi.mock("../notionClient.js", () => ({
   enhancedNotion: {
@@ -15,14 +13,6 @@ vi.mock("./translateFrontMatter.js", () => ({
   translateText: mockTranslateText,
 }));
 
-vi.mock("node:fs", () => ({
-  default: { existsSync: mockExistsSync },
-}));
-
-vi.mock("../notion-fetch/imageReplacer.js", () => ({
-  extractImageMatches: mockExtractImageMatches,
-}));
-
 function blocksResponse(results: object[]) {
   return { results, has_more: false, next_cursor: null };
 }
@@ -31,12 +21,11 @@ describe("translateNotionBlocksDirectly", () => {
   beforeEach(() => {
     mockBlocksChildrenList.mockReset();
     mockTranslateText.mockReset();
-    mockExistsSync.mockReset();
-    mockExtractImageMatches.mockReset();
 
-    mockTranslateText.mockResolvedValue({ markdown: "translated", title: "" });
-    mockExtractImageMatches.mockReturnValue([]);
-    mockExistsSync.mockReturnValue(false);
+    mockTranslateText.mockImplementation(async (content: string) => ({
+      markdown: `translated:${content}`,
+      title: "",
+    }));
   });
 
   it("replaces invalid bookmark URL with INVALID_URL_PLACEHOLDER", async () => {
@@ -56,7 +45,6 @@ describe("translateNotionBlocksDirectly", () => {
 
     const block = result[0] as Record<string, unknown>;
     const bookmark = block.bookmark as { url: string };
-    // Should use the default INVALID_URL_PLACEHOLDER value
     expect(bookmark.url).toBe("https://example.com/invalid-url-removed");
   });
 
@@ -81,7 +69,7 @@ describe("translateNotionBlocksDirectly", () => {
     );
   });
 
-  it("falls back to index-based filename when orderedImagePaths is empty", async () => {
+  it("converts image blocks to placeholder paragraphs instead of static image callouts", async () => {
     mockBlocksChildrenList.mockResolvedValue(
       blocksResponse([
         {
@@ -90,31 +78,42 @@ describe("translateNotionBlocksDirectly", () => {
           image: {
             type: "external",
             external: { url: "https://s3.example.com/img.png" },
+            caption: [
+              {
+                type: "text",
+                text: { content: "Diagram caption" },
+                plain_text: "Diagram caption",
+              },
+            ],
           },
           has_children: false,
         },
       ])
     );
+    mockTranslateText.mockResolvedValueOnce({
+      markdown: "Legenda do diagrama",
+      title: "",
+    });
 
     const { translateNotionBlocksDirectly } = await import("./translateBlocks");
-    const result = await translateNotionBlocksDirectly(
-      "page-id",
-      "pt-BR",
-      "mypage"
-    );
+    const result = await translateNotionBlocksDirectly("page-id", "pt-BR");
 
     const block = result[0] as Record<string, unknown>;
-    expect(block.type).toBe("callout");
-    const callout = block.callout as {
+    expect(block.type).toBe("paragraph");
+    const paragraph = block.paragraph as {
       rich_text: Array<{ text: { content: string } }>;
     };
-    // Fallback path should include the sanitized page name and index
-    expect(callout.rich_text[0].text.content).toContain("mypage");
-    expect(callout.rich_text[0].text.content).toContain("_0");
-    expect(callout.rich_text[0].text.content).toMatch(/static\/images\//);
+    expect(paragraph.rich_text[0].text.content).toBe(
+      "[Image: Legenda do diagrama]"
+    );
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      "Diagram caption",
+      "",
+      "pt-BR"
+    );
   });
 
-  it("uses matched path from orderedImagePaths when file exists on disk", async () => {
+  it("falls back to the source URL when an image block has no caption", async () => {
     mockBlocksChildrenList.mockResolvedValue(
       blocksResponse([
         {
@@ -123,94 +122,31 @@ describe("translateNotionBlocksDirectly", () => {
           image: {
             type: "external",
             external: { url: "https://s3.example.com/img.png" },
+            caption: [],
           },
           has_children: false,
         },
       ])
     );
-    // Simulate the file existing at the resolved path
-    mockExistsSync.mockImplementation((p: string) =>
-      p.endsWith("specific.png")
-    );
 
     const { translateNotionBlocksDirectly } = await import("./translateBlocks");
-    const result = await translateNotionBlocksDirectly(
-      "page-id",
-      "pt-BR",
-      "mypage",
-      ["/images/specific.png"]
-    );
+    const result = await translateNotionBlocksDirectly("page-id", "pt-BR");
 
     const block = result[0] as Record<string, unknown>;
-    const callout = block.callout as {
+    const paragraph = block.paragraph as {
       rich_text: Array<{ text: { content: string } }>;
     };
-    expect(callout.rich_text[0].text.content).toBe(
-      "static/images/specific.png"
+    expect(paragraph.rich_text[0].text.content).toBe(
+      "[Image: https://s3.example.com/img.png]"
     );
-  });
-
-  it("consumes orderedImagePaths for inline images to prevent block-image index drift", async () => {
-    // Page has: paragraph with inline image, then a standalone image block.
-    // orderedImagePaths has two entries: first for the inline, second for the block.
-    mockBlocksChildrenList.mockResolvedValue(
-      blocksResponse([
-        {
-          id: "b5",
-          type: "paragraph",
-          paragraph: {
-            rich_text: [
-              {
-                type: "text",
-                text: { content: "![alt](/images/inline.png) text" },
-              },
-            ],
-          },
-          has_children: false,
-        },
-        {
-          id: "b6",
-          type: "image",
-          image: {
-            type: "external",
-            external: { url: "https://s3.example.com/img.png" },
-          },
-          has_children: false,
-        },
-      ])
-    );
-
-    // The inline image match in the paragraph rich_text should consume the first path
-    mockExtractImageMatches.mockReturnValue(["![alt](/images/inline.png)"]);
-    // The second path corresponds to the block image
-    mockExistsSync.mockImplementation((p: string) => p.endsWith("block.png"));
-    mockTranslateText.mockResolvedValue({
-      markdown: "![alt](/images/inline.png) text",
-      title: "",
-    });
-
-    const { translateNotionBlocksDirectly } = await import("./translateBlocks");
-    const result = await translateNotionBlocksDirectly(
-      "page-id",
-      "pt-BR",
-      "mypage",
-      ["/images/inline.png", "/images/block.png"]
-    );
-
-    // The image block (result[1]) should use the second path, not the first
-    const imgBlock = result[1] as Record<string, unknown>;
-    expect(imgBlock.type).toBe("callout");
-    const callout = imgBlock.callout as {
-      rich_text: Array<{ text: { content: string } }>;
-    };
-    expect(callout.rich_text[0].text.content).toBe("static/images/block.png");
+    expect(mockTranslateText).not.toHaveBeenCalled();
   });
 
   it("keeps short rich-text paragraph translation intact", async () => {
     mockBlocksChildrenList.mockResolvedValue(
       blocksResponse([
         {
-          id: "b7",
+          id: "b5",
           type: "paragraph",
           paragraph: {
             rich_text: [
@@ -225,8 +161,7 @@ describe("translateNotionBlocksDirectly", () => {
         },
       ])
     );
-
-    mockTranslateText.mockResolvedValue({
+    mockTranslateText.mockResolvedValueOnce({
       markdown: "Parágrafo curto traduzido",
       title: "",
     });
@@ -243,7 +178,6 @@ describe("translateNotionBlocksDirectly", () => {
       "Parágrafo curto traduzido"
     );
     expect(paragraph.rich_text[0].plain_text).toBe("Parágrafo curto traduzido");
-    expect(mockTranslateText).toHaveBeenCalledTimes(1);
     expect(mockTranslateText).toHaveBeenCalledWith(
       "Short paragraph content",
       "",

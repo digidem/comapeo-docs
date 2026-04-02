@@ -571,6 +571,55 @@ describe("notion-translate index", () => {
     });
   });
 
+  it("prefers canonical English markdown during bulk translation and skips image stabilization", async () => {
+    mockReadFile.mockImplementation(async (filePath: string) => {
+      if (
+        String(filePath).endsWith(
+          path.join(
+            "docs",
+            "getting-started-essentials",
+            "installing-comapeo.md"
+          )
+        )
+      ) {
+        return [
+          "---",
+          'title: "Installing CoMapeo & Onboarding"',
+          "---",
+          "",
+          "![Screenshot](/images/screenshot.png)",
+          "",
+          "English markdown",
+        ].join("\n");
+      }
+      return '{"hello":{"message":"Hello"}}';
+    });
+
+    const { main } = await import("./index");
+
+    const summary = await main();
+
+    expect(summary.failedTranslations).toBe(0);
+    expect(mockReadFile).toHaveBeenCalledWith(
+      expect.stringContaining(
+        path.join("docs", "getting-started-essentials", "installing-comapeo.md")
+      ),
+      "utf8"
+    );
+    expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
+    expect(mockProcessAndReplaceImages).not.toHaveBeenCalled();
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      expect.stringContaining("[Image: Screenshot]"),
+      "Hello World",
+      "pt-BR"
+    );
+    expect(
+      mockTranslateText.mock.calls.some((call) =>
+        String(call[0]).includes("/images/")
+      )
+    ).toBe(false);
+  });
+
   describe("CLI page-id mode", () => {
     it("parses and normalizes --page-id values", async () => {
       const { parseCliOptions } = await import("./index");

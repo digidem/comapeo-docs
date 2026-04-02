@@ -35,12 +35,6 @@ import {
   NotionPage,
   TranslationConfig,
 } from "../constants.js";
-import {
-  processAndReplaceImages,
-  getImageDiagnostics,
-  validateAndFixRemainingImages,
-  extractImageMatches,
-} from "../notion-fetch/imageReplacer.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
@@ -56,6 +50,10 @@ type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
 type NotionRelationProperty = { relation: Array<{ id: string }> };
 
 const FRONTMATTER_BLOCK_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+const HYPERLINKED_MARKDOWN_IMAGE_REGEX =
+  /\[!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
+const HTML_IMAGE_TAG_REGEX = /<img\b[^>]*>/gi;
 
 // Type for Notion page parent (API hierarchy structure)
 interface NotionPageParent {
@@ -105,6 +103,51 @@ function replaceFrontmatterValue(
     case "pagination_label":
       return frontmatter.replace(/(^pagination_label:\s*).*$/m, replacement);
   }
+}
+
+function buildImagePlaceholder(
+  altText: string | undefined,
+  imageRef: string | undefined
+): string {
+  const label = altText?.trim() || imageRef?.trim() || "image";
+  return `[Image: ${label}]`;
+}
+
+function replaceImagesWithPlaceholders(markdownContent: string): string {
+  if (
+    !markdownContent.includes("![") &&
+    !markdownContent.toLowerCase().includes("<img")
+  ) {
+    return markdownContent;
+  }
+
+  const replaceImageTag = (tag: string): string => {
+    const altText = /(?:^|\s)alt=(["'])(.*?)\1/i.exec(tag)?.[2];
+    const imageRef = /(?:^|\s)src=(["'])(.*?)\1/i.exec(tag)?.[2];
+    return buildImagePlaceholder(altText, imageRef);
+  };
+
+  return markdownContent
+    .replace(
+      HYPERLINKED_MARKDOWN_IMAGE_REGEX,
+      (_full, altText: string, imageRef: string) =>
+        buildImagePlaceholder(altText, imageRef.replace(/\\\)/g, ")"))
+    )
+    .replace(MARKDOWN_IMAGE_REGEX, (_full, altText: string, imageRef: string) =>
+      buildImagePlaceholder(altText, imageRef.replace(/\\\)/g, ")"))
+    )
+    .replace(HTML_IMAGE_TAG_REGEX, replaceImageTag);
+}
+
+function prepareMarkdownForTranslation(
+  markdownContent: string,
+  options: { skipImages?: boolean } = {}
+): string {
+  if (!options.skipImages) {
+    return markdownContent;
+  }
+
+  return replaceImagesWithPlaceholders(markdownContent);
 }
 
 async function ensureTranslatedFrontmatter(
@@ -684,6 +727,29 @@ async function loadCanonicalEnglishMarkdown(
     : null;
 }
 
+async function getSourceMarkdownForTranslation(
+  englishPage: NotionPage
+): Promise<string> {
+  const originalTitle = getTitle(englishPage);
+  const canonicalMarkdown = await loadCanonicalEnglishMarkdown(englishPage.id);
+
+  if (canonicalMarkdown !== null) {
+    console.log(
+      chalk.gray(
+        `  Using canonical English markdown from docs/ for "${originalTitle}"`
+      )
+    );
+    return prepareMarkdownForTranslation(canonicalMarkdown, {
+      skipImages: true,
+    });
+  }
+
+  const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
+  return prepareMarkdownForTranslation(rawMarkdownContent, {
+    skipImages: true,
+  });
+}
+
 /**
  * Saves translated content to the output directory
  * @param englishPage The English page
@@ -698,10 +764,6 @@ const NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE =
 const RAW_NOTION_S3_URL_REGEX = new RegExp(
   NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
   "gi"
-);
-const NOTION_IMAGE_URL_FAMILY_REGEX = new RegExp(
-  NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
-  "i"
 );
 
 /**
@@ -771,10 +833,6 @@ function formatRedactedS3Urls(urls: string[]): string {
     return "none";
   }
   return urls.map((url) => redactPotentiallySignedUrl(url)).join(", ");
-}
-
-function isNotionImageUrlFamily(url: string): boolean {
-  return NOTION_IMAGE_URL_FAMILY_REGEX.test(url);
 }
 
 export async function saveTranslatedContentToDisk(
@@ -1202,38 +1260,10 @@ async function processSinglePageTranslation({
     translatedContent = `# ${originalTitle}`;
     translatedTitle = originalTitle;
   } else {
-    const safeFilename = generateSafeFilename(originalTitle, englishPage.id);
     let markdownContent = stabilizedMarkdownCache?.get(englishPage.id);
     if (markdownContent === undefined) {
-      const rawMarkdownContent =
-        (pageId && (await loadCanonicalEnglishMarkdown(englishPage.id))) ??
-        (await convertPageToMarkdown(englishPage.id));
-
-      // Stabilize images: replace expiring S3 URLs with /images/... paths
-      const imageResult = await processAndReplaceImages(
-        rawMarkdownContent,
-        safeFilename
-      );
-
-      // Fail page if any images failed to download (no broken placeholders)
-      if (imageResult.stats.totalFailures > 0) {
-        throw new Error(
-          `Image stabilization failed for "${originalTitle}": ` +
-            `${imageResult.stats.totalFailures} image(s) failed to download. ` +
-            "Cannot proceed with translation - images would be broken."
-        );
-      }
-
-      markdownContent = imageResult.markdown;
+      markdownContent = await getSourceMarkdownForTranslation(englishPage);
       stabilizedMarkdownCache?.set(englishPage.id, markdownContent);
-
-      if (imageResult.stats.successfulImages > 0) {
-        console.log(
-          chalk.blue(
-            `  Images: processed=${imageResult.stats.successfulImages} failed=${imageResult.stats.totalFailures}`
-          )
-        );
-      }
     }
     // For regular pages, translate the full content
     const translated = await translateText(
@@ -1244,33 +1274,8 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
-    // Helper to detect S3 URLs in content
-    const detectNotionS3Urls = (content: string) => {
-      const diagnostics = getImageDiagnostics(content);
-      const rawMatches = collectRawNotionS3Matches(content);
-      const notionSamples = diagnostics.s3Samples.filter(
-        isNotionImageUrlFamily
-      );
-      const urls = Array.from(
-        new Set([...notionSamples, ...rawMatches.samples])
-      ).slice(0, 5);
-      const count = Math.max(rawMatches.count, notionSamples.length);
-      return { urls, count };
-    };
-
-    // Post-translation validation: ensure no S3 URLs survive translation
-    let { urls: detectedS3Urls, count: totalS3Matches } =
-      detectNotionS3Urls(translatedContent);
-
-    // Safety net: attempt a final image-fix pass for markdown/image-based S3 URLs.
-    if (totalS3Matches > 0) {
-      translatedContent = await validateAndFixRemainingImages(
-        translatedContent,
-        safeFilename
-      );
-      ({ urls: detectedS3Urls, count: totalS3Matches } =
-        detectNotionS3Urls(translatedContent));
-    }
+    const { count: totalS3Matches, samples: detectedS3Urls } =
+      collectRawNotionS3Matches(translatedContent);
 
     if (totalS3Matches > 0) {
       throw new Error(
@@ -1334,20 +1339,9 @@ async function processSinglePageTranslation({
     // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
     let translatedBlocks: any[] = [];
     if (!isTitlePage) {
-      const sanitizedPageName = generateSafeFilename(
-        originalTitle,
-        englishPage.id
-      );
-      const markdownContent =
-        stabilizedMarkdownCache?.get(englishPage.id) || "";
-      const orderedImagePaths = extractImageMatches(markdownContent).map(
-        (m) => m.url
-      );
       translatedBlocks = await translateNotionBlocksDirectly(
         englishPage.id,
-        config.language,
-        sanitizedPageName,
-        orderedImagePaths
+        config.language
       );
     } else {
       // Restore regression: title pages previously got a minimal heading block

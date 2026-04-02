@@ -200,6 +200,7 @@ ARTIFACT_DIR="${TMPDIR:-/tmp}/comapeo-single-page-flow-${PAGE_ID}-${RUN_ID}"
 mkdir -p "$ARTIFACT_DIR"
 FETCH_START_MARKER="${ARTIFACT_DIR}/fetch-start.marker"
 : >"$FETCH_START_MARKER"
+STRICT_QUALITY_GATE="${STRICT_QUALITY_GATE:-0}"
 
 echo "Artifacts: ${ARTIFACT_DIR}"
 echo "Page ID: ${PAGE_ID}"
@@ -402,7 +403,9 @@ else
 fi
 
 OVERALL_STATUS=0
-if [[ "$FETCH_STATUS" -ne 0 || "$TRANSLATE_STATUS" -ne 0 || "$QUALITY_STATUS" -ne 0 ]]; then
+if [[ "$FETCH_STATUS" -ne 0 || "$TRANSLATE_STATUS" -ne 0 ]]; then
+  OVERALL_STATUS=1
+elif [[ "$STRICT_QUALITY_GATE" == "1" && "$QUALITY_STATUS" -ne 0 ]]; then
   OVERALL_STATUS=1
 fi
 

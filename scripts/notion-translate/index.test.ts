@@ -528,6 +528,68 @@ describe("notion-translate index", () => {
     });
   });
 
+  it("does not block generic signed amazonaws links outside Notion image URL families", async () => {
+    const genericSignedUrl =
+      "https://s3.amazonaws.com/example-bucket/file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600";
+    mockResolveCanonicalDocsRelativePath.mockReturnValue(null);
+    mockN2m.toMarkdownString.mockReturnValue({
+      parent: `Link: ${genericSignedUrl}`,
+    });
+    mockTranslateText.mockResolvedValue({
+      markdown: `Link: ${genericSignedUrl}`,
+      title: "translated title",
+    });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { main } = await import("./index");
+
+    const summary = await main();
+
+    expect(summary.failedTranslations).toBe(0);
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      expect.stringContaining(genericSignedUrl),
+      "Hello World",
+      "pt-BR"
+    );
+
+    const loggedSummary = findSummaryLog(logSpy);
+    expect(loggedSummary.failedTranslations).toBe(0);
+    expect(loggedSummary.failures).toEqual([]);
+  });
+
+  it("reports the full raw match count while capping and redacting sample URLs", async () => {
+    const notionUrls = Array.from(
+      { length: 7 },
+      (_, index) =>
+        `https://prod-files-secure.s3.us-west-2.amazonaws.com/image-${index}.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600`
+    );
+    mockTranslateText.mockResolvedValue({
+      markdown: notionUrls.join("\n"),
+      title: "translated title",
+    });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { main } = await import("./index");
+
+    await expect(main()).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+
+    const loggedSummary = findSummaryLog(logSpy);
+    expect(loggedSummary.failures).toHaveLength(2);
+    expect(loggedSummary.failures[0].error).toContain(
+      "still contains 7 Notion/S3 URLs"
+    );
+    expect(loggedSummary.failures[0].error).toContain("image-0.png?<redacted>");
+    expect(loggedSummary.failures[0].error).toContain("image-4.png?<redacted>");
+    expect(loggedSummary.failures[0].error).not.toContain("image-5.png");
+    expect(loggedSummary.failures[0].error).not.toContain("image-6.png");
+    expect(loggedSummary.failures[0].error).not.toContain("X-Amz-Algorithm");
+  });
+
   it("prefers canonical English markdown during bulk translation and skips image stabilization", async () => {
     mockReadFile.mockImplementation(async (filePath: string) => {
       if (

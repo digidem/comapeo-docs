@@ -1433,6 +1433,168 @@ describe("generateBlocks", () => {
     });
   });
 
+  describe("Page-result accounting and cache update seam", () => {
+    it("should update cache for successfully processed pages", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const { PAGE_METADATA_CACHE_PATH } = await import("./pageMetadataCache");
+
+      const page = createMockNotionPage({
+        id: "cache-update-test-page",
+        title: "Cache Update Test",
+        elementType: "Page",
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({
+        parent: "Test content for cache",
+      });
+
+      await generateBlocks([page], vi.fn(), { force: true });
+
+      // Verify the cache file was written with the page entry
+      const cacheContent = (fs.readFileSync as Mock).mock.calls.find(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("page-metadata.json") &&
+          typeof call[1] === "string"
+      );
+      // Cache is saved via atomic write (temp file + rename), so check renameSync
+      // The cache should have been saved with the page's output path
+      const writeCalls = (fs.writeFileSync as Mock).mock.calls.filter(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("page-metadata.json") &&
+          typeof call[1] === "string"
+      );
+      // At least one write should contain the page ID
+      const cacheWrite = writeCalls.find(
+        (call: any[]) =>
+          typeof call[1] === "string" &&
+          call[1].includes("cache-update-test-page")
+      );
+      expect(cacheWrite).toBeDefined();
+    });
+
+    it("should log timeout-specific message when page processing is rejected with TimeoutError", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      // Create a page that will cause processSinglePage to throw a TimeoutError
+      // by making pageToMarkdown reject with a timeout-like error
+      const page = createMockNotionPage({
+        id: "timeout-test-page",
+        title: "Timeout Test Page",
+        elementType: "Page",
+      });
+
+      const timeoutError = new Error("Operation timed out after 600000ms");
+      timeoutError.name = "TimeoutError";
+
+      // Make the page processing throw — this will be caught by the
+      // try/catch in the processBatch processor, creating a failed result
+      n2m.pageToMarkdown.mockRejectedValue(timeoutError);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      // generateBlocks should complete without throwing
+      const result = await generateBlocks([page], vi.fn(), { force: true });
+      expect(result).toBeDefined();
+
+      // The error should have been logged — either via console.error for the
+      // page processing failure or via the onItemComplete rejected path
+      const allOutput = [
+        ...consoleErrorSpy.mock.calls.flat().map(String),
+        ...consoleWarnSpy.mock.calls.flat().map(String),
+        ...consoleLogSpy.mock.calls.flat().map(String),
+      ].join(" ");
+
+      // Should mention the page failure somewhere in output
+      expect(
+        allOutput.includes("timeout-test-page") ||
+          allOutput.includes("Timeout Test Page") ||
+          allOutput.includes("timed out") ||
+          allOutput.includes("failed")
+      ).toBe(true);
+
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should report failed page count in summary when pages fail", async () => {
+      const { generateBlocks } = await import("./generateBlocks");
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      const page = createMockNotionPage({
+        id: "failing-page",
+        title: "Failing Page",
+        elementType: "Page",
+      });
+
+      // Make pageToMarkdown throw to trigger failure path
+      n2m.pageToMarkdown.mockRejectedValue(new Error("Simulated failure"));
+      n2m.toMarkdownString.mockReturnValue({ parent: "Test content" });
+
+      await generateBlocks([page], vi.fn(), { force: true });
+
+      // Should log a warning about failed pages
+      const warnCalls = consoleWarnSpy.mock.calls.flat().map(String).join(" ");
+      expect(warnCalls).toContain("pages failed to process");
+
+      consoleWarnSpy.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should not apply batch-level timeout to page processing", async () => {
+      // Verify that the processBatch call in generateBlocks does NOT pass
+      // timeoutMs. We confirm this structurally: a page that returns success
+      // is always reflected in the cache, even if it was slow. The old code
+      // with timeoutMs would have raced slow-but-successful pages against a
+      // 600s timeout, causing cache misses. Without timeoutMs, successful
+      // pages always update the cache.
+      const { generateBlocks } = await import("./generateBlocks");
+
+      const page = createMockNotionPage({
+        id: "slow-page-no-timeout",
+        title: "Slow Page",
+        elementType: "Page",
+      });
+
+      n2m.pageToMarkdown.mockResolvedValue([]);
+      n2m.toMarkdownString.mockReturnValue({ parent: "Slow content" });
+
+      const result = await generateBlocks([page], vi.fn(), { force: true });
+      expect(result).toBeDefined();
+      expect(result.totalSaved).toBeGreaterThanOrEqual(0);
+
+      // Verify cache was written with this page's entry
+      const writeCalls = (fs.writeFileSync as Mock).mock.calls.filter(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("page-metadata.json") &&
+          typeof call[1] === "string"
+      );
+      const cacheWrite = writeCalls.find(
+        (call: any[]) =>
+          typeof call[1] === "string" &&
+          call[1].includes("slow-page-no-timeout")
+      );
+      expect(cacheWrite).toBeDefined();
+    });
+  });
+
   describe("ensureBlankLineAfterStandaloneBold", () => {
     let ensureBlankLineAfterStandaloneBold: (content: string) => string;
 

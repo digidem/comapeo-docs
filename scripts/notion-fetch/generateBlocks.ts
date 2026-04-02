@@ -564,17 +564,36 @@ async function processSinglePage(
         if (fs.existsSync(filePath)) {
           const writtenContent = fs.readFileSync(filePath, "utf-8");
           const postWriteDiagnostics = getImageDiagnostics(writtenContent);
-          if (postWriteDiagnostics.s3Matches > 0) {
-            contentHasS3 = true;
+          if (
+            postWriteDiagnostics.s3Matches > 0 ||
+            postWriteDiagnostics.dataUrlMatches > 0
+          ) {
+            contentHasS3 = postWriteDiagnostics.s3Matches > 0;
+            const parts: string[] = [];
+            if (postWriteDiagnostics.s3Matches > 0) {
+              parts.push(`${postWriteDiagnostics.s3Matches} S3 URL(s)`);
+            }
+            if (postWriteDiagnostics.dataUrlMatches > 0) {
+              parts.push(
+                `${postWriteDiagnostics.dataUrlMatches} data: image reference(s)`
+              );
+            }
             console.warn(
               chalk.yellow(
-                `  ⚠️  Post-write validation detected ${postWriteDiagnostics.s3Matches} S3 URL(s) in ${filePath}`
+                `  ⚠️  Post-write validation detected ${parts.join(" and ")} in ${filePath}`
               )
             );
             if (postWriteDiagnostics.s3Samples.length > 0) {
               console.warn(
                 chalk.gray(
-                  `     Sample URLs: ${postWriteDiagnostics.s3Samples.join(", ")}`
+                  `     Sample S3 URLs: ${postWriteDiagnostics.s3Samples.join(", ")}`
+                )
+              );
+            }
+            if (postWriteDiagnostics.dataUrlSamples.length > 0) {
+              console.warn(
+                chalk.gray(
+                  `     Sample data: URLs: ${postWriteDiagnostics.dataUrlSamples.join(", ")}`
                 )
               );
             }
@@ -585,7 +604,13 @@ async function processSinglePage(
               pageTitle,
               outputPath: filePath,
               leftoverS3Count: postWriteDiagnostics.s3Matches,
-              samples: postWriteDiagnostics.s3Samples,
+              leftoverDataUrlCount: postWriteDiagnostics.dataUrlMatches,
+              samples:
+                postWriteDiagnostics.s3Samples.length > 0
+                  ? postWriteDiagnostics.s3Samples
+                  : postWriteDiagnostics.dataUrlSamples,
+              s3Samples: postWriteDiagnostics.s3Samples,
+              dataUrlSamples: postWriteDiagnostics.dataUrlSamples,
               type: "post_write_validation_failure",
             });
           } else {
@@ -1193,7 +1218,12 @@ export async function generateBlocks(
           // TODO: Make concurrency configurable via environment variable or config
           // See Issue #6 (Adaptive Batch) in IMPROVEMENT_ISSUES.md
           maxConcurrent: 5,
-          timeoutMs: 600000, // 10 minutes per batch item (allows for 5 min page timeout + buffer)
+          // NOTE: No outer timeoutMs here. Page processing contains bounded inner
+          // operations (image download: 30s, sharp resize: 30s, compression: 45s,
+          // per-image overall: 300s with up to 3 retries). A batch-level timeout
+          // would race against valid inner retries and cause false page failures.
+          // The spinner timeout (300s) and inner timeouts provide adequate hang
+          // protection without the accounting mismatch that a batch timeout creates.
           operation: "page processing",
           progressTracker,
           // Stream progress updates as each page completes
@@ -1209,6 +1239,11 @@ export async function generateBlocks(
               markdownCacheHits.value += value.markdownCacheHits;
               if (!value.success) {
                 failedCount++;
+                console.warn(
+                  chalk.yellow(
+                    `Page processing reported failure: ${value.pageTitle || "unknown"} (pageId: ${value.pageId})`
+                  )
+                );
               } else {
                 // Update cache with successful page processing
                 updatePageInCache(
@@ -1221,14 +1256,28 @@ export async function generateBlocks(
               }
             } else {
               failedCount++;
-              // Include page title for better error context
-
+              // Distinguish timeout-driven rejection from content-generation failure
+              const isTimeout =
+                result.reason?.name === "TimeoutError" ||
+                (result.reason instanceof Error &&
+                  result.reason.message?.includes("timed out"));
               const failedTask = pageTasks[index];
-              console.error(
-                chalk.red(
-                  `Page processing failed: ${failedTask?.pageTitle || "unknown"}: ${result.reason}`
-                )
-              );
+              if (isTimeout) {
+                console.error(
+                  chalk.yellow(
+                    `Page processing timed out (batch-level): ${failedTask?.pageTitle || "unknown"}. ` +
+                      `Inner operations may still be in progress. ` +
+                      `This should not happen with the current config (no batch timeout). ` +
+                      `If you see this, the timeoutMs was re-added.`
+                  )
+                );
+              } else {
+                console.error(
+                  chalk.red(
+                    `Page processing failed: ${failedTask?.pageTitle || "unknown"}: ${result.reason}`
+                  )
+                );
+              }
             }
             // Emit progress update immediately as each page settles
             processedPages++;

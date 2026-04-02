@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   extractImageMatches,
   processAndReplaceImages,
+  getImageDiagnostics,
+  validateAndFixRemainingImages,
   type ImageMatch,
 } from "./imageReplacer";
 
@@ -576,6 +578,33 @@ Some text after
       expect(trackerInstance.finish).not.toHaveBeenCalled();
     });
 
+    it("should convert data: URL images to canonical /images/ paths", async () => {
+      const dataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const markdown = `![alt](${dataUrl})`;
+      const result = await processAndReplaceImages(markdown, "test-file");
+
+      // The data: URL should be routed through the processing pipeline
+      // and replaced with a canonical /images/ path, not left inline.
+      expect(result.markdown).not.toContain("data:");
+      expect(result.markdown).toMatch(/\/images\//);
+      expect(result.stats.successfulImages).toBe(1);
+    });
+
+    it("should not log 'Kept ... data URL image(s) unchanged' after processing", async () => {
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const dataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const markdown = `![alt](${dataUrl})`;
+
+      await processAndReplaceImages(markdown, "test-file");
+
+      const dataUrlKeptLogs = infoSpy.mock.calls.filter((args) =>
+        String(args[0]).includes("data URL image")
+      );
+      expect(dataUrlKeptLogs).toHaveLength(0);
+    });
+
     it("should not throw ReferenceError when DEBUG_S3_IMAGES is enabled on large markdown", () => {
       // This test ensures that the debug path in extractImageMatches doesn't use
       // require() which is not available in ESM modules
@@ -594,6 +623,46 @@ Some text after
       } finally {
         process.env.DEBUG_S3_IMAGES = originalEnv;
       }
+    });
+  });
+
+  describe("getImageDiagnostics", () => {
+    it("should report S3 and data URL leftovers separately", () => {
+      const dataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const markdown = `
+![s3](https://prod-files-secure.s3.us-west-2.amazonaws.com/example.png)
+![inline](${dataUrl})
+<img src="${dataUrl}" alt="inline-html" />
+      `;
+
+      const diagnostics = getImageDiagnostics(markdown);
+
+      expect(diagnostics.totalMatches).toBe(3);
+      expect(diagnostics.markdownMatches).toBe(2);
+      expect(diagnostics.htmlMatches).toBe(1);
+      expect(diagnostics.s3Matches).toBe(1);
+      expect(diagnostics.dataUrlMatches).toBe(2);
+      expect(diagnostics.s3Samples[0]).toContain("prod-files-secure.s3");
+      expect(diagnostics.dataUrlSamples).toHaveLength(2);
+      expect(
+        diagnostics.dataUrlSamples.every((sample) =>
+          sample.startsWith("data:image/png;base64,")
+        )
+      ).toBe(true);
+    });
+  });
+
+  describe("validateAndFixRemainingImages", () => {
+    it("should run a final pass for leftover data URL images", async () => {
+      const dataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const markdown = `![alt](${dataUrl})`;
+
+      const result = await validateAndFixRemainingImages(markdown, "test-file");
+
+      expect(result).not.toContain("data:");
+      expect(result).toMatch(/\/images\//);
     });
   });
 });

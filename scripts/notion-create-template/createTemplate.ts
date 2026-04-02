@@ -272,6 +272,7 @@ if (import.meta.main) {
     try {
       await createContentTemplate(title);
       console.log(chalk.green("\n🎉 Content template creation completed!"));
+      process.exit(0);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(`\n💥 Error: ${message}`));

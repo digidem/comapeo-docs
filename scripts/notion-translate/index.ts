@@ -25,6 +25,7 @@ import {
   fetchNotionData,
   sortAndExpandNotionData,
 } from "../fetchNotionData.js";
+import { getRequestScheduler } from "../notion-fetch/requestScheduler";
 import { quoteYamlValue } from "../notion-fetch/frontmatterBuilder.js";
 import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCache.js";
 import { normalizePageId } from "../utils/normalizePageId.js";
@@ -1646,6 +1647,11 @@ export async function main(options: CliOptions = {}) {
     console.log(`TRANSLATION_SUMMARY ${JSON.stringify(summary)}`);
     throw error;
   } finally {
+    try {
+      getRequestScheduler().destroy();
+    } catch {
+      // Best-effort cleanup — don't mask the original error
+    }
     console.log(chalk.blue("\nCleaned up temporary files"));
   }
 }
@@ -1658,12 +1664,17 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(chalk.bold.red("\n❌ Invalid CLI arguments:"), message);
-    process.exitCode = 1;
+    process.exit(1);
   }
 
   if (process.exitCode !== 1 && cliOptions) {
-    main(cliOptions).catch(() => {
-      process.exitCode = 1;
-    });
+    (async () => {
+      try {
+        await main(cliOptions);
+        process.exit(0);
+      } catch {
+        process.exit(1);
+      }
+    })();
   }
 }

@@ -1,4 +1,5 @@
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createMockNotionPage, installTestNotionEnv } from "../test-utils";
 
@@ -23,6 +24,10 @@ const mockNotionPagesUpdate = vi.fn();
 const mockNotionBlocksChildrenList = vi.fn();
 const mockNotionBlocksChildrenAppend = vi.fn();
 const mockNotionBlocksDelete = vi.fn();
+const mockSchedulerDestroy = vi.fn();
+const mockGetRequestScheduler = vi.fn(() => ({
+  destroy: mockSchedulerDestroy,
+}));
 
 const mockN2m = {
   pageToMarkdown: vi.fn(),
@@ -70,6 +75,10 @@ vi.mock("../notionClient", () => ({
 vi.mock("../fetchNotionData.js", () => ({
   fetchNotionData: mockFetchNotionData,
   sortAndExpandNotionData: mockSortAndExpandNotionData,
+}));
+
+vi.mock("../notion-fetch/requestScheduler", () => ({
+  getRequestScheduler: mockGetRequestScheduler,
 }));
 
 vi.mock("../notion-fetch/pageMetadataCache.js", () => ({
@@ -138,6 +147,8 @@ describe("notion-translate index", () => {
     mockNotionBlocksDelete.mockReset();
     mockN2m.pageToMarkdown.mockReset();
     mockN2m.toMarkdownString.mockReset();
+    mockSchedulerDestroy.mockReset();
+    mockGetRequestScheduler.mockClear();
 
     mockFetchNotionData.mockImplementation(async (filter) => {
       if (
@@ -2463,6 +2474,71 @@ describe("notion-translate index", () => {
       // Test Spanish lookup
       const esResult = await findSiblingTranslations(englishPage, "Spanish");
       expect(esResult?.id).toBe(spanishSibling.id);
+    });
+  });
+
+  describe("cleanup and CLI wrapper", () => {
+    let originalArgv: string[];
+    let processExitSpy: ReturnType<typeof vi.spyOn>;
+    const scriptPath = fileURLToPath(new URL("./index.ts", import.meta.url));
+
+    beforeEach(() => {
+      originalArgv = [...process.argv];
+      processExitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation(() => undefined as never);
+      mockSchedulerDestroy.mockReset();
+      mockGetRequestScheduler.mockClear();
+    });
+
+    afterEach(() => {
+      process.argv = originalArgv;
+      processExitSpy.mockRestore();
+    });
+
+    it("destroys the request scheduler when main completes", async () => {
+      const { main } = await import("./index");
+
+      await main();
+
+      expect(mockGetRequestScheduler).toHaveBeenCalledTimes(1);
+      expect(mockSchedulerDestroy).toHaveBeenCalledTimes(1);
+    });
+
+    it("exits with code 1 when CLI args are invalid", async () => {
+      process.argv = ["bun", scriptPath, "--page-id", "invalid-id"];
+      vi.resetModules();
+
+      await import("./index");
+
+      await vi.waitFor(() => {
+        expect(processExitSpy).toHaveBeenCalledWith(1);
+      });
+    });
+
+    it("exits with code 0 when executed successfully from the CLI wrapper", async () => {
+      process.argv = ["bun", scriptPath];
+      vi.resetModules();
+
+      await import("./index");
+
+      await vi.waitFor(() => {
+        expect(processExitSpy).toHaveBeenCalledWith(0);
+      });
+
+      expect(mockSchedulerDestroy).toHaveBeenCalledTimes(1);
+    });
+
+    it("exits with code 1 when main rejects from the CLI wrapper", async () => {
+      mockFetchNotionData.mockRejectedValueOnce(new Error("boom"));
+      process.argv = ["bun", scriptPath];
+      vi.resetModules();
+
+      await import("./index");
+
+      await vi.waitFor(() => {
+        expect(processExitSpy).toHaveBeenCalledWith(1);
+      });
     });
   });
 });

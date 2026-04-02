@@ -145,4 +145,6 @@ async function main() {
 
   console.log("All assertions passed!");
 }
-main();
+main()
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1));

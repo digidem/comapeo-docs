@@ -519,8 +519,10 @@ const isDirectExec =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
-  main().catch((error) => {
-    console.error(chalk.red("❌ Fatal error:"), error);
-    process.exit(1);
-  });
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(chalk.red("❌ Fatal error:"), error);
+      process.exit(1);
+    });
 }

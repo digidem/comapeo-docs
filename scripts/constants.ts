@@ -73,6 +73,8 @@ export const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
 export const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 export const DEFAULT_OPENAI_TEMPERATURE = 0.3;
 export const DEFAULT_OPENAI_MAX_TOKENS = 4096;
+/** Maximum output tokens for custom OpenAI-compatible APIs (e.g., DeepSeek has 8192). */
+export const CUSTOM_API_MAX_OUTPUT_TOKENS = 8192;
 
 // Check if using OpenAI's default API (vs custom endpoint like DeepSeek)
 export const IS_CUSTOM_OPENAI_API = !!OPENAI_BASE_URL;
@@ -182,6 +184,16 @@ export const ENGLISH_DIR_SAVE_ERROR =
 // Translation retry configuration
 export const TRANSLATION_MAX_RETRIES = 3;
 export const TRANSLATION_RETRY_BASE_DELAY_MS = 750;
+
+/**
+ * Maximum chars per chunk for custom APIs (e.g., DeepSeek).
+ * Kept smaller than TRANSLATION_CHUNK_MAX_CHARS because custom APIs
+ * typically have lower output-token limits and slower response times.
+ * Formula: 12K chars ÷ ~3.4 chars/token ≈ 3.5K output tokens per chunk,
+ * safely below the 8192-token API ceiling.
+ */
+export const CUSTOM_API_CHUNK_MAX_CHARS = 12_000;
+
 /**
  * Reliability-oriented cap for proactive markdown translation chunking.
  * This keeps long-form docs away from the model's theoretical context ceiling,

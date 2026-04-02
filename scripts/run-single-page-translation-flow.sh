@@ -183,6 +183,8 @@ cd "$REPO_ROOT"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${TMPDIR:-/tmp}/comapeo-single-page-flow-${PAGE_ID}-${RUN_ID}"
 mkdir -p "$ARTIFACT_DIR"
+FETCH_START_MARKER="${ARTIFACT_DIR}/fetch-start.marker"
+: >"$FETCH_START_MARKER"
 
 echo "Artifacts: ${ARTIFACT_DIR}"
 echo "Page ID: ${PAGE_ID}"
@@ -215,12 +217,47 @@ CANONICAL_RELATIVE_PATH="$(
 )"
 
 if [[ -z "$CANONICAL_RELATIVE_PATH" ]]; then
-  echo
-  echo "Unable to resolve canonical English docs path from .cache/page-metadata.json after fetch." >&2
-  echo "See: ${ARTIFACT_DIR}/fetch.log" >&2
-  exit 1
-fi
+  # --- Filesystem fallback when cache resolution fails ---
+  echo "  Cache had no entry for page ${PAGE_ID}, attempting filesystem fallback..." >&2
 
+  # Deterministic fallback: scan docs/ for markdown files whose path was
+  # written during this fetch run (newer than FETCH_START_MARKER). Unlike the
+  # previous heuristic `find -newer` which could match unrelated files, we
+  # constrain results to the docs/ tree and pick the most-recently-written
+  # English markdown file.  For single-page fetch this is unambiguous because
+  # only one English page should be generated.
+  RECENT_MD="$(find "${REPO_ROOT}/docs" -name "*.md" -newer "${FETCH_START_MARKER}" -type f 2>/dev/null | head -1)"
+  if [[ -n "$RECENT_MD" ]]; then
+    CANONICAL_RELATIVE_PATH="${RECENT_MD#"${REPO_ROOT}/"}"
+    echo "  Filesystem fallback: found ${CANONICAL_RELATIVE_PATH}" >&2
+  else
+    echo "  No recently-written markdown files found in docs/" >&2
+  fi
+
+  # --- Fetch-log failure detection ---
+  # If the fetch log indicates page processing failures despite exit code 0,
+  # do NOT proceed into translation — the English source may be incomplete or
+  # missing.  This closes the gap where a successful process exit did not
+  # guarantee successful page generation.
+  if [[ -z "$CANONICAL_RELATIVE_PATH" ]] && [[ -f "${ARTIFACT_DIR}/fetch.log" ]]; then
+    if grep -q "pages failed to process" "${ARTIFACT_DIR}/fetch.log" >/dev/null 2>&1; then
+      echo
+      echo "Fetch log indicates page processing failures despite exit code 0." >&2
+      echo "  Refusing to proceed with translation — English source may be incomplete." >&2
+      echo "See: ${ARTIFACT_DIR}/fetch.log" >&2
+      exit 1
+    fi
+  fi
+
+  # --- Strict failure when no path found ---
+  if [[ -z "$CANONICAL_RELATIVE_PATH" ]]; then
+    echo
+    echo "Unable to resolve canonical English docs path for page ${PAGE_ID}." >&2
+    echo "  Cache had no entry, filesystem fallback found nothing, and fetch log showed no failures." >&2
+    echo "See: ${ARTIFACT_DIR}/fetch.log" >&2
+    exit 1
+  fi
+fi
 ENGLISH_FILE="${REPO_ROOT}/docs/${CANONICAL_RELATIVE_PATH}"
 PT_FILE="${REPO_ROOT}/i18n/pt/docusaurus-plugin-content-docs/current/${CANONICAL_RELATIVE_PATH}"
 ES_FILE="${REPO_ROOT}/i18n/es/docusaurus-plugin-content-docs/current/${CANONICAL_RELATIVE_PATH}"

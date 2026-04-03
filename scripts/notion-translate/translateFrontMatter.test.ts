@@ -1176,7 +1176,92 @@ describe("notion-translate translateFrontMatter", () => {
     expect(parseFrontmatterKeys(md)).toEqual([]);
   });
 
+  it("parseFrontmatterKeys ignores body-level horizontal-rule blocks without anchor keys", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    const md =
+      "---\n\n" +
+      "Video: @[document_4997224092760278339_trimmed.mp4](https://drive.google.com/file/d/14l9AjdANFSzhtCC94h0DHw2Xolt11_Yq/view?usp=drive_link)\n\n" +
+      "---";
+
+    expect(parseFrontmatterKeys(md)).toEqual([]);
+  });
+
+  it("parseFrontmatterKeys keeps real frontmatter and ignores later Video blocks", async () => {
+    const { parseFrontmatterKeys } = await import("./translateFrontMatter");
+    const md =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Main Content\n\n" +
+      "Body paragraph one.\n\n" +
+      "---\n\n" +
+      "Video: @[document_4997224092760278339_trimmed.mp4](https://drive.google.com/file/d/14l9AjdANFSzhtCC94h0DHw2Xolt11_Yq/view?usp=drive_link)\n\n" +
+      "---\n\n" +
+      "## Sub Section\n\n" +
+      "Body paragraph two.";
+
+    expect(parseFrontmatterKeys(md)).toEqual([
+      "title",
+      "slug",
+      "sidebar_position",
+    ]);
+  });
+
   // Frontmatter integrity integration tests
+
+  it("succeeds when a later chunk contains a body-level Video block", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Main Content\n\n" +
+      `${"Body paragraph one. ".repeat(180)}\n\n` +
+      "---\n\n" +
+      "Video: @[document_4997224092760278339_trimmed.mp4](https://drive.google.com/file/d/14l9AjdANFSzhtCC94h0DHw2Xolt11_Yq/view?usp=drive_link)\n\n" +
+      "---\n\n" +
+      "## Sub Section\n\n" +
+      `${"Body paragraph two. ".repeat(180)}`;
+
+    const payloads: string[] = [];
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        payloads.push(payload.markdown);
+
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Minha Página",
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "My Page", "pt-BR", {
+      chunkLimit: 3_000,
+    });
+
+    expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);
+    expect(
+      payloads.slice(1).some((payload) => payload.includes("Video: @["))
+    ).toBe(true);
+    expect(result.markdown).toContain("## Sub Section");
+    expect(result.markdown).toContain("Video: @[");
+    expect(result.markdown).toContain("slug: /my-page");
+  });
 
   it("fails when a critical frontmatter field is dropped by translation", async () => {
     const { translateText } = await import("./translateFrontMatter");

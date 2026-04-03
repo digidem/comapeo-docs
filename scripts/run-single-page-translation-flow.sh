@@ -244,7 +244,7 @@ if [[ -z "$CANONICAL_RELATIVE_PATH" ]]; then
   # only one English page should be generated.
   RECENT_MD="$(find "${REPO_ROOT}/docs" -name "*.md" -newer "${FETCH_START_MARKER}" -type f 2>/dev/null | head -1)"
   if [[ -n "$RECENT_MD" ]]; then
-    CANONICAL_RELATIVE_PATH="${RECENT_MD#"${REPO_ROOT}/"}"
+    CANONICAL_RELATIVE_PATH="${RECENT_MD#"${REPO_ROOT}/docs/"}"
     echo "  Filesystem fallback: found ${CANONICAL_RELATIVE_PATH}" >&2
   else
     echo "  No recently-written markdown files found in docs/" >&2

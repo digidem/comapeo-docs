@@ -258,8 +258,7 @@ describe("translation image placeholder flow", () => {
       parentItem: "parent-1",
       elementType: "Page",
     });
-    const remoteImageUrl =
-      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+    const remoteImageUrl = "https://example.com/assets/remote-image.png";
     mockN2m.toMarkdownString.mockReturnValue({
       parent: `![Remote image](${remoteImageUrl})\n\nBody copy`,
     });
@@ -303,6 +302,35 @@ describe("translation image placeholder flow", () => {
     mockTranslateText.mockResolvedValue({
       markdown: translatedWithS3,
       title: "Failure Case",
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(runTranslation(englishPage)).rejects.toThrow(
+      "Translation workflow completed with failures"
+    );
+
+    expect(
+      errorSpy.mock.calls.some((args) =>
+        args.join(" ").includes("still contains 1 Notion/S3 URLs")
+      )
+    ).toBe(true);
+  });
+
+  it("fails when translated markdown hides a Notion S3 URL behind a remote placeholder", async () => {
+    const englishPage = createMockNotionPage({
+      id: "placeholder-bypass-page",
+      title: "Placeholder Bypass",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+    const remotePlaceholder = encodeRemoteImagePlaceholderPath(remoteImageUrl);
+    mockTranslateText.mockResolvedValue({
+      markdown: `![img](${remotePlaceholder})`,
+      title: "Placeholder Bypass",
     });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 

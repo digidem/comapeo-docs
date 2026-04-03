@@ -30,6 +30,7 @@ import { quoteYamlValue } from "../notion-fetch/frontmatterBuilder.js";
 import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCache.js";
 import {
   replaceCanonicalMarkdownImagesWithPlaceholders,
+  decodeRemoteImagePlaceholderPaths,
   HYPERLINKED_MARKDOWN_IMAGE_REGEX,
   MARKDOWN_IMAGE_REGEX,
   HTML_IMAGE_TAG_REGEX,
@@ -1282,8 +1283,10 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
+    const decodedTranslatedContent =
+      decodeRemoteImagePlaceholderPaths(translatedContent);
     const { count: totalS3Matches, samples: detectedS3Urls } =
-      collectRawNotionS3Matches(translatedContent);
+      collectRawNotionS3Matches(decodedTranslatedContent);
 
     if (totalS3Matches > 0) {
       throw new Error(

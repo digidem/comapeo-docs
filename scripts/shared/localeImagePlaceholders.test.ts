@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodeLocaleImagePlaceholderPath,
   decodeRemoteImagePlaceholderPath,
+  decodeRemoteImagePlaceholderPaths,
   encodeLocaleImagePlaceholderPath,
   encodeRemoteImagePlaceholderPath,
   isLocaleImagePlaceholderPath,
@@ -114,6 +115,22 @@ describe("localeImagePlaceholders", () => {
     expect(rewriteLocaleImagePlaceholderPath(placeholderPath)).toBe(
       remoteImageUrl
     );
+  });
+
+  it("decodes remote image placeholders within markdown content", () => {
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+    const placeholderPath = encodeRemoteImagePlaceholderPath(remoteImageUrl);
+    const content = [
+      `![Screenshot](${placeholderPath})`,
+      "",
+      `<img src="${placeholderPath}" alt="Figure" />`,
+    ].join("\n");
+
+    const decodedContent = decodeRemoteImagePlaceholderPaths(content);
+
+    expect(decodedContent).toContain(remoteImageUrl);
+    expect(decodedContent).not.toContain(placeholderPath);
   });
 
   it("preserves non-src attributes when rewriting multi-attribute <img> tags", () => {

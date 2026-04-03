@@ -113,6 +113,17 @@ export function rewriteLocaleImagePlaceholderPath(path: string): string {
   return path;
 }
 
+export function decodeRemoteImagePlaceholderPaths(content: string): string {
+  if (!content.includes(REMOTE_IMAGE_PLACEHOLDER_PREFIX)) {
+    return content;
+  }
+
+  return content.replace(
+    /\/images\/__remote_ref__\/[A-Za-z0-9_-]+/g,
+    (imagePath) => decodeRemoteImagePlaceholderPath(imagePath) ?? imagePath
+  );
+}
+
 export function replaceCanonicalMarkdownImagesWithPlaceholders(
   markdownContent: string
 ): string {

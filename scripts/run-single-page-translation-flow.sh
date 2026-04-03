@@ -176,6 +176,49 @@ read_json_value() {
   ' 2>/dev/null
 }
 
+format_number() {
+  LC_ALL=en_US.UTF-8 printf "%'d" "$1" 2>/dev/null || echo "$1"
+}
+
+rep_char() {
+  local n="$1" char="$2" result="" i
+  for ((i = 0; i < n; i++)); do result="${result}${char}"; done
+  printf '%s' "$result"
+}
+
+print_metrics_table() {
+  local en_h="$1" en_i="$2" en_l="$3" en_c="$4"
+  local pt_h="$5" pt_i="$6" pt_l="$7" pt_c="$8"
+  local es_h="$9" es_i="${10}" es_l="${11}" es_c="${12}"
+
+  en_c="$(format_number "$en_c")"
+  pt_c="$(format_number "$pt_c")"
+  es_c="$(format_number "$es_c")"
+
+  # Column content widths (no padding); minimums are header widths
+  local w1=8 w2=7 w3=2 w4=2  # "headings"=8, "English"=7, "PT"=2, "ES"=2
+  for v in "$en_h" "$en_i" "$en_l" "$en_c"; do [[ ${#v} -gt $w2 ]] && w2=${#v}; done
+  for v in "$pt_h" "$pt_i" "$pt_l" "$pt_c"; do [[ ${#v} -gt $w3 ]] && w3=${#v}; done
+  for v in "$es_h" "$es_i" "$es_l" "$es_c"; do [[ ${#v} -gt $w4 ]] && w4=${#v}; done
+
+  local t1=$((w1 + 2)) t2=$((w2 + 2)) t3=$((w3 + 2)) t4=$((w4 + 2))
+  local h1 h2 h3 h4
+  h1="$(rep_char "$t1" '─')" h2="$(rep_char "$t2" '─')"
+  h3="$(rep_char "$t3" '─')" h4="$(rep_char "$t4" '─')"
+
+  printf "  ┌%s┬%s┬%s┬%s┐\n" "$h1" "$h2" "$h3" "$h4"
+  printf "  │ %-*s │ %-*s │ %-*s │ %-*s │\n" "$w1" "Metric"   "$w2" "English" "$w3" "PT"    "$w4" "ES"
+  printf "  ├%s┼%s┼%s┼%s┤\n" "$h1" "$h2" "$h3" "$h4"
+  printf "  │ %-*s │ %-*s │ %-*s │ %-*s │\n" "$w1" "headings" "$w2" "$en_h"   "$w3" "$pt_h" "$w4" "$es_h"
+  printf "  ├%s┼%s┼%s┼%s┤\n" "$h1" "$h2" "$h3" "$h4"
+  printf "  │ %-*s │ %-*s │ %-*s │ %-*s │\n" "$w1" "images"   "$w2" "$en_i"   "$w3" "$pt_i" "$w4" "$es_i"
+  printf "  ├%s┼%s┼%s┼%s┤\n" "$h1" "$h2" "$h3" "$h4"
+  printf "  │ %-*s │ %-*s │ %-*s │ %-*s │\n" "$w1" "lines"    "$w2" "$en_l"   "$w3" "$pt_l" "$w4" "$es_l"
+  printf "  ├%s┼%s┼%s┼%s┤\n" "$h1" "$h2" "$h3" "$h4"
+  printf "  │ %-*s │ %-*s │ %-*s │ %-*s │\n" "$w1" "chars"    "$w2" "$en_c"   "$w3" "$pt_c" "$w4" "$es_c"
+  printf "  └%s┴%s┴%s┴%s┘\n" "$h1" "$h2" "$h3" "$h4"
+}
+
 require_command bun
 
 PAGE_ID_RAW="${1:-}"
@@ -329,6 +372,7 @@ BENCHMARK_ES_SECONDS="$(cat "$ARTIFACT_DIR/benchmark-es.seconds" 2>/dev/null || 
 PT_OUTPUT_STATUS="$(assess_output_file pt "$PT_FILE")"
 ES_OUTPUT_STATUS="$(assess_output_file es "$ES_FILE")"
 FAILED_TRANSLATIONS="$(read_json_value "$ARTIFACT_DIR/translation-summary.json" "failedTranslations" || echo "n/a")"
+NEW_TRANSLATIONS="$(read_json_value "$ARTIFACT_DIR/translation-summary.json" "newTranslations" || echo "n/a")"
 
 QUALITY_STATUS=0
 if [[ "$PT_OUTPUT_STATUS" != "pt: ok" || "$ES_OUTPUT_STATUS" != "es: ok" ]]; then
@@ -338,60 +382,90 @@ if [[ "$FAILED_TRANSLATIONS" != "0" && "$FAILED_TRANSLATIONS" != "n/a" ]]; then
   QUALITY_STATUS=1
 fi
 
-echo
-echo "Summary"
-echo "- fetch: $([[ "$FETCH_STATUS" -eq 0 ]] && echo "ok" || echo "failed") (${FETCH_SECONDS}s)"
-echo "- translate: $([[ "$TRANSLATE_STATUS" -eq 0 ]] && echo "ok" || echo "failed") (${TRANSLATE_SECONDS}s)"
-echo "- model benchmark pt: $([[ "$BENCHMARK_PT_STATUS" -eq 0 ]] && echo "ok" || echo "skipped/failed") (${BENCHMARK_PT_SECONDS}s)"
-echo "- model benchmark es: $([[ "$BENCHMARK_ES_STATUS" -eq 0 ]] && echo "ok" || echo "skipped/failed") (${BENCHMARK_ES_SECONDS}s)"
-echo "- output quality: $([[ "$QUALITY_STATUS" -eq 0 ]] && echo "ok" || echo "needs review")"
-echo "- canonical docs path: ${CANONICAL_RELATIVE_PATH}"
-echo
+# Collect per-file metrics for the summary table
+_file_metrics() {
+  local file_path="$1"
+  if [[ ! -f "$file_path" ]] || ! file_has_content "$file_path"; then
+    printf '%s %s %s %s' '-' '-' '-' '-'
+    return
+  fi
+  local h i ip l c
+  h="$(count_headings "$file_path")"
+  i="$(count_images "$file_path")"
+  ip="$(count_placeholders "$file_path")"
+  l="$(wc -l <"$file_path" | tr -d ' ')"
+  c="$(wc -m <"$file_path" | tr -d ' ')"
+  printf '%s %s %s %s' "$h" "$((i + ip))" "$l" "$c"
+}
 
-if [[ -f "$ARTIFACT_DIR/translation-summary.json" ]]; then
-  echo "Translation summary"
-  echo "- totalEnglishPages: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "totalEnglishPages" || echo "n/a")"
-  echo "- processedLanguages: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "processedLanguages" || echo "n/a")"
-  echo "- newTranslations: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "newTranslations" || echo "n/a")"
-  echo "- updatedTranslations: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "updatedTranslations" || echo "n/a")"
-  echo "- skippedTranslations: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "skippedTranslations" || echo "n/a")"
-  echo "- failedTranslations: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "failedTranslations" || echo "n/a")"
-  echo "- codeJsonFailures: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "codeJsonFailures" || echo "n/a")"
-  echo "- themeFailures: $(read_json_value "$ARTIFACT_DIR/translation-summary.json" "themeFailures" || echo "n/a")"
-  echo
+read -r en_h en_i en_l en_c <<< "$(_file_metrics "$ENGLISH_FILE")"
+read -r pt_h pt_i pt_l pt_c <<< "$(_file_metrics "$PT_FILE")"
+read -r es_h es_i es_l es_c <<< "$(_file_metrics "$ES_FILE")"
+
+echo
+print_metrics_table \
+  "$en_h" "$en_i" "$en_l" "$en_c" \
+  "$pt_h" "$pt_i" "$pt_l" "$pt_c" \
+  "$es_h" "$es_i" "$es_l" "$es_c"
+
+# Consolidated checks summary
+echo
+if [[ "$FETCH_STATUS" -eq 0 && "$TRANSLATE_STATUS" -eq 0 && "$QUALITY_STATUS" -eq 0 ]]; then
+  echo "  All checks passed:"
+else
+  echo "  Checks:"
 fi
 
-echo "Output files"
-print_file_stats "english" "$ENGLISH_FILE"
-print_file_stats "pt" "$PT_FILE"
-print_file_stats "es" "$ES_FILE"
-echo "- ${PT_OUTPUT_STATUS}"
-echo "- ${ES_OUTPUT_STATUS}"
+# — fetch
+if [[ "$FETCH_STATUS" -eq 0 ]]; then
+  echo "  - fetch: ok (${FETCH_SECONDS}s)"
+else
+  echo "  - fetch: FAILED (${FETCH_SECONDS}s)"
+fi
+
+# — translate
+if [[ "$TRANSLATE_STATUS" -eq 0 ]]; then
+  _tx_detail=""
+  if [[ "$NEW_TRANSLATIONS" != "n/a" && "$FAILED_TRANSLATIONS" != "n/a" ]]; then
+    _tx_detail=" — ${NEW_TRANSLATIONS} new translations, ${FAILED_TRANSLATIONS} failures"
+  fi
+  echo "  - translate: ok (${TRANSLATE_SECONDS}s)${_tx_detail}"
+else
+  echo "  - translate: FAILED (${TRANSLATE_SECONDS}s)"
+fi
+
+# — output quality
+if [[ "$QUALITY_STATUS" -eq 0 ]]; then
+  _q_detail=""
+  if [[ "$en_h" != "-" && "$en_i" != "-" ]]; then
+    _q_detail=" — all ${en_h} headings preserved, all ${en_i} images preserved in both PT and ES"
+  fi
+  echo "  - output quality: ok${_q_detail}"
+else
+  _q_issues=""
+  [[ "$PT_OUTPUT_STATUS" != "pt: ok" ]] && _q_issues="${_q_issues} pt:${PT_OUTPUT_STATUS#*: }"
+  [[ "$ES_OUTPUT_STATUS" != "es: ok" ]] && _q_issues="${_q_issues} es:${ES_OUTPUT_STATUS#*: }"
+  [[ "$FAILED_TRANSLATIONS" != "0" && "$FAILED_TRANSLATIONS" != "n/a" ]] && \
+    _q_issues="${_q_issues}, ${FAILED_TRANSLATIONS} failed translations"
+  echo "  - output quality: needs review —${_q_issues}"
+fi
+
+# — model benchmarks
+if [[ "$BENCHMARK_PT_STATUS" -eq 0 && "$BENCHMARK_ES_STATUS" -eq 0 ]]; then
+  echo "  - model benchmarks: ok for both languages"
+elif [[ "$BENCHMARK_PT_STATUS" -ne 0 && "$BENCHMARK_ES_STATUS" -ne 0 ]]; then
+  echo "  - model benchmarks: skipped/failed"
+elif [[ "$BENCHMARK_PT_STATUS" -eq 0 ]]; then
+  echo "  - model benchmarks: pt ok, es skipped/failed"
+else
+  echo "  - model benchmarks: pt skipped/failed, es ok"
+fi
+
 echo
-
-if [[ "$BENCHMARK_PT_STATUS" -eq 0 && -f "$ARTIFACT_DIR/benchmark-pt.json" ]]; then
-  echo "PT model benchmark"
-  echo "- totalMs: $(read_json_value "$ARTIFACT_DIR/benchmark-pt.json" "totalMs" || echo "n/a")"
-  echo "- apiCalls: $(read_json_value "$ARTIFACT_DIR/benchmark-pt.json" "apiCalls" || echo "n/a")"
-  echo "- meanApiCallMs: $(read_json_value "$ARTIFACT_DIR/benchmark-pt.json" "meanApiCallMs" || echo "n/a")"
-  echo
-fi
-
-if [[ "$BENCHMARK_ES_STATUS" -eq 0 && -f "$ARTIFACT_DIR/benchmark-es.json" ]]; then
-  echo "ES model benchmark"
-  echo "- totalMs: $(read_json_value "$ARTIFACT_DIR/benchmark-es.json" "totalMs" || echo "n/a")"
-  echo "- apiCalls: $(read_json_value "$ARTIFACT_DIR/benchmark-es.json" "apiCalls" || echo "n/a")"
-  echo "- meanApiCallMs: $(read_json_value "$ARTIFACT_DIR/benchmark-es.json" "meanApiCallMs" || echo "n/a")"
-  echo
-fi
-
-echo "Logs"
-echo "- fetch log: ${ARTIFACT_DIR}/fetch.log"
-echo "- translate log: ${ARTIFACT_DIR}/translate.log"
-echo "- translation summary json: ${ARTIFACT_DIR}/translation-summary.json"
-echo "- fetch perf json: ${ARTIFACT_DIR}/fetch-perf.json"
-echo "- pt benchmark json: ${ARTIFACT_DIR}/benchmark-pt.json"
-echo "- es benchmark json: ${ARTIFACT_DIR}/benchmark-es.json"
+echo "  Logs"
+echo "  - fetch:     ${ARTIFACT_DIR}/fetch.log"
+echo "  - translate: ${ARTIFACT_DIR}/translate.log"
+echo "  - artifacts: ${ARTIFACT_DIR}/"
 echo
 
 echo "Next"
@@ -399,7 +473,7 @@ if [[ "$FETCH_STATUS" -eq 0 && "$TRANSLATE_STATUS" -eq 0 && "$QUALITY_STATUS" -e
   echo "- run Portuguese dev server: bun run dev:pt"
   echo "- run Spanish dev server: bun run dev:es"
 else
-  echo "- inspect the logs and output-status lines above before running locale dev servers"
+  echo "- inspect the logs above before running locale dev servers"
 fi
 
 OVERALL_STATUS=0

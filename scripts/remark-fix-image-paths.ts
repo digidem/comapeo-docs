@@ -1,24 +1,23 @@
-// Remark plugin (TypeScript) to rewrite markdown image URLs
-// from `images/...` (relative to the doc) to `/images/...` (served from static)
-// Also rewrites raw HTML <img src="images/..."> occurrences.
+import { rewriteLocaleImagePlaceholderPath } from "./shared/localeImagePlaceholders";
 
+// Remark plugin to rewrite doc-local image references to site-root paths
+// and decode locale image placeholders back to canonical English assets.
 export default function remarkFixImagePaths() {
   function transformNode(node: any): void {
     if (!node || typeof node !== "object") return;
 
-    // Markdown image nodes
     if (node.type === "image" && typeof node.url === "string") {
-      if (node.url.startsWith("images/")) {
-        node.url = `/${node.url}`;
-      }
+      node.url = rewriteLocaleImagePlaceholderPath(node.url);
     }
 
-    // Raw HTML nodes possibly containing <img>
     if (node.type === "html" && typeof node.value === "string") {
-      node.value = node.value.replace(/src=(["'])images\//g, "src=$1/images/");
+      node.value = node.value.replace(
+        /\bsrc=(["'])([^"']+)\1/g,
+        (_full: string, quote: string, src: string) =>
+          `src=${quote}${rewriteLocaleImagePlaceholderPath(src)}${quote}`
+      );
     }
 
-    // Recurse into children
     if (Array.isArray(node.children)) {
       for (const child of node.children) transformNode(child);
     }

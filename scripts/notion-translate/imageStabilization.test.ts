@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockNotionPage, installTestNotionEnv } from "../test-utils";
+import { encodeLocaleImagePlaceholderPath } from "../shared/localeImagePlaceholders.js";
 
 const mockFetchNotionData = vi.fn();
 const mockSortAndExpandNotionData = vi.fn();
@@ -228,10 +229,13 @@ describe("translation image placeholder flow", () => {
     );
 
     await runTranslation(englishPage);
+    const placeholderPath = encodeLocaleImagePlaceholderPath(
+      "/images/screenshot.png"
+    );
 
     expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
     expect(mockTranslateText).toHaveBeenCalledWith(
-      expect.stringContaining("[Image: Screenshot]"),
+      expect.stringContaining(placeholderPath),
       "Hello World",
       "pt-BR"
     );

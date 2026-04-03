@@ -28,6 +28,12 @@ import {
 import { getRequestScheduler } from "../notion-fetch/requestScheduler";
 import { quoteYamlValue } from "../notion-fetch/frontmatterBuilder.js";
 import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCache.js";
+import {
+  replaceCanonicalMarkdownImagesWithPlaceholders,
+  HYPERLINKED_MARKDOWN_IMAGE_REGEX,
+  MARKDOWN_IMAGE_REGEX,
+  HTML_IMAGE_TAG_REGEX,
+} from "../shared/localeImagePlaceholders.js";
 import { normalizePageId } from "../utils/normalizePageId.js";
 import {
   LANGUAGES,
@@ -51,10 +57,6 @@ type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
 type NotionRelationProperty = { relation: Array<{ id: string }> };
 
 const FRONTMATTER_BLOCK_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
-const HYPERLINKED_MARKDOWN_IMAGE_REGEX =
-  /\[!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
-const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(\s*((?:\\\)|[^)])+?)\s*\)/g;
-const HTML_IMAGE_TAG_REGEX = /<img\b[^>]*>/gi;
 
 // Type for Notion page parent (API hierarchy structure)
 interface NotionPageParent {
@@ -142,13 +144,18 @@ function replaceImagesWithPlaceholders(markdownContent: string): string {
 
 function prepareMarkdownForTranslation(
   markdownContent: string,
-  options: { skipImages?: boolean } = {}
+  options: {
+    imageHandling?: "preserve" | "placeholder-text" | "placeholder-path";
+  } = {}
 ): string {
-  if (!options.skipImages) {
-    return markdownContent;
+  switch (options.imageHandling) {
+    case "placeholder-text":
+      return replaceImagesWithPlaceholders(markdownContent);
+    case "placeholder-path":
+      return replaceCanonicalMarkdownImagesWithPlaceholders(markdownContent);
+    default:
+      return markdownContent;
   }
-
-  return replaceImagesWithPlaceholders(markdownContent);
 }
 
 async function ensureTranslatedFrontmatter(
@@ -741,13 +748,13 @@ async function getSourceMarkdownForTranslation(
       )
     );
     return prepareMarkdownForTranslation(canonicalMarkdown, {
-      skipImages: true,
+      imageHandling: "placeholder-path",
     });
   }
 
   const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
   return prepareMarkdownForTranslation(rawMarkdownContent, {
-    skipImages: true,
+    imageHandling: "placeholder-text",
   });
 }
 

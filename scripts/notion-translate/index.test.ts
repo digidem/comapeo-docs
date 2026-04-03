@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createMockNotionPage, installTestNotionEnv } from "../test-utils";
+import { encodeLocaleImagePlaceholderPath } from "../shared/localeImagePlaceholders.js";
 
 const mockFetchNotionData = vi.fn();
 const mockSortAndExpandNotionData = vi.fn();
@@ -628,6 +629,9 @@ describe("notion-translate index", () => {
     const { main } = await import("./index");
 
     const summary = await main();
+    const placeholderPath = encodeLocaleImagePlaceholderPath(
+      "/images/screenshot.png"
+    );
 
     expect(summary.failedTranslations).toBe(0);
     expect(mockReadFile).toHaveBeenCalledWith(
@@ -638,13 +642,13 @@ describe("notion-translate index", () => {
     );
     expect(mockN2m.pageToMarkdown).not.toHaveBeenCalled();
     expect(mockTranslateText).toHaveBeenCalledWith(
-      expect.stringContaining("[Image: Screenshot]"),
+      expect.stringContaining(placeholderPath),
       "Hello World",
       "pt-BR"
     );
     expect(
       mockTranslateText.mock.calls.some((call) =>
-        String(call[0]).includes("/images/")
+        String(call[0]).includes("/images/screenshot.png")
       )
     ).toBe(false);
   });

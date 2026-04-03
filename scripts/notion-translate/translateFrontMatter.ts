@@ -36,6 +36,8 @@ const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 const DATA_URL_PLACEHOLDER_REGEX =
   /\/images\/__data_url_placeholder_\d+__\.png/g;
 const CANONICAL_IMAGE_PATH_REGEX = /\/images\/[^\s)"'<>]+/g;
+const MARKDOWN_FENCE_REGEX = /^[ \t]{0,3}(`{3,}|~{3,})/;
+const ATX_HEADING_REGEX = /^[ \t]{0,3}(#{1,6})\s+(.+?)\s*$/;
 const MAX_PLACEHOLDER_INTEGRITY_RETRIES = 2;
 
 const isDataUrlPlaceholderPath = (path: string): boolean =>
@@ -70,7 +72,10 @@ You are a translation assistant, responsible for translating the text provided b
 - **Do not translate or modify any image URLs.**
 - **Do not modify any paths starting with /images/ - these are canonical asset references that must remain unchanged.**
 - **Do not modify placeholder image paths matching /images/__data_url_placeholder_<number>__.png.**
+- **Preserve all heading lines (lines starting with #). Do not merge, drop, or combine headings.**
 - Preserve all markdown formatting, including headings, lists, code blocks, etc.
+- **Do not modify JSX attribute syntax: \`style={{...}}\`, \`className={...}\`, etc. must remain exactly as in the original. Never wrap JSX expressions in additional quotes (e.g., \`style="{{...}}"\` is invalid).**
+- **Do not modify or translate any HTML/JSX element tags or their attribute names. Only translate visible text content.**
 
 ## Workflow
 
@@ -104,6 +109,21 @@ type TranslationErrorDetails = {
     failedChecks: string[];
     metrics: CompletenessDiagnostics["metrics"];
   };
+};
+
+type MarkdownHeading = {
+  line: string;
+  text: string;
+  level: number;
+  bodyLineIndex: number;
+  sectionContentLength: number;
+};
+
+type ParsedHeadingDocument = {
+  frontmatter: string;
+  bodyLines: string[];
+  headings: MarkdownHeading[];
+  preambleContentLength: number;
 };
 
 export class TranslationError extends Error {
@@ -555,6 +575,9 @@ export function parseFrontmatterKeys(markdown: string): string[] {
       keys.push(match[1]);
     }
   }
+  if (!keys.some((key) => CRITICAL_FRONTMATTER_FIELDS.has(key))) {
+    return [];
+  }
   return keys;
 }
 
@@ -684,6 +707,265 @@ function stripYamlFrontmatter(markdown: string): string {
     }
   }
   return markdown;
+}
+
+function splitYamlFrontmatter(markdown: string): {
+  frontmatter: string;
+  body: string;
+} {
+  if (markdown.startsWith("---\n") || markdown.startsWith("---\r\n")) {
+    const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+    if (endFrontmatterIndex !== -1) {
+      const endOfLineIndex = markdown.indexOf("\n", endFrontmatterIndex + 1);
+      if (endOfLineIndex !== -1) {
+        return {
+          frontmatter: markdown.substring(0, endOfLineIndex + 1),
+          body: markdown.substring(endOfLineIndex + 1),
+        };
+      }
+      return { frontmatter: markdown, body: "" };
+    }
+  }
+
+  return { frontmatter: "", body: markdown };
+}
+
+function parseHeadingDocument(markdown: string): ParsedHeadingDocument {
+  const { frontmatter, body } = splitYamlFrontmatter(markdown);
+  const bodyLines = body.length > 0 ? body.split("\n") : [];
+  const headingDrafts: Omit<MarkdownHeading, "sectionContentLength">[] = [];
+
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
+
+  for (const [bodyLineIndex, line] of bodyLines.entries()) {
+    const fenceMatch = line.match(MARKDOWN_FENCE_REGEX);
+
+    if (!inFence) {
+      if (fenceMatch) {
+        inFence = true;
+        fenceChar = fenceMatch[1][0];
+        fenceLen = fenceMatch[1].length;
+        continue;
+      }
+
+      const headingMatch = line.match(ATX_HEADING_REGEX);
+      if (headingMatch) {
+        headingDrafts.push({
+          line: `${headingMatch[1]} ${headingMatch[2].trim()}`,
+          text: headingMatch[2].trim(),
+          level: headingMatch[1].length,
+          bodyLineIndex,
+        });
+      }
+      continue;
+    }
+
+    if (
+      fenceMatch &&
+      fenceMatch[1][0] === fenceChar &&
+      fenceMatch[1].length >= fenceLen &&
+      /^\s*$/.test(line.trimStart().slice(fenceMatch[1].length))
+    ) {
+      inFence = false;
+      fenceChar = "";
+      fenceLen = 0;
+    }
+  }
+
+  const headings = headingDrafts.map((heading, index) => {
+    const nextHeadingStart = headingDrafts[index + 1]?.bodyLineIndex;
+    const sectionLines = bodyLines.slice(
+      heading.bodyLineIndex + 1,
+      nextHeadingStart ?? bodyLines.length
+    );
+
+    return {
+      ...heading,
+      sectionContentLength: sectionLines.join("\n").trim().length,
+    };
+  });
+
+  const firstHeadingIndex = headings[0]?.bodyLineIndex ?? bodyLines.length;
+  const preambleContentLength = bodyLines
+    .slice(0, firstHeadingIndex)
+    .join("\n")
+    .trim().length;
+
+  return {
+    frontmatter,
+    bodyLines,
+    headings,
+    preambleContentLength,
+  };
+}
+
+function isHeadingOnlyCompletenessFailure(
+  diagnostics: CompletenessDiagnostics
+): boolean {
+  return (
+    diagnostics.failedChecks.length > 0 &&
+    diagnostics.failedChecks.every((check) => check.startsWith("heading loss:"))
+  );
+}
+
+function areHeadingLevelsCompatible(
+  sourceHeading: MarkdownHeading,
+  translatedHeading: MarkdownHeading
+): boolean {
+  return Math.abs(sourceHeading.level - translatedHeading.level) <= 1;
+}
+
+function alignHeadingsByOrder(
+  sourceHeadings: MarkdownHeading[],
+  translatedHeadings: MarkdownHeading[]
+): Array<number | null> {
+  const sourceCount = sourceHeadings.length;
+  const translatedCount = translatedHeadings.length;
+  const dp = Array.from({ length: sourceCount + 1 }, () =>
+    Array<number>(translatedCount + 1).fill(0)
+  );
+
+  for (let sourceIndex = sourceCount - 1; sourceIndex >= 0; sourceIndex -= 1) {
+    for (
+      let translatedIndex = translatedCount - 1;
+      translatedIndex >= 0;
+      translatedIndex -= 1
+    ) {
+      if (
+        areHeadingLevelsCompatible(
+          sourceHeadings[sourceIndex],
+          translatedHeadings[translatedIndex]
+        )
+      ) {
+        dp[sourceIndex][translatedIndex] =
+          dp[sourceIndex + 1][translatedIndex + 1] + 1;
+      } else {
+        dp[sourceIndex][translatedIndex] = Math.max(
+          dp[sourceIndex + 1][translatedIndex],
+          dp[sourceIndex][translatedIndex + 1]
+        );
+      }
+    }
+  }
+
+  const sourceToTranslated = Array<number | null>(sourceCount).fill(null);
+  let sourceIndex = 0;
+  let translatedIndex = 0;
+
+  while (sourceIndex < sourceCount && translatedIndex < translatedCount) {
+    if (
+      areHeadingLevelsCompatible(
+        sourceHeadings[sourceIndex],
+        translatedHeadings[translatedIndex]
+      ) &&
+      dp[sourceIndex][translatedIndex] ===
+        dp[sourceIndex + 1][translatedIndex + 1] + 1
+    ) {
+      sourceToTranslated[sourceIndex] = translatedIndex;
+      sourceIndex += 1;
+      translatedIndex += 1;
+      continue;
+    }
+
+    if (
+      dp[sourceIndex + 1][translatedIndex] >=
+      dp[sourceIndex][translatedIndex + 1]
+    ) {
+      sourceIndex += 1;
+    } else {
+      translatedIndex += 1;
+    }
+  }
+
+  return sourceToTranslated;
+}
+
+function estimateInsertionLineIndex(
+  bodyLines: string[],
+  startLineIndex: number,
+  endLineIndex: number,
+  targetRatio: number
+): number {
+  const safeStart = Math.max(0, Math.min(startLineIndex, bodyLines.length));
+  const safeEnd = Math.max(safeStart, Math.min(endLineIndex, bodyLines.length));
+  const regionLines = bodyLines.slice(safeStart, safeEnd);
+  const totalChars = regionLines.join("\n").length;
+
+  if (totalChars === 0) {
+    return safeStart;
+  }
+
+  const clampedRatio = Math.max(0, Math.min(targetRatio, 1));
+  let bestLineIndex = safeStart;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let cumulativeChars = 0;
+
+  for (let lineOffset = 0; lineOffset <= regionLines.length; lineOffset += 1) {
+    const currentRatio = cumulativeChars / totalChars;
+    const distance = Math.abs(currentRatio - clampedRatio);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestLineIndex = safeStart + lineOffset;
+    }
+
+    if (lineOffset < regionLines.length) {
+      cumulativeChars += regionLines[lineOffset].length;
+      if (lineOffset < regionLines.length - 1) {
+        cumulativeChars += 1;
+      }
+    }
+  }
+
+  return bestLineIndex;
+}
+
+function normalizeHeadingLine(line: string): string {
+  return line.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function hasHeadingNearInsertionPoint(
+  bodyLines: string[],
+  lineIndex: number,
+  headingLine: string
+): boolean {
+  const normalizedHeading = normalizeHeadingLine(headingLine);
+  const start = Math.max(0, lineIndex - 2);
+  const end = Math.min(bodyLines.length, lineIndex + 2);
+
+  for (let currentIndex = start; currentIndex < end; currentIndex += 1) {
+    if (
+      normalizeHeadingLine(bodyLines[currentIndex] ?? "") === normalizedHeading
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function insertHeadingLine(
+  bodyLines: string[],
+  lineIndex: number,
+  headingLine: string
+): void {
+  const insertionLines: string[] = [];
+  const previousLine = bodyLines[lineIndex - 1];
+  const nextLine = bodyLines[lineIndex];
+
+  if (lineIndex > 0 && previousLine?.trim() !== "") {
+    insertionLines.push("");
+  }
+
+  insertionLines.push(headingLine);
+
+  if (nextLine !== undefined && nextLine.trim() !== "") {
+    insertionLines.push("");
+  }
+
+  bodyLines.splice(lineIndex, 0, ...insertionLines);
 }
 
 function collectMarkdownStructureMetrics(
@@ -1180,6 +1462,246 @@ async function translateChunkWithOverflowFallback(
   }
 }
 
+async function translateHeadingLine(
+  headingLine: string,
+  targetLanguage: string,
+  chunkLimit: number
+): Promise<string> {
+  const headingMatch = headingLine.match(ATX_HEADING_REGEX);
+  if (!headingMatch) {
+    throw new TranslationError(
+      `Cannot translate non-heading line during heading recovery: ${headingLine}`,
+      "unexpected_error",
+      false
+    );
+  }
+
+  const translated = await translateChunkWithOverflowFallback(
+    `${headingLine}\n`,
+    "",
+    targetLanguage,
+    0,
+    chunkLimit
+  );
+  const translatedHeadingMatch = translated.markdown.match(ATX_HEADING_REGEX);
+
+  if (translatedHeadingMatch) {
+    return `${"#".repeat(headingMatch[1].length)} ${translatedHeadingMatch[2].trim()}`;
+  }
+
+  const fallbackText = translated.markdown
+    .replace(ATX_HEADING_REGEX, "$2")
+    .trim()
+    .split("\n")[0]
+    ?.trim();
+
+  if (fallbackText) {
+    return `${"#".repeat(headingMatch[1].length)} ${fallbackText}`;
+  }
+
+  return headingLine;
+}
+
+async function recoverMissingTranslatedHeadings(
+  sourceMarkdown: string,
+  translatedMarkdown: string,
+  targetLanguage: string,
+  chunkLimit: number,
+  diagnostics: CompletenessDiagnostics
+): Promise<string | null> {
+  if (!isHeadingOnlyCompletenessFailure(diagnostics)) {
+    return null;
+  }
+
+  const sourceDocument = parseHeadingDocument(sourceMarkdown);
+  const translatedDocument = parseHeadingDocument(translatedMarkdown);
+
+  if (
+    sourceDocument.headings.length === 0 ||
+    translatedDocument.headings.length >= sourceDocument.headings.length
+  ) {
+    return null;
+  }
+
+  const sourceToTranslated = alignHeadingsByOrder(
+    sourceDocument.headings,
+    translatedDocument.headings
+  );
+  const missingSourceHeadingIndexes = sourceToTranslated
+    .map((translatedHeadingIndex, sourceHeadingIndex) =>
+      translatedHeadingIndex === null ? sourceHeadingIndex : null
+    )
+    .filter(
+      (sourceHeadingIndex): sourceHeadingIndex is number =>
+        sourceHeadingIndex !== null
+    );
+
+  if (missingSourceHeadingIndexes.length === 0) {
+    return null;
+  }
+
+  const insertionPlans: Array<{
+    sourceHeadingIndex: number;
+    lineIndex: number;
+  }> = [];
+  let runStartIndex = 0;
+
+  while (runStartIndex < missingSourceHeadingIndexes.length) {
+    let runEndIndex = runStartIndex;
+    while (
+      runEndIndex + 1 < missingSourceHeadingIndexes.length &&
+      missingSourceHeadingIndexes[runEndIndex + 1] ===
+        missingSourceHeadingIndexes[runEndIndex] + 1
+    ) {
+      runEndIndex += 1;
+    }
+
+    const runHeadingIndexes = missingSourceHeadingIndexes.slice(
+      runStartIndex,
+      runEndIndex + 1
+    );
+    const firstMissingHeadingIndex = runHeadingIndexes[0];
+    const lastMissingHeadingIndex =
+      runHeadingIndexes[runHeadingIndexes.length - 1];
+
+    let previousMatchedSourceHeadingIndex: number | null = null;
+    for (
+      let sourceHeadingIndex = firstMissingHeadingIndex - 1;
+      sourceHeadingIndex >= 0;
+      sourceHeadingIndex -= 1
+    ) {
+      if (sourceToTranslated[sourceHeadingIndex] !== null) {
+        previousMatchedSourceHeadingIndex = sourceHeadingIndex;
+        break;
+      }
+    }
+
+    let nextMatchedSourceHeadingIndex: number | null = null;
+    for (
+      let sourceHeadingIndex = lastMissingHeadingIndex + 1;
+      sourceHeadingIndex < sourceToTranslated.length;
+      sourceHeadingIndex += 1
+    ) {
+      if (sourceToTranslated[sourceHeadingIndex] !== null) {
+        nextMatchedSourceHeadingIndex = sourceHeadingIndex;
+        break;
+      }
+    }
+
+    const regionStartLineIndex =
+      previousMatchedSourceHeadingIndex !== null
+        ? translatedDocument.headings[
+            sourceToTranslated[previousMatchedSourceHeadingIndex]!
+          ].bodyLineIndex + 1
+        : 0;
+    const regionEndLineIndex =
+      nextMatchedSourceHeadingIndex !== null
+        ? translatedDocument.headings[
+            sourceToTranslated[nextMatchedSourceHeadingIndex]!
+          ].bodyLineIndex
+        : translatedDocument.bodyLines.length;
+
+    const leadingSegmentLength =
+      previousMatchedSourceHeadingIndex !== null
+        ? sourceDocument.headings[previousMatchedSourceHeadingIndex]
+            .sectionContentLength
+        : sourceDocument.preambleContentLength;
+    const totalSourceRegionLength =
+      leadingSegmentLength +
+      runHeadingIndexes.reduce(
+        (sum, sourceHeadingIndex) =>
+          sum +
+          sourceDocument.headings[sourceHeadingIndex].sectionContentLength,
+        0
+      );
+
+    let consumedSourceLength = leadingSegmentLength;
+    for (const sourceHeadingIndex of runHeadingIndexes) {
+      const targetRatio =
+        totalSourceRegionLength > 0
+          ? consumedSourceLength / totalSourceRegionLength
+          : 0;
+
+      insertionPlans.push({
+        sourceHeadingIndex,
+        lineIndex: estimateInsertionLineIndex(
+          translatedDocument.bodyLines,
+          regionStartLineIndex,
+          regionEndLineIndex,
+          targetRatio
+        ),
+      });
+      consumedSourceLength +=
+        sourceDocument.headings[sourceHeadingIndex].sectionContentLength;
+    }
+
+    runStartIndex = runEndIndex + 1;
+  }
+
+  if (insertionPlans.length === 0) {
+    return null;
+  }
+
+  const recoveredBodyLines = [...translatedDocument.bodyLines];
+  const translatedHeadingCache = new Map<number, string>();
+
+  for (const plan of [...insertionPlans].sort((left, right) => {
+    if (right.lineIndex !== left.lineIndex) {
+      return right.lineIndex - left.lineIndex;
+    }
+    return right.sourceHeadingIndex - left.sourceHeadingIndex;
+  })) {
+    const sourceHeading = sourceDocument.headings[plan.sourceHeadingIndex];
+    let translatedHeadingLine = translatedHeadingCache.get(
+      plan.sourceHeadingIndex
+    );
+
+    if (!translatedHeadingLine) {
+      translatedHeadingLine = await translateHeadingLine(
+        sourceHeading.line,
+        targetLanguage,
+        chunkLimit
+      );
+      translatedHeadingCache.set(
+        plan.sourceHeadingIndex,
+        translatedHeadingLine
+      );
+    }
+
+    if (
+      hasHeadingNearInsertionPoint(
+        recoveredBodyLines,
+        plan.lineIndex,
+        translatedHeadingLine
+      )
+    ) {
+      continue;
+    }
+
+    insertHeadingLine(
+      recoveredBodyLines,
+      plan.lineIndex,
+      translatedHeadingLine
+    );
+  }
+
+  const recoveredMarkdown = `${translatedDocument.frontmatter}${recoveredBodyLines.join("\n")}`;
+  const recoveredCompleteness = evaluateTranslationCompleteness(
+    sourceMarkdown,
+    recoveredMarkdown
+  );
+  const completenessImproved =
+    recoveredCompleteness.metrics.translated.headingCount >
+      diagnostics.metrics.translated.headingCount ||
+    recoveredCompleteness.failedChecks.length < diagnostics.failedChecks.length;
+
+  if (!completenessImproved || recoveredCompleteness.isIncomplete) {
+    return null;
+  }
+
+  return recoveredMarkdown;
+}
+
 type TranslateTextOptions = {
   chunkLimit?: number;
   completenessRetryDepth?: number;
@@ -1213,7 +1735,8 @@ export async function translateText(
   const translateAndValidate = async (
     sourceMarkdown: string,
     translatedChunk: Promise<{ markdown: string; title: string }>,
-    stage: CompletenessFailureStage
+    stage: CompletenessFailureStage,
+    isFirstChunk = true
   ) => {
     const translated = await translatedChunk;
     const completeness = evaluateTranslationCompleteness(
@@ -1223,7 +1746,9 @@ export async function translateText(
     if (completeness.isIncomplete) {
       throw createCompletenessError(stage, completeness);
     }
-    assertFrontmatterIntegrity(sourceMarkdown, translated.markdown);
+    if (isFirstChunk) {
+      assertFrontmatterIntegrity(sourceMarkdown, translated.markdown);
+    }
     return translated;
   };
 
@@ -1286,7 +1811,8 @@ export async function translateText(
           0,
           effectiveChunkLimit
         ),
-        "chunk"
+        "chunk",
+        i === 0
       );
 
       if (i === 0) {
@@ -1302,6 +1828,21 @@ export async function translateText(
       joinedMarkdown
     );
     if (reassemblyCompleteness.isIncomplete) {
+      const recoveredMarkdown = await recoverMissingTranslatedHeadings(
+        maskedText,
+        joinedMarkdown,
+        targetLanguage,
+        effectiveChunkLimit,
+        reassemblyCompleteness
+      );
+
+      if (recoveredMarkdown) {
+        return {
+          markdown: restoreDataUrlPlaceholders(recoveredMarkdown, placeholders),
+          title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
+        };
+      }
+
       throw createCompletenessError("reassembly", reassemblyCompleteness);
     }
 

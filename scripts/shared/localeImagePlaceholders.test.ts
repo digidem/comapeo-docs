@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   decodeLocaleImagePlaceholderPath,
+  decodeRemoteImagePlaceholderPath,
   encodeLocaleImagePlaceholderPath,
+  encodeRemoteImagePlaceholderPath,
   isLocaleImagePlaceholderPath,
+  isRemoteImagePlaceholderPath,
   replaceCanonicalMarkdownImagesWithPlaceholders,
   rewriteLocaleImagePlaceholderPath,
 } from "./localeImagePlaceholders";
@@ -42,6 +45,21 @@ describe("localeImagePlaceholders", () => {
     ).toBeNull();
   });
 
+  it("encodes and decodes remote image URLs deterministically", () => {
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+
+    const placeholderPath = encodeRemoteImagePlaceholderPath(remoteImageUrl);
+
+    expect(placeholderPath).toMatch(
+      /^\/images\/__remote_ref__\/[A-Za-z0-9_-]+$/
+    );
+    expect(isRemoteImagePlaceholderPath(placeholderPath)).toBe(true);
+    expect(decodeRemoteImagePlaceholderPath(placeholderPath)).toBe(
+      remoteImageUrl
+    );
+  });
+
   it("rewrites canonical markdown images to placeholder URLs", () => {
     const markdown = [
       "![Screenshot](/images/getting-started/screenshot.png)",
@@ -59,6 +77,23 @@ describe("localeImagePlaceholders", () => {
     expect(rewritten).not.toContain("/images/getting-started/figure.png");
   });
 
+  it("rewrites remote markdown images to placeholder URLs", () => {
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+    const markdown = [
+      `![Screenshot](${remoteImageUrl})`,
+      "",
+      `[![Diagram](${remoteImageUrl})](https://example.com)`,
+      "",
+      `<img src="${remoteImageUrl}" alt="Figure" />`,
+    ].join("\n");
+
+    const rewritten = replaceCanonicalMarkdownImagesWithPlaceholders(markdown);
+
+    expect(rewritten).toContain("/images/__remote_ref__/");
+    expect(rewritten).not.toContain(remoteImageUrl);
+  });
+
   it("rewrites placeholder paths back to canonical image paths", () => {
     const canonicalPath = "/images/getting-started/screenshot.png";
     const placeholderPath = encodeLocaleImagePlaceholderPath(canonicalPath);
@@ -68,6 +103,16 @@ describe("localeImagePlaceholders", () => {
     );
     expect(rewriteLocaleImagePlaceholderPath("images/foo.png")).toBe(
       "/images/foo.png"
+    );
+  });
+
+  it("rewrites remote placeholder paths back to remote image URLs", () => {
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/image.png";
+    const placeholderPath = encodeRemoteImagePlaceholderPath(remoteImageUrl);
+
+    expect(rewriteLocaleImagePlaceholderPath(placeholderPath)).toBe(
+      remoteImageUrl
     );
   });
 

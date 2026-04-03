@@ -754,7 +754,7 @@ async function getSourceMarkdownForTranslation(
 
   const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
   return prepareMarkdownForTranslation(rawMarkdownContent, {
-    imageHandling: "placeholder-text",
+    imageHandling: "placeholder-path",
   });
 }
 

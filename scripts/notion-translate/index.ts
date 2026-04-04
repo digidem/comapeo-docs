@@ -30,6 +30,7 @@ import { quoteYamlValue } from "../notion-fetch/frontmatterBuilder.js";
 import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCache.js";
 import {
   replaceCanonicalMarkdownImagesWithPlaceholders,
+  decodeLocaleImagePlaceholderPaths,
   decodeRemoteImagePlaceholderPaths,
   HYPERLINKED_MARKDOWN_IMAGE_REGEX,
   MARKDOWN_IMAGE_REGEX,
@@ -923,7 +924,7 @@ export async function saveTranslatedContentToDisk(
 
     const localizedContent = await ensureTranslatedFrontmatter(
       englishPage,
-      translatedContent,
+      decodeLocaleImagePlaceholderPaths(translatedContent),
       translatedTitle,
       canonicalRelativePath
     );

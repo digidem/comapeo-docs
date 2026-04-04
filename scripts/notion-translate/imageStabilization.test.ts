@@ -288,6 +288,43 @@ describe("translation image placeholder flow", () => {
     ).toBe(true);
   });
 
+  it("uses a safe text placeholder when markdown images have no alt text in Notion-converted fallback mode", async () => {
+    const englishPage = createMockNotionPage({
+      id: "converted-empty-alt-page",
+      title: "Empty Alt",
+      status: "Ready for translation",
+      language: "English",
+      parentItem: "parent-1",
+      elementType: "Page",
+    });
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/empty-alt-image.png";
+    mockN2m.toMarkdownString.mockReturnValue({
+      parent: `![](${remoteImageUrl})\n\nBody copy`,
+    });
+    mockTranslateText.mockImplementation(
+      async (text: string, title: string) => ({
+        markdown: text,
+        title,
+      })
+    );
+
+    await runTranslation(englishPage);
+
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      expect.stringContaining("[Image: image]"),
+      "Empty Alt",
+      "pt-BR"
+    );
+    expect(
+      mockWriteFile.mock.calls.some(
+        ([, content]) =>
+          String(content).includes("[Image: image]") &&
+          !String(content).includes(remoteImageUrl)
+      )
+    ).toBe(true);
+  });
+
   it("fails when translated markdown unexpectedly still contains Notion image URLs", async () => {
     const englishPage = createMockNotionPage({
       id: "failure-page",

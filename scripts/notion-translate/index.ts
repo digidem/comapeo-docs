@@ -110,11 +110,8 @@ function replaceFrontmatterValue(
   }
 }
 
-function buildImagePlaceholder(
-  altText: string | undefined,
-  imageRef: string | undefined
-): string {
-  const label = altText?.trim() || imageRef?.trim() || "image";
+function buildImagePlaceholder(altText: string | undefined): string {
+  const label = altText?.trim() || "image";
   return `[Image: ${label}]`;
 }
 
@@ -128,18 +125,15 @@ function replaceImagesWithPlaceholders(markdownContent: string): string {
 
   const replaceImageTag = (tag: string): string => {
     const altText = /(?:^|\s)alt=(["'])(.*?)\1/i.exec(tag)?.[2];
-    const imageRef = /(?:^|\s)src=(["'])(.*?)\1/i.exec(tag)?.[2];
-    return buildImagePlaceholder(altText, imageRef);
+    return buildImagePlaceholder(altText);
   };
 
   return markdownContent
-    .replace(
-      HYPERLINKED_MARKDOWN_IMAGE_REGEX,
-      (_full, altText: string, imageRef: string) =>
-        buildImagePlaceholder(altText, imageRef.replace(/\\\)/g, ")"))
+    .replace(HYPERLINKED_MARKDOWN_IMAGE_REGEX, (_full, altText: string) =>
+      buildImagePlaceholder(altText)
     )
-    .replace(MARKDOWN_IMAGE_REGEX, (_full, altText: string, imageRef: string) =>
-      buildImagePlaceholder(altText, imageRef.replace(/\\\)/g, ")"))
+    .replace(MARKDOWN_IMAGE_REGEX, (_full, altText: string) =>
+      buildImagePlaceholder(altText)
     )
     .replace(HTML_IMAGE_TAG_REGEX, replaceImageTag);
 }

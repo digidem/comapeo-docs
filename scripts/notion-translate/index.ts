@@ -809,7 +809,7 @@ async function getSourceMarkdownForTranslation(
 
   const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
   return prepareMarkdownForTranslation(rawMarkdownContent, {
-    imageHandling: "placeholder-path",
+    imageHandling: "placeholder-text",
   });
 }
 

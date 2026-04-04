@@ -249,7 +249,7 @@ describe("translation image placeholder flow", () => {
     ).toBe(false);
   });
 
-  it("preserves markdown image syntax in Notion-converted fallback mode", async () => {
+  it("replaces markdown image syntax with text placeholders in Notion-converted fallback mode", async () => {
     const englishPage = createMockNotionPage({
       id: "converted-page",
       title: "Hello World",
@@ -258,7 +258,8 @@ describe("translation image placeholder flow", () => {
       parentItem: "parent-1",
       elementType: "Page",
     });
-    const remoteImageUrl = "https://example.com/assets/remote-image.png";
+    const remoteImageUrl =
+      "https://prod-files-secure.s3.us-west-2.amazonaws.com/xxx/remote-image.png";
     mockN2m.toMarkdownString.mockReturnValue({
       parent: `![Remote image](${remoteImageUrl})\n\nBody copy`,
     });
@@ -272,18 +273,17 @@ describe("translation image placeholder flow", () => {
     await runTranslation(englishPage);
 
     expect(mockN2m.pageToMarkdown).toHaveBeenCalledTimes(1);
-    const placeholderPath = encodeRemoteImagePlaceholderPath(remoteImageUrl);
     expect(mockTranslateText).toHaveBeenCalledWith(
-      expect.stringContaining(placeholderPath),
+      expect.stringContaining("[Image: Remote image]"),
       "Hello World",
       "pt-BR"
     );
     expect(
       mockWriteFile.mock.calls.some(
         ([, content]) =>
-          String(content).includes(placeholderPath) &&
+          String(content).includes("[Image: Remote image]") &&
           !String(content).includes(remoteImageUrl) &&
-          !String(content).includes("[Image: Remote image]")
+          !String(content).includes("/images/__remote_ref__/")
       )
     ).toBe(true);
   });

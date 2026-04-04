@@ -764,17 +764,30 @@ describe("notion-translate translateFrontMatter", () => {
       "Gamma ".repeat(60);
 
     // chunkLimit is the *total* request budget (prompt overhead + markdown).
-    // Prompt overhead is ~2.6 K chars; a 3_200 limit leaves ~587 chars of
-    // markdown per chunk, which fits one 375-char section but not two — so
-    // the three sections produce exactly three API calls.
+    // Prompt overhead is ~3.05 K chars; a 3_600 limit leaves ~551 chars of
+    // markdown per chunk, which fits one ~375-char section but not two — so
+    // the three sections produce exactly three initial API calls.
     const result = await translateText(source, "Original Title", "pt-BR", {
-      chunkLimit: 3_200,
+      chunkLimit: 3_600,
     });
 
-    expect(mockOpenAIChatCompletionCreate).toHaveBeenCalledTimes(3);
+    // Behavioural assertions: all three translated headings must survive
     expect(result.markdown).toContain("# Seção Um");
     expect(result.markdown).toContain("# Seção Dois");
     expect(result.markdown).toContain("# Seção Três");
+
+    // Structural assertion: the initial API payloads show section-level
+    // chunking (each chunk contains exactly one heading).
+    const payloads = mockOpenAIChatCompletionCreate.mock.calls.map(
+      (call) => extractPromptMarkdown(call[0] as MockOpenAIRequest).markdown
+    );
+    const firstPassPayloads = payloads.slice(0, 3);
+    expect(firstPassPayloads.length).toBeGreaterThanOrEqual(3);
+    expect(firstPassPayloads[0]).toContain("# Section One");
+    expect(firstPassPayloads[0]).not.toContain("# Section Two");
+    expect(firstPassPayloads[1]).toContain("# Section Two");
+    expect(firstPassPayloads[1]).not.toContain("# Section One");
+    expect(firstPassPayloads[2]).toContain("# Section Three");
   });
 
   it("continues to classify token overflow errors as non-critical token_overflow code", async () => {
@@ -1250,8 +1263,13 @@ describe("notion-translate translateFrontMatter", () => {
       }
     );
 
+    // chunkLimit is the *total* request budget (prompt overhead + markdown).
+    // Prompt overhead is ~3.05 K chars; a 6_000 limit leaves ~2.9 K chars of
+    // markdown per chunk, which produces 7 chunks with the Video block in a
+    // later chunk (not the first), and the round-trip preserves newlines so
+    // frontmatter integrity is maintained.
     const result = await translateText(source, "My Page", "pt-BR", {
-      chunkLimit: 3_000,
+      chunkLimit: 6_000,
     });
 
     expect(mockOpenAIChatCompletionCreate.mock.calls.length).toBeGreaterThan(1);

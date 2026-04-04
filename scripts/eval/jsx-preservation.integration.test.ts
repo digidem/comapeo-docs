@@ -4,9 +4,10 @@
  * Purpose: Guarantee that inline JSX tags (style={{...}}, className, <div>...)
  * survive translation structurally intact, with zero reliance on LLM prompt compliance.
  *
- * These tests make real API calls. They are skipped when OPENAI_API_KEY is not set.
+ * These tests make real API calls. They are skipped unless BOTH
+ * OPENAI_API_KEY is set AND RUN_LIVE_TRANSLATION_TESTS=1.
  * Run manually with:
- *   bunx vitest run scripts/eval/jsx-preservation.integration.test.ts
+ *   RUN_LIVE_TRANSLATION_TESTS=1 bunx vitest run scripts/eval/jsx-preservation.integration.test.ts
  *
  * A passing run here is the acceptance criterion for the placeholder protection
  * implementation (scripts/shared/jsxPlaceholders.ts). Before that implementation
@@ -29,8 +30,22 @@ try {
     const eq = trimmed.indexOf("=");
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
-    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-    if (key && !(key in process.env)) process.env[key] = val;
+    const val = trimmed
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["']|["']$/g, "");
+    if (key === "OPENAI_API_KEY" && !process.env.OPENAI_API_KEY) {
+      process.env.OPENAI_API_KEY = val;
+    }
+    if (key === "OPENAI_BASE_URL" && !process.env.OPENAI_BASE_URL) {
+      process.env.OPENAI_BASE_URL = val;
+    }
+    if (
+      key === "RUN_LIVE_TRANSLATION_TESTS" &&
+      !process.env.RUN_LIVE_TRANSLATION_TESTS
+    ) {
+      process.env.RUN_LIVE_TRANSLATION_TESTS = val;
+    }
   }
 } catch {
   // .env not present — rely on environment variables already set
@@ -40,7 +55,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const FIXTURE_PATH = resolve(
   __dirname,
-  "../notion-translate/__fixtures__/small.md",
+  "../notion-translate/__fixtures__/small.md"
 );
 
 // Strip YAML frontmatter block so translateText() receives bare markdown body
@@ -57,53 +72,52 @@ const SOURCE_IMG_COUNT = (SOURCE_BODY.match(/<img\b/g) ?? []).length; // 4
 const SOURCE_STYLE_COUNT = (SOURCE_BODY.match(/style=\{\{/g) ?? []).length; // 4
 const SOURCE_CLASSNAME_VALUES = [
   ...new Set(
-    [...SOURCE_BODY.matchAll(/className="([^"]+)"/g)].map((m) => m[1]),
+    [...SOURCE_BODY.matchAll(/className="([^"]+)"/g)].map((m) => m[1])
   ),
 ]; // ["emoji"]
 
 const hasApiKey = !!process.env.OPENAI_API_KEY;
+const shouldRunLiveTranslationTests =
+  process.env.RUN_LIVE_TRANSLATION_TESTS === "1";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function assertJsxIntegrity(
-  translated: string,
-  label: string,
-): void {
+function assertJsxIntegrity(translated: string, label: string): void {
   // 1. The exact production bug: style="{{...}}" wrapping
   const corrupted = translated.match(/style="\{\{/g) ?? [];
   expect(
     corrupted,
-    `[${label}] LLM wrapped style={{...}} in quotes (style="{{...}}")`,
+    `[${label}] LLM wrapped style={{...}} in quotes (style="{{...}}")`
   ).toHaveLength(0);
 
   // 2. All <img> tags must survive
   const imgCount = (translated.match(/<img\b/g) ?? []).length;
   expect(
     imgCount,
-    `[${label}] Expected ${SOURCE_IMG_COUNT} <img> tags, got ${imgCount}`,
+    `[${label}] Expected ${SOURCE_IMG_COUNT} <img> tags, got ${imgCount}`
   ).toBe(SOURCE_IMG_COUNT);
 
   // 3. All style={{...}} attributes must survive intact
   const styleCount = (translated.match(/style=\{\{/g) ?? []).length;
   expect(
     styleCount,
-    `[${label}] Expected ${SOURCE_STYLE_COUNT} style={{...}} attributes, got ${styleCount}`,
+    `[${label}] Expected ${SOURCE_STYLE_COUNT} style={{...}} attributes, got ${styleCount}`
   ).toBe(SOURCE_STYLE_COUNT);
 
   // 4. className values must not be translated or modified
   for (const value of SOURCE_CLASSNAME_VALUES) {
     expect(
       translated,
-      `[${label}] className="${value}" was modified or removed`,
+      `[${label}] className="${value}" was modified or removed`
     ).toContain(`className="${value}"`);
   }
 
   // 5. notion-spacer <div> must survive
   expect(
     translated,
-    `[${label}] <div class="notion-spacer"> was lost or corrupted`,
+    `[${label}] <div class="notion-spacer"> was lost or corrupted`
   ).toContain('class="notion-spacer"');
 }
 
@@ -111,7 +125,7 @@ function assertJsxIntegrity(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasApiKey)(
+describe.skipIf(!(hasApiKey && shouldRunLiveTranslationTests))(
   "JSX preservation — real DeepSeek API calls",
   { timeout: 120_000 },
   () => {
@@ -147,5 +161,5 @@ describe.skipIf(!hasApiKey)(
 
       assertJsxIntegrity(result.markdown, "pt-BR repeat");
     });
-  },
+  }
 );

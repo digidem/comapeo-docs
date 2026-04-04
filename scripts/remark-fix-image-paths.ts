@@ -1,9 +1,12 @@
+import type { Node } from "unist";
 import { rewriteLocaleImagePlaceholderPath } from "./shared/localeImagePlaceholders";
+
+type UnistNode = Node & Record<string, unknown>;
 
 // Remark plugin to rewrite doc-local image references to site-root paths
 // and decode locale image placeholders back to canonical English assets.
 export default function remarkFixImagePaths() {
-  function transformNode(node: any): void {
+  function transformNode(node: UnistNode): void {
     if (!node || typeof node !== "object") return;
 
     if (node.type === "image" && typeof node.url === "string") {
@@ -23,7 +26,7 @@ export default function remarkFixImagePaths() {
     }
   }
 
-  return (tree: any): void => {
+  return (tree: UnistNode): void => {
     transformNode(tree);
   };
 }

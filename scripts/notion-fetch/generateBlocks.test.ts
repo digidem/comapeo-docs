@@ -1453,7 +1453,7 @@ describe("generateBlocks", () => {
 
       // Verify the cache file was written with the page entry
       const cacheContent = (fs.readFileSync as Mock).mock.calls.find(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[0] === "string" &&
           call[0].includes("page-metadata.json") &&
           typeof call[1] === "string"
@@ -1461,14 +1461,14 @@ describe("generateBlocks", () => {
       // Cache is saved via atomic write (temp file + rename), so check renameSync
       // The cache should have been saved with the page's output path
       const writeCalls = (fs.writeFileSync as Mock).mock.calls.filter(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[0] === "string" &&
           call[0].includes("page-metadata.json") &&
           typeof call[1] === "string"
       );
       // At least one write should contain the page ID
       const cacheWrite = writeCalls.find(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[1] === "string" &&
           call[1].includes("cache-update-test-page")
       );
@@ -1581,13 +1581,13 @@ describe("generateBlocks", () => {
 
       // Verify cache was written with this page's entry
       const writeCalls = (fs.writeFileSync as Mock).mock.calls.filter(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[0] === "string" &&
           call[0].includes("page-metadata.json") &&
           typeof call[1] === "string"
       );
       const cacheWrite = writeCalls.find(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[1] === "string" &&
           call[1].includes("slow-page-no-timeout")
       );

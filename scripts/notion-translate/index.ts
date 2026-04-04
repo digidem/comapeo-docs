@@ -160,6 +160,31 @@ function prepareMarkdownForTranslation(
   }
 }
 
+export function extractFrontmatterValue(
+  content: string,
+  key: "sidebar_label" | "pagination_label"
+): string | null {
+  const frontmatterMatch = content.match(FRONTMATTER_BLOCK_REGEX);
+  if (!frontmatterMatch) return null;
+
+  const lineMatch =
+    key === "sidebar_label"
+      ? frontmatterMatch[0].match(/^sidebar_label:\s*(.+)$/m)
+      : frontmatterMatch[0].match(/^pagination_label:\s*(.+)$/m);
+  if (!lineMatch) return null;
+
+  let rawValue = lineMatch[1].trim();
+
+  // Strip surrounding quotes added by quoteYamlValue
+  if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
+    rawValue = rawValue.slice(1, -1).replace(/\\"/g, '"');
+  } else if (rawValue.startsWith("'") && rawValue.endsWith("'")) {
+    rawValue = rawValue.slice(1, -1);
+  }
+
+  return rawValue.length > 0 ? rawValue : null;
+}
+
 async function ensureTranslatedFrontmatter(
   englishPage: NotionPage,
   translatedContent: string,
@@ -190,13 +215,35 @@ async function ensureTranslatedFrontmatter(
 
   const effectiveTitle = translatedTitle.trim() || getTitle(englishPage);
   let translatedFrontmatter = frontmatterMatch[0];
-  for (const key of ["title", "sidebar_label", "pagination_label"] as const) {
-    translatedFrontmatter = replaceFrontmatterValue(
-      translatedFrontmatter,
-      key,
-      effectiveTitle
-    );
-  }
+
+  // title: always use effectiveTitle (LLM can hallucinate titles)
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "title",
+    effectiveTitle
+  );
+
+  // sidebar_label / pagination_label: prefer LLM-translated value from
+  // translatedContent; fall back to effectiveTitle if absent or blank
+  const llmSidebarLabel = extractFrontmatterValue(
+    translatedContent,
+    "sidebar_label"
+  );
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "sidebar_label",
+    llmSidebarLabel ?? effectiveTitle
+  );
+
+  const llmPaginationLabel = extractFrontmatterValue(
+    translatedContent,
+    "pagination_label"
+  );
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "pagination_label",
+    llmPaginationLabel ?? effectiveTitle
+  );
 
   const contentWithoutFrontmatter = translatedContent.replace(
     FRONTMATTER_BLOCK_REGEX,

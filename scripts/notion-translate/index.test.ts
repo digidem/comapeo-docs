@@ -1998,6 +1998,223 @@ describe("notion-translate index", () => {
         "# Instalando o CoMapeo e Integração"
       );
     });
+
+    it("preserves distinct LLM-translated sidebar_label and pagination_label", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-distinct-labels",
+        title: "Installing CoMapeo",
+        elementType: "Page",
+      });
+
+      // translatedContent has distinct sidebar_label and pagination_label
+      const translatedContent = [
+        "---",
+        "title: Instalando o CoMapeo",
+        "sidebar_label: Instalação",
+        "pagination_label: Instalar",
+        "---",
+        "Corpo traduzido",
+      ].join("\n");
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        translatedContent,
+        "Instalando o CoMapeo",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+      expect(markdownWriteCall).toBeDefined();
+      const written = String(markdownWriteCall?.[1]);
+      // title always comes from effectiveTitle
+      expect(written).toContain("title: Instalando o CoMapeo");
+      // distinct LLM values must be preserved, not overwritten with title
+      expect(written).toContain("sidebar_label: Instalação");
+      expect(written).toContain("pagination_label: Instalar");
+      // slug preserved from English canonical
+      expect(written).toContain('slug: "/installing-comapeo--onboarding"');
+    });
+
+    it("falls back to effectiveTitle when translatedContent has no frontmatter", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-no-frontmatter",
+        title: "Real Title",
+        elementType: "Page",
+      });
+
+      // translatedContent has no frontmatter at all
+      const translatedContent = "# Título Traduzido\n\nCorpo";
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        translatedContent,
+        "Título Traduzido",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+      expect(markdownWriteCall).toBeDefined();
+      const written = String(markdownWriteCall?.[1]);
+      // all three fields fall back to effectiveTitle
+      expect(written).toContain("title: Título Traduzido");
+      expect(written).toContain("sidebar_label: Título Traduzido");
+      expect(written).toContain("pagination_label: Título Traduzido");
+    });
+
+    it("falls back to effectiveTitle when LLM produced blank sidebar_label", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-blank-sidebar",
+        title: "Real Title",
+        elementType: "Page",
+      });
+
+      // translatedContent has a blank sidebar_label
+      const translatedContent = [
+        "---",
+        "title: Título Traduzido",
+        'sidebar_label: ""',
+        "---",
+        "Corpo",
+      ].join("\n");
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        translatedContent,
+        "Título Traduzido",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+      expect(markdownWriteCall).toBeDefined();
+      const written = String(markdownWriteCall?.[1]);
+      // blank sidebar_label falls back to effectiveTitle
+      expect(written).toContain("sidebar_label: Título Traduzido");
+    });
+
+    it("title always uses effectiveTitle, not LLM title from translatedContent", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      const regularPage = createMockNotionPage({
+        id: "page-hallucinated-title",
+        title: "Real Title",
+        elementType: "Page",
+      });
+
+      // translatedContent has a hallucinated/different title
+      const translatedContent = [
+        "---",
+        "title: Hallucinated Title",
+        "---",
+        "Corpo",
+      ].join("\n");
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        translatedContent,
+        "Título Real",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+      expect(markdownWriteCall).toBeDefined();
+      const written = String(markdownWriteCall?.[1]);
+      // effectiveTitle wins; hallucinated value from translatedContent is ignored
+      expect(written).toContain("title: Título Real");
+      expect(written).not.toContain("Hallucinated Title");
+    });
+
+    it("does not inject sidebar_label when absent from English canonical", async () => {
+      const { saveTranslatedContentToDisk } = await import("./index");
+
+      // Override mockReadFile to return a canonical with no sidebar_label
+      mockReadFile.mockImplementation(async (filePath: string) => {
+        if (
+          String(filePath).endsWith(
+            path.join(
+              "docs",
+              "getting-started-essentials",
+              "installing-comapeo.md"
+            )
+          )
+        ) {
+          return [
+            "---",
+            'title: "Page Title"',
+            "sidebar_position: 1",
+            "---",
+            "",
+            "# Page Title",
+            "",
+            "English body",
+          ].join("\n");
+        }
+        return '{"hello":{"message":"Hello"}}';
+      });
+
+      const regularPage = createMockNotionPage({
+        id: "page-no-sidebar-canonical",
+        title: "Page Title",
+        elementType: "Page",
+      });
+
+      // translatedContent has a sidebar_label but English canonical does not
+      const translatedContent = [
+        "---",
+        "title: Título da Página",
+        "sidebar_label: Etiqueta",
+        "---",
+        "Corpo",
+      ].join("\n");
+
+      await saveTranslatedContentToDisk(
+        regularPage,
+        translatedContent,
+        "Título da Página",
+        {
+          language: "pt-BR",
+          notionLangCode: "Portuguese",
+          outputDir: "/test/output",
+        }
+      );
+
+      const markdownWriteCall = mockWriteFile.mock.calls.find(
+        (call: string[]) => call[0].endsWith("installing-comapeo.md")
+      );
+      expect(markdownWriteCall).toBeDefined();
+      const written = String(markdownWriteCall?.[1]);
+      // sidebar_label absent from English canonical: replaceFrontmatterValue is a no-op
+      expect(written).not.toContain("sidebar_label:");
+    });
   });
 
   describe("missing parent relation handling", () => {

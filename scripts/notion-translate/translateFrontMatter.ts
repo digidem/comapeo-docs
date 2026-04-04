@@ -428,44 +428,43 @@ function splitByParagraphs(text: string, maxChars: number): string[] {
   return chunks;
 }
 
-/** Last-resort split at individual line boundaries. */
+/** Last-resort split at individual line boundaries.
+ *  Reassembly via join("") is lossless because "\n" characters are preserved
+ *  as explicit tokens rather than consumed by split(). */
 function splitByLines(text: string, maxChars: number): string[] {
-  const lines = text.split("\n");
+  // Split keeping "\n" as separate tokens so join("") reconstructs the
+  // original text exactly.  Tokens alternate: content, "\n", content, …
+  const tokens = text.split(/(\n)/);
   const chunks: string[] = [];
   let current = "";
 
-  for (const line of lines) {
-    const candidate = current.length === 0 ? line : current + "\n" + line;
+  for (const token of tokens) {
+    if (token.length === 0) continue;
 
-    if (candidate.length > maxChars) {
+    const candidate = current + token;
+
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      // Token doesn't fit — flush current, then handle token
       if (current.length > 0) {
         chunks.push(current);
-        // If the line itself exceeds the limit, force-split by character
-        if (line.length > maxChars) {
-          for (let i = 0; i < line.length; i += maxChars) {
-            const segment = line.slice(i, i + maxChars);
-            if (i + maxChars < line.length) {
-              chunks.push(segment);
-            } else {
-              current = segment;
-            }
-          }
-        } else {
-          current = line;
-        }
+        current = "";
+      }
+
+      if (token.length <= maxChars) {
+        current = token;
       } else {
-        // Leading oversized line (current is empty) — force-split by character
-        for (let i = 0; i < line.length; i += maxChars) {
-          const segment = line.slice(i, i + maxChars);
-          if (i + maxChars < line.length) {
+        // Single token exceeds limit — force-split by character
+        for (let i = 0; i < token.length; i += maxChars) {
+          const segment = token.slice(i, i + maxChars);
+          if (i + maxChars < token.length) {
             chunks.push(segment);
           } else {
             current = segment;
           }
         }
       }
-    } else {
-      current = candidate;
     }
   }
 

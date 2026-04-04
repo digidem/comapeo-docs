@@ -1281,6 +1281,58 @@ describe("notion-translate translateFrontMatter", () => {
     expect(result.markdown).toContain("slug: /my-page");
   });
 
+  it("succeeds with low chunkLimit that forces character-level splitting without losing frontmatter", async () => {
+    const { translateText } = await import("./translateFrontMatter");
+
+    // Reproduces the original bug: with chunkLimit: 3_000 and a ~3 K-char
+    // TRANSLATION_PROMPT, the content budget drops to ~1 char.  The old
+    // splitByLines consumed "\n" during text.split("\n") and never restored
+    // it, so reassembled markdown lost its frontmatter structure.
+    const source =
+      "---\n" +
+      "title: My Page\n" +
+      "slug: /my-page\n" +
+      "sidebar_position: 2\n" +
+      "---\n\n" +
+      "# Main Content\n\n" +
+      `${"Body paragraph one. ".repeat(180)}\n\n` +
+      "---\n\n" +
+      "Video: @[document_4997224092760278339_trimmed.mp4](https://drive.google.com/file/d/14l9AjdANFSzhtCC94h0DHw2Xolt11_Yq/view?usp=drive_link)\n\n" +
+      "---\n\n" +
+      "## Sub Section\n\n" +
+      `${"Body paragraph two. ".repeat(180)}`;
+
+    mockOpenAIChatCompletionCreate.mockImplementation(
+      async (request: MockOpenAIRequest) => {
+        const payload = extractPromptMarkdown(request);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  markdown: payload.markdown,
+                  title: "Minha Página",
+                }),
+              },
+            },
+          ],
+        };
+      }
+    );
+
+    const result = await translateText(source, "My Page", "pt-BR", {
+      chunkLimit: 3_000,
+    });
+
+    // Frontmatter keys must survive the round-trip through many tiny chunks
+    expect(result.markdown).toContain("title: My Page");
+    expect(result.markdown).toContain("slug: /my-page");
+    expect(result.markdown).toContain("sidebar_position: 2");
+    // Body content must also survive
+    expect(result.markdown).toContain("Video: @[");
+    expect(result.markdown).toContain("## Sub Section");
+  });
+
   it("fails when a critical frontmatter field is dropped by translation", async () => {
     const { translateText } = await import("./translateFrontMatter");
 

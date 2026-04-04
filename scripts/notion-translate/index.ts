@@ -754,6 +754,12 @@ async function getSourceMarkdownForTranslation(
     });
   }
 
+  console.log(
+    chalk.gray(
+      `  No canonical English markdown in docs/ for "${originalTitle}", fetching from Notion`
+    )
+  );
+
   const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
   return prepareMarkdownForTranslation(rawMarkdownContent, {
     imageHandling: "placeholder-path",

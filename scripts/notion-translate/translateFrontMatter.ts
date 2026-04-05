@@ -1643,6 +1643,7 @@ async function recoverMissingTranslatedHeadings(
 
   const recoveredBodyLines = [...translatedDocument.bodyLines];
   const translatedHeadingCache = new Map<number, string>();
+  const insertedSourceHeadingIndexes = new Set<number>();
 
   for (const plan of [...insertionPlans].sort((left, right) => {
     if (right.lineIndex !== left.lineIndex) {
@@ -1682,6 +1683,7 @@ async function recoverMissingTranslatedHeadings(
       plan.lineIndex,
       translatedHeadingLine
     );
+    insertedSourceHeadingIndexes.add(plan.sourceHeadingIndex);
   }
 
   const recoveredMarkdown = `${translatedDocument.frontmatter}${recoveredBodyLines.join("\n")}`;
@@ -1696,6 +1698,25 @@ async function recoverMissingTranslatedHeadings(
 
   if (!completenessImproved || recoveredCompleteness.isIncomplete) {
     return null;
+  }
+
+  const recoveredDocument = parseHeadingDocument(recoveredMarkdown);
+  const restoredHeadingTexts = new Set(
+    [...insertedSourceHeadingIndexes].map((idx) => {
+      const line = translatedHeadingCache.get(idx) ?? "";
+      return (line.match(ATX_HEADING_REGEX)?.[2] ?? line).toLocaleLowerCase();
+    })
+  );
+  for (const heading of recoveredDocument.headings) {
+    const headingText = (
+      heading.line.match(ATX_HEADING_REGEX)?.[2] ?? heading.line
+    ).toLocaleLowerCase();
+    if (
+      restoredHeadingTexts.has(headingText) &&
+      heading.sectionContentLength === 0
+    ) {
+      return null;
+    }
   }
 
   return recoveredMarkdown;

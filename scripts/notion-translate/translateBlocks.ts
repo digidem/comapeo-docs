@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { enhancedNotion } from "../notionClient.js";
 import { translateText } from "./translateFrontMatter.js";
 import type { Client } from "@notionhq/client";
@@ -9,7 +7,6 @@ import type {
   BlockObjectRequest,
 } from "@notionhq/client/build/src/api-endpoints";
 import { INVALID_URL_PLACEHOLDER, NOTION_PROPERTIES } from "../constants.js";
-import { extractImageMatches } from "../notion-fetch/imageReplacer.js";
 import chalk from "chalk";
 
 /** Block fetched from Notion API, extended with recursively-fetched children. */
@@ -49,24 +46,12 @@ async function fetchAllBlocks(blockId: string): Promise<FetchedBlock[]> {
   return blocks;
 }
 
-/**
- * @param orderedImagePaths - Array of image paths to consume in order (read-only).
- *                           A shallow copy is made internally; the caller's array is never mutated.
- */
 export async function translateNotionBlocksDirectly(
   pageId: string,
-  targetLanguage: string,
-  sanitizedPageName?: string,
-  orderedImagePaths: string[] = []
+  targetLanguage: string
 ): Promise<BlockObjectRequest[]> {
   const blocks = await fetchAllBlocks(pageId);
-  const state = { imageIndex: 0, orderedImagePaths: [...orderedImagePaths] };
-  return await translateBlocksTree(
-    blocks,
-    targetLanguage,
-    sanitizedPageName,
-    state
-  );
+  return await translateBlocksTree(blocks, targetLanguage);
 }
 
 function sanitizeUrl(url: string | null | undefined): string | null {
@@ -122,13 +107,53 @@ async function translateRichTextArray(
   }
 }
 
+function extractPlainText(items: unknown): string {
+  if (!Array.isArray(items)) {
+    return "";
+  }
+
+  return items
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return "";
+      }
+
+      const richTextItem = item as MutableRichTextItem;
+      if (typeof richTextItem.plain_text === "string") {
+        return richTextItem.plain_text;
+      }
+
+      return richTextItem.text?.content ?? "";
+    })
+    .join("")
+    .trim();
+}
+
+async function buildImagePlaceholder(
+  imageBlock: Record<string, unknown>,
+  targetLanguage: string
+): Promise<string> {
+  const caption = extractPlainText(
+    (imageBlock.image as { caption?: unknown } | undefined)?.caption
+  );
+  const imageRef =
+    (imageBlock.image as { external?: { url?: string } } | undefined)?.external
+      ?.url ??
+    (imageBlock.image as { file?: { url?: string } } | undefined)?.file?.url ??
+    "";
+
+  if (!caption) {
+    return `[Image: ${imageRef || "image"}]`;
+  }
+
+  const translatedCaption = await translateText(caption, "", targetLanguage);
+  const translatedLabel = translatedCaption.markdown.trim() || caption;
+  return `[Image: ${translatedLabel}]`;
+}
+
 async function translateBlocksTree(
   blocks: FetchedBlock[],
-  targetLanguage: string,
-  sanitizedPageName?: string,
-  state: { imageIndex: number; orderedImagePaths?: string[] } = {
-    imageIndex: 0,
-  }
+  targetLanguage: string
 ): Promise<BlockObjectRequest[]> {
   const result: BlockObjectRequest[] = [];
   for (const block of blocks) {
@@ -155,66 +180,21 @@ async function translateBlocksTree(
       continue; // Cannot append these blocks
     }
 
-    let wasImageBlock = false;
+    let skipRichTextTranslation = false;
     if (newBlock.type === "image") {
-      wasImageBlock = true;
-      newBlock.type = "callout";
-
-      const imageIndex = state.imageIndex++;
-      let finalImageName = "";
-
-      const expectedPathFromList = state.orderedImagePaths?.shift();
-      const imagesDir = path.join(process.cwd(), "static/images");
-
-      if (expectedPathFromList) {
-        // e.g. "/images/filename.ext" -> "filename.ext"
-        const filename = expectedPathFromList.replace(/^\/?images\//, "");
-        if (fs.existsSync(path.join(imagesDir, filename))) {
-          finalImageName = filename;
-        }
-      }
-
-      if (!finalImageName && sanitizedPageName) {
-        const sanitizedBlockName = sanitizedPageName
-          .replace(/[^a-z0-9]/gi, "")
-          .toLowerCase()
-          .slice(0, 20);
-
-        const prefix = `${sanitizedBlockName}_${imageIndex}`;
-        const extensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"];
-
-        for (const ext of extensions) {
-          if (fs.existsSync(path.join(imagesDir, prefix + ext))) {
-            finalImageName = prefix + ext;
-            break;
-          }
-        }
-      }
-
-      if (!finalImageName) {
-        if (!sanitizedPageName) {
-          finalImageName = `image_${imageIndex}.png`;
-        } else {
-          const sanitizedBlockName = sanitizedPageName
-            .replace(/[^a-z0-9]/gi, "")
-            .toLowerCase()
-            .slice(0, 20);
-          finalImageName = `${sanitizedBlockName}_${imageIndex}.png`;
-        }
-        console.warn(
-          chalk.yellow(
-            `⚠️  Could not find matched image file for image #${imageIndex} in ${sanitizedPageName || "unknown"}. Defaulting to ${finalImageName}. Note: fallback index (Notion image-block counter) may not match fetch-time index (all-images counter including inline), causing wrong file lookup on pages with mixed inline+block images.`
-          )
-        );
-      }
-
-      const relativePath = `static/images/${finalImageName}`;
-
-      newBlock.callout = {
-        rich_text: [{ type: "text", text: { content: relativePath } }],
-        icon: { type: "emoji", emoji: "🖼️" },
+      const placeholder = await buildImagePlaceholder(newBlock, targetLanguage);
+      newBlock.type = "paragraph";
+      newBlock.paragraph = {
+        rich_text: [
+          {
+            type: "text",
+            text: { content: placeholder },
+            plain_text: placeholder,
+          },
+        ],
       };
       delete newBlock.image;
+      skipRichTextTranslation = true;
     }
 
     if (
@@ -252,35 +232,7 @@ async function translateBlocksTree(
         }
       }
 
-      if (typeObj.rich_text && !wasImageBlock) {
-        // Consume paths for inline markdown images to prevent index drift
-        if (state.orderedImagePaths && state.orderedImagePaths.length > 0) {
-          for (const rt of typeObj.rich_text) {
-            if (rt.text && rt.text.content) {
-              const matches = extractImageMatches(rt.text.content);
-              const remainingBefore = state.orderedImagePaths.length;
-              for (let i = 0; i < matches.length; i++) {
-                if (state.orderedImagePaths.length === 0) {
-                  console.warn(
-                    chalk.yellow(
-                      `Warning: More inline images found (${matches.length - i}) than available paths in orderedImagePaths`
-                    )
-                  );
-                  break;
-                }
-                state.orderedImagePaths.shift();
-              }
-              const consumed = remainingBefore - state.orderedImagePaths.length;
-              if (consumed > 0) {
-                console.log(
-                  chalk.dim(
-                    `Consumed ${consumed} image path(s) from orderedImagePaths (found ${matches.length} in rich_text)`
-                  )
-                );
-              }
-            }
-          }
-        }
+      if (typeObj.rich_text && !skipRichTextTranslation) {
         await translateRichTextArray(typeObj.rich_text, targetLanguage);
       }
       if (typeObj.caption) {
@@ -303,9 +255,7 @@ async function translateBlocksTree(
       const parentTypeObj = newBlock[blockType] as Record<string, unknown>;
       parentTypeObj.children = await translateBlocksTree(
         block.children,
-        targetLanguage,
-        sanitizedPageName,
-        state
+        targetLanguage
       );
     }
 

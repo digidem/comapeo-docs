@@ -2,6 +2,7 @@
   "name": "comapeo-docs",
   "version": "0.1.1-beta",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "docusaurus": "docusaurus",
     "prepare": "lefthook install",
@@ -47,6 +48,7 @@
     "test:notion-cli": "vitest --run scripts/notion-fetch-all/__tests__/",
     "test:api-server": "vitest --run api-server/",
     "test:notion-pipeline": "vitest --run \"scripts/notion-fetch/__tests__/runFetchPipeline.test.ts\"",
+    "test:jsx-integration": "vitest run scripts/eval/jsx-preservation.integration.test.ts",
     "test:notion-image": "vitest --run \"scripts/notion-fetch/__tests__/downloadImage.test.ts\"",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",

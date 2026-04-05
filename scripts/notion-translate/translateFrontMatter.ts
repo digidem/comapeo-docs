@@ -6,21 +6,28 @@ import ora from "ora";
 import chalk from "chalk";
 import {
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_MAX_TOKENS,
+  CUSTOM_API_MAX_OUTPUT_TOKENS,
   getModelParams,
   TRANSLATION_MAX_RETRIES,
   TRANSLATION_RETRY_BASE_DELAY_MS,
   OPENAI_BASE_URL,
   IS_CUSTOM_OPENAI_API,
+  CUSTOM_API_CHUNK_MAX_CHARS,
   getMaxChunkChars,
+  TRANSLATION_CHUNK_MAX_CHARS,
+  TRANSLATION_MIN_CHUNK_MAX_CHARS,
+  TRANSLATION_COMPLETENESS_MAX_RETRIES,
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: OPENAI_BASE_URL,
+  timeout: 120_000,
 });
 
 const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
@@ -28,7 +35,13 @@ const MAX_RETRIES = TRANSLATION_MAX_RETRIES;
 const RETRY_BASE_DELAY_MS = TRANSLATION_RETRY_BASE_DELAY_MS;
 const DATA_URL_PLACEHOLDER_REGEX =
   /\/images\/__data_url_placeholder_\d+__\.png/g;
+const CANONICAL_IMAGE_PATH_REGEX = /\/images\/[^\s)"'<>]+/g;
+const MARKDOWN_FENCE_REGEX = /^[ \t]{0,3}(`{3,}|~{3,})/;
+const ATX_HEADING_REGEX = /^[ \t]{0,3}(#{1,6})\s+(.+?)\s*$/;
 const MAX_PLACEHOLDER_INTEGRITY_RETRIES = 2;
+
+const isDataUrlPlaceholderPath = (path: string): boolean =>
+  /\/images\/__data_url_placeholder_\d+__\.png/.test(path);
 // Translation prompt template
 const TRANSLATION_PROMPT = `
 # Role: Translation Assistant
@@ -59,7 +72,10 @@ You are a translation assistant, responsible for translating the text provided b
 - **Do not translate or modify any image URLs.**
 - **Do not modify any paths starting with /images/ - these are canonical asset references that must remain unchanged.**
 - **Do not modify placeholder image paths matching /images/__data_url_placeholder_<number>__.png.**
+- **Preserve all heading lines (lines starting with #). Do not merge, drop, or combine headings.**
 - Preserve all markdown formatting, including headings, lists, code blocks, etc.
+- **Do not modify JSX attribute syntax: \`style={{...}}\`, \`className={...}\`, etc. must remain exactly as in the original. Never wrap JSX expressions in additional quotes (e.g., \`style="{{...}}"\` is invalid).**
+- **Do not modify or translate any HTML/JSX element tags or their attribute names. Only translate visible text content.**
 
 ## Workflow
 
@@ -85,6 +101,31 @@ type TranslationPayload = {
   title: string;
 };
 
+type CompletenessFailureStage = "single_call" | "chunk" | "reassembly";
+
+type TranslationErrorDetails = {
+  completeness?: {
+    stage: CompletenessFailureStage;
+    failedChecks: string[];
+    metrics: CompletenessDiagnostics["metrics"];
+  };
+};
+
+type MarkdownHeading = {
+  line: string;
+  text: string;
+  level: number;
+  bodyLineIndex: number;
+  sectionContentLength: number;
+};
+
+type ParsedHeadingDocument = {
+  frontmatter: string;
+  bodyLines: string[];
+  headings: MarkdownHeading[];
+  preambleContentLength: number;
+};
+
 export class TranslationError extends Error {
   code:
     | "quota_exceeded"
@@ -92,21 +133,25 @@ export class TranslationError extends Error {
     | "schema_invalid"
     | "token_overflow"
     | "transient_api_error"
+    | "completeness_check_failed"
     | "unexpected_error";
   isCritical: boolean;
   status?: number;
+  details?: TranslationErrorDetails;
 
   constructor(
     message: string,
     code: TranslationError["code"],
     isCritical: boolean,
-    status?: number
+    status?: number,
+    details?: TranslationErrorDetails
   ) {
     super(message);
     this.name = "TranslationError";
     this.code = code;
     this.isCritical = isCritical;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -290,15 +335,33 @@ function splitBySections(markdown: string): string[] {
   const lastIdx = lines.length - 1;
   let current = "";
   let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
 
   for (const [idx, line] of lines.entries()) {
     // Reconstruct original text: all lines except the last trailing empty get "\n" appended
     const lineWithNewline =
       idx < lastIdx ? line + "\n" : line.length > 0 ? line : "";
 
-    // Toggle fence state on ``` or ~~~ lines
-    if (/^(`{3,}|~{3,})/.test(line)) {
-      inFence = !inFence;
+    // Track fence state per CommonMark spec: a fence of N backticks/tildes is closed
+    // only by a closing fence of >= N of the same character (and no info string on close).
+    const fenceMatch = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const ch = fenceMatch[1][0];
+      const len = fenceMatch[1].length;
+      if (!inFence) {
+        inFence = true;
+        fenceChar = ch;
+        fenceLen = len;
+      } else if (ch === fenceChar && len >= fenceLen) {
+        // Closing fence: same character, at least as long, no info string
+        const afterFence = line.trimStart().slice(len);
+        if (/^\s*$/.test(afterFence)) {
+          inFence = false;
+          fenceChar = "";
+          fenceLen = 0;
+        }
+      }
     }
     // Start a new section before any ATX heading (outside fences)
     if (!inFence && /^#{1,6}\s/.test(line) && current.length > 0) {
@@ -365,44 +428,43 @@ function splitByParagraphs(text: string, maxChars: number): string[] {
   return chunks;
 }
 
-/** Last-resort split at individual line boundaries. */
+/** Last-resort split at individual line boundaries.
+ *  Reassembly via join("") is lossless because "\n" characters are preserved
+ *  as explicit tokens rather than consumed by split(). */
 function splitByLines(text: string, maxChars: number): string[] {
-  const lines = text.split("\n");
+  // Split keeping "\n" as separate tokens so join("") reconstructs the
+  // original text exactly.  Tokens alternate: content, "\n", content, …
+  const tokens = text.split(/(\n)/);
   const chunks: string[] = [];
   let current = "";
 
-  for (const line of lines) {
-    const candidate = current.length === 0 ? line : current + "\n" + line;
+  for (const token of tokens) {
+    if (token.length === 0) continue;
 
-    if (candidate.length > maxChars) {
+    const candidate = current + token;
+
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      // Token doesn't fit — flush current, then handle token
       if (current.length > 0) {
         chunks.push(current);
-        // If the line itself exceeds the limit, force-split by character
-        if (line.length > maxChars) {
-          for (let i = 0; i < line.length; i += maxChars) {
-            const segment = line.slice(i, i + maxChars);
-            if (i + maxChars < line.length) {
-              chunks.push(segment);
-            } else {
-              current = segment;
-            }
-          }
-        } else {
-          current = line;
-        }
+        current = "";
+      }
+
+      if (token.length <= maxChars) {
+        current = token;
       } else {
-        // Leading oversized line (current is empty) — force-split by character
-        for (let i = 0; i < line.length; i += maxChars) {
-          const segment = line.slice(i, i + maxChars);
-          if (i + maxChars < line.length) {
+        // Single token exceeds limit — force-split by character
+        for (let i = 0; i < token.length; i += maxChars) {
+          const segment = token.slice(i, i + maxChars);
+          if (i + maxChars < token.length) {
             chunks.push(segment);
           } else {
             current = segment;
           }
         }
       }
-    } else {
-      current = candidate;
     }
   }
 
@@ -454,22 +516,678 @@ function extractDataUrlPlaceholders(text: string): string[] {
   return Array.from(new Set(matches));
 }
 
-function getMissingPlaceholders(
-  text: string,
-  requiredPlaceholders: string[]
-): string[] {
-  return requiredPlaceholders.filter(
-    (placeholder) => !text.includes(placeholder)
+function extractCanonicalImagePaths(text: string): string[] {
+  const matches = text.match(CANONICAL_IMAGE_PATH_REGEX) ?? [];
+
+  return Array.from(
+    new Set(matches.filter((match) => !isDataUrlPlaceholderPath(match)))
   );
 }
 
-function isPlaceholderIntegrityError(
+function getMissingProtectedPaths(
+  text: string,
+  requiredPaths: string[]
+): string[] {
+  return requiredPaths.filter((requiredPath) => !text.includes(requiredPath));
+}
+
+function isProtectedPathIntegrityError(
   error: unknown
 ): error is TranslationError {
   return (
     error instanceof TranslationError &&
     error.code === "schema_invalid" &&
-    /Data URL placeholder integrity check failed/.test(error.message)
+    /(Data URL placeholder|Canonical image path) integrity check failed/.test(
+      error.message
+    )
+  );
+}
+
+const CRITICAL_FRONTMATTER_FIELDS = new Set([
+  "slug",
+  "sidebar_position",
+  "sidebar_label",
+  "id",
+  "title",
+]);
+
+/**
+ * Extracts the top-level YAML keys from a frontmatter block.
+ * Only recognises simple `key:` entries (no nested parsing) — enough to
+ * detect dropped or added keys without pulling in a YAML parser dependency.
+ * @internal exported for testing
+ */
+export function parseFrontmatterKeys(markdown: string): string[] {
+  if (!markdown.startsWith("---\n") && !markdown.startsWith("---\r\n")) {
+    return [];
+  }
+  const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+  if (endFrontmatterIndex === -1) {
+    return [];
+  }
+  const frontmatterBody = markdown.slice(4, endFrontmatterIndex);
+  const keys: string[] = [];
+  for (const line of frontmatterBody.split("\n")) {
+    // Top-level keys: start at column 0, followed by optional spaces and ":"
+    const match = line.match(/^([A-Za-z_][\w-]*)[\s]*:/);
+    if (match) {
+      keys.push(match[1]);
+    }
+  }
+  if (!keys.some((key) => CRITICAL_FRONTMATTER_FIELDS.has(key))) {
+    return [];
+  }
+  return keys;
+}
+
+/**
+ * Checks that the translated markdown preserves all frontmatter keys that
+ * were present in the source, and that no critical routing/sidebar fields
+ * have been added or removed.
+ *
+ * Throws a non-critical `TranslationError` when an integrity violation is
+ * detected so the caller can retry (same pattern as completeness checks).
+ */
+function assertFrontmatterIntegrity(
+  sourceMarkdown: string,
+  translatedMarkdown: string
+): void {
+  const sourceKeys = parseFrontmatterKeys(sourceMarkdown);
+  if (sourceKeys.length === 0) {
+    // No frontmatter in source — nothing to validate.
+    return;
+  }
+
+  const translatedKeys = new Set(parseFrontmatterKeys(translatedMarkdown));
+
+  const missingKeys = sourceKeys.filter((key) => !translatedKeys.has(key));
+  if (missingKeys.length > 0) {
+    const criticalMissing = missingKeys.filter((key) =>
+      CRITICAL_FRONTMATTER_FIELDS.has(key)
+    );
+    const label =
+      criticalMissing.length > 0
+        ? `critical frontmatter key(s) missing: ${criticalMissing.join(", ")}`
+        : `frontmatter key(s) missing: ${missingKeys.join(", ")}`;
+    throw new TranslationError(
+      `Frontmatter integrity check failed — ${label}`,
+      "schema_invalid",
+      false
+    );
+  }
+
+  // Also flag if the translation invented new critical keys not in the source
+  const sourceKeySet = new Set(sourceKeys);
+  const addedCriticalKeys = [...translatedKeys].filter(
+    (key) => CRITICAL_FRONTMATTER_FIELDS.has(key) && !sourceKeySet.has(key)
+  );
+  if (addedCriticalKeys.length > 0) {
+    throw new TranslationError(
+      `Frontmatter integrity check failed — unexpected critical key(s) added: ${addedCriticalKeys.join(", ")}`,
+      "schema_invalid",
+      false
+    );
+  }
+}
+
+type MarkdownStructureMetrics = {
+  headingCount: number;
+  fencedCodeBlockCount: number;
+  admonitionCount: number;
+  bulletListCount: number;
+  numberedListCount: number;
+  tableCount: number;
+  contentLength: number;
+};
+
+/**
+ * Returns a copy of the markdown with the *content* of fenced code blocks
+ * removed (the opening/closing fence markers are kept so that fenced block
+ * counts remain accurate). This prevents structural markers inside code
+ * samples — headings, list items, table rows, etc. — from inflating counts.
+ */
+function stripFencedCodeContent(markdown: string): string {
+  const lines = markdown.split("\n");
+  const result: string[] = [];
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
+  let fenceBuffer: string[] = [];
+
+  for (const line of lines) {
+    if (!inFence) {
+      const match = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+      if (match) {
+        inFence = true;
+        fenceChar = match[1][0];
+        fenceLen = match[1].length;
+        result.push(line); // keep opening marker
+        fenceBuffer = [];
+      } else {
+        result.push(line);
+      }
+    } else {
+      // Closing fence per CommonMark spec: same character, >= opening length, no info string
+      const closeMatch = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+      if (
+        closeMatch &&
+        closeMatch[1][0] === fenceChar &&
+        closeMatch[1].length >= fenceLen &&
+        /^\s*$/.test(line.trimStart().slice(closeMatch[1].length))
+      ) {
+        inFence = false;
+        fenceChar = "";
+        fenceLen = 0;
+        result.push(line); // keep closing marker
+        fenceBuffer = [];
+      } else {
+        fenceBuffer.push(line);
+      }
+    }
+  }
+
+  // Failsafe: restore lines if the block was never closed
+  if (inFence && fenceBuffer.length > 0) {
+    result.push(...fenceBuffer);
+  }
+
+  return result.join("\n");
+}
+
+function stripYamlFrontmatter(markdown: string): string {
+  if (markdown.startsWith("---\n") || markdown.startsWith("---\r\n")) {
+    const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+    if (endFrontmatterIndex !== -1) {
+      const endOfLineIndex = markdown.indexOf("\n", endFrontmatterIndex + 1);
+      if (endOfLineIndex !== -1) {
+        return markdown.substring(endOfLineIndex + 1);
+      }
+      return "";
+    }
+  }
+  return markdown;
+}
+
+function splitYamlFrontmatter(markdown: string): {
+  frontmatter: string;
+  body: string;
+} {
+  if (markdown.startsWith("---\n") || markdown.startsWith("---\r\n")) {
+    const endFrontmatterIndex = markdown.indexOf("\n---", 3);
+    if (endFrontmatterIndex !== -1) {
+      const endOfLineIndex = markdown.indexOf("\n", endFrontmatterIndex + 1);
+      if (endOfLineIndex !== -1) {
+        return {
+          frontmatter: markdown.substring(0, endOfLineIndex + 1),
+          body: markdown.substring(endOfLineIndex + 1),
+        };
+      }
+      return { frontmatter: markdown, body: "" };
+    }
+  }
+
+  return { frontmatter: "", body: markdown };
+}
+
+function parseHeadingDocument(markdown: string): ParsedHeadingDocument {
+  const { frontmatter, body } = splitYamlFrontmatter(markdown);
+  const bodyLines = body.length > 0 ? body.split("\n") : [];
+  const headingDrafts: Omit<MarkdownHeading, "sectionContentLength">[] = [];
+
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
+
+  for (const [bodyLineIndex, line] of bodyLines.entries()) {
+    const fenceMatch = line.match(MARKDOWN_FENCE_REGEX);
+
+    if (!inFence) {
+      if (fenceMatch) {
+        inFence = true;
+        fenceChar = fenceMatch[1][0];
+        fenceLen = fenceMatch[1].length;
+        continue;
+      }
+
+      const headingMatch = line.match(ATX_HEADING_REGEX);
+      if (headingMatch) {
+        headingDrafts.push({
+          line: `${headingMatch[1]} ${headingMatch[2].trim()}`,
+          text: headingMatch[2].trim(),
+          level: headingMatch[1].length,
+          bodyLineIndex,
+        });
+      }
+      continue;
+    }
+
+    if (
+      fenceMatch &&
+      fenceMatch[1][0] === fenceChar &&
+      fenceMatch[1].length >= fenceLen &&
+      /^\s*$/.test(line.trimStart().slice(fenceMatch[1].length))
+    ) {
+      inFence = false;
+      fenceChar = "";
+      fenceLen = 0;
+    }
+  }
+
+  const headings = headingDrafts.map((heading, index) => {
+    const nextHeadingStart = headingDrafts[index + 1]?.bodyLineIndex;
+    const sectionLines = bodyLines.slice(
+      heading.bodyLineIndex + 1,
+      nextHeadingStart ?? bodyLines.length
+    );
+
+    return {
+      ...heading,
+      sectionContentLength: sectionLines.join("\n").trim().length,
+    };
+  });
+
+  const firstHeadingIndex = headings[0]?.bodyLineIndex ?? bodyLines.length;
+  const preambleContentLength = bodyLines
+    .slice(0, firstHeadingIndex)
+    .join("\n")
+    .trim().length;
+
+  return {
+    frontmatter,
+    bodyLines,
+    headings,
+    preambleContentLength,
+  };
+}
+
+function isHeadingOnlyCompletenessFailure(
+  diagnostics: CompletenessDiagnostics
+): boolean {
+  return (
+    diagnostics.failedChecks.length > 0 &&
+    diagnostics.failedChecks.every((check) => check.startsWith("heading loss:"))
+  );
+}
+
+function areHeadingLevelsCompatible(
+  sourceHeading: MarkdownHeading,
+  translatedHeading: MarkdownHeading
+): boolean {
+  return Math.abs(sourceHeading.level - translatedHeading.level) <= 1;
+}
+
+function alignHeadingsByOrder(
+  sourceHeadings: MarkdownHeading[],
+  translatedHeadings: MarkdownHeading[]
+): Array<number | null> {
+  const sourceCount = sourceHeadings.length;
+  const translatedCount = translatedHeadings.length;
+  const dp = Array.from({ length: sourceCount + 1 }, () =>
+    Array<number>(translatedCount + 1).fill(0)
+  );
+
+  for (let sourceIndex = sourceCount - 1; sourceIndex >= 0; sourceIndex -= 1) {
+    for (
+      let translatedIndex = translatedCount - 1;
+      translatedIndex >= 0;
+      translatedIndex -= 1
+    ) {
+      if (
+        areHeadingLevelsCompatible(
+          sourceHeadings[sourceIndex],
+          translatedHeadings[translatedIndex]
+        )
+      ) {
+        dp[sourceIndex][translatedIndex] =
+          dp[sourceIndex + 1][translatedIndex + 1] + 1;
+      } else {
+        dp[sourceIndex][translatedIndex] = Math.max(
+          dp[sourceIndex + 1][translatedIndex],
+          dp[sourceIndex][translatedIndex + 1]
+        );
+      }
+    }
+  }
+
+  const sourceToTranslated = Array<number | null>(sourceCount).fill(null);
+  let sourceIndex = 0;
+  let translatedIndex = 0;
+
+  while (sourceIndex < sourceCount && translatedIndex < translatedCount) {
+    if (
+      areHeadingLevelsCompatible(
+        sourceHeadings[sourceIndex],
+        translatedHeadings[translatedIndex]
+      ) &&
+      dp[sourceIndex][translatedIndex] ===
+        dp[sourceIndex + 1][translatedIndex + 1] + 1
+    ) {
+      sourceToTranslated[sourceIndex] = translatedIndex;
+      sourceIndex += 1;
+      translatedIndex += 1;
+      continue;
+    }
+
+    if (
+      dp[sourceIndex + 1][translatedIndex] >=
+      dp[sourceIndex][translatedIndex + 1]
+    ) {
+      sourceIndex += 1;
+    } else {
+      translatedIndex += 1;
+    }
+  }
+
+  return sourceToTranslated;
+}
+
+function estimateInsertionLineIndex(
+  bodyLines: string[],
+  startLineIndex: number,
+  endLineIndex: number,
+  targetRatio: number
+): number {
+  const safeStart = Math.max(0, Math.min(startLineIndex, bodyLines.length));
+  const safeEnd = Math.max(safeStart, Math.min(endLineIndex, bodyLines.length));
+  const regionLines = bodyLines.slice(safeStart, safeEnd);
+  const totalChars = regionLines.join("\n").length;
+
+  if (totalChars === 0) {
+    return safeStart;
+  }
+
+  const clampedRatio = Math.max(0, Math.min(targetRatio, 1));
+  let bestLineIndex = safeStart;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let cumulativeChars = 0;
+
+  for (let lineOffset = 0; lineOffset <= regionLines.length; lineOffset += 1) {
+    const currentRatio = cumulativeChars / totalChars;
+    const distance = Math.abs(currentRatio - clampedRatio);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestLineIndex = safeStart + lineOffset;
+    }
+
+    if (lineOffset < regionLines.length) {
+      cumulativeChars += regionLines[lineOffset].length;
+      if (lineOffset < regionLines.length - 1) {
+        cumulativeChars += 1;
+      }
+    }
+  }
+
+  return bestLineIndex;
+}
+
+function normalizeHeadingLine(line: string): string {
+  return line.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function hasHeadingNearInsertionPoint(
+  bodyLines: string[],
+  lineIndex: number,
+  headingLine: string
+): boolean {
+  const normalizedHeading = normalizeHeadingLine(headingLine);
+  const start = Math.max(0, lineIndex - 2);
+  const end = Math.min(bodyLines.length, lineIndex + 2);
+
+  for (let currentIndex = start; currentIndex < end; currentIndex += 1) {
+    if (
+      normalizeHeadingLine(bodyLines[currentIndex] ?? "") === normalizedHeading
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function insertHeadingLine(
+  bodyLines: string[],
+  lineIndex: number,
+  headingLine: string
+): void {
+  const insertionLines: string[] = [];
+  const previousLine = bodyLines[lineIndex - 1];
+  const nextLine = bodyLines[lineIndex];
+
+  if (lineIndex > 0 && previousLine?.trim() !== "") {
+    insertionLines.push("");
+  }
+
+  insertionLines.push(headingLine);
+
+  if (nextLine !== undefined && nextLine.trim() !== "") {
+    insertionLines.push("");
+  }
+
+  bodyLines.splice(lineIndex, 0, ...insertionLines);
+}
+
+function collectMarkdownStructureMetrics(
+  markdown: string
+): MarkdownStructureMetrics {
+  // Remove frontmatter before stripping fenced code content
+  const withoutFrontmatter = stripYamlFrontmatter(markdown);
+
+  // Fenced code blocks must be counted on raw markdown (before stripping).
+  // Allow up to 3 leading spaces so the metric matches CommonMark fence rules.
+  const fencedCodeMatches =
+    withoutFrontmatter.match(/^[ \t]{0,3}(`{3,}|~{3,})/gm) ?? [];
+
+  // All other structural markers are measured on the stripped version so that
+  // examples inside code blocks do not inflate the counts.
+  const stripped = stripFencedCodeContent(withoutFrontmatter);
+
+  // ATX headings: "# Heading"
+  const atxHeadingMatches = stripped.match(/^#{1,6}\s.+$/gm) ?? [];
+  // Setext H1 headings ("===" underline): unambiguous — "=" has no other
+  // CommonMark meaning, so these can never be confused with thematic breaks.
+  const setextH1Matches = stripped.match(/^.+\n=+\s*$/gm) ?? [];
+  // Setext H2 headings ("---" underline): a thematic break uses the same
+  // syntax, but only when the preceding line is a block-level marker (list
+  // item, blockquote, ATX heading, etc.). A setext H2 content line is a
+  // plain paragraph — so we exclude lines starting with list/block markers.
+  const setextH2Matches =
+    stripped.match(/^(?![ \t]*(?:[-*+]|\d+\.)\s|[ \t]*[>#]).+\n-{2,}\s*$/gm) ??
+    [];
+  // Docusaurus / MDX admonition markers (:::type … :::)
+  const admonitionMatches = stripped.match(/^:::/gm) ?? [];
+  const bulletListMatches = stripped.match(/^\s*[-*+]\s+/gm) ?? [];
+  const numberedListMatches = stripped.match(/^\s*\d+\.\s+/gm) ?? [];
+  // GFM table separator rows (---|---|---) are the unambiguous indicator of a
+  // table and work regardless of whether the model uses outer pipes or not.
+  // A separator line contains only "-", ":", "|", space, and tab characters,
+  // and must include both a "|" (distinguishes from thematic break) and a "-".
+  const tableMatches = (
+    (stripped.match(/^[ \t:|-]+\s*$/gm) ?? []) as string[]
+  ).filter((line) => line.includes("|") && line.includes("-"));
+
+  return {
+    headingCount:
+      atxHeadingMatches.length +
+      setextH1Matches.length +
+      setextH2Matches.length,
+    fencedCodeBlockCount: Math.floor(fencedCodeMatches.length / 2),
+    admonitionCount: Math.floor(admonitionMatches.length / 2),
+    bulletListCount: bulletListMatches.length,
+    numberedListCount: numberedListMatches.length,
+    tableCount: tableMatches.length,
+    contentLength: withoutFrontmatter.trim().length,
+  };
+}
+
+/**
+ * Structured result from translation completeness evaluation.
+ * When `isIncomplete` is true, `failedChecks` lists which structural
+ * checks failed and `metrics` contains the compared values so callers
+ * can produce diagnostic-rich error messages.
+ */
+export interface CompletenessDiagnostics {
+  isIncomplete: boolean;
+  failedChecks: string[];
+  metrics: {
+    source: MarkdownStructureMetrics;
+    translated: MarkdownStructureMetrics;
+    lengthRatio: number;
+  };
+}
+
+function evaluateTranslationCompleteness(
+  sourceMarkdown: string,
+  translatedMarkdown: string
+): CompletenessDiagnostics {
+  const sourceMetrics = collectMarkdownStructureMetrics(sourceMarkdown);
+  const translatedMetrics = collectMarkdownStructureMetrics(translatedMarkdown);
+  const failedChecks: string[] = [];
+
+  if (sourceMetrics.contentLength === 0) {
+    return {
+      isIncomplete: false,
+      failedChecks: [],
+      metrics: {
+        source: sourceMetrics,
+        translated: translatedMetrics,
+        lengthRatio: 1,
+      },
+    };
+  }
+
+  const lengthRatio =
+    translatedMetrics.contentLength / Math.max(sourceMetrics.contentLength, 1);
+
+  if (
+    sourceMetrics.headingCount > 0 &&
+    translatedMetrics.headingCount < sourceMetrics.headingCount
+  ) {
+    failedChecks.push(
+      `heading loss: ${sourceMetrics.headingCount} → ${translatedMetrics.headingCount}`
+    );
+  }
+  if (
+    sourceMetrics.fencedCodeBlockCount > 0 &&
+    translatedMetrics.fencedCodeBlockCount < sourceMetrics.fencedCodeBlockCount
+  ) {
+    failedChecks.push(
+      `fenced code block loss: ${sourceMetrics.fencedCodeBlockCount} → ${translatedMetrics.fencedCodeBlockCount}`
+    );
+  }
+  if (
+    sourceMetrics.admonitionCount > 0 &&
+    translatedMetrics.admonitionCount < sourceMetrics.admonitionCount
+  ) {
+    failedChecks.push(
+      `admonition loss: ${sourceMetrics.admonitionCount} → ${translatedMetrics.admonitionCount}`
+    );
+  }
+  if (
+    sourceMetrics.bulletListCount >= 3 &&
+    translatedMetrics.bulletListCount === 0
+  ) {
+    failedChecks.push(`bullet list loss: ${sourceMetrics.bulletListCount} → 0`);
+  }
+  if (
+    sourceMetrics.numberedListCount >= 3 &&
+    translatedMetrics.numberedListCount === 0
+  ) {
+    failedChecks.push(
+      `numbered list loss: ${sourceMetrics.numberedListCount} → 0`
+    );
+  }
+  if (sourceMetrics.tableCount >= 1 && translatedMetrics.tableCount === 0) {
+    failedChecks.push(`table loss: ${sourceMetrics.tableCount} → 0`);
+  }
+  if (sourceMetrics.contentLength >= 4_000 && lengthRatio < 0.55) {
+    failedChecks.push(
+      `severe length shrinkage: ratio ${lengthRatio.toFixed(2)} (${sourceMetrics.contentLength} → ${translatedMetrics.contentLength} chars)`
+    );
+  }
+
+  return {
+    isIncomplete: failedChecks.length > 0,
+    failedChecks,
+    metrics: {
+      source: sourceMetrics,
+      translated: translatedMetrics,
+      lengthRatio,
+    },
+  };
+}
+
+function formatCompletenessMetrics(
+  diagnostics: CompletenessDiagnostics
+): string {
+  const { source, translated, lengthRatio } = diagnostics.metrics;
+
+  return [
+    `headings ${translated.headingCount}/${source.headingCount}`,
+    `fencedCodeBlocks ${translated.fencedCodeBlockCount}/${source.fencedCodeBlockCount}`,
+    `admonitions ${translated.admonitionCount}/${source.admonitionCount}`,
+    `bulletLists ${translated.bulletListCount}/${source.bulletListCount}`,
+    `numberedLists ${translated.numberedListCount}/${source.numberedListCount}`,
+    `tables ${translated.tableCount}/${source.tableCount}`,
+    `lengthRatio ${lengthRatio.toFixed(2)}`,
+  ].join(", ");
+}
+
+function createCompletenessError(
+  stage: CompletenessFailureStage,
+  diagnostics: CompletenessDiagnostics
+): TranslationError {
+  const stageDescription =
+    stage === "reassembly"
+      ? "after chunk reassembly"
+      : stage === "chunk"
+        ? "within a translated chunk"
+        : "after translation";
+
+  return new TranslationError(
+    `Translated markdown appears incomplete ${stageDescription}: ${diagnostics.failedChecks.join("; ")} | metrics: ${formatCompletenessMetrics(diagnostics)}`,
+    "completeness_check_failed",
+    false,
+    undefined,
+    {
+      completeness: {
+        stage,
+        failedChecks: [...diagnostics.failedChecks],
+        metrics: diagnostics.metrics,
+      },
+    }
+  );
+}
+
+function getProactiveChunkCharLimit(modelName: string): number {
+  const contextBasedLimit = Math.min(
+    getMaxChunkChars(modelName),
+    TRANSLATION_CHUNK_MAX_CHARS
+  );
+  // Custom APIs (e.g., DeepSeek) have lower output-token limits and slower
+  // response times, so use a smaller chunk size to keep API calls fast.
+  if (IS_CUSTOM_OPENAI_API) {
+    return Math.min(contextBasedLimit, CUSTOM_API_CHUNK_MAX_CHARS);
+  }
+  return contextBasedLimit;
+}
+
+function getChunkContentBudget(totalChunkLimit: number, title: string): number {
+  // Subtract prompt overhead so the *total* request stays within totalChunkLimit.
+  // The minimum content budget is 1; the retry-level floor (TRANSLATION_MIN_CHUNK_MAX_CHARS)
+  // is enforced as a total-request budget by the caller, not as a markdown payload floor.
+  const overhead = TRANSLATION_PROMPT.length + title.length + 20;
+  return Math.max(totalChunkLimit - overhead, 1);
+}
+
+function splitMarkdownForTranslation(
+  markdown: string,
+  title: string,
+  totalChunkLimit: number
+): string[] {
+  return splitMarkdownIntoChunks(
+    markdown,
+    getChunkContentBudget(totalChunkLimit, title)
   );
 }
 
@@ -522,12 +1240,12 @@ async function translateTextSingleCall(
   text: string,
   title: string,
   targetLanguage: string,
-  requiredPlaceholders: string[] = [],
+  requiredProtectedPaths: string[] = [],
   strictPlaceholderGuard = false
 ): Promise<{ markdown: string; title: string }> {
   const placeholderGuard =
-    requiredPlaceholders.length > 0
-      ? `\n\n${strictPlaceholderGuard ? "CRITICAL REQUIREMENT" : "Placeholder paths to preserve exactly"}:\n${requiredPlaceholders.map((placeholder) => `- ${placeholder}`).join("\n")}\n`
+    requiredProtectedPaths.length > 0
+      ? `\n\n${strictPlaceholderGuard ? "CRITICAL REQUIREMENT" : "Image paths to preserve exactly"}:\n${requiredProtectedPaths.map((requiredPath) => `- ${requiredPath}`).join("\n")}\n`
       : "";
   const textWithTitle = `title: ${title}\n${placeholderGuard}\nmarkdown: ${text}`;
 
@@ -568,9 +1286,27 @@ async function translateTextSingleCall(
         ],
         response_format: responseFormat,
         ...modelParams,
+        ...(IS_CUSTOM_OPENAI_API
+          ? {
+              max_tokens: Math.min(
+                CUSTOM_API_MAX_OUTPUT_TOKENS,
+                Math.max(DEFAULT_OPENAI_MAX_TOKENS, Math.ceil(text.length / 2))
+              ),
+            }
+          : {}),
       });
 
-      const content = response.choices[0]?.message?.content;
+      const choice = response.choices[0];
+      const finishReason = choice?.finish_reason;
+      if (finishReason === "length") {
+        throw new TranslationError(
+          "OpenAI output was truncated (finish_reason: length) — chunk too large for model output budget",
+          "token_overflow",
+          false
+        );
+      }
+
+      const content = choice?.message?.content;
       if (!content) {
         throw new TranslationError(
           "OpenAI returned an empty translation response",
@@ -581,14 +1317,29 @@ async function translateTextSingleCall(
 
       const parsed = parseTranslationPayload(content);
 
-      if (requiredPlaceholders.length > 0) {
-        const missingPlaceholders = getMissingPlaceholders(
+      if (requiredProtectedPaths.length > 0) {
+        const missingProtectedPaths = getMissingProtectedPaths(
           parsed.markdown,
-          requiredPlaceholders
+          requiredProtectedPaths
         );
-        if (missingPlaceholders.length > 0) {
+        if (missingProtectedPaths.length > 0) {
+          const missingPlaceholderPaths = missingProtectedPaths.filter(
+            isDataUrlPlaceholderPath
+          );
+          const missingCanonicalImagePaths = missingProtectedPaths.filter(
+            (path) => !isDataUrlPlaceholderPath(path)
+          );
+
+          if (missingPlaceholderPaths.length > 0) {
+            throw new TranslationError(
+              `Data URL placeholder integrity check failed: missing ${missingPlaceholderPaths.length} placeholder(s): ${missingPlaceholderPaths.slice(0, 3).join(", ")}`,
+              "schema_invalid",
+              true
+            );
+          }
+
           throw new TranslationError(
-            `Data URL placeholder integrity check failed: missing ${missingPlaceholders.length} placeholder(s): ${missingPlaceholders.slice(0, 3).join(", ")}`,
+            `Canonical image path integrity check failed: missing ${missingCanonicalImagePaths.length} path(s): ${missingCanonicalImagePaths.slice(0, 3).join(", ")}`,
             "schema_invalid",
             true
           );
@@ -622,28 +1373,37 @@ async function translateChunkWithOverflowFallback(
   text: string,
   title: string,
   targetLanguage: string,
-  placeholderGuardAttempt = 0
+  placeholderGuardAttempt = 0,
+  chunkBudgetForRetry = getProactiveChunkCharLimit(model),
+  maxDepth = 10
 ): Promise<{ markdown: string; title: string }> {
-  const requiredPlaceholders = extractDataUrlPlaceholders(text);
+  const requiredProtectedPaths = Array.from(
+    new Set([
+      ...extractDataUrlPlaceholders(text),
+      ...extractCanonicalImagePaths(text),
+    ])
+  );
 
   try {
     return await translateTextSingleCall(
       text,
       title,
       targetLanguage,
-      requiredPlaceholders,
+      requiredProtectedPaths,
       placeholderGuardAttempt > 0
     );
   } catch (err) {
     if (
-      isPlaceholderIntegrityError(err) &&
+      isProtectedPathIntegrityError(err) &&
       placeholderGuardAttempt < MAX_PLACEHOLDER_INTEGRITY_RETRIES
     ) {
       return translateChunkWithOverflowFallback(
         text,
         title,
         targetLanguage,
-        placeholderGuardAttempt + 1
+        placeholderGuardAttempt + 1,
+        chunkBudgetForRetry,
+        maxDepth
       );
     }
 
@@ -651,12 +1411,23 @@ async function translateChunkWithOverflowFallback(
       throw err;
     }
 
+    if (maxDepth <= 0) {
+      throw new TranslationError(
+        "Max recursion depth exhausted during chunk overflow splitting",
+        "token_overflow",
+        false
+      );
+    }
+
     if (text.length < 2) {
       throw err;
     }
 
-    const splitTarget = Math.max(Math.floor(text.length / 2), 1);
-    let subChunks = splitMarkdownIntoChunks(text, splitTarget);
+    const splitTarget = Math.max(
+      Math.floor(Math.min(text.length, chunkBudgetForRetry) / 2),
+      TRANSLATION_MIN_CHUNK_MAX_CHARS
+    );
+    let subChunks = splitMarkdownForTranslation(text, title, splitTarget);
     if (subChunks.length <= 1) {
       const midpoint = Math.floor(text.length / 2);
       if (midpoint < 1 || midpoint >= text.length) {
@@ -673,7 +1444,9 @@ async function translateChunkWithOverflowFallback(
         chunk,
         chunkTitle,
         targetLanguage,
-        0
+        0,
+        chunkBudgetForRetry,
+        maxDepth - 1
       );
       if (index === 0) {
         translatedTitle = translated.title;
@@ -688,6 +1461,273 @@ async function translateChunkWithOverflowFallback(
   }
 }
 
+async function translateHeadingLine(
+  headingLine: string,
+  targetLanguage: string,
+  chunkLimit: number
+): Promise<string> {
+  const headingMatch = headingLine.match(ATX_HEADING_REGEX);
+  if (!headingMatch) {
+    throw new TranslationError(
+      `Cannot translate non-heading line during heading recovery: ${headingLine}`,
+      "unexpected_error",
+      false
+    );
+  }
+
+  const translated = await translateChunkWithOverflowFallback(
+    `${headingLine}\n`,
+    "",
+    targetLanguage,
+    0,
+    chunkLimit
+  );
+  const translatedHeadingMatch = translated.markdown.match(ATX_HEADING_REGEX);
+
+  if (translatedHeadingMatch) {
+    return `${"#".repeat(headingMatch[1].length)} ${translatedHeadingMatch[2].trim()}`;
+  }
+
+  const fallbackText = translated.markdown
+    .replace(ATX_HEADING_REGEX, "$2")
+    .trim()
+    .split("\n")[0]
+    ?.trim();
+
+  if (fallbackText) {
+    return `${"#".repeat(headingMatch[1].length)} ${fallbackText}`;
+  }
+
+  return headingLine;
+}
+
+async function recoverMissingTranslatedHeadings(
+  sourceMarkdown: string,
+  translatedMarkdown: string,
+  targetLanguage: string,
+  chunkLimit: number,
+  diagnostics: CompletenessDiagnostics
+): Promise<string | null> {
+  if (!isHeadingOnlyCompletenessFailure(diagnostics)) {
+    return null;
+  }
+
+  const sourceDocument = parseHeadingDocument(sourceMarkdown);
+  const translatedDocument = parseHeadingDocument(translatedMarkdown);
+
+  if (
+    sourceDocument.headings.length === 0 ||
+    translatedDocument.headings.length >= sourceDocument.headings.length
+  ) {
+    return null;
+  }
+
+  const sourceToTranslated = alignHeadingsByOrder(
+    sourceDocument.headings,
+    translatedDocument.headings
+  );
+  const missingSourceHeadingIndexes = sourceToTranslated
+    .map((translatedHeadingIndex, sourceHeadingIndex) =>
+      translatedHeadingIndex === null ? sourceHeadingIndex : null
+    )
+    .filter(
+      (sourceHeadingIndex): sourceHeadingIndex is number =>
+        sourceHeadingIndex !== null
+    );
+
+  if (missingSourceHeadingIndexes.length === 0) {
+    return null;
+  }
+
+  const insertionPlans: Array<{
+    sourceHeadingIndex: number;
+    lineIndex: number;
+  }> = [];
+  let runStartIndex = 0;
+
+  while (runStartIndex < missingSourceHeadingIndexes.length) {
+    let runEndIndex = runStartIndex;
+    while (
+      runEndIndex + 1 < missingSourceHeadingIndexes.length &&
+      missingSourceHeadingIndexes[runEndIndex + 1] ===
+        missingSourceHeadingIndexes[runEndIndex] + 1
+    ) {
+      runEndIndex += 1;
+    }
+
+    const runHeadingIndexes = missingSourceHeadingIndexes.slice(
+      runStartIndex,
+      runEndIndex + 1
+    );
+    const firstMissingHeadingIndex = runHeadingIndexes[0];
+    const lastMissingHeadingIndex =
+      runHeadingIndexes[runHeadingIndexes.length - 1];
+
+    let previousMatchedSourceHeadingIndex: number | null = null;
+    for (
+      let sourceHeadingIndex = firstMissingHeadingIndex - 1;
+      sourceHeadingIndex >= 0;
+      sourceHeadingIndex -= 1
+    ) {
+      if (sourceToTranslated[sourceHeadingIndex] !== null) {
+        previousMatchedSourceHeadingIndex = sourceHeadingIndex;
+        break;
+      }
+    }
+
+    let nextMatchedSourceHeadingIndex: number | null = null;
+    for (
+      let sourceHeadingIndex = lastMissingHeadingIndex + 1;
+      sourceHeadingIndex < sourceToTranslated.length;
+      sourceHeadingIndex += 1
+    ) {
+      if (sourceToTranslated[sourceHeadingIndex] !== null) {
+        nextMatchedSourceHeadingIndex = sourceHeadingIndex;
+        break;
+      }
+    }
+
+    const regionStartLineIndex =
+      previousMatchedSourceHeadingIndex !== null
+        ? translatedDocument.headings[
+            sourceToTranslated[previousMatchedSourceHeadingIndex]!
+          ].bodyLineIndex + 1
+        : 0;
+    const regionEndLineIndex =
+      nextMatchedSourceHeadingIndex !== null
+        ? translatedDocument.headings[
+            sourceToTranslated[nextMatchedSourceHeadingIndex]!
+          ].bodyLineIndex
+        : translatedDocument.bodyLines.length;
+
+    const leadingSegmentLength =
+      previousMatchedSourceHeadingIndex !== null
+        ? sourceDocument.headings[previousMatchedSourceHeadingIndex]
+            .sectionContentLength
+        : sourceDocument.preambleContentLength;
+    const totalSourceRegionLength =
+      leadingSegmentLength +
+      runHeadingIndexes.reduce(
+        (sum, sourceHeadingIndex) =>
+          sum +
+          sourceDocument.headings[sourceHeadingIndex].sectionContentLength,
+        0
+      );
+
+    let consumedSourceLength = leadingSegmentLength;
+    for (const sourceHeadingIndex of runHeadingIndexes) {
+      const targetRatio =
+        totalSourceRegionLength > 0
+          ? consumedSourceLength / totalSourceRegionLength
+          : 0;
+
+      insertionPlans.push({
+        sourceHeadingIndex,
+        lineIndex: estimateInsertionLineIndex(
+          translatedDocument.bodyLines,
+          regionStartLineIndex,
+          regionEndLineIndex,
+          targetRatio
+        ),
+      });
+      consumedSourceLength +=
+        sourceDocument.headings[sourceHeadingIndex].sectionContentLength;
+    }
+
+    runStartIndex = runEndIndex + 1;
+  }
+
+  if (insertionPlans.length === 0) {
+    return null;
+  }
+
+  const recoveredBodyLines = [...translatedDocument.bodyLines];
+  const translatedHeadingCache = new Map<number, string>();
+  const insertedSourceHeadingIndexes = new Set<number>();
+
+  for (const plan of [...insertionPlans].sort((left, right) => {
+    if (right.lineIndex !== left.lineIndex) {
+      return right.lineIndex - left.lineIndex;
+    }
+    return right.sourceHeadingIndex - left.sourceHeadingIndex;
+  })) {
+    const sourceHeading = sourceDocument.headings[plan.sourceHeadingIndex];
+    let translatedHeadingLine = translatedHeadingCache.get(
+      plan.sourceHeadingIndex
+    );
+
+    if (!translatedHeadingLine) {
+      translatedHeadingLine = await translateHeadingLine(
+        sourceHeading.line,
+        targetLanguage,
+        chunkLimit
+      );
+      translatedHeadingCache.set(
+        plan.sourceHeadingIndex,
+        translatedHeadingLine
+      );
+    }
+
+    if (
+      hasHeadingNearInsertionPoint(
+        recoveredBodyLines,
+        plan.lineIndex,
+        translatedHeadingLine
+      )
+    ) {
+      continue;
+    }
+
+    insertHeadingLine(
+      recoveredBodyLines,
+      plan.lineIndex,
+      translatedHeadingLine
+    );
+    insertedSourceHeadingIndexes.add(plan.sourceHeadingIndex);
+  }
+
+  const recoveredMarkdown = `${translatedDocument.frontmatter}${recoveredBodyLines.join("\n")}`;
+  const recoveredCompleteness = evaluateTranslationCompleteness(
+    sourceMarkdown,
+    recoveredMarkdown
+  );
+  const completenessImproved =
+    recoveredCompleteness.metrics.translated.headingCount >
+      diagnostics.metrics.translated.headingCount ||
+    recoveredCompleteness.failedChecks.length < diagnostics.failedChecks.length;
+
+  if (!completenessImproved || recoveredCompleteness.isIncomplete) {
+    return null;
+  }
+
+  const recoveredDocument = parseHeadingDocument(recoveredMarkdown);
+  const restoredHeadingTexts = new Set(
+    [...insertedSourceHeadingIndexes].map((idx) => {
+      const line = translatedHeadingCache.get(idx) ?? "";
+      return (line.match(ATX_HEADING_REGEX)?.[2] ?? line).toLocaleLowerCase();
+    })
+  );
+  for (const heading of recoveredDocument.headings) {
+    const headingText = (
+      heading.line.match(ATX_HEADING_REGEX)?.[2] ?? heading.line
+    ).toLocaleLowerCase();
+    if (
+      restoredHeadingTexts.has(headingText) &&
+      heading.sectionContentLength === 0
+    ) {
+      return null;
+    }
+  }
+
+  return recoveredMarkdown;
+}
+
+type TranslateTextOptions = {
+  chunkLimit?: number;
+  completenessRetryDepth?: number;
+  forceChunking?: boolean;
+};
+
 /**
  * Translates text using OpenAI
  * @param text Text to translate
@@ -698,7 +1738,8 @@ async function translateChunkWithOverflowFallback(
 export async function translateText(
   text: string,
   title: string,
-  targetLanguage: string
+  targetLanguage: string,
+  options: TranslateTextOptions = {}
 ): Promise<{ markdown: string; title: string }> {
   const safeText =
     typeof text === "string" && text.length > 0
@@ -706,59 +1747,158 @@ export async function translateText(
       : "# Empty Content\n\nThis page has no content to translate.";
   const { maskedText, placeholders } = maskDataUrlImages(safeText);
 
-  // Get model-specific chunk size
-  const maxChunkChars = getMaxChunkChars(model);
+  const effectiveChunkLimit =
+    options.chunkLimit ?? getProactiveChunkCharLimit(model);
+  const completenessRetryDepth = options.completenessRetryDepth ?? 0;
+  const forceChunking = options.forceChunking ?? false;
+
+  const translateAndValidate = async (
+    sourceMarkdown: string,
+    translatedChunk: Promise<{ markdown: string; title: string }>,
+    stage: CompletenessFailureStage,
+    isFirstChunk = true
+  ) => {
+    const translated = await translatedChunk;
+    const completeness = evaluateTranslationCompleteness(
+      sourceMarkdown,
+      translated.markdown
+    );
+    if (completeness.isIncomplete) {
+      throw createCompletenessError(stage, completeness);
+    }
+    if (isFirstChunk) {
+      assertFrontmatterIntegrity(sourceMarkdown, translated.markdown);
+    }
+    return translated;
+  };
 
   // Include system prompt overhead (~1800 chars) + title prefix + "markdown: " prefix
   const estimatedTotalChars =
     TRANSLATION_PROMPT.length + title.length + 20 + maskedText.length;
 
-  if (estimatedTotalChars <= maxChunkChars) {
-    // Fast path: content fits in a single call
-    const translated = await translateChunkWithOverflowFallback(
+  try {
+    if (!forceChunking && estimatedTotalChars <= effectiveChunkLimit) {
+      // Fast path: content fits in a single call
+      const translated = await translateAndValidate(
+        maskedText,
+        translateChunkWithOverflowFallback(
+          maskedText,
+          title,
+          targetLanguage,
+          0,
+          effectiveChunkLimit
+        ),
+        "single_call"
+      );
+      return {
+        markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
+        title: restoreDataUrlPlaceholders(translated.title, placeholders),
+      };
+    }
+
+    // Slow path: content too large — split into chunks
+    let chunks = splitMarkdownForTranslation(
       maskedText,
       title,
-      targetLanguage
+      effectiveChunkLimit
     );
-    return {
-      markdown: restoreDataUrlPlaceholders(translated.markdown, placeholders),
-      title: restoreDataUrlPlaceholders(translated.title, placeholders),
-    };
-  }
-
-  // Slow path: content too large — split into chunks
-  const contentBudget =
-    maxChunkChars - TRANSLATION_PROMPT.length - title.length - 20;
-  const chunks = splitMarkdownIntoChunks(
-    maskedText,
-    Math.max(contentBudget, 50_000)
-  );
-
-  let translatedTitle = title;
-  const translatedChunks: string[] = [];
-
-  for (const [i, chunk] of chunks.entries()) {
-    const chunkTitle = i === 0 ? title : "";
-    const result = await translateChunkWithOverflowFallback(
-      chunk,
-      chunkTitle,
-      targetLanguage
-    );
-
-    if (i === 0) {
-      translatedTitle = result.title;
+    if (forceChunking && chunks.length <= 1 && maskedText.length > 1) {
+      chunks = splitMarkdownForTranslation(
+        maskedText,
+        title,
+        Math.max(estimatedTotalChars - 1, 1)
+      );
+      if (chunks.length <= 1) {
+        throw new TranslationError(
+          "Unable to force chunked retry for translated markdown",
+          "unexpected_error",
+          false
+        );
+      }
     }
-    translatedChunks.push(result.markdown);
-  }
 
-  // Sections already end with "\n"; join with "" to avoid extra blank lines
-  return {
-    markdown: restoreDataUrlPlaceholders(
-      translatedChunks.join(""),
-      placeholders
-    ),
-    title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
-  };
+    let translatedTitle = title;
+    const translatedChunks: string[] = [];
+
+    for (const [i, chunk] of chunks.entries()) {
+      const chunkTitle = i === 0 ? title : "";
+      const result = await translateAndValidate(
+        chunk,
+        translateChunkWithOverflowFallback(
+          chunk,
+          chunkTitle,
+          targetLanguage,
+          0,
+          effectiveChunkLimit
+        ),
+        "chunk",
+        i === 0
+      );
+
+      if (i === 0) {
+        translatedTitle = result.title;
+      }
+      translatedChunks.push(result.markdown);
+    }
+
+    const joinedMarkdown = translatedChunks.join("");
+    assertFrontmatterIntegrity(maskedText, joinedMarkdown);
+    const reassemblyCompleteness = evaluateTranslationCompleteness(
+      maskedText,
+      joinedMarkdown
+    );
+    if (reassemblyCompleteness.isIncomplete) {
+      const recoveredMarkdown = await recoverMissingTranslatedHeadings(
+        maskedText,
+        joinedMarkdown,
+        targetLanguage,
+        effectiveChunkLimit,
+        reassemblyCompleteness
+      );
+
+      if (recoveredMarkdown) {
+        return {
+          markdown: restoreDataUrlPlaceholders(recoveredMarkdown, placeholders),
+          title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
+        };
+      }
+
+      throw createCompletenessError("reassembly", reassemblyCompleteness);
+    }
+
+    // Sections already end with "\n"; join with "" to avoid extra blank lines
+    return {
+      markdown: restoreDataUrlPlaceholders(joinedMarkdown, placeholders),
+      title: restoreDataUrlPlaceholders(translatedTitle, placeholders),
+    };
+  } catch (error) {
+    const isRecoverableCompletenessFailure =
+      error instanceof TranslationError &&
+      error.isCritical === false &&
+      (error.code === "completeness_check_failed" ||
+        (error.code === "schema_invalid" &&
+          /Frontmatter integrity check failed/.test(error.message)));
+
+    if (
+      isRecoverableCompletenessFailure &&
+      completenessRetryDepth < TRANSLATION_COMPLETENESS_MAX_RETRIES
+    ) {
+      const nextChunkLimit = Math.max(
+        Math.floor(effectiveChunkLimit / 2),
+        TRANSLATION_MIN_CHUNK_MAX_CHARS
+      );
+
+      if (nextChunkLimit < effectiveChunkLimit) {
+        return translateText(text, title, targetLanguage, {
+          chunkLimit: nextChunkLimit,
+          completenessRetryDepth: completenessRetryDepth + 1,
+          forceChunking: true,
+        });
+      }
+    }
+
+    throw error;
+  }
 }
 
 /**

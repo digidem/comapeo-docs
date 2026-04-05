@@ -28,7 +28,7 @@ if (isDirectExec) {
   createContentTemplate(title)
     .then(() => {
       console.log("🎉 Content template creation completed!");
-      return;
+      process.exit(0);
     })
     .catch((error) => {
       console.error(`💥 Error: ${error.message}`);

@@ -25,6 +25,18 @@ import {
   fetchNotionData,
   sortAndExpandNotionData,
 } from "../fetchNotionData.js";
+import { getRequestScheduler } from "../notion-fetch/requestScheduler";
+import { quoteYamlValue } from "../notion-fetch/frontmatterBuilder.js";
+import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCache.js";
+import {
+  replaceCanonicalMarkdownImagesWithPlaceholders,
+  decodeLocaleImagePlaceholderPaths,
+  decodeRemoteImagePlaceholderPaths,
+  HYPERLINKED_MARKDOWN_IMAGE_REGEX,
+  MARKDOWN_IMAGE_REGEX,
+  HTML_IMAGE_TAG_REGEX,
+} from "../shared/localeImagePlaceholders.js";
+import { normalizePageId } from "../utils/normalizePageId.js";
 import {
   LANGUAGES,
   MAIN_LANGUAGE,
@@ -32,12 +44,6 @@ import {
   NotionPage,
   TranslationConfig,
 } from "../constants.js";
-import {
-  processAndReplaceImages,
-  getImageDiagnostics,
-  validateAndFixRemainingImages,
-  extractImageMatches,
-} from "../notion-fetch/imageReplacer.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
 const PARENT_ITEM_PROPERTY = "Parent item";
@@ -51,6 +57,8 @@ type NotionSelectProperty = {
 type NotionNumberProperty = { number: number };
 type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
 type NotionRelationProperty = { relation: Array<{ id: string }> };
+
+const FRONTMATTER_BLOCK_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
 
 // Type for Notion page parent (API hierarchy structure)
 interface NotionPageParent {
@@ -83,6 +91,162 @@ function isChildPageBlock(block: unknown): block is ChildPageBlock {
   return (
     typeof b.id === "string" && (b.type === "child_page" || b.object === "page")
   );
+}
+
+function replaceFrontmatterValue(
+  frontmatter: string,
+  key: "title" | "sidebar_label" | "pagination_label",
+  value: string
+): string {
+  const replacement = `$1${quoteYamlValue(value)}`;
+
+  switch (key) {
+    case "title":
+      return frontmatter.replace(/(^title:\s*).*$/m, replacement);
+    case "sidebar_label":
+      return frontmatter.replace(/(^sidebar_label:\s*).*$/m, replacement);
+    case "pagination_label":
+      return frontmatter.replace(/(^pagination_label:\s*).*$/m, replacement);
+  }
+}
+
+function buildImagePlaceholder(altText: string | undefined): string {
+  const label = altText?.trim() || "image";
+  return `[Image: ${label}]`;
+}
+
+function replaceImagesWithPlaceholders(markdownContent: string): string {
+  if (
+    !markdownContent.includes("![") &&
+    !markdownContent.toLowerCase().includes("<img")
+  ) {
+    return markdownContent;
+  }
+
+  const replaceImageTag = (tag: string): string => {
+    const altText = /(?:^|\s)alt=(["'])(.*?)\1/i.exec(tag)?.[2];
+    return buildImagePlaceholder(altText);
+  };
+
+  return markdownContent
+    .replace(HYPERLINKED_MARKDOWN_IMAGE_REGEX, (_full, altText: string) =>
+      buildImagePlaceholder(altText)
+    )
+    .replace(MARKDOWN_IMAGE_REGEX, (_full, altText: string) =>
+      buildImagePlaceholder(altText)
+    )
+    .replace(HTML_IMAGE_TAG_REGEX, replaceImageTag);
+}
+
+function prepareMarkdownForTranslation(
+  markdownContent: string,
+  options: {
+    imageHandling?: "preserve" | "placeholder-text" | "placeholder-path";
+  } = {}
+): string {
+  switch (options.imageHandling) {
+    case "placeholder-text":
+      return replaceImagesWithPlaceholders(markdownContent);
+    case "placeholder-path":
+      return replaceCanonicalMarkdownImagesWithPlaceholders(markdownContent);
+    default:
+      return markdownContent;
+  }
+}
+
+export function extractFrontmatterValue(
+  content: string,
+  key: "sidebar_label" | "pagination_label"
+): string | null {
+  const frontmatterMatch = content.match(FRONTMATTER_BLOCK_REGEX);
+  if (!frontmatterMatch) return null;
+
+  const lineMatch =
+    key === "sidebar_label"
+      ? frontmatterMatch[0].match(/^sidebar_label:\s*(.+)$/m)
+      : frontmatterMatch[0].match(/^pagination_label:\s*(.+)$/m);
+  if (!lineMatch) return null;
+
+  let rawValue = lineMatch[1].trim();
+
+  // Strip surrounding quotes added by quoteYamlValue
+  if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
+    rawValue = rawValue.slice(1, -1).replace(/\\"/g, '"');
+  } else if (rawValue.startsWith("'") && rawValue.endsWith("'")) {
+    rawValue = rawValue.slice(1, -1);
+  }
+
+  return rawValue.length > 0 ? rawValue : null;
+}
+
+async function ensureTranslatedFrontmatter(
+  englishPage: NotionPage,
+  translatedContent: string,
+  translatedTitle: string,
+  canonicalRelativePath: string | null
+): Promise<string> {
+  if (!canonicalRelativePath) {
+    return translatedContent;
+  }
+
+  const englishDocPath = path.join(
+    process.cwd(),
+    "docs",
+    canonicalRelativePath
+  );
+
+  let englishMarkdown: string;
+  try {
+    englishMarkdown = await fs.readFile(englishDocPath, "utf8");
+  } catch {
+    return translatedContent;
+  }
+
+  const frontmatterMatch = englishMarkdown.match(FRONTMATTER_BLOCK_REGEX);
+  if (!frontmatterMatch) {
+    return translatedContent;
+  }
+
+  const effectiveTitle = translatedTitle.trim() || getTitle(englishPage);
+  let translatedFrontmatter = frontmatterMatch[0];
+
+  // title: always use effectiveTitle (LLM can hallucinate titles)
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "title",
+    effectiveTitle
+  );
+
+  // sidebar_label / pagination_label: prefer LLM-translated value from
+  // translatedContent; fall back to effectiveTitle if absent or blank
+  const llmSidebarLabel = extractFrontmatterValue(
+    translatedContent,
+    "sidebar_label"
+  );
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "sidebar_label",
+    llmSidebarLabel ?? effectiveTitle
+  );
+
+  const llmPaginationLabel = extractFrontmatterValue(
+    translatedContent,
+    "pagination_label"
+  );
+  translatedFrontmatter = replaceFrontmatterValue(
+    translatedFrontmatter,
+    "pagination_label",
+    llmPaginationLabel ?? effectiveTitle
+  );
+
+  const contentWithoutFrontmatter = translatedContent.replace(
+    FRONTMATTER_BLOCK_REGEX,
+    ""
+  );
+  const normalizedFrontmatter = translatedFrontmatter.replace(/\s*$/u, "");
+  const normalizedContent = contentWithoutFrontmatter.trimStart();
+
+  return `${normalizedFrontmatter}\n\n${normalizedContent}`;
 }
 
 /**
@@ -175,6 +339,7 @@ type TranslationRunSummary = {
 
 type CliOptions = {
   pageId?: string;
+  localOnly?: boolean;
 };
 
 export interface TranslationUpdateResult {
@@ -207,11 +372,35 @@ const getParentRelationId = (page: NotionPage): string | undefined => {
   return parentRelation?.relation?.[0]?.id;
 };
 
-const normalizePageId = (pageId: string): string =>
-  pageId.replace(/-/g, "").toLowerCase();
-
 const isValidNotionPageId = (pageId: string): boolean =>
   /^[0-9a-f]{32}$/i.test(pageId);
+
+const getSelectedPropertyName = (page: NotionPage, propertyName: string) => {
+  // eslint-disable-next-line security/detect-object-injection -- propertyName is a trusted Notion property constant at each call site
+  const property = page.properties?.[propertyName];
+  if (!isSelectProperty(property)) {
+    return undefined;
+  }
+
+  return property.select?.name;
+};
+
+const isEnglishSourcePage = (page: NotionPage): boolean =>
+  getSelectedPropertyName(page, NOTION_PROPERTIES.LANGUAGE) === MAIN_LANGUAGE;
+
+const isReadyForTranslationPage = (page: NotionPage): boolean =>
+  getSelectedPropertyName(page, NOTION_PROPERTIES.STATUS) ===
+  NOTION_PROPERTIES.READY_FOR_TRANSLATION;
+
+export class CanonicalPathError extends Error {
+  constructor(pageId: string) {
+    super(
+      `Unable to resolve canonical docs path for page ${pageId}. ` +
+        "Ensure the English fetch cache exists before running --page-id translation."
+    );
+    this.name = "CanonicalPathError";
+  }
+}
 
 // Summary file path for CI parsing (avoids brittle log grep)
 const SUMMARY_FILE_PATH = "translation-summary.json";
@@ -238,7 +427,7 @@ async function writeSummaryFile(summary: TranslationRunSummary): Promise<void> {
 }
 
 // Load environment variables from .env file
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 // Translation config is imported from constants.js
 
@@ -265,46 +454,55 @@ function validateRequiredEnvironment(): void {
 /**
  * Fetches published English pages from Notion
  */
-export async function fetchPublishedEnglishPages(pageId?: string) {
+export async function fetchPublishedEnglishPages(
+  pageId?: string,
+  ignoreReadyStatus = false
+) {
   const spinner = ora("Fetching published English pages from Notion").start();
 
   try {
-    const filter = {
-      and: [
-        {
-          property: NOTION_PROPERTIES.STATUS,
-          select: {
-            equals: NOTION_PROPERTIES.READY_FOR_TRANSLATION,
-          },
-        },
-      ],
-    };
+    if (pageId) {
+      const page = (await enhancedNotion.pagesRetrieve({
+        page_id: pageId,
+      })) as NotionPage;
+      const singlePage =
+        isEnglishSourcePage(page) &&
+        (ignoreReadyStatus || isReadyForTranslationPage(page))
+          ? [page]
+          : [];
+
+      spinner.succeed(
+        chalk.green(
+          `Fetched ${singlePage.length} published English page${singlePage.length === 1 ? "" : "s"}`
+        )
+      );
+      return singlePage;
+    }
+
+    const filter = ignoreReadyStatus
+      ? undefined
+      : {
+          and: [
+            {
+              property: NOTION_PROPERTIES.STATUS,
+              select: {
+                equals: NOTION_PROPERTIES.READY_FOR_TRANSLATION,
+              },
+            },
+          ],
+        };
 
     const pages = (await fetchNotionData(filter)) as NotionPage[];
 
     const sortedPages = (await sortAndExpandNotionData(pages)) as NotionPage[];
-    // Filter sortedPages according to language
-    const filteredPages = sortedPages.filter((page) => {
-      const langProp = (
-        page.properties?.[NOTION_PROPERTIES.LANGUAGE] as
-          | NotionSelectProperty
-          | undefined
-      )?.select;
-      return langProp && langProp.name === MAIN_LANGUAGE;
-    });
-
-    const filteredByPageId = pageId
-      ? filteredPages.filter(
-          (page) => normalizePageId(page.id) === normalizePageId(pageId)
-        )
-      : filteredPages;
+    const englishSourcePages = sortedPages.filter(isEnglishSourcePage);
 
     spinner.succeed(
       chalk.green(
-        `Fetched ${filteredByPageId.length} published English page${filteredByPageId.length === 1 ? "" : "s"}`
+        `Fetched ${englishSourcePages.length} published English page${englishSourcePages.length === 1 ? "" : "s"}`
       )
     );
-    return filteredByPageId;
+    return englishSourcePages;
   } catch (error) {
     spinner.fail(
       chalk.red(`Failed to fetch published English pages: ${error.message}`)
@@ -558,6 +756,57 @@ async function convertPageToMarkdown(pageId: string): Promise<string> {
   }
 }
 
+async function loadCanonicalEnglishMarkdown(
+  pageId: string
+): Promise<string | null> {
+  const canonicalRelativePath = resolveCanonicalDocsRelativePath(pageId);
+  if (!canonicalRelativePath) {
+    return null;
+  }
+
+  const canonicalEnglishPath = path.join(
+    process.cwd(),
+    "docs",
+    canonicalRelativePath
+  );
+  const content = await fs.readFile(canonicalEnglishPath, "utf8").catch(() => {
+    return null;
+  });
+
+  return typeof content === "string" && content.trim().length > 0
+    ? content
+    : null;
+}
+
+async function getSourceMarkdownForTranslation(
+  englishPage: NotionPage
+): Promise<string> {
+  const originalTitle = getTitle(englishPage);
+  const canonicalMarkdown = await loadCanonicalEnglishMarkdown(englishPage.id);
+
+  if (canonicalMarkdown !== null) {
+    console.log(
+      chalk.gray(
+        `  Using canonical English markdown from docs/ for "${originalTitle}"`
+      )
+    );
+    return prepareMarkdownForTranslation(canonicalMarkdown, {
+      imageHandling: "placeholder-path",
+    });
+  }
+
+  console.log(
+    chalk.gray(
+      `  No canonical English markdown in docs/ for "${originalTitle}", fetching from Notion`
+    )
+  );
+
+  const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
+  return prepareMarkdownForTranslation(rawMarkdownContent, {
+    imageHandling: "placeholder-text",
+  });
+}
+
 /**
  * Saves translated content to the output directory
  * @param englishPage The English page
@@ -572,10 +821,6 @@ const NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE =
 const RAW_NOTION_S3_URL_REGEX = new RegExp(
   NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
   "gi"
-);
-const NOTION_IMAGE_URL_FAMILY_REGEX = new RegExp(
-  NOTION_IMAGE_URL_FAMILY_REGEX_SOURCE,
-  "i"
 );
 
 /**
@@ -647,26 +892,35 @@ function formatRedactedS3Urls(urls: string[]): string {
   return urls.map((url) => redactPotentiallySignedUrl(url)).join(", ");
 }
 
-function isNotionImageUrlFamily(url: string): boolean {
-  return NOTION_IMAGE_URL_FAMILY_REGEX.test(url);
-}
-
 export async function saveTranslatedContentToDisk(
   englishPage: NotionPage,
   translatedContent: string,
   translatedTitle: string,
-  config: TranslationConfig
+  config: TranslationConfig,
+  options: {
+    requireCanonicalOutputPath?: boolean;
+  } = {}
 ): Promise<string> {
   try {
     // Create a sanitized filename from the title
     const title = getTitle(englishPage);
 
     // Build deterministic filename from stable page ID to keep reruns idempotent.
+    // Used as the fallback when the canonical docs path is unavailable.
     // Truncate slug to avoid path length limits on Windows/CI environments
     const deterministicName = generateSafeFilename(title, englishPage.id);
+    const canonicalRelativePath = resolveCanonicalDocsRelativePath(
+      englishPage.id
+    );
+    const useCanonicalOutputPath = Boolean(canonicalRelativePath);
 
-    let filename = `${deterministicName}.md`;
-    let outputPath = path.join(config.outputDir, filename);
+    if (options.requireCanonicalOutputPath && !canonicalRelativePath) {
+      throw new CanonicalPathError(englishPage.id);
+    }
+
+    let outputPath = canonicalRelativePath
+      ? path.join(config.outputDir, canonicalRelativePath)
+      : path.join(config.outputDir, `${deterministicName}.md`);
 
     // Handle section folders
     const elementType = getElementTypeProperty(englishPage);
@@ -674,11 +928,10 @@ export async function saveTranslatedContentToDisk(
 
     if (sectionType) {
       if (sectionType === "toggle") {
-        // For toggle sections, create a folder with the same name
-        const sectionFolder = deterministicName;
-
-        const sectionPath = path.join(config.outputDir, sectionFolder);
-        await fs.mkdir(sectionPath, { recursive: true });
+        const categoryFilePath = useCanonicalOutputPath
+          ? outputPath
+          : path.join(config.outputDir, deterministicName, "_category_.json");
+        await fs.mkdir(path.dirname(categoryFilePath), { recursive: true });
 
         // Create _category_.json file
         const effectiveTitle = translatedTitle?.trim() || title || "untitled";
@@ -700,7 +953,6 @@ export async function saveTranslatedContentToDisk(
           },
         };
 
-        const categoryFilePath = path.join(sectionPath, "_category_.json");
         await fs.writeFile(
           categoryFilePath,
           JSON.stringify(categoryContent, null, 2),
@@ -717,8 +969,15 @@ export async function saveTranslatedContentToDisk(
     // Ensure the output directory exists
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
+    const localizedContent = await ensureTranslatedFrontmatter(
+      englishPage,
+      decodeLocaleImagePlaceholderPaths(translatedContent),
+      translatedTitle,
+      canonicalRelativePath
+    );
+
     // Write the translated content to the output file
-    await fs.writeFile(outputPath, translatedContent, "utf8");
+    await fs.writeFile(outputPath, localizedContent, "utf8");
 
     return outputPath;
   } catch (error) {
@@ -880,7 +1139,8 @@ async function processLanguageTranslations(
   config: TranslationConfig,
   englishPages: NotionPage[],
   pageId?: string,
-  stabilizedMarkdownCache?: Map<string, string>
+  stabilizedMarkdownCache?: Map<string, string>,
+  localOnly = false
 ): Promise<LanguageTranslationSummary> {
   console.log(chalk.yellow(`\nProcessing ${config.language} translations:`));
   if (pageId) {
@@ -919,7 +1179,7 @@ async function processLanguageTranslations(
     )?.relation?.[0]?.id;
     /* eslint-enable security/detect-object-injection */
 
-    if (!parentRelation && !pageId) {
+    if (!parentRelation && !pageId && !localOnly) {
       console.warn(
         chalk.yellow(
           `⚠️  Skipping "${originalTitle}" - missing required Parent item relation`
@@ -937,35 +1197,38 @@ async function processLanguageTranslations(
     }
 
     // Find existing translation
-    if (!parentRelation && pageId) {
+    if (!parentRelation && (pageId || localOnly)) {
       console.log(
         chalk.gray(
-          `Bypassing Parent item relation check for "${originalTitle}" because --page-id is set`
+          `Bypassing Parent item relation check for "${originalTitle}" because ${pageId ? "--page-id" : "--local-only"} is set`
         )
       );
     }
 
-    const translationPage = await findTranslationPage(
-      englishPage,
-      config.notionLangCode,
-      {
-        sourcePageId: !parentRelation && pageId ? englishPage.id : undefined,
-      }
-    );
-
-    // Check if translation needs update
-    const updateCheck = await needsTranslationUpdate(
-      englishPage,
-      translationPage
-    );
-    if (!updateCheck.needsUpdate) {
-      console.log(
-        chalk.gray(
-          `Skipping ${originalTitle} (${updateCheck.reason}${typeof updateCheck.blockCount === "number" ? `, blocks: ${updateCheck.blockCount}` : ""})`
-        )
+    let translationPage: NotionPage | null = null;
+    if (!localOnly) {
+      translationPage = await findTranslationPage(
+        englishPage,
+        config.notionLangCode,
+        {
+          sourcePageId: !parentRelation && pageId ? englishPage.id : undefined,
+        }
       );
-      skippedTranslations++;
-      continue;
+
+      // Check if translation needs update
+      const updateCheck = await needsTranslationUpdate(
+        englishPage,
+        translationPage
+      );
+      if (!updateCheck.needsUpdate) {
+        console.log(
+          chalk.gray(
+            `Skipping ${originalTitle} (${updateCheck.reason}${typeof updateCheck.blockCount === "number" ? `, blocks: ${updateCheck.blockCount}` : ""})`
+          )
+        );
+        skippedTranslations++;
+        continue;
+      }
     }
 
     try {
@@ -973,6 +1236,8 @@ async function processLanguageTranslations(
         englishPage,
         config,
         translationPage,
+        pageId,
+        localOnly,
         stabilizedMarkdownCache,
         relationParentId:
           parentRelation ?? (pageId ? englishPage.id : undefined),
@@ -981,6 +1246,9 @@ async function processLanguageTranslations(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof CanonicalPathError) {
+        throw error;
+      }
       console.error(chalk.red(`Error processing ${originalTitle}:`, message));
       failedTranslations++;
       failures.push({
@@ -1017,6 +1285,8 @@ async function processSinglePageTranslation({
   englishPage,
   config,
   translationPage,
+  pageId,
+  localOnly,
   stabilizedMarkdownCache,
   relationParentId,
   onNew,
@@ -1025,6 +1295,8 @@ async function processSinglePageTranslation({
   englishPage: NotionPage;
   config: TranslationConfig;
   translationPage: NotionPage | null;
+  pageId?: string;
+  localOnly: boolean;
   stabilizedMarkdownCache?: Map<string, string>;
   relationParentId?: string;
   onNew: () => void;
@@ -1045,37 +1317,10 @@ async function processSinglePageTranslation({
     translatedContent = `# ${originalTitle}`;
     translatedTitle = originalTitle;
   } else {
-    const safeFilename = generateSafeFilename(originalTitle, englishPage.id);
     let markdownContent = stabilizedMarkdownCache?.get(englishPage.id);
     if (markdownContent === undefined) {
-      // Convert English page to markdown only when translation needs full content
-      const rawMarkdownContent = await convertPageToMarkdown(englishPage.id);
-
-      // Stabilize images: replace expiring S3 URLs with /images/... paths
-      const imageResult = await processAndReplaceImages(
-        rawMarkdownContent,
-        safeFilename
-      );
-
-      // Fail page if any images failed to download (no broken placeholders)
-      if (imageResult.stats.totalFailures > 0) {
-        throw new Error(
-          `Image stabilization failed for "${originalTitle}": ` +
-            `${imageResult.stats.totalFailures} image(s) failed to download. ` +
-            "Cannot proceed with translation - images would be broken."
-        );
-      }
-
-      markdownContent = imageResult.markdown;
+      markdownContent = await getSourceMarkdownForTranslation(englishPage);
       stabilizedMarkdownCache?.set(englishPage.id, markdownContent);
-
-      if (imageResult.stats.successfulImages > 0) {
-        console.log(
-          chalk.blue(
-            `  Images: processed=${imageResult.stats.successfulImages} failed=${imageResult.stats.totalFailures}`
-          )
-        );
-      }
     }
     // For regular pages, translate the full content
     const translated = await translateText(
@@ -1086,33 +1331,10 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
-    // Helper to detect S3 URLs in content
-    const detectNotionS3Urls = (content: string) => {
-      const diagnostics = getImageDiagnostics(content);
-      const rawMatches = collectRawNotionS3Matches(content);
-      const notionSamples = diagnostics.s3Samples.filter(
-        isNotionImageUrlFamily
-      );
-      const urls = Array.from(
-        new Set([...notionSamples, ...rawMatches.samples])
-      ).slice(0, 5);
-      const count = Math.max(rawMatches.count, notionSamples.length);
-      return { urls, count };
-    };
-
-    // Post-translation validation: ensure no S3 URLs survive translation
-    let { urls: detectedS3Urls, count: totalS3Matches } =
-      detectNotionS3Urls(translatedContent);
-
-    // Safety net: attempt a final image-fix pass for markdown/image-based S3 URLs.
-    if (totalS3Matches > 0) {
-      translatedContent = await validateAndFixRemainingImages(
-        translatedContent,
-        safeFilename
-      );
-      ({ urls: detectedS3Urls, count: totalS3Matches } =
-        detectNotionS3Urls(translatedContent));
-    }
+    const decodedTranslatedContent =
+      decodeRemoteImagePlaceholderPaths(translatedContent);
+    const { count: totalS3Matches, samples: detectedS3Urls } =
+      collectRawNotionS3Matches(decodedTranslatedContent);
 
     if (totalS3Matches > 0) {
       throw new Error(
@@ -1159,71 +1381,66 @@ async function processSinglePageTranslation({
   }
 
   // Find the parent of the English page to nest the translation as a sibling
-  const parentInfo =
-    relationParentId ??
-    (
-      englishPage.properties["Parent item"] as
-        | NotionRelationProperty
-        | undefined
-    )?.relation?.[0]?.id;
-  if (!parentInfo) {
-    throw new Error(
-      `Missing required Parent item relation for page "${originalTitle}" (${englishPage.id})`
-    );
-  }
-  // Create or update translation page in Notion as a sibling (child of the same parent)
-  // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
-  let translatedBlocks: any[] = [];
-  if (!isTitlePage) {
-    const sanitizedPageName = generateSafeFilename(
-      originalTitle,
-      englishPage.id
-    );
-    const markdownContent = stabilizedMarkdownCache?.get(englishPage.id) || "";
-    const orderedImagePaths = extractImageMatches(markdownContent).map(
-      (m) => m.url
-    );
-    translatedBlocks = await translateNotionBlocksDirectly(
-      englishPage.id,
-      config.language,
-      sanitizedPageName,
-      orderedImagePaths
-    );
-  } else {
-    // Restore regression: title pages previously got a minimal heading block
-    translatedBlocks = [
-      {
-        object: "block",
-        type: "heading_1",
-        heading_1: {
-          rich_text: [
-            {
-              type: "text",
-              text: { content: translatedTitle },
-            },
-          ],
+  if (!localOnly) {
+    const parentInfo =
+      relationParentId ??
+      (
+        englishPage.properties["Parent item"] as
+          | NotionRelationProperty
+          | undefined
+      )?.relation?.[0]?.id;
+    if (!parentInfo) {
+      throw new Error(
+        `Missing required Parent item relation for page "${originalTitle}" (${englishPage.id})`
+      );
+    }
+    // Create or update translation page in Notion as a sibling (child of the same parent)
+    // Use DATA_SOURCE_ID as primary (Notion API v5), fall back to DATABASE_ID for compatibility
+    let translatedBlocks: any[] = [];
+    if (!isTitlePage) {
+      translatedBlocks = await translateNotionBlocksDirectly(
+        englishPage.id,
+        config.language
+      );
+    } else {
+      // Restore regression: title pages previously got a minimal heading block
+      translatedBlocks = [
+        {
+          object: "block",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: translatedTitle },
+              },
+            ],
+          },
         },
-      },
-    ];
-  }
+      ];
+    }
 
-  await createNotionPageWithBlocks(
-    notion,
-    parentInfo,
-    DATA_SOURCE_ID || DATABASE_ID, // Primary: DATA_SOURCE_ID, Fallback: DATABASE_ID
-    translatedTitle,
-    translatedBlocks,
-    properties,
-    config.notionLangCode,
-    translationPage?.id
-  );
+    await createNotionPageWithBlocks(
+      notion,
+      parentInfo,
+      DATA_SOURCE_ID || DATABASE_ID, // Primary: DATA_SOURCE_ID, Fallback: DATABASE_ID
+      translatedTitle,
+      translatedBlocks,
+      properties,
+      config.notionLangCode,
+      translationPage?.id
+    );
+  }
 
   // Save translated content to output directory
   await saveTranslatedContentToDisk(
     englishPage,
     translatedContent,
     translatedTitle,
-    config
+    config,
+    {
+      requireCanonicalOutputPath: Boolean(pageId),
+    }
   );
 
   // Update statistics
@@ -1271,6 +1488,11 @@ export function parseCliOptions(args: string[]): CliOptions {
       continue;
     }
 
+    if (arg === "--local-only") {
+      options.localOnly = true;
+      continue;
+    }
+
     throw new Error(`Unknown flag: ${arg}`);
   }
 
@@ -1311,6 +1533,8 @@ export async function main(options: CliOptions = {}) {
     const normalizedPageId = options.pageId
       ? normalizePageId(options.pageId)
       : undefined;
+    const allowAnyStatusForPageId =
+      Boolean(normalizedPageId) && Boolean(options.localOnly);
     if (normalizedPageId) {
       console.log(
         chalk.bold.cyan(
@@ -1318,14 +1542,33 @@ export async function main(options: CliOptions = {}) {
         )
       );
     }
+    if (options.localOnly) {
+      console.log(
+        chalk.bold.cyan(
+          "Local-only mode enabled: skipping translated Notion page writes and direct block translation"
+        )
+      );
+      if (allowAnyStatusForPageId) {
+        console.log(
+          chalk.bold.cyan(
+            "Local-only page-id mode enabled: bypassing the 'Ready for translation' status filter for the selected page"
+          )
+        );
+      }
+    }
 
     // Fetch published English pages
-    const englishPages = await fetchPublishedEnglishPages(normalizedPageId);
+    const englishPages = await fetchPublishedEnglishPages(
+      normalizedPageId,
+      allowAnyStatusForPageId
+    );
     summary.totalEnglishPages = englishPages.length;
 
     if (normalizedPageId && englishPages.length === 0) {
       throw new Error(
-        `No English page found for --page-id ${normalizedPageId} with status 'Ready for translation'.`
+        allowAnyStatusForPageId
+          ? `No English page found for --page-id ${normalizedPageId}.`
+          : `No English page found for --page-id ${normalizedPageId} with status 'Ready for translation'.`
       );
     }
 
@@ -1411,7 +1654,8 @@ export async function main(options: CliOptions = {}) {
         config,
         englishPages as NotionPage[],
         normalizedPageId,
-        stabilizedMarkdownCache
+        stabilizedMarkdownCache,
+        options.localOnly ?? false
       );
       summary.processedLanguages++;
       summary.newTranslations += languageSummary.newTranslations;
@@ -1461,6 +1705,11 @@ export async function main(options: CliOptions = {}) {
     console.log(`TRANSLATION_SUMMARY ${JSON.stringify(summary)}`);
     throw error;
   } finally {
+    try {
+      getRequestScheduler().destroy();
+    } catch {
+      // Best-effort cleanup — don't mask the original error
+    }
     console.log(chalk.blue("\nCleaned up temporary files"));
   }
 }
@@ -1473,12 +1722,17 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(chalk.bold.red("\n❌ Invalid CLI arguments:"), message);
-    process.exitCode = 1;
+    process.exit(1);
   }
 
   if (process.exitCode !== 1 && cliOptions) {
-    main(cliOptions).catch(() => {
-      process.exitCode = 1;
-    });
+    (async () => {
+      try {
+        await main(cliOptions);
+        process.exit(0);
+      } catch {
+        process.exit(1);
+      }
+    })();
   }
 }

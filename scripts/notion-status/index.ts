@@ -412,6 +412,8 @@ async function main() {
         chalk.gray(`Use rollback commands to revert these changes if needed.`)
       );
     }
+
+    process.exit(0);
   } catch (error) {
     console.error(chalk.red("Status update failed:", (error as Error).message));
     process.exit(1);

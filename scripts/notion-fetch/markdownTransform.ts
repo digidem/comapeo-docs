@@ -15,16 +15,17 @@ const LEADING_LOCALE_SPACE_PATTERN = /^[\s\u00A0\u2007\u202F]+/u;
 const LEADING_LOCALE_SEPARATOR_PATTERN =
   /^[\s\u00A0\u2007\u202F:;!?¡¿\-\u2013\u2014\u2212\u2011\u2012\uFF1A\uFE55\uA789\uFF1B\uFF0C\u3001\u3002\uFF0E\u00B7\u2022\u30FB\.]+/u;
 
-function convertBlocksToMarkdown(
+async function convertBlocksToMarkdown(
   blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>
-): string {
+): Promise<string> {
   if (!blocks || blocks.length === 0) {
     return "";
   }
   try {
-    const markdown = n2m.toMarkdownString(
-      blocks as unknown as Parameters<typeof n2m.toMarkdownString>[0]
+    const mdBlocks = await n2m.blocksToMarkdown(
+      blocks as unknown as Parameters<typeof n2m.blocksToMarkdown>[0]
     );
+    const markdown = n2m.toMarkdownString(mdBlocks);
     return markdown.parent || "";
   } catch {
     return "";
@@ -316,10 +317,10 @@ export function findMatchingBlockquote(
 /**
  * Process callout blocks in the markdown string to convert them to Docusaurus admonitions
  */
-export function processCalloutsInMarkdown(
+export async function processCalloutsInMarkdown(
   markdownContent: string,
   blocks: Array<PartialBlockObjectResponse | BlockObjectResponse>
-): string {
+): Promise<string> {
   if (!markdownContent || !blocks || blocks.length === 0) {
     return markdownContent;
   }
@@ -361,7 +362,7 @@ export function processCalloutsInMarkdown(
 
     const calloutChildren = (calloutBlock as CalloutBlockNode).children;
     const childrenMarkdown = calloutChildren
-      ? convertBlocksToMarkdown(calloutChildren)
+      ? await convertBlocksToMarkdown(calloutChildren)
       : undefined;
 
     const admonitionMarkdown = convertCalloutToAdmonition(

@@ -171,6 +171,9 @@ async function translateBlocksTree(
     delete newBlock.archived;
     delete newBlock.in_trash;
     delete newBlock.children;
+    // Remove read-only/metadata fields that Notion rejects on block creation
+    delete newBlock.object;
+    delete newBlock.icon;
 
     if (
       newBlock.type === "child_page" ||
@@ -244,9 +247,10 @@ async function translateBlocksTree(
         }
       }
 
-      // Clean up unsupported properties that Notion API rejects on creation
-      if (blockType === "table" && typeObj.table_width !== undefined) {
-        // sometimes table_width is read-only? No, table_width is required.
+      // Clean up unsupported properties that Notion API rejects on block creation.
+      // The Notion API returns these fields when reading but rejects them as null on write.
+      if ("icon" in typeObj && typeObj.icon === null) {
+        delete typeObj.icon;
       }
     }
 

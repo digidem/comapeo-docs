@@ -797,8 +797,13 @@ describe("notion-translate index", () => {
         )
       ).toBe(false);
 
-      expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
-      expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(1);
+      // Portuguese existing translation (English newer) → automated no-overwrite path → new page created
+      // Spanish (no translation) → normal new translation path → new page created
+      // No updates: the no-overwrite strategy never updates existing translations
+      expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
+      expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(0);
+      expect(summary.automatedTranslations).toBe(1);
+      expect(summary.newTranslations).toBe(1);
 
       const lookedUpBySourceId = mockFetchNotionData.mock.calls.some(
         ([filter]) =>

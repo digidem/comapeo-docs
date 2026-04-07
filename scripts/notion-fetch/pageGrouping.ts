@@ -10,6 +10,8 @@ const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
   english: "en",
   spanish: "es",
   portuguese: "pt",
+  "pt - automated": "pt",
+  "es - automated": "es",
   en: "en",
   es: "es",
   pt: "pt",

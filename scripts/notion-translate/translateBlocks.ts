@@ -206,7 +206,7 @@ async function translateBlocksTree(
     }
 
     const blockType = newBlock.type as string;
-    // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
+
     const typeObj = newBlock[blockType] as
       | (Record<string, unknown> & {
           url?: string;
@@ -251,7 +251,6 @@ async function translateBlocksTree(
     }
 
     if (block.children) {
-      // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
       const parentTypeObj = newBlock[blockType] as Record<string, unknown>;
       parentTypeObj.children = await translateBlocksTree(
         block.children,
@@ -272,7 +271,8 @@ export async function createNotionPageWithBlocks(
   blocks: BlockObjectRequest[],
   properties: Record<string, unknown> = {},
   language?: string,
-  existingPageId?: string
+  existingPageId?: string,
+  forceCreate?: boolean
 ): Promise<string> {
   const MAX_RETRIES = 3;
   const NOTION_API_CHUNK_SIZE = 100;
@@ -285,48 +285,59 @@ export async function createNotionPageWithBlocks(
         throw new Error("Cannot modify English pages");
       }
 
-      let pageId: string | null = existingPageId ?? null;
+      let pageId: string | null = null;
       const pageRelation = {
         "Parent item": {
           relation: [{ id: parentPageId }],
         },
       };
 
-      if (!existingPageId) {
-        const filter = language
-          ? {
-              and: [
-                { property: NOTION_PROPERTIES.TITLE, title: { equals: title } },
-                {
-                  property: NOTION_PROPERTIES.LANGUAGE,
-                  select: { equals: language },
-                },
-              ],
-            }
-          : { property: NOTION_PROPERTIES.TITLE, title: { equals: title } };
+      // When forceCreate is set, skip the DB search entirely and always create
+      if (!forceCreate) {
+        pageId = existingPageId ?? null;
 
-        const response = await enhancedNotion.dataSourcesQuery({
-          data_source_id: databaseId,
-          filter: filter,
-        });
-
-        const nonEnglishResults = language
-          ? response.results
-          : response.results.filter(
-              (page: {
-                properties?: Record<string, unknown>;
-                [k: string]: unknown;
-              }) => {
-                const langProp = page.properties?.[
-                  NOTION_PROPERTIES.LANGUAGE
-                ] as { select?: { name?: string } } | undefined;
-                const pageLang = langProp?.select?.name || "en";
-                return pageLang !== "en";
+        if (!existingPageId) {
+          const filter = language
+            ? {
+                and: [
+                  {
+                    property: NOTION_PROPERTIES.TITLE,
+                    title: { equals: title },
+                  },
+                  {
+                    property: NOTION_PROPERTIES.LANGUAGE,
+                    select: { equals: language },
+                  },
+                ],
               }
-            );
+            : {
+                property: NOTION_PROPERTIES.TITLE,
+                title: { equals: title },
+              };
 
-        if (nonEnglishResults.length > 0) {
-          pageId = nonEnglishResults[0].id;
+          const response = await enhancedNotion.dataSourcesQuery({
+            data_source_id: databaseId,
+            filter: filter,
+          });
+
+          const nonEnglishResults = language
+            ? response.results
+            : response.results.filter(
+                (page: {
+                  properties?: Record<string, unknown>;
+                  [k: string]: unknown;
+                }) => {
+                  const langProp = page.properties?.[
+                    NOTION_PROPERTIES.LANGUAGE
+                  ] as { select?: { name?: string } } | undefined;
+                  const pageLang = langProp?.select?.name || "en";
+                  return pageLang !== "en";
+                }
+              );
+
+          if (nonEnglishResults.length > 0) {
+            pageId = nonEnglishResults[0].id;
+          }
         }
       }
 

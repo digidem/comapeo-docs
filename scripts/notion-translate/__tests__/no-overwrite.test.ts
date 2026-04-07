@@ -185,6 +185,88 @@ function setupCommonMocks(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: set up mocks for three-level hierarchy (ParentContainer → ChildEnglish,
+// ChildPT).  The key difference from setupCommonMocks is that the "Publish Status"
+// filter returns MULTIPLE English pages (both ParentContainer and ChildEnglish),
+// matching how fetchPublishedEnglishPages() returns all Language=English pages.
+// ---------------------------------------------------------------------------
+
+function setupThreeLevelMocks(
+  englishPages: ReturnType<typeof createMockNotionPage>[],
+  translationsByLanguage: Record<
+    string,
+    ReturnType<typeof createMockNotionPage>
+  > = {}
+) {
+  // Collect all page IDs that should resolve to a canonical path
+  const canonicalPageIds = new Set(englishPages.map((p) => p.id));
+
+  mockFetchNotionData.mockImplementation(async (filter: unknown) => {
+    const f = filter as { and?: FilterCondition[] };
+    // English page fetch (Publish Status filter or no filter)
+    if (f?.and?.some((c) => c.property === "Publish Status") || !f?.and) {
+      return englishPages;
+    }
+    // Translation lookup (Parent item + Language)
+    const langCondition = f?.and?.find((c) => c.property === "Language");
+    if (langCondition?.select?.equals) {
+      const lang = langCondition.select.equals;
+      return translationsByLanguage[lang] ? [translationsByLanguage[lang]] : [];
+    }
+    return [];
+  });
+  mockSortAndExpandNotionData.mockImplementation(
+    async (pages: unknown[]) => pages
+  );
+  mockN2m.pageToMarkdown.mockResolvedValue([]);
+  mockN2m.toMarkdownString.mockReturnValue({
+    parent: "# Translated\n\nContent",
+  });
+  mockBlocksChildrenList.mockResolvedValue({
+    results: [
+      {
+        type: "heading_1",
+        has_children: false,
+        heading_1: { rich_text: [{ plain_text: "Translated content" }] },
+      },
+    ],
+    has_more: false,
+    next_cursor: null,
+  });
+  mockNotionDataSourcesQuery.mockResolvedValue({
+    results: [],
+    has_more: false,
+  });
+  mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
+  mockNotionPagesUpdate.mockResolvedValue({});
+  mockNotionBlocksChildrenList.mockResolvedValue({
+    results: [],
+    has_more: false,
+  });
+  mockNotionBlocksChildrenAppend.mockResolvedValue({});
+  mockNotionBlocksDelete.mockResolvedValue({});
+  mockTranslateText.mockResolvedValue({
+    markdown: "# Traduzido",
+    title: "Traduzido",
+  });
+  mockTranslateJson.mockResolvedValue("{}");
+  mockExtractTranslatableText.mockReturnValue({});
+  mockGetLanguageName.mockImplementation((lang: string) =>
+    lang === "pt" ? "Portuguese" : "Spanish"
+  );
+  mockResolveCanonicalDocsRelativePath.mockImplementation((pageId: string) =>
+    canonicalPageIds.has(pageId) ? "test-page.md" : null
+  );
+  // Default: i18n file does NOT exist
+  mockAccess.mockRejectedValue(new Error("ENOENT"));
+  mockReadFile.mockResolvedValue("");
+  mockWriteFile.mockResolvedValue(undefined);
+  mockMkdir.mockResolvedValue(undefined);
+  // translateThemeConfig needs readdir to return an iterable
+  mockReaddir.mockResolvedValue([]);
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -510,5 +592,145 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     // Toggle pages are skipped in both automated and normal paths
     expect(summary.failedTranslations).toBe(0);
     expect(summary.automatedTranslations).toBe(0); // Toggle skipped
+  });
+
+  // -------------------------------------------------------------------------
+  // Scenario 8: Three-level hierarchy — sibling matching via shared container
+  //
+  // Hierarchy: ParentContainer (English, no Parent item)
+  //              ├── ChildEnglish (English, Parent item → ParentContainer)
+  //              └── ChildPT      (Portuguese, Parent item → ParentContainer)
+  //
+  // When main() processes ChildEnglish, findTranslationPage() queries for
+  // pages with Parent item = ParentContainer.id AND Language = Portuguese,
+  // which returns ChildPT.  The test does NOT use --local-only.
+  // -------------------------------------------------------------------------
+  it("Scenario 8: three-level hierarchy — ChildEnglish resolves ChildPT via shared container", async () => {
+    const containerId = "parent-container-sc8";
+
+    const childEnglish = createMockNotionPage({
+      id: "child-en-sc8",
+      title: "Child English Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: containerId,
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z", // English is NEWER
+    });
+    const childPT = createMockNotionPage({
+      id: "child-pt-sc8",
+      title: "Página em Português",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: containerId,
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z", // Translation is OLDER
+    });
+
+    // Only ChildEnglish in the English page set (container excluded)
+    setupThreeLevelMocks([childEnglish], {
+      Portuguese: childPT,
+    });
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    // Portuguese → automated path (ChildEnglish newer, existing PT found via container)
+    // Spanish → normal new translation path (no existing translation)
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.newTranslations).toBe(1); // Spanish
+    expect(summary.updatedTranslations).toBe(0);
+    expect(summary.failedTranslations).toBe(0);
+
+    // Automated path always creates (forceCreate) — never updates
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2); // 1 automated PT + 1 new ES
+    expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(0);
+
+    // Disk write to automated-translations/ directory
+    const writeCalls = mockWriteFile.mock.calls.map(
+      ([p]: [string]) => p as string
+    );
+    const automatedWrite = writeCalls.some((p) =>
+      p.includes("automated-translations")
+    );
+    expect(automatedWrite).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Scenario 9: Batch-mode with container — ParentContainer skipped, ChildEnglish processed
+  //
+  // Hierarchy: ParentContainer (English, no Parent item)
+  //              ├── ChildEnglish (English, Parent item → ParentContainer)
+  //              └── ChildPT      (Portuguese, Parent item → ParentContainer)
+  //
+  // fetchPublishedEnglishPages() returns BOTH ParentContainer and ChildEnglish.
+  // ParentContainer is skipped (no Parent item relation in batch mode).
+  // ChildEnglish is processed and reaches the automated no-overwrite path.
+  // -------------------------------------------------------------------------
+  it("Scenario 9: batch-mode with container — container skipped, child processed", async () => {
+    const containerId = "parent-container-sc9";
+
+    const parentContainer = createMockNotionPage({
+      id: containerId,
+      title: "Parent Container",
+      status: "Ready for translation",
+      language: "English",
+      order: 0,
+      // No parentItem — this is the top-level container
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const childEnglish = createMockNotionPage({
+      id: "child-en-sc9",
+      title: "Child English Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: containerId,
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z", // English is NEWER
+    });
+    const childPT = createMockNotionPage({
+      id: "child-pt-sc9",
+      title: "Página em Português",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: containerId,
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z", // Translation is OLDER
+    });
+
+    // Both ParentContainer and ChildEnglish returned by fetchPublishedEnglishPages
+    setupThreeLevelMocks([parentContainer, childEnglish], {
+      Portuguese: childPT,
+    });
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    // ParentContainer is skipped (no Parent item) — counted once per language
+    // ChildEnglish: PT → automated (English newer, existing PT found), ES → new
+    // Total skips = 2 (ParentContainer skipped for both PT and ES)
+    expect(summary.skippedTranslations).toBe(2);
+    expect(summary.automatedTranslations).toBe(1); // ChildEnglish PT → automated
+    expect(summary.newTranslations).toBe(1); // ChildEnglish ES → new
+    expect(summary.updatedTranslations).toBe(0);
+    expect(summary.failedTranslations).toBe(0);
+
+    // 1 automated PT page + 1 new ES page (container generates no pages)
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
+    expect(mockNotionPagesUpdate).toHaveBeenCalledTimes(0);
+
+    // Disk write to automated-translations/ directory
+    const writeCalls = mockWriteFile.mock.calls.map(
+      ([p]: [string]) => p as string
+    );
+    const automatedWrite = writeCalls.some((p) =>
+      p.includes("automated-translations")
+    );
+    expect(automatedWrite).toBe(true);
   });
 });

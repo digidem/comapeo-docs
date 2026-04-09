@@ -55,11 +55,6 @@ favicon.svg
 /assets/
 assets/
 
-# Generated content (synced from content branch)
-# These directories are populated by checking out from the content branch
-/docs/
-/i18n/
-/static/images/
 
 # Generated robots.txt (created at build time based on IS_PRODUCTION env var)
 /static/robots.txt

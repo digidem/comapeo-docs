@@ -26,6 +26,7 @@ import {
   removePageFromCache,
   getCacheStats,
   hasMissingOutputs,
+  resolveCanonicalDocsRelativePath,
   CACHE_VERSION,
   PAGE_METADATA_CACHE_PATH,
   PROJECT_ROOT,
@@ -551,6 +552,186 @@ describe("pageMetadataCache", () => {
 
       expect(stats.totalPages).toBe(2);
       expect(stats.lastSync).toBe("2024-01-01T00:00:00.000Z");
+    });
+  });
+
+  describe("resolveCanonicalDocsRelativePath", () => {
+    it("should return null when cache is null", () => {
+      const result = resolveCanonicalDocsRelativePath("page-1", null);
+      expect(result).toBeNull();
+    });
+
+    it("should return null when page is not in cache", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "other-page": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/other.md")],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("missing-page", cache);
+      expect(result).toBeNull();
+    });
+
+    it("should return docs-relative markdown path from cache", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/getting-started.md")],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBe("getting-started.md");
+    });
+
+    it("should return docs-relative markdown path in subfolder", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [
+              path.join(PROJECT_ROOT, "docs/section/getting-started.md"),
+            ],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBe("section/getting-started.md");
+    });
+
+    it("should return category path when no markdown path exists", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "section-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [
+              path.join(PROJECT_ROOT, "docs/section/_category_.json"),
+            ],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("section-1", cache);
+      expect(result).toBe("section/_category_.json");
+    });
+
+    it("should prefer markdown over category when both exist", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [
+              path.join(PROJECT_ROOT, "docs/section/_category_.json"),
+              path.join(PROJECT_ROOT, "docs/section/intro.md"),
+            ],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBe("section/intro.md");
+    });
+
+    it("should match page ID with dashes (normalized comparison)", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "26a1b08162d5800d8342e1ab896f5485": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/test-page.md")],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      // Should match with or without dashes
+      const result = resolveCanonicalDocsRelativePath(
+        "26a1b081-62d5-800d-8342-e1ab896f5485",
+        cache
+      );
+      expect(result).toBe("test-page.md");
+    });
+
+    it("should return null for output paths outside docs/", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "static/images/photo.jpg")],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBeNull();
+    });
+
+    it("should return null for empty outputPaths", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBeNull();
+    });
+
+    it("should handle .mdx extension", () => {
+      const cache: PageMetadataCache = {
+        version: CACHE_VERSION,
+        scriptHash: "hash",
+        lastSync: "2024-01-01T00:00:00.000Z",
+        pages: {
+          "page-1": {
+            lastEdited: "2024-01-01",
+            outputPaths: [path.join(PROJECT_ROOT, "docs/interactive.mdx")],
+            processedAt: "2024-01-01",
+          },
+        },
+      };
+
+      const result = resolveCanonicalDocsRelativePath("page-1", cache);
+      expect(result).toBe("interactive.mdx");
     });
   });
 });

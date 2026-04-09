@@ -15,7 +15,7 @@ import {
 } from "../notion-fetch/runtime";
 
 // Load environment variables (.env does not override CI/production env vars)
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
@@ -253,8 +253,9 @@ async function main() {
       generateOptions: {
         force: options.force,
         dryRun: options.dryRun,
-        // Only enable deletion when we have the full dataset (no filters/limits)
-        enableDeletion: !options.maxPages && !options.statusFilter,
+        // Only enable deletion when we have the full dataset (no filters/limits/page-id)
+        enableDeletion:
+          !options.maxPages && !options.statusFilter && !options.pageId,
       },
     };
 

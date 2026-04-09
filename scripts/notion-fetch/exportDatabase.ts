@@ -9,7 +9,7 @@ import { fetchNotionBlocks } from "../fetchNotionData";
 import { NOTION_PROPERTIES } from "../constants";
 import SpinnerManager from "./spinnerManager";
 
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -19,7 +19,7 @@ type MarkdownBlock = Awaited<
 // Load environment variables from .env file
 // Note: This runs at module import time. In test environments, ensure env vars
 // are set before importing this module, or use process.env directly.
-dotenv.config();
+dotenv.config({ quiet: true });
 
 if (!process.env.NOTION_API_KEY) {
   throw new Error(

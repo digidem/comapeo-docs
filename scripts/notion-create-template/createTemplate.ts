@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { NOTION_PROPERTIES, MAIN_LANGUAGE } from "../constants";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
@@ -272,6 +272,7 @@ if (import.meta.main) {
     try {
       await createContentTemplate(title);
       console.log(chalk.green("\n🎉 Content template creation completed!"));
+      process.exit(0);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(`\n💥 Error: ${message}`));

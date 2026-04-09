@@ -10,6 +10,35 @@ interface UpdateDatabaseTitleOptions {
   packageJsonPath?: string;
 }
 
+function isNumericIdentifier(value: string): boolean {
+  return value.length > 0 && /^\d+$/.test(value);
+}
+
+function isPrereleaseIdentifier(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.split("").every((char) => /[a-zA-Z0-9-]/.test(char))
+  );
+}
+
+function isVersionSuffix(value: string): boolean {
+  const [coreVersion, ...prereleaseParts] = value.split("-");
+  const versionParts = coreVersion.split(".");
+
+  if (
+    versionParts.length !== 3 ||
+    versionParts.some((part) => !isNumericIdentifier(part))
+  ) {
+    return false;
+  }
+
+  if (prereleaseParts.length === 0) {
+    return true;
+  }
+
+  return isPrereleaseIdentifier(prereleaseParts.join("-"));
+}
+
 /**
  * Updates the Notion database title with version information from package.json
  * @param options Configuration options for the database title update
@@ -54,13 +83,16 @@ export async function updateNotionDatabaseTitle(
     }
 
     // Check if version pattern exists in title (e.g., v1.2.3, v1.2.3-beta, etc.)
-    const versionRegex = /\s-\sv\d+\.\d+\.\d+(?:-[a-zA-Z0-9-]+)?$/;
-    const hasVersion = versionRegex.test(currentTitle);
+    const versionPrefix = " - v";
+    const versionStart = currentTitle.lastIndexOf(versionPrefix);
+    const hasVersion =
+      versionStart !== -1 &&
+      isVersionSuffix(currentTitle.slice(versionStart + versionPrefix.length));
 
     let newTitle: string;
     if (hasVersion) {
       // Replace existing version
-      newTitle = currentTitle.replace(versionRegex, ` - v${version}`);
+      newTitle = `${currentTitle.slice(0, versionStart)}${versionPrefix}${version}`;
       spinner.text = `Updating existing version in title`;
     } else {
       // Append new version
@@ -102,8 +134,7 @@ async function main() {
   const options: Partial<UpdateDatabaseTitleOptions> = {};
 
   for (let i = 0; i < args.length; i += 2) {
-    const flag = args[i];
-    const value = args[i + 1];
+    const [flag, value] = args.slice(i, i + 2);
 
     switch (flag) {
       case "--token":
@@ -161,6 +192,7 @@ async function main() {
       databaseId,
       packageJsonPath: options.packageJsonPath,
     });
+    process.exit(0);
   } catch (error) {
     console.error(chalk.red("Database title update failed:", error.message));
     process.exit(1);

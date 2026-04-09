@@ -446,7 +446,6 @@ export async function processAndReplaceImages(
     fallbackUsed: true;
   }> = [];
   let canonicalLocalImagesKept = 0;
-  let dataUrlImagesKept = 0;
 
   for (const match of imageMatches) {
     const trimmedUrl = match.url.trim();
@@ -515,9 +514,17 @@ export async function processAndReplaceImages(
     }
 
     if (urlValidation.sanitizedUrl!.startsWith("data:")) {
-      dataUrlImagesKept++;
+      // Route data: URLs through the existing image processing pipeline
+      // (downloadAndProcessImage already supports data: URI decoding).
+      // This prevents megabyte-scale inline payloads from surviving into
+      // translation output.
+      validImages.push({
+        match,
+        sanitizedUrl: urlValidation.sanitizedUrl!,
+      });
+
       if (DEBUG_S3_IMAGES) {
-        debugS3(`  -> Categorized as VALID (data URL kept unchanged)`);
+        debugS3(`  -> Categorized as VALID (data URL to be processed)`);
       }
       continue;
     }
@@ -555,14 +562,6 @@ export async function processAndReplaceImages(
     console.info(
       chalk.blue(
         `ℹ️  Kept ${canonicalLocalImagesKept} canonical /images/ path${canonicalLocalImagesKept === 1 ? "" : "s"} unchanged`
-      )
-    );
-  }
-
-  if (dataUrlImagesKept > 0) {
-    console.info(
-      chalk.blue(
-        `ℹ️  Kept ${dataUrlImagesKept} data URL image${dataUrlImagesKept === 1 ? "" : "s"} unchanged`
       )
     );
   }
@@ -768,6 +767,10 @@ export interface ImageDiagnostics {
   htmlMatches: number;
   s3Matches: number;
   s3Samples: string[];
+  /** Number of leftover inline data: image references found */
+  dataUrlMatches: number;
+  /** Sample leftover data: image references (up to 5) */
+  dataUrlSamples: string[];
 }
 
 function isExpiringS3Url(url: string): boolean {
@@ -878,6 +881,9 @@ export function getImageDiagnostics(content: string): ImageDiagnostics {
   const htmlMatches = extractHtmlImageMatches(source, markdownMatches.length);
   const allMatches = [...markdownMatches, ...htmlMatches];
   const s3Matches = allMatches.filter((match) => isExpiringS3Url(match.url));
+  const dataUrlMatches = allMatches.filter((match) =>
+    match.url.trim().startsWith("data:")
+  );
 
   return {
     totalMatches: allMatches.length,
@@ -885,6 +891,12 @@ export function getImageDiagnostics(content: string): ImageDiagnostics {
     htmlMatches: htmlMatches.length,
     s3Matches: s3Matches.length,
     s3Samples: s3Matches.slice(0, 5).map((match) => match.url),
+    dataUrlMatches: dataUrlMatches.length,
+    dataUrlSamples: dataUrlMatches
+      .slice(0, 5)
+      .map((match) =>
+        match.url.length > 80 ? match.url.substring(0, 80) + "..." : match.url
+      ),
   };
 }
 
@@ -902,29 +914,46 @@ export async function validateAndFixRemainingImages(
   safeFilename: string
 ): Promise<string> {
   const diagnostics = getImageDiagnostics(markdown);
-  if (diagnostics.s3Matches === 0) {
+  if (diagnostics.s3Matches === 0 && diagnostics.dataUrlMatches === 0) {
     return markdown;
   }
 
-  console.warn(
-    chalk.yellow(
-      `⚠️  Found AWS S3 URLs in final markdown for ${safeFilename}. Running final replacement pass...`
-    )
-  );
+  if (diagnostics.s3Matches > 0 && diagnostics.dataUrlMatches > 0) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  Found ${diagnostics.s3Matches} S3 URL(s) and ${diagnostics.dataUrlMatches} data: image reference(s) in final markdown for ${safeFilename}. Running final replacement pass...`
+      )
+    );
+  } else if (diagnostics.s3Matches > 0) {
+    console.warn(
+      chalk.yellow(
+        `⚠️  Found AWS S3 URLs in final markdown for ${safeFilename}. Running final replacement pass...`
+      )
+    );
+  } else {
+    console.warn(
+      chalk.yellow(
+        `⚠️  Found ${diagnostics.dataUrlMatches} inline data: image reference(s) in final markdown for ${safeFilename}. Running final replacement pass...`
+      )
+    );
+  }
 
   // Re-run processAndReplaceImages
   const result = await processAndReplaceImages(markdown, safeFilename);
 
   // Check if any remain (indicating persistent failure)
-  if (hasS3Urls(result.markdown)) {
+  const postDiagnostics = getImageDiagnostics(result.markdown);
+  if (postDiagnostics.s3Matches > 0 || postDiagnostics.dataUrlMatches > 0) {
     console.warn(
       chalk.red(
-        `❌ Failed to replace all S3 URLs in final pass for ${safeFilename}. Some images may expire.`
+        `❌ Failed to replace all S3 URLs and data: image references in final pass for ${safeFilename}. Some images may expire.`
       )
     );
   } else {
     console.info(
-      chalk.green(`✅ Successfully fixed remaining S3 URLs in ${safeFilename}`)
+      chalk.green(
+        `✅ Successfully fixed remaining S3 URLs and data: image references in ${safeFilename}`
+      )
     );
   }
 

@@ -96,9 +96,12 @@ const eslintConfig = [
     },
   },
 
-  // Notion API scripts use controlled dynamic property access (not user input)
+  // Notion API/translate scripts use controlled dynamic property access (not user input)
   {
-    files: ["scripts/notion-fetch/generateBlocks.ts"],
+    files: [
+      "scripts/notion-fetch/generateBlocks.ts",
+      "scripts/notion-translate/**/*.ts",
+    ],
     rules: {
       "security/detect-object-injection": "off",
     },

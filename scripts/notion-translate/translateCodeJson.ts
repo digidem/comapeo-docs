@@ -2,16 +2,19 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import ora from "ora";
 import chalk from "chalk";
 import {
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_MAX_TOKENS,
   getModelParams,
+  IS_CUSTOM_OPENAI_API,
   OPENAI_BASE_URL,
 } from "../constants.js";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -86,6 +89,9 @@ export async function translateJson(
       // cannot be defined (OpenAI strict mode forbids additionalProperties schemas).
       response_format: { type: "json_object" },
       ...modelParams,
+      ...(IS_CUSTOM_OPENAI_API
+        ? { max_tokens: DEFAULT_OPENAI_MAX_TOKENS }
+        : {}),
     });
 
     const content = response.choices[0]?.message?.content;
@@ -411,10 +417,10 @@ export async function main() {
 }
 
 // Run main function only when executed directly outside of tests
-if (
-  process.env.NODE_ENV !== "test" &&
-  (import.meta.url.endsWith("translateCodeJson.js") ||
-    import.meta.url.endsWith("translateCodeJson.ts"))
-) {
+const isExecutedDirectly =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (process.env.NODE_ENV !== "test" && isExecutedDirectly) {
   void main();
 }

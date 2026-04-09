@@ -13,7 +13,7 @@ import { BackupManager } from "./utils/backupManager";
 import { ConfigError, logError, logWarning } from "../shared/errors";
 
 // Load environment variables
-dotenv.config({ override: true });
+dotenv.config({ override: true, quiet: true });
 
 const resolvedDatabaseId =
   process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
@@ -519,8 +519,10 @@ const isDirectExec =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isDirectExec && process.env.NODE_ENV !== "test") {
-  main().catch((error) => {
-    console.error(chalk.red("❌ Fatal error:"), error);
-    process.exit(1);
-  });
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(chalk.red("❌ Fatal error:"), error);
+      process.exit(1);
+    });
 }

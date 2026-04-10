@@ -185,6 +185,80 @@ describe("translateNotionBlocksDirectly", () => {
     );
   });
 
+  it("strips null icon/color from block type objects (Notion returns null but rejects on append)", async () => {
+    mockBlocksChildrenList.mockResolvedValue(
+      blocksResponse([
+        {
+          id: "b-callout-null-icon",
+          type: "callout",
+          callout: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Callout text" },
+                plain_text: "Callout text",
+              },
+            ],
+            icon: null,
+            color: null,
+          },
+          has_children: false,
+        },
+        {
+          id: "b-callout-valid-icon",
+          type: "callout",
+          callout: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Keeps icon" },
+                plain_text: "Keeps icon",
+              },
+            ],
+            icon: { type: "emoji", emoji: "💡" },
+            color: "blue_background",
+          },
+          has_children: false,
+        },
+        {
+          id: "b-paragraph-null-color",
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Text" },
+                plain_text: "Text",
+              },
+            ],
+            color: null,
+          },
+          has_children: false,
+        },
+      ])
+    );
+
+    const { translateNotionBlocksDirectly } = await import("./translateBlocks");
+    const result = await translateNotionBlocksDirectly("page-id", "pt-BR");
+
+    // Null icon/color stripped from callout
+    const calloutNull = result[0] as Record<string, unknown>;
+    const calloutNullObj = calloutNull.callout as Record<string, unknown>;
+    expect(calloutNullObj.icon).toBeUndefined();
+    expect(calloutNullObj.color).toBeUndefined();
+
+    // Non-null icon/color preserved on callout
+    const calloutValid = result[1] as Record<string, unknown>;
+    const calloutValidObj = calloutValid.callout as Record<string, unknown>;
+    expect(calloutValidObj.icon).toEqual({ type: "emoji", emoji: "💡" });
+    expect(calloutValidObj.color).toBe("blue_background");
+
+    // Null color stripped from paragraph
+    const paragraph = result[2] as Record<string, unknown>;
+    const paragraphObj = paragraph.paragraph as Record<string, unknown>;
+    expect(paragraphObj.color).toBeUndefined();
+  });
+
   it("strips Notion-internal metadata fields from output blocks", async () => {
     mockBlocksChildrenList.mockResolvedValue(
       blocksResponse([

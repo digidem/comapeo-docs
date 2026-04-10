@@ -171,6 +171,9 @@ async function translateBlocksTree(
     delete newBlock.archived;
     delete newBlock.in_trash;
     delete newBlock.children;
+    // Remove read-only/metadata fields that Notion rejects on block creation
+    delete newBlock.object;
+    delete newBlock.icon;
 
     if (
       newBlock.type === "child_page" ||
@@ -206,7 +209,7 @@ async function translateBlocksTree(
     }
 
     const blockType = newBlock.type as string;
-    // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
+
     const typeObj = newBlock[blockType] as
       | (Record<string, unknown> & {
           url?: string;
@@ -218,6 +221,15 @@ async function translateBlocksTree(
         })
       | undefined;
     if (typeObj) {
+      // Strip read-only properties that Notion returns as null but rejects on append.
+      // The API expects these to be absent/undefined, not null.
+      if ("icon" in typeObj && typeObj.icon === null) {
+        delete typeObj.icon;
+      }
+      if ("color" in typeObj && typeObj.color === null) {
+        delete typeObj.color;
+      }
+
       if (typeObj.url) {
         const sanitized = sanitizeUrl(typeObj.url);
         if (sanitized) {
@@ -251,7 +263,6 @@ async function translateBlocksTree(
     }
 
     if (block.children) {
-      // eslint-disable-next-line security/detect-object-injection -- blockType comes from Notion API block.type, not user input
       const parentTypeObj = newBlock[blockType] as Record<string, unknown>;
       parentTypeObj.children = await translateBlocksTree(
         block.children,

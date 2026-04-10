@@ -60,8 +60,15 @@ type NotionSelectProperty = {
 type NotionNumberProperty = { number: number };
 type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
 type NotionRelationProperty = { relation: Array<{ id: string }> };
+type NotionDatabaseSelectSchemaProperty = {
+  type?: "select";
+  select?: {
+    options?: Array<{ name?: string }>;
+  };
+};
 
 const FRONTMATTER_BLOCK_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+let automatedLanguageOptionsValidated = false;
 
 // Type for Notion page parent (API hierarchy structure)
 interface NotionPageParent {
@@ -456,6 +463,48 @@ function validateRequiredEnvironment(): void {
       `Missing required environment variables: ${missingVariables.join(", ")}`
     );
   }
+}
+
+async function validateAutomatedLanguageOptions(): Promise<void> {
+  if (automatedLanguageOptionsValidated) {
+    return;
+  }
+
+  if (!DATABASE_ID) {
+    console.warn(
+      "Cannot verify automated language select options without DATABASE_ID — ensure they exist in Notion"
+    );
+    automatedLanguageOptionsValidated = true;
+    return;
+  }
+
+  const database = (await notion.databases.retrieve({
+    database_id: DATABASE_ID,
+  })) as {
+    properties?: Record<string, unknown>;
+  };
+  const languageProperty = database.properties?.[NOTION_PROPERTIES.LANGUAGE] as
+    | NotionDatabaseSelectSchemaProperty
+    | undefined;
+  const optionNames = new Set(
+    languageProperty?.select?.options
+      ?.map((option) => option.name)
+      .filter((name): name is string => Boolean(name)) ?? []
+  );
+  const requiredAutomatedOptions = ["PT - automated", "ES - automated"];
+  const missingOptions = requiredAutomatedOptions.filter(
+    (optionName) => !optionNames.has(optionName)
+  );
+
+  if (missingOptions.length > 0) {
+    throw new TranslationError(
+      `Missing automated language select options in Notion: ${missingOptions.join(", ")}`,
+      "schema_invalid",
+      true
+    );
+  }
+
+  automatedLanguageOptionsValidated = true;
 }
 
 /**
@@ -1371,6 +1420,17 @@ async function processLanguageTranslations(
     }
 
     if (automatedPathNeeded) {
+      const elementType = getElementTypeProperty(englishPage);
+      if (elementType?.select?.name?.toLowerCase() === "toggle") {
+        console.log(
+          chalk.gray(
+            `Skipping toggle page "${originalTitle}" — automated path does not handle toggles`
+          )
+        );
+        skippedTranslations++;
+        continue;
+      }
+
       try {
         await processAutomatedTranslation({
           englishPage,
@@ -1479,17 +1539,12 @@ async function processAutomatedTranslation({
 }): Promise<void> {
   const originalTitle = getTitle(englishPage);
 
-  // Skip toggle/category pages
+  if (!localOnly) {
+    await validateAutomatedLanguageOptions();
+  }
+
   const elementType = getElementTypeProperty(englishPage);
   const sectionType = elementType?.select?.name?.toLowerCase();
-  if (sectionType === "toggle") {
-    console.log(
-      chalk.gray(
-        `Skipping toggle page "${originalTitle}" — automated path does not handle toggles`
-      )
-    );
-    return;
-  }
 
   // Get automated language code (exactly once — prevents double-apply)
   const automatedLangCode = getAutomatedLanguageCode(config.notionLangCode);
@@ -1530,6 +1585,7 @@ async function processAutomatedTranslation({
 
   // Translate Notion blocks (only when not local-only)
   let translatedBlocks: any[] | undefined;
+  let skipNotionPageCreation = false;
   if (!localOnly) {
     try {
       if (!isTitlePage) {
@@ -1549,10 +1605,23 @@ async function processAutomatedTranslation({
         ];
       }
     } catch (err) {
+      skipNotionPageCreation = true;
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(
         chalk.yellow(
-          `Could not translate Notion blocks for "${originalTitle}": ${msg} — Notion page will be created without translated blocks`
+          `Could not translate Notion blocks for "${originalTitle}": ${msg} — skipping Notion page creation to avoid an empty page`
+        )
+      );
+    }
+
+    if (
+      !isTitlePage &&
+      (!Array.isArray(translatedBlocks) || translatedBlocks.length === 0)
+    ) {
+      skipNotionPageCreation = true;
+      console.warn(
+        chalk.yellow(
+          `Translated Notion blocks for "${originalTitle}" were empty — skipping Notion page creation to avoid an empty page`
         )
       );
     }
@@ -1597,7 +1666,7 @@ async function processAutomatedTranslation({
     )?.relation?.[0]?.id;
 
   // Notion write (only when not local-only)
-  if (!localOnly) {
+  if (!localOnly && !skipNotionPageCreation) {
     if (parentId) {
       await createNotionPageWithBlocks(
         notion,
@@ -1619,6 +1688,14 @@ async function processAutomatedTranslation({
     }
   }
 
+  const translatedBlocksForDisk =
+    !localOnly &&
+    !skipNotionPageCreation &&
+    Array.isArray(translatedBlocks) &&
+    translatedBlocks.length > 0
+      ? translatedBlocks
+      : undefined;
+
   // Disk write
   await saveAutomatedTranslationToDisk(
     englishPage,
@@ -1626,8 +1703,8 @@ async function processAutomatedTranslation({
     translatedTitle,
     automatedOutputDir,
     undefined, // generate datetime suffix
-    localOnly ? undefined : translatedBlocks,
-    localOnly ? undefined : parentId
+    translatedBlocksForDisk,
+    translatedBlocksForDisk ? parentId : undefined
   );
 
   onNew();

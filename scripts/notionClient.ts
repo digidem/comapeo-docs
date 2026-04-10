@@ -28,13 +28,18 @@ if (!process.env.NOTION_API_KEY) {
 }
 
 const resolvedDatabaseId =
-  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID;
+  process.env.DATABASE_ID ?? process.env.NOTION_DATABASE_ID ?? "";
+const rawDataSourceId = process.env.DATA_SOURCE_ID;
 
-if (!resolvedDatabaseId) {
-  throw new Error("DATABASE_ID is not defined in the environment variables.");
+if (!resolvedDatabaseId && !rawDataSourceId) {
+  throw new Error(
+    "DATABASE_ID (or DATA_SOURCE_ID) is not defined in the environment variables."
+  );
 }
 
-process.env.DATABASE_ID = resolvedDatabaseId;
+if (resolvedDatabaseId) {
+  process.env.DATABASE_ID = resolvedDatabaseId;
+}
 
 // Configuration for retry logic
 // Standardized test environment detection
@@ -437,13 +442,11 @@ const imageTransformer: BlockToMarkdown = async (block) => {
 
 n2m.setCustomTransformer("image", imageTransformer);
 
-export const DATABASE_ID = resolvedDatabaseId;
+export const DATABASE_ID = resolvedDatabaseId || undefined;
 
 // For v5 API compatibility - export data source ID
 // DATA_SOURCE_ID is required for v5 API. If not set, warn and fall back to DATABASE_ID
 // Note: DATABASE_ID and DATA_SOURCE_ID may be different values in v5!
-const rawDataSourceId = process.env.DATA_SOURCE_ID;
-
 if (!rawDataSourceId && !IS_TEST_ENV) {
   console.warn(
     chalk.yellow(
@@ -489,7 +492,7 @@ export const getActiveDataSourceId = (): string => {
 };
 
 // Export the active database ID based on test mode
-export const getActiveDatabaseId = (): string => {
+export const getActiveDatabaseId = (): string | undefined => {
   if (isTestMode && TEST_DATABASE_ID) {
     return TEST_DATABASE_ID;
   }

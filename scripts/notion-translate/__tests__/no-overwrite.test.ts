@@ -28,11 +28,16 @@ const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
 const mockResolveCanonicalDocsRelativePath = vi.fn();
 const mockNotionDataSourcesQuery = vi.fn();
+const mockNotionDatabasesRetrieve = vi.fn();
 const mockNotionPagesCreate = vi.fn();
 const mockNotionPagesUpdate = vi.fn();
 const mockNotionBlocksChildrenList = vi.fn();
 const mockNotionBlocksChildrenAppend = vi.fn();
 const mockNotionBlocksDelete = vi.fn();
+const defaultMockDatabaseId = "test-database-id";
+const defaultMockDataSourceId = "test-data-source-id";
+let mockDatabaseId: string | undefined = defaultMockDatabaseId;
+let mockDataSourceId: string | undefined = defaultMockDataSourceId;
 const mockSchedulerDestroy = vi.fn();
 const mockGetRequestScheduler = vi.fn(() => ({
   destroy: mockSchedulerDestroy,
@@ -57,6 +62,7 @@ vi.mock("fs/promises", () => ({
 vi.mock("../../notionClient", () => ({
   notion: {
     dataSources: { query: mockNotionDataSourcesQuery },
+    databases: { retrieve: mockNotionDatabasesRetrieve },
     pages: { create: mockNotionPagesCreate, update: mockNotionPagesUpdate },
     blocks: {
       children: {
@@ -66,8 +72,12 @@ vi.mock("../../notionClient", () => ({
       delete: mockNotionBlocksDelete,
     },
   },
-  DATABASE_ID: "test-database-id",
-  DATA_SOURCE_ID: "test-data-source-id",
+  get DATABASE_ID() {
+    return mockDatabaseId;
+  },
+  get DATA_SOURCE_ID() {
+    return mockDataSourceId;
+  },
   n2m: mockN2m,
   enhancedNotion: {
     dataSourcesQuery: mockNotionDataSourcesQuery,
@@ -112,6 +122,19 @@ type FilterCondition = {
   relation?: { contains?: string };
 };
 
+function createLanguageSchemaResponse(optionNames: string[] = []) {
+  return {
+    properties: {
+      Language: {
+        type: "select",
+        select: {
+          options: optionNames.map((name) => ({ name })),
+        },
+      },
+    },
+  };
+}
+
 function setupCommonMocks(
   englishPage: ReturnType<typeof createMockNotionPage>,
   translationsByLanguage: Record<
@@ -155,6 +178,14 @@ function setupCommonMocks(
     results: [],
     has_more: false,
   });
+  mockNotionDatabasesRetrieve.mockResolvedValue(
+    createLanguageSchemaResponse([
+      "Portuguese",
+      "Spanish",
+      "PT - automated",
+      "ES - automated",
+    ])
+  );
   mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
   mockNotionPagesUpdate.mockResolvedValue({});
   mockNotionBlocksChildrenList.mockResolvedValue({
@@ -237,6 +268,14 @@ function setupThreeLevelMocks(
     results: [],
     has_more: false,
   });
+  mockNotionDatabasesRetrieve.mockResolvedValue(
+    createLanguageSchemaResponse([
+      "Portuguese",
+      "Spanish",
+      "PT - automated",
+      "ES - automated",
+    ])
+  );
   mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
   mockNotionPagesUpdate.mockResolvedValue({});
   mockNotionBlocksChildrenList.mockResolvedValue({
@@ -275,7 +314,10 @@ describe("no-overwrite translation routing (Issue #171)", () => {
 
   beforeEach(() => {
     restoreEnv = installTestNotionEnv();
+    vi.resetModules();
     vi.resetAllMocks();
+    mockDatabaseId = defaultMockDatabaseId;
+    mockDataSourceId = defaultMockDataSourceId;
     // Re-wire mocks after reset
     mockGetRequestScheduler.mockReturnValue({ destroy: mockSchedulerDestroy });
   });
@@ -447,6 +489,7 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     expect(summary.failedTranslations).toBe(0);
 
     // localOnly → no Notion API calls
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
     expect(mockNotionPagesCreate).not.toHaveBeenCalled();
     expect(mockNotionPagesUpdate).not.toHaveBeenCalled();
 
@@ -560,7 +603,7 @@ describe("no-overwrite translation routing (Issue #171)", () => {
   // -------------------------------------------------------------------------
   // Scenario 7: Toggle page in automated path → skipped
   // -------------------------------------------------------------------------
-  it("Scenario 7: toggle page routed to automated path → skipped gracefully", async () => {
+  it("Scenario 7: toggle page routed to automated path → skipped at gate before automated processing", async () => {
     const toggleEnglishPage = createMockNotionPage({
       id: "en-toggle-sc7",
       title: "Toggle Section",
@@ -581,17 +624,36 @@ describe("no-overwrite translation routing (Issue #171)", () => {
       elementType: "toggle",
       lastEdited: "2026-01-01T00:00:00.000Z", // Translation older
     });
+    const esToggleTranslation = createMockNotionPage({
+      id: "es-toggle-sc7",
+      title: "Sección Toggle",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-7",
+      elementType: "toggle",
+      lastEdited: "2026-01-01T00:00:00.000Z", // Translation older
+    });
 
-    setupCommonMocks(toggleEnglishPage, { Portuguese: ptToggleTranslation });
-    // resolveCanonicalDocsRelativePath returns null for toggle pages
+    setupCommonMocks(toggleEnglishPage, {
+      Portuguese: ptToggleTranslation,
+      Spanish: esToggleTranslation,
+    });
     mockResolveCanonicalDocsRelativePath.mockReturnValue(null);
 
     const { main } = await import("../index.js");
     const summary = await main({});
 
-    // Toggle pages are skipped in both automated and normal paths
     expect(summary.failedTranslations).toBe(0);
-    expect(summary.automatedTranslations).toBe(0); // Toggle skipped
+    expect(summary.automatedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(2);
+    expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
+
+    const automatedWrite = mockWriteFile.mock.calls.some(([p]) =>
+      String(p).includes("automated-translations")
+    );
+    expect(automatedWrite).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -732,5 +794,383 @@ describe("no-overwrite translation routing (Issue #171)", () => {
       p.includes("automated-translations")
     );
     expect(automatedWrite).toBe(true);
+  });
+
+  it("Scenario 10: missing automated select options → reports TranslationError", async () => {
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc10",
+      title: "Automated Validation Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-10",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc10",
+      title: "Página de Validação",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-10",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc10",
+      title: "Página de Validación",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-10",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+    mockNotionDatabasesRetrieve.mockResolvedValue(
+      createLanguageSchemaResponse(["Portuguese", "Spanish"])
+    );
+
+    const { main } = await import("../index.js");
+    await expect(main({})).rejects.toThrow(
+      "Translation workflow completed with failures (docs: 1, code.json: 0, theme: 0)"
+    );
+
+    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("Scenario 11: missing DATABASE_ID logs warning and continues automated processing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc11",
+      title: "Automated Warning Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc11",
+      title: "Página de Aviso",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc11",
+      title: "Página de Aviso ES",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+    mockDatabaseId = undefined;
+    delete process.env.DATABASE_ID;
+    process.env.DATA_SOURCE_ID = defaultMockDataSourceId;
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(1);
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Cannot verify automated language select options without DATABASE_ID — ensure they exist in Notion"
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("Scenario 12: successful automated option validation → automated processing continues", async () => {
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc11",
+      title: "Automated Success Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc11",
+      title: "Página de Sucesso",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc11",
+      title: "Página de Éxito",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-11",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(1);
+    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("Scenario 13: automated language validation runs once per process", async () => {
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc12",
+      title: "Automated Cache Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-12",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc12",
+      title: "Página Cache PT",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-12",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc12",
+      title: "Página Cache ES",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-12",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(2);
+    expect(summary.failedTranslations).toBe(0);
+    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("Scenario 14: automated block translation failure skips Notion page creation but still saves disk artifact", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc14",
+      title: "Automated Block Failure Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-14",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc14",
+      title: "Página com Falha de Blocos",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-14",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc14",
+      title: "Página con Bloques",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-14",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+    mockBlocksChildrenList.mockImplementation(
+      async ({ block_id }: { block_id: string }) => {
+        if (block_id === englishPage.id) {
+          throw new Error("block translation failed");
+        }
+        return {
+          results: [
+            {
+              type: "heading_1",
+              has_children: false,
+              heading_1: { rich_text: [{ plain_text: "Content" }] },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+    );
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(1);
+    expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+
+    const writePaths = mockWriteFile.mock.calls.map(([filePath]) =>
+      String(filePath)
+    );
+    expect(
+      writePaths.some(
+        (filePath) =>
+          filePath.includes("automated-translations") &&
+          filePath.endsWith(".md")
+      )
+    ).toBe(true);
+    expect(
+      writePaths.some((filePath) => filePath.endsWith(".notion.json"))
+    ).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Could not translate Notion blocks for "Automated Block Failure Page": block translation failed — skipping Notion page creation to avoid an empty page'
+      )
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("Scenario 15: empty translated Notion blocks skip Notion page creation but still save disk artifact", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc15",
+      title: "Automated Empty Blocks Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-15",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc15",
+      title: "Página com Blocos Vazios",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-15",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc15",
+      title: "Página con Bloques Vacíos",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-15",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+    mockBlocksChildrenList.mockImplementation(
+      async ({ block_id }: { block_id: string }) => {
+        if (block_id === englishPage.id) {
+          return {
+            results: [],
+            has_more: false,
+            next_cursor: null,
+          };
+        }
+
+        return {
+          results: [
+            {
+              type: "heading_1",
+              has_children: false,
+              heading_1: { rich_text: [{ plain_text: "Content" }] },
+            },
+          ],
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+    );
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(1);
+    expect(mockNotionPagesCreate).not.toHaveBeenCalled();
+
+    const writePaths = mockWriteFile.mock.calls.map(([filePath]) =>
+      String(filePath)
+    );
+    expect(
+      writePaths.some(
+        (filePath) =>
+          filePath.includes("automated-translations") &&
+          filePath.endsWith(".md")
+      )
+    ).toBe(true);
+    expect(
+      writePaths.some((filePath) => filePath.endsWith(".notion.json"))
+    ).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Translated Notion blocks for "Automated Empty Blocks Page" were empty — skipping Notion page creation to avoid an empty page'
+      )
+    );
+
+    warnSpy.mockRestore();
   });
 });

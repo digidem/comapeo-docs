@@ -32,7 +32,6 @@ import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCa
 import {
   replaceCanonicalMarkdownImagesWithPlaceholders,
   decodeLocaleImagePlaceholderPaths,
-  decodeRemoteImagePlaceholderPaths,
   HYPERLINKED_MARKDOWN_IMAGE_REGEX,
   MARKDOWN_IMAGE_REGEX,
   HTML_IMAGE_TAG_REGEX,
@@ -1613,6 +1612,13 @@ async function processAutomatedTranslation({
     );
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
+
+    const { count, samples } = collectRawNotionS3Matches(translatedContent);
+    if (count > 0) {
+      throw new Error(
+        `Automated translation for "${originalTitle}" still contains ${count} Notion/S3 URLs. Offending URLs (redacted): ${formatRedactedS3Urls(samples)}`
+      );
+    }
   }
 
   // Translate Notion blocks (only when not local-only)
@@ -1796,10 +1802,8 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
-    const decodedTranslatedContent =
-      decodeRemoteImagePlaceholderPaths(translatedContent);
     const { count: totalS3Matches, samples: detectedS3Urls } =
-      collectRawNotionS3Matches(decodedTranslatedContent);
+      collectRawNotionS3Matches(translatedContent);
 
     if (totalS3Matches > 0) {
       throw new Error(

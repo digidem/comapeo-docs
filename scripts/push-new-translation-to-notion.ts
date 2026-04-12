@@ -3,7 +3,7 @@
  * Push a pre-translated automated translation file to Notion as a new page.
  *
  * Usage:
- *   bun scripts/push-new-translation-to-notion.ts --file <path> --language <"PT - automated"|"ES - automated">
+ *   bun scripts/push-new-translation-to-notion.ts --file <path> --language <automated-language-code>
  *
  * Requires: the file to have a corresponding .notion.json sidecar from a Notion-API translation run.
  * Does NOT work with files generated in --local-only mode (no sidecar).
@@ -13,6 +13,7 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { createNotionPageWithBlocks } from "./notion-translate/translateBlocks.js";
 import { notion } from "./notionClient.js";
+import { LANGUAGES, getAutomatedLanguageCode } from "./constants.js";
 
 dotenv.config({ override: true });
 
@@ -57,15 +58,16 @@ function parseArgs(): { file: string; language: string } {
     throw new Error("Missing --file argument");
   }
   if (languageIndex === -1 || !args[languageIndex + 1]) {
-    throw new Error(
-      "Missing --language argument. Expected: 'PT - automated' or 'ES - automated'"
-    );
+    throw new Error("Missing --language argument");
   }
 
   const language = args[languageIndex + 1];
-  if (language !== "PT - automated" && language !== "ES - automated") {
+  const validAutomatedLanguages = LANGUAGES.map((lang) =>
+    getAutomatedLanguageCode(lang.notionLangCode)
+  );
+  if (!validAutomatedLanguages.includes(language)) {
     throw new Error(
-      `Invalid --language value: "${language}". Expected: 'PT - automated' or 'ES - automated'`
+      `Invalid --language value: "${language}". Expected one of: ${validAutomatedLanguages.map((l) => `'${l}'`).join(", ")}`
     );
   }
 
@@ -102,6 +104,7 @@ async function run() {
   const sidecar = sidecarParsed as {
     parentId?: string;
     blocks?: unknown[];
+    sourceProperties?: Record<string, unknown>;
   };
 
   // Support both wrapped format { parentId, blocks } and legacy bare array
@@ -127,6 +130,7 @@ async function run() {
   console.log(`Creating Notion page: "${title}" under parent ${parentId}`);
 
   const properties: Record<string, unknown> = {
+    ...(sidecar.sourceProperties || {}),
     Language: { select: { name: language } },
   };
 

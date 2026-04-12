@@ -491,7 +491,9 @@ async function validateAutomatedLanguageOptions(): Promise<void> {
       ?.map((option) => option.name)
       .filter((name): name is string => Boolean(name)) ?? []
   );
-  const requiredAutomatedOptions = ["PT - automated", "ES - automated"];
+  const requiredAutomatedOptions = LANGUAGES.map((lang) =>
+    getAutomatedLanguageCode(lang.notionLangCode)
+  );
   const missingOptions = requiredAutomatedOptions.filter(
     (optionName) => !optionNames.has(optionName)
   );
@@ -561,7 +563,9 @@ export async function fetchPublishedEnglishPages(
     return englishSourcePages;
   } catch (error) {
     spinner.fail(
-      chalk.red(`Failed to fetch published English pages: ${error.message}`)
+      chalk.red(
+        `Failed to fetch published English pages: ${error instanceof Error ? error.message : String(error)}`
+      )
     );
     throw error;
   }
@@ -1056,7 +1060,8 @@ export async function saveAutomatedTranslationToDisk(
   automatedOutputDir: string,
   datetimeSuffix?: string,
   translatedBlocks?: BlockObjectRequest[],
-  parentId?: string
+  parentId?: string,
+  properties?: Record<string, unknown>
 ): Promise<string> {
   try {
     const elementType = getElementTypeProperty(englishPage);
@@ -1080,7 +1085,8 @@ export async function saveAutomatedTranslationToDisk(
       const day = String(now.getDate()).padStart(2, "0");
       const hours = String(now.getHours()).padStart(2, "0");
       const minutes = String(now.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day}T${hours}${minutes}`;
+      const seconds = String(now.getSeconds()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}${minutes}${seconds}`;
     })();
 
     const canonicalRelativePath = resolveCanonicalDocsRelativePath(
@@ -1109,11 +1115,37 @@ export async function saveAutomatedTranslationToDisk(
       const sidecarPath = outputPath.endsWith(".md")
         ? outputPath.replace(/\.md$/i, ".notion.json")
         : `${outputPath}.notion.json`;
-      const sidecarData: { parentId?: string; blocks: BlockObjectRequest[] } = {
+      const sidecarData: {
+        parentId?: string;
+        blocks: BlockObjectRequest[];
+        sourceProperties?: Record<string, unknown>;
+      } = {
         blocks: translatedBlocks,
       };
       if (parentId) {
         sidecarData.parentId = parentId;
+      }
+      if (properties) {
+        const { Language: _lang, ...metadataProps } = properties;
+        const normalized: Record<string, unknown> = {};
+        if (NOTION_PROPERTIES.ELEMENT_TYPE in metadataProps) {
+          normalized[NOTION_PROPERTIES.ELEMENT_TYPE] =
+            metadataProps[NOTION_PROPERTIES.ELEMENT_TYPE];
+        } else if (LEGACY_SECTION_PROPERTY in metadataProps) {
+          normalized[NOTION_PROPERTIES.ELEMENT_TYPE] =
+            metadataProps[LEGACY_SECTION_PROPERTY];
+        }
+        for (const key of [
+          NOTION_PROPERTIES.ORDER,
+          NOTION_PROPERTIES.TAGS,
+        ] as const) {
+          if (key in metadataProps) {
+            normalized[key] = metadataProps[key];
+          }
+        }
+        if (Object.keys(normalized).length > 0) {
+          sidecarData.sourceProperties = normalized;
+        }
       }
       await fs.writeFile(
         sidecarPath,
@@ -1634,7 +1666,7 @@ async function processAutomatedTranslation({
   const orderProp = englishPage.properties[NOTION_PROPERTIES.ORDER] as
     | { number?: number }
     | undefined;
-  if (orderProp?.number) {
+  if (typeof orderProp?.number === "number") {
     properties[NOTION_PROPERTIES.ORDER] = { number: orderProp.number };
   }
   const tagsProp = englishPage.properties[NOTION_PROPERTIES.TAGS] as
@@ -1704,7 +1736,8 @@ async function processAutomatedTranslation({
     automatedOutputDir,
     undefined, // generate datetime suffix
     translatedBlocksForDisk,
-    translatedBlocksForDisk ? parentId : undefined
+    translatedBlocksForDisk ? parentId : undefined,
+    properties
   );
 
   onNew();
@@ -1790,7 +1823,7 @@ async function processSinglePageTranslation({
   const orderProp = englishPage.properties[NOTION_PROPERTIES.ORDER] as
     | NotionNumberProperty
     | undefined;
-  if (orderProp && orderProp.number) {
+  if (typeof orderProp?.number === "number") {
     properties[NOTION_PROPERTIES.ORDER] = {
       number: orderProp.number,
     };

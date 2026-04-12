@@ -14,8 +14,7 @@ import { getAutomatedOutputDir, LANGUAGES } from "./constants.js";
 import { resolveCanonicalDocsRelativePath } from "./notion-fetch/pageMetadataCache.js";
 import { main } from "./notion-translate/index.js";
 
-const DEFAULT_PAGE_ID = "2331b08162d58090ab6ad6c1c5f60dda";
-const MINUTE_BOUNDARY_BUFFER_MS = 1500;
+const MINUTE_BOUNDARY_BUFFER_MS = 100;
 
 type FileSnapshot = {
   hash: string;
@@ -189,22 +188,36 @@ function getLanguageTargets(
 }
 
 async function waitForNextAutomatedTimestampWindow(): Promise<void> {
-  const now = new Date();
-  const nextMinute = new Date(now);
-  nextMinute.setSeconds(60, 0);
-  const waitMs =
-    nextMinute.getTime() - now.getTime() + MINUTE_BOUNDARY_BUFFER_MS;
-
   console.log(
-    `\nWaiting ${waitMs}ms for the next minute boundary so automated artifact names must advance...`
+    `\nWaiting ${MINUTE_BOUNDARY_BUFFER_MS}ms between runs to ensure distinct millisecond timestamps...`
   );
-  await sleep(waitMs);
+  await sleep(MINUTE_BOUNDARY_BUFFER_MS);
 }
 
 async function run() {
   const args = process.argv.slice(2);
-  const pageIdIndex = args.indexOf("--page-id");
-  const pageId = pageIdIndex !== -1 ? args[pageIdIndex + 1] : DEFAULT_PAGE_ID;
+  const pageIdArg = args.find(
+    (a) => a === "--page-id" || a.startsWith("--page-id=")
+  );
+  let pageId: string | undefined;
+  if (pageIdArg) {
+    if (pageIdArg.includes("=")) {
+      pageId = pageIdArg.split("=")[1];
+    } else {
+      const idx = args.indexOf(pageIdArg);
+      pageId = args[idx + 1];
+    }
+  }
+
+  if (!pageId) {
+    console.error(
+      "Error: Missing required argument --page-id.\n" +
+        "Usage: bun run notion:translate-test --page-id <notion-page-id>\n" +
+        "Example: bun run notion:translate-test --page-id 2331b08162d58090ab6ad6c1c5f60dda"
+    );
+    process.exit(1);
+  }
+
   const canonicalRelativePath = getCanonicalRelativePath(pageId);
   const languageTargets = getLanguageTargets(canonicalRelativePath);
 
@@ -332,7 +345,7 @@ async function run() {
     if (result.newAutomatedFiles.length === 0) {
       const changedArtifactsHint =
         result.changedAutomatedFiles.length > 0
-          ? ` (${result.changedAutomatedFiles.length} same-name artifact${result.changedAutomatedFiles.length === 1 ? " was" : "s were"} modified in place, which usually means both runs landed in the same minute window)`
+          ? ` (${result.changedAutomatedFiles.length} same-name artifact${result.changedAutomatedFiles.length === 1 ? " was" : "s were"} modified in place, which usually means both runs landed in the same millisecond window)`
           : "";
       failures.push(
         `${result.language}: no new page-specific automated file was created on run 2 for ${canonicalRelativePath}${changedArtifactsHint}`

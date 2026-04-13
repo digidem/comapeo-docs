@@ -49,8 +49,11 @@ function parseSimpleFrontmatter(content: string): Record<string, string> {
   return result;
 }
 
-function parseArgs(): { file: string; language: string } {
-  const args = process.argv.slice(2);
+function parseArgs(argsOverride?: string[]): {
+  file: string;
+  language: string;
+} {
+  const args = argsOverride ?? process.argv.slice(2);
   const fileIndex = args.indexOf("--file");
   const languageIndex = args.indexOf("--language");
 
@@ -74,8 +77,8 @@ function parseArgs(): { file: string; language: string } {
   return { file: args[fileIndex + 1], language };
 }
 
-async function run() {
-  const { file, language } = parseArgs();
+export async function run(argsOverride?: string[]) {
+  const { file, language } = parseArgs(argsOverride);
 
   const filePath = path.resolve(file);
   const sidecarPath = filePath.replace(/\.md$/i, ".notion.json");
@@ -150,8 +153,10 @@ async function run() {
   console.log(`   View: https://notion.so/${pageId.replace(/-/g, "")}`);
 }
 
-run().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error("Push failed:", message);
-  process.exit(1);
-});
+if (import.meta.main) {
+  run().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Push failed:", message);
+    process.exit(1);
+  });
+}

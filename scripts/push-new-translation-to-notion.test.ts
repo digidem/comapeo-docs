@@ -4,8 +4,9 @@
  * Verifies that the push CLI correctly reads sourceProperties from the
  * .notion.json sidecar and passes them through to createNotionPageWithBlocks.
  *
- * Strategy: Since the push CLI auto-executes on import, we use vi.resetModules()
- * with vi.doMock() to re-import the module for each test case with fresh state.
+ * Strategy: The module exports run(), so tests call it directly with an args
+ * override. Top-level execution is guarded by import.meta.main, so no module
+ * cache reset is needed between test cases.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -58,37 +59,15 @@ async function runPushCli(
   await fs.writeFile(mdPath, mdContent, "utf8");
   await fs.writeFile(sidecarPath, JSON.stringify(sidecarData, null, 2), "utf8");
 
-  const originalArgv = process.argv;
   const originalEnv = { ...process.env };
-  process.argv = [
-    "bun",
-    "scripts/push-new-translation-to-notion.ts",
-    "--file",
-    mdPath,
-    "--language",
-    language,
-  ];
   process.env.DATA_SOURCE_ID = "test-ds-id";
   process.env.DATABASE_ID = "test-db-id";
 
-  // Invalidate module cache to get a fresh import
-  vi.resetModules();
-  // Re-mock after resetModules
-  vi.doMock("./notion-translate/translateBlocks.js", () => ({
-    createNotionPageWithBlocks: mockCreateNotionPageWithBlocks,
-  }));
-  vi.doMock("./notionClient.js", () => ({
-    notion: {},
-  }));
-  vi.doMock("dotenv", () => ({
-    default: { config: vi.fn() },
-  }));
-
   mockCreateNotionPageWithBlocks.mockResolvedValue("new-page-id");
 
-  await import("./push-new-translation-to-notion");
+  const { run } = await import("./push-new-translation-to-notion.js");
+  await run(["--file", mdPath, "--language", language]);
 
-  process.argv = originalArgv;
   process.env = originalEnv;
 
   expect(mockCreateNotionPageWithBlocks).toHaveBeenCalledTimes(1);

@@ -32,6 +32,7 @@ import { resolveCanonicalDocsRelativePath } from "../notion-fetch/pageMetadataCa
 import {
   replaceCanonicalMarkdownImagesWithPlaceholders,
   decodeLocaleImagePlaceholderPaths,
+  decodeRemoteImagePlaceholderPaths,
   HYPERLINKED_MARKDOWN_IMAGE_REGEX,
   MARKDOWN_IMAGE_REGEX,
   HTML_IMAGE_TAG_REGEX,
@@ -1614,7 +1615,12 @@ async function processAutomatedTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
-    const { count, samples } = collectRawNotionS3Matches(translatedContent);
+    const decodedTranslatedContent = decodeRemoteImagePlaceholderPaths(
+      decodeLocaleImagePlaceholderPaths(translatedContent)
+    );
+    const { count, samples } = collectRawNotionS3Matches(
+      decodedTranslatedContent
+    );
     if (count > 0) {
       throw new Error(
         `Automated translation for "${originalTitle}" still contains ${count} Notion/S3 URLs. Offending URLs (redacted): ${formatRedactedS3Urls(samples)}`
@@ -1803,8 +1809,11 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
+    const decodedTranslatedContent = decodeRemoteImagePlaceholderPaths(
+      decodeLocaleImagePlaceholderPaths(translatedContent)
+    );
     const { count: totalS3Matches, samples: detectedS3Urls } =
-      collectRawNotionS3Matches(translatedContent);
+      collectRawNotionS3Matches(decodedTranslatedContent);
 
     if (totalS3Matches > 0) {
       throw new Error(

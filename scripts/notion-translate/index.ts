@@ -382,7 +382,7 @@ const getOrder = (page: NotionPage): number | undefined =>
     ?.number;
 
 const getParentRelationId = (page: NotionPage): string | undefined => {
-  const parentRelation = page.properties["Parent item"] as
+  const parentRelation = page.properties[PARENT_ITEM_PROPERTY] as
     | NotionRelationProperty
     | undefined;
   return parentRelation?.relation?.[0]?.id;
@@ -1724,12 +1724,12 @@ async function processAutomatedTranslation({
   const parentId =
     relationParentId ??
     (
-      existingTranslationPage?.properties["Parent item"] as
+      existingTranslationPage?.properties[PARENT_ITEM_PROPERTY] as
         | { relation?: Array<{ id: string }> }
         | undefined
     )?.relation?.[0]?.id ??
     (
-      englishPage.properties["Parent item"] as
+      englishPage.properties[PARENT_ITEM_PROPERTY] as
         | { relation?: Array<{ id: string }> }
         | undefined
     )?.relation?.[0]?.id;
@@ -1888,7 +1888,7 @@ async function processSinglePageTranslation({
     const parentInfo =
       relationParentId ??
       (
-        englishPage.properties["Parent item"] as
+        englishPage.properties[PARENT_ITEM_PROPERTY] as
           | NotionRelationProperty
           | undefined
       )?.relation?.[0]?.id;

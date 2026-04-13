@@ -1165,6 +1165,30 @@ export async function saveAutomatedTranslationToDisk(
   }
 }
 
+export function getTranslatedBlocksForDisk({
+  localOnly,
+  skipNotionPageCreation,
+  translatedBlocks,
+  parentId,
+}: {
+  localOnly: boolean;
+  skipNotionPageCreation: boolean;
+  translatedBlocks: BlockObjectRequest[] | undefined;
+  parentId?: string;
+}): BlockObjectRequest[] | undefined {
+  if (
+    localOnly ||
+    skipNotionPageCreation ||
+    !parentId ||
+    !Array.isArray(translatedBlocks) ||
+    translatedBlocks.length === 0
+  ) {
+    return undefined;
+  }
+
+  return translatedBlocks;
+}
+
 /**
  * Translate code.json for all languages except English.
  */
@@ -1725,6 +1749,7 @@ async function processAutomatedTranslation({
         true // forceCreate — skip DB search entirely
       );
     } else {
+      skipNotionPageCreation = true;
       console.warn(
         chalk.yellow(
           `Cannot determine parent relation for "${originalTitle}" (${englishPage.id}) — skipping Notion write`
@@ -1733,13 +1758,12 @@ async function processAutomatedTranslation({
     }
   }
 
-  const translatedBlocksForDisk =
-    !localOnly &&
-    !skipNotionPageCreation &&
-    Array.isArray(translatedBlocks) &&
-    translatedBlocks.length > 0
-      ? translatedBlocks
-      : undefined;
+  const translatedBlocksForDisk = getTranslatedBlocksForDisk({
+    localOnly,
+    skipNotionPageCreation,
+    translatedBlocks,
+    parentId,
+  });
 
   // Disk write
   await saveAutomatedTranslationToDisk(

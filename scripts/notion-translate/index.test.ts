@@ -3064,4 +3064,31 @@ describe("notion-translate index", () => {
       expect(sidecarWrite).toBeUndefined();
     });
   });
+
+  describe("getTranslatedBlocksForDisk", () => {
+    it("requires parent metadata before replay blocks are eligible for disk writes", async () => {
+      const { getTranslatedBlocksForDisk } = await import("./index");
+
+      const translatedBlocks = [
+        { type: "paragraph", paragraph: { rich_text: [] } },
+      ] as any;
+
+      expect(
+        getTranslatedBlocksForDisk({
+          localOnly: false,
+          skipNotionPageCreation: false,
+          translatedBlocks,
+        })
+      ).toBeUndefined();
+
+      expect(
+        getTranslatedBlocksForDisk({
+          localOnly: false,
+          skipNotionPageCreation: false,
+          translatedBlocks,
+          parentId: "parent-789",
+        })
+      ).toBe(translatedBlocks);
+    });
+  });
 });

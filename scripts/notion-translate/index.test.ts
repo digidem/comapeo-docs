@@ -20,6 +20,7 @@ const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
 const mockResolveCanonicalDocsRelativePath = vi.fn();
 const mockNotionDataSourcesQuery = vi.fn();
+const mockNotionDataSourcesRetrieve = vi.fn();
 const mockNotionPagesCreate = vi.fn();
 const mockNotionPagesUpdate = vi.fn();
 const mockNotionBlocksChildrenList = vi.fn();
@@ -51,6 +52,7 @@ vi.mock("../notionClient", () => ({
   notion: {
     dataSources: {
       query: mockNotionDataSourcesQuery,
+      retrieve: mockNotionDataSourcesRetrieve,
     },
     databases: {
       retrieve: mockNotionDatabasesRetrieve,
@@ -145,6 +147,7 @@ describe("notion-translate index", () => {
     mockPagesRetrieve.mockReset();
     mockResolveCanonicalDocsRelativePath.mockReset();
     mockNotionDataSourcesQuery.mockReset();
+    mockNotionDataSourcesRetrieve.mockReset();
     mockNotionPagesCreate.mockReset();
     mockNotionPagesUpdate.mockReset();
     mockNotionBlocksChildrenList.mockReset();
@@ -187,6 +190,21 @@ describe("notion-translate index", () => {
       results: [],
       has_more: false,
       next_cursor: null,
+    });
+    mockNotionDataSourcesRetrieve.mockResolvedValue({
+      properties: {
+        Language: {
+          select: {
+            options: [
+              { name: "English" },
+              { name: "Portuguese" },
+              { name: "Spanish" },
+              { name: "PT - automated" },
+              { name: "ES - automated" },
+            ],
+          },
+        },
+      },
     });
     mockNotionPagesCreate.mockResolvedValue({ id: "new-page-id" });
     mockNotionPagesUpdate.mockResolvedValue({});

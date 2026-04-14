@@ -27,10 +27,19 @@ function parseSimpleFrontmatter(content: string): Record<string, string> {
 
   if (!trimmed.startsWith("---")) return result;
 
-  const closingIndex = trimmed.indexOf("---", 3);
-  if (closingIndex === -1) return result;
+  // Find the closing delimiter as a standalone line (not just "---" anywhere in YAML values)
+  const lines = trimmed.split("\n");
+  let closingLine = -1;
+  for (let i = 1; i < lines.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- numeric index from for-loop, not user-controlled
+    if (lines[i].trimEnd() === "---") {
+      closingLine = i;
+      break;
+    }
+  }
+  if (closingLine === -1) return result;
 
-  const yaml = trimmed.slice(3, closingIndex).trim();
+  const yaml = lines.slice(1, closingLine).join("\n").trim();
 
   for (const line of yaml.split("\n")) {
     const colonIndex = line.indexOf(":");

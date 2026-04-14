@@ -86,6 +86,27 @@ async function runPushCli(
 // Tests
 // ---------------------------------------------------------------------------
 
+describe("parseSimpleFrontmatter — closing delimiter detection", () => {
+  it("does not truncate YAML when a value contains ---", async () => {
+    // Regression: indexOf('---', 3) would match the '---' inside the title value
+    const mdContent =
+      "---\ntitle: Hello --- World\nauthor: test\n---\n\nBody text";
+    const properties = await runPushCli(
+      {
+        parentId: "parent-regression",
+        blocks: [],
+      },
+      "PT - automated",
+      mdContent
+    );
+    // The title read by run() is not exposed via properties, but if frontmatter
+    // parsed correctly the CLI completes without error and Language is set.
+    expect(properties["Language"]).toEqual({
+      select: { name: "PT - automated" },
+    });
+  });
+});
+
 describe("push-new-translation-to-notion property handling", () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
 

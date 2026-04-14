@@ -282,6 +282,9 @@ export async function createNotionPageWithBlocks(
   const NOTION_API_CHUNK_SIZE = 100;
   let retryCount = 0;
   let lastError: Error | null = null;
+  let retryPageId: string | null = forceCreate
+    ? null
+    : (existingPageId ?? null);
 
   while (retryCount < MAX_RETRIES) {
     try {
@@ -289,7 +292,8 @@ export async function createNotionPageWithBlocks(
         throw new Error("Cannot modify English pages");
       }
 
-      let pageId: string | null = null;
+      let pageId = retryPageId;
+
       const pageRelation = {
         "Parent item": {
           relation: [{ id: parentPageId }],
@@ -297,51 +301,47 @@ export async function createNotionPageWithBlocks(
       };
 
       // When forceCreate is set, skip the DB search entirely and always create
-      if (!forceCreate) {
-        pageId = existingPageId ?? null;
+      if (!forceCreate && !pageId) {
+        const filter = language
+          ? {
+              and: [
+                {
+                  property: NOTION_PROPERTIES.TITLE,
+                  title: { equals: title },
+                },
+                {
+                  property: NOTION_PROPERTIES.LANGUAGE,
+                  select: { equals: language },
+                },
+              ],
+            }
+          : {
+              property: NOTION_PROPERTIES.TITLE,
+              title: { equals: title },
+            };
 
-        if (!existingPageId) {
-          const filter = language
-            ? {
-                and: [
-                  {
-                    property: NOTION_PROPERTIES.TITLE,
-                    title: { equals: title },
-                  },
-                  {
-                    property: NOTION_PROPERTIES.LANGUAGE,
-                    select: { equals: language },
-                  },
-                ],
+        const response = await enhancedNotion.dataSourcesQuery({
+          data_source_id: databaseId,
+          filter: filter,
+        });
+
+        const nonEnglishResults = language
+          ? response.results
+          : response.results.filter(
+              (page: {
+                properties?: Record<string, unknown>;
+                [k: string]: unknown;
+              }) => {
+                const langProp = page.properties?.[
+                  NOTION_PROPERTIES.LANGUAGE
+                ] as { select?: { name?: string } } | undefined;
+                const pageLang = langProp?.select?.name || "en";
+                return pageLang !== "en";
               }
-            : {
-                property: NOTION_PROPERTIES.TITLE,
-                title: { equals: title },
-              };
+            );
 
-          const response = await enhancedNotion.dataSourcesQuery({
-            data_source_id: databaseId,
-            filter: filter,
-          });
-
-          const nonEnglishResults = language
-            ? response.results
-            : response.results.filter(
-                (page: {
-                  properties?: Record<string, unknown>;
-                  [k: string]: unknown;
-                }) => {
-                  const langProp = page.properties?.[
-                    NOTION_PROPERTIES.LANGUAGE
-                  ] as { select?: { name?: string } } | undefined;
-                  const pageLang = langProp?.select?.name || "en";
-                  return pageLang !== "en";
-                }
-              );
-
-          if (nonEnglishResults.length > 0) {
-            pageId = nonEnglishResults[0].id;
-          }
+        if (nonEnglishResults.length > 0) {
+          pageId = nonEnglishResults[0].id;
         }
       }
 
@@ -390,6 +390,7 @@ export async function createNotionPageWithBlocks(
           properties: pageProperties,
         });
         pageId = newPage.id;
+        retryPageId = pageId;
       }
 
       // Add content blocks in chunks to avoid API limits

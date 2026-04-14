@@ -478,12 +478,19 @@ async function validateAutomatedLanguageOptions(): Promise<void> {
     return;
   }
 
-  const database = (await notion.databases.retrieve({
-    database_id: DATABASE_ID,
-  })) as {
-    properties?: Record<string, unknown>;
-  };
-  const languageProperty = database.properties?.[NOTION_PROPERTIES.LANGUAGE] as
+  const useActiveDataSource = DATA_SOURCE_ID && DATA_SOURCE_ID !== DATABASE_ID;
+  const source = useActiveDataSource
+    ? ((await notion.dataSources.retrieve({
+        data_source_id: DATA_SOURCE_ID,
+      })) as {
+        properties?: Record<string, unknown>;
+      })
+    : ((await notion.databases.retrieve({
+        database_id: DATABASE_ID,
+      })) as {
+        properties?: Record<string, unknown>;
+      });
+  const languageProperty = source.properties?.[NOTION_PROPERTIES.LANGUAGE] as
     | NotionDatabaseSelectSchemaProperty
     | undefined;
   const optionNames = new Set(

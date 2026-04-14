@@ -28,6 +28,7 @@ const mockBlocksChildrenList = vi.fn();
 const mockPagesRetrieve = vi.fn();
 const mockResolveCanonicalDocsRelativePath = vi.fn();
 const mockNotionDataSourcesQuery = vi.fn();
+const mockNotionDataSourcesRetrieve = vi.fn();
 const mockNotionDatabasesRetrieve = vi.fn();
 const mockNotionPagesCreate = vi.fn();
 const mockNotionPagesUpdate = vi.fn();
@@ -61,7 +62,10 @@ vi.mock("fs/promises", () => ({
 
 vi.mock("../../notionClient", () => ({
   notion: {
-    dataSources: { query: mockNotionDataSourcesQuery },
+    dataSources: {
+      query: mockNotionDataSourcesQuery,
+      retrieve: mockNotionDataSourcesRetrieve,
+    },
     databases: { retrieve: mockNotionDatabasesRetrieve },
     pages: { create: mockNotionPagesCreate, update: mockNotionPagesUpdate },
     blocks: {
@@ -178,6 +182,14 @@ function setupCommonMocks(
     results: [],
     has_more: false,
   });
+  mockNotionDataSourcesRetrieve.mockResolvedValue(
+    createLanguageSchemaResponse([
+      "Portuguese",
+      "Spanish",
+      "PT - automated",
+      "ES - automated",
+    ])
+  );
   mockNotionDatabasesRetrieve.mockResolvedValue(
     createLanguageSchemaResponse([
       "Portuguese",
@@ -268,6 +280,14 @@ function setupThreeLevelMocks(
     results: [],
     has_more: false,
   });
+  mockNotionDataSourcesRetrieve.mockResolvedValue(
+    createLanguageSchemaResponse([
+      "Portuguese",
+      "Spanish",
+      "PT - automated",
+      "ES - automated",
+    ])
+  );
   mockNotionDatabasesRetrieve.mockResolvedValue(
     createLanguageSchemaResponse([
       "Portuguese",
@@ -320,6 +340,7 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     mockDataSourceId = defaultMockDataSourceId;
     // Re-wire mocks after reset
     mockGetRequestScheduler.mockReturnValue({ destroy: mockSchedulerDestroy });
+    mockNotionDataSourcesRetrieve.mockReset();
   });
 
   afterEach(() => {
@@ -832,6 +853,9 @@ describe("no-overwrite translation routing (Issue #171)", () => {
       Portuguese: ptTranslation,
       Spanish: esTranslation,
     });
+    mockNotionDataSourcesRetrieve.mockResolvedValue(
+      createLanguageSchemaResponse(["Portuguese", "Spanish"])
+    );
     mockNotionDatabasesRetrieve.mockResolvedValue(
       createLanguageSchemaResponse(["Portuguese", "Spanish"])
     );
@@ -841,7 +865,8 @@ describe("no-overwrite translation routing (Issue #171)", () => {
       "Translation workflow completed with failures (docs: 1, code.json: 0, theme: 0)"
     );
 
-    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDataSourcesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
     expect(mockNotionPagesCreate).not.toHaveBeenCalled();
   });
 
@@ -902,6 +927,65 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     warnSpy.mockRestore();
   });
 
+  it("Scenario 11a: validates against the active data source when DATABASE_ID differs", async () => {
+    const englishPage = createMockNotionPage({
+      id: "en-page-sc11a",
+      title: "Active Source Validation Page",
+      status: "Ready for translation",
+      language: "English",
+      order: 1,
+      parentItem: "parent-11a",
+      elementType: "Page",
+      lastEdited: "2026-02-01T00:00:00.000Z",
+    });
+    const ptTranslation = createMockNotionPage({
+      id: "pt-page-sc11a",
+      title: "Página de Origem Ativa",
+      status: "Auto Translation Generated",
+      language: "Portuguese",
+      order: 1,
+      parentItem: "parent-11a",
+      elementType: "Page",
+      lastEdited: "2026-01-01T00:00:00.000Z",
+    });
+    const esTranslation = createMockNotionPage({
+      id: "es-page-sc11a",
+      title: "Página de Origem Ativa ES",
+      status: "Auto Translation Generated",
+      language: "Spanish",
+      order: 1,
+      parentItem: "parent-11a",
+      elementType: "Page",
+      lastEdited: "2026-03-01T00:00:00.000Z",
+    });
+
+    setupCommonMocks(englishPage, {
+      Portuguese: ptTranslation,
+      Spanish: esTranslation,
+    });
+    mockNotionDatabasesRetrieve.mockResolvedValue(
+      createLanguageSchemaResponse([])
+    );
+    mockNotionDataSourcesRetrieve.mockResolvedValue(
+      createLanguageSchemaResponse([
+        "Portuguese",
+        "Spanish",
+        "PT - automated",
+        "ES - automated",
+      ])
+    );
+
+    const { main } = await import("../index.js");
+    const summary = await main({});
+
+    expect(summary.automatedTranslations).toBe(1);
+    expect(summary.failedTranslations).toBe(0);
+    expect(summary.skippedTranslations).toBe(1);
+    expect(mockNotionDataSourcesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
+    expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
+  });
+
   it("Scenario 12: successful automated option validation → automated processing continues", async () => {
     const englishPage = createMockNotionPage({
       id: "en-page-sc11",
@@ -945,7 +1029,8 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     expect(summary.automatedTranslations).toBe(1);
     expect(summary.failedTranslations).toBe(0);
     expect(summary.skippedTranslations).toBe(1);
-    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDataSourcesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
     expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -991,7 +1076,8 @@ describe("no-overwrite translation routing (Issue #171)", () => {
 
     expect(summary.automatedTranslations).toBe(2);
     expect(summary.failedTranslations).toBe(0);
-    expect(mockNotionDatabasesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDataSourcesRetrieve).toHaveBeenCalledTimes(1);
+    expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
     expect(mockNotionPagesCreate).toHaveBeenCalledTimes(2);
   });
 

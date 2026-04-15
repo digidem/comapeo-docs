@@ -1616,12 +1616,9 @@ async function processAutomatedTranslation({
   // Get automated output directory
   const automatedOutputDir = getAutomatedOutputDir(config.language);
   if (!automatedOutputDir) {
-    console.warn(
-      chalk.yellow(
-        `No automated output dir configured for language: ${config.language} — skipping`
-      )
+    throw new Error(
+      `No automated output dir configured for language: ${config.language}`
     );
-    return;
   }
 
   // Translate content for disk
@@ -1773,7 +1770,7 @@ async function processAutomatedTranslation({
   });
 
   // Disk write
-  await saveAutomatedTranslationToDisk(
+  const writtenPath = await saveAutomatedTranslationToDisk(
     englishPage,
     translatedContent,
     translatedTitle,
@@ -1784,7 +1781,9 @@ async function processAutomatedTranslation({
     properties
   );
 
-  onNew();
+  if (writtenPath) {
+    onNew();
+  }
 }
 
 /**
@@ -2009,6 +2008,7 @@ export function parseCliOptions(args: string[]): CliOptions {
 }
 
 export async function main(options: CliOptions = {}) {
+  automatedLanguageOptionsValidated = false;
   console.log(chalk.bold.cyan("🚀 Starting Notion translation workflow\n"));
 
   // Log which ID type is being used (v5 API validation)

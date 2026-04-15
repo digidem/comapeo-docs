@@ -989,32 +989,32 @@ describe("no-overwrite translation routing (Issue #171)", () => {
 
   it("Scenario 12: successful automated option validation → automated processing continues", async () => {
     const englishPage = createMockNotionPage({
-      id: "en-page-sc11",
+      id: "en-page-sc12",
       title: "Automated Success Page",
       status: "Ready for translation",
       language: "English",
       order: 1,
-      parentItem: "parent-11",
+      parentItem: "parent-12",
       elementType: "Page",
       lastEdited: "2026-02-01T00:00:00.000Z",
     });
     const ptTranslation = createMockNotionPage({
-      id: "pt-page-sc11",
+      id: "pt-page-sc12",
       title: "Página de Sucesso",
       status: "Auto Translation Generated",
       language: "Portuguese",
       order: 1,
-      parentItem: "parent-11",
+      parentItem: "parent-12",
       elementType: "Page",
       lastEdited: "2026-01-01T00:00:00.000Z",
     });
     const esTranslation = createMockNotionPage({
-      id: "es-page-sc11",
+      id: "es-page-sc12",
       title: "Página de Éxito",
       status: "Auto Translation Generated",
       language: "Spanish",
       order: 1,
-      parentItem: "parent-11",
+      parentItem: "parent-12",
       elementType: "Page",
       lastEdited: "2026-03-01T00:00:00.000Z",
     });
@@ -1037,32 +1037,32 @@ describe("no-overwrite translation routing (Issue #171)", () => {
 
   it("Scenario 13: automated language validation runs once per process", async () => {
     const englishPage = createMockNotionPage({
-      id: "en-page-sc12",
+      id: "en-page-sc13",
       title: "Automated Cache Page",
       status: "Ready for translation",
       language: "English",
       order: 1,
-      parentItem: "parent-12",
+      parentItem: "parent-13",
       elementType: "Page",
       lastEdited: "2026-02-01T00:00:00.000Z",
     });
     const ptTranslation = createMockNotionPage({
-      id: "pt-page-sc12",
+      id: "pt-page-sc13",
       title: "Página Cache PT",
       status: "Auto Translation Generated",
       language: "Portuguese",
       order: 1,
-      parentItem: "parent-12",
+      parentItem: "parent-13",
       elementType: "Page",
       lastEdited: "2026-01-01T00:00:00.000Z",
     });
     const esTranslation = createMockNotionPage({
-      id: "es-page-sc12",
+      id: "es-page-sc13",
       title: "Página Cache ES",
       status: "Auto Translation Generated",
       language: "Spanish",
       order: 1,
-      parentItem: "parent-12",
+      parentItem: "parent-13",
       elementType: "Page",
       lastEdited: "2026-01-01T00:00:00.000Z",
     });

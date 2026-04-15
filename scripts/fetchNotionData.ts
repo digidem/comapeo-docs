@@ -336,9 +336,15 @@ export async function sortAndExpandNotionData(
 // const pageId = '16d8004e5f6a42a6981151c22ddada12';
 // await fetchNotionPage(pageId);
 export async function fetchNotionPage() {
+  const blockId = DATABASE_ID ?? DATA_SOURCE_ID;
+  if (!blockId) {
+    throw new Error(
+      "Neither DATABASE_ID nor DATA_SOURCE_ID is set. Cannot fetch Notion page blocks."
+    );
+  }
   try {
     const response = await enhancedNotion.blocksChildrenList({
-      block_id: DATABASE_ID,
+      block_id: blockId,
     });
     console.log("Fetched page content:", response);
     return response;

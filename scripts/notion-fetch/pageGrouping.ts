@@ -16,11 +16,28 @@ const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
   es: "es",
   pt: "pt",
 };
+
+/** Language names that represent machine-generated (automated) translations. */
+const AUTOMATED_LANGUAGE_NAMES = new Set(["pt - automated", "es - automated"]);
+
 const LOCALE_PRIORITY = new Map(
   config.i18n.locales.map((locale, index) => [locale, index])
 );
 
-type LocaleResolutionSource = "explicit" | "fallback";
+/**
+ * Priority order (highest wins): explicit > automated > fallback
+ * - "explicit"  – human-reviewed translation with a named locale
+ * - "automated" – machine-generated translation (lower priority than explicit)
+ * - "fallback"  – locale inferred from default, no language property
+ */
+type LocaleResolutionSource = "explicit" | "automated" | "fallback";
+
+/** Numeric rank for each source — higher value wins when two pages claim the same locale. */
+const SOURCE_RANK: Record<LocaleResolutionSource, number> = {
+  fallback: 0,
+  automated: 1,
+  explicit: 2,
+};
 
 type LocaleResolution = {
   locale: string;
@@ -168,7 +185,9 @@ const resolvePageLocaleDetails = (
   ) {
     return {
       locale: LANGUAGE_NAME_TO_LOCALE[normalizedLanguageName],
-      source: "explicit",
+      source: AUTOMATED_LANGUAGE_NAMES.has(normalizedLanguageName)
+        ? "automated"
+        : "explicit",
     };
   }
 
@@ -209,9 +228,12 @@ export const groupPagesByLang = (
   const upsertLocalizedContent = (candidatePage: Record<string, any>) => {
     const resolution = resolvePageLocaleDetails(candidatePage);
     const existingSource = localeSources[resolution.locale];
+    // A slot is only replaced when the incoming source strictly outranks the
+    // existing one, so human-reviewed ("explicit") pages always win over
+    // machine-generated ("automated") ones regardless of Sub-item order.
     const shouldReplace =
       existingSource === undefined ||
-      (existingSource === "fallback" && resolution.source === "explicit");
+      SOURCE_RANK[resolution.source] > SOURCE_RANK[existingSource];
 
     if (shouldReplace) {
       grouped.content[resolution.locale] = candidatePage;

@@ -33,7 +33,7 @@ export async function fetchNotionData(filter) {
 
     // Use DATA_SOURCE_ID with fallback to DATABASE_ID
     // Note: notionClient.ts will warn if DATA_SOURCE_ID is not set
-    const dataSourceId = DATA_SOURCE_ID || DATABASE_ID;
+    const dataSourceId = (DATA_SOURCE_ID || DATABASE_ID) as string;
 
     const response = await enhancedNotion.dataSourcesQuery({
       // v5 API: data_source_id parameter

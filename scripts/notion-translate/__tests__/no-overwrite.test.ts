@@ -870,7 +870,7 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     expect(mockNotionPagesCreate).not.toHaveBeenCalled();
   });
 
-  it("Scenario 11: missing DATABASE_ID logs warning and continues automated processing", async () => {
+  it("Scenario 11: DATA_SOURCE_ID-only workflow validates via data source and continues automated processing", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const englishPage = createMockNotionPage({
@@ -920,8 +920,9 @@ describe("no-overwrite translation routing (Issue #171)", () => {
     expect(summary.skippedTranslations).toBe(1);
     expect(mockNotionDatabasesRetrieve).not.toHaveBeenCalled();
     expect(mockNotionPagesCreate).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Cannot verify automated language select options without DATABASE_ID — ensure they exist in Notion"
+    // Validation warning must NOT fire when DATA_SOURCE_ID is present
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Cannot verify automated language select options")
     );
 
     warnSpy.mockRestore();

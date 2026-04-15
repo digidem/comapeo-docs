@@ -342,6 +342,7 @@ export async function createNotionPageWithBlocks(
 
         if (nonEnglishResults.length > 0) {
           pageId = nonEnglishResults[0].id;
+          retryPageId = pageId;
         }
       }
 

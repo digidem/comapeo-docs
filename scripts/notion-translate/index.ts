@@ -470,9 +470,9 @@ async function validateAutomatedLanguageOptions(): Promise<void> {
     return;
   }
 
-  if (!DATABASE_ID) {
+  if (!DATABASE_ID && !DATA_SOURCE_ID) {
     console.warn(
-      "Cannot verify automated language select options without DATABASE_ID — ensure they exist in Notion"
+      "Cannot verify automated language select options without DATABASE_ID or DATA_SOURCE_ID — ensure they exist in Notion"
     );
     automatedLanguageOptionsValidated = true;
     return;

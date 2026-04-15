@@ -11,6 +11,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
+import { parse as parseYaml } from "yaml";
 import { createNotionPageWithBlocks } from "./notion-translate/translateBlocks.js";
 import { notion } from "./notionClient.js";
 import { LANGUAGES, getAutomatedLanguageCode } from "./constants.js";
@@ -20,12 +21,11 @@ dotenv.config({ override: true });
 const DATA_SOURCE_ID = process.env.DATA_SOURCE_ID ?? "";
 const DATABASE_ID = process.env.DATABASE_ID ?? "";
 
-/** Minimal frontmatter parser — splits on --- delimiters and parses key: value pairs. */
+/** Frontmatter parser — extracts YAML between --- delimiters and parses with the yaml package. */
 function parseSimpleFrontmatter(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
   const trimmed = content.trimStart();
 
-  if (!trimmed.startsWith("---")) return result;
+  if (!trimmed.startsWith("---")) return {};
 
   // Find the closing delimiter as a standalone line (not just "---" anywhere in YAML values)
   const lines = trimmed.split("\n");
@@ -37,24 +37,20 @@ function parseSimpleFrontmatter(content: string): Record<string, string> {
       break;
     }
   }
-  if (closingLine === -1) return result;
+  if (closingLine === -1) return {};
 
-  const yaml = lines.slice(1, closingLine).join("\n").trim();
+  const yamlContent = lines.slice(1, closingLine).join("\n");
+  const parsed = parseYaml(yamlContent) as Record<string, unknown>;
 
-  for (const line of yaml.split("\n")) {
-    const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) continue;
-    const key = line.slice(0, colonIndex).trim();
-    const value = line
-      .slice(colonIndex + 1)
-      .trim()
-      .replace(/^['"]|['"]$/g, "");
-    if (key) {
-      // eslint-disable-next-line security/detect-object-injection -- key comes from frontmatter line parsing, not user input
+  if (!parsed || typeof parsed !== "object") return {};
+
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === "string") {
+      // eslint-disable-next-line security/detect-object-injection -- key comes from YAML parsing, not user input
       result[key] = value;
     }
   }
-
   return result;
 }
 
@@ -119,11 +115,9 @@ export async function run(argsOverride?: string[]) {
     sourceProperties?: Record<string, unknown>;
   };
 
-  // Support both wrapped format { parentId, blocks } and legacy bare array
-  const blocks = (
-    Array.isArray(sidecarParsed) ? sidecarParsed : (sidecar.blocks ?? [])
-  ) as import("@notionhq/client/build/src/api-endpoints").BlockObjectRequest[];
-  const parentId = !Array.isArray(sidecarParsed) ? sidecar.parentId : undefined;
+  const blocks = (sidecar.blocks ??
+    []) as import("@notionhq/client/build/src/api-endpoints").BlockObjectRequest[];
+  const parentId = sidecar.parentId;
 
   if (!parentId) {
     throw new Error(

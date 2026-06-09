@@ -55,6 +55,39 @@ export const LANGUAGES: TranslationConfig[] = [
   },
 ];
 
+export const AUTOMATED_OUTPUT_DIRS: Record<string, string> = {
+  "pt-BR": "./automated-translations/pt",
+  es: "./automated-translations/es",
+};
+
+/** Maps base Notion language names to their automated select option values. */
+export const AUTOMATED_LANGUAGE_MAP: Record<string, string> = {
+  Portuguese: "PT - automated",
+  Spanish: "ES - automated",
+};
+
+export function isAutomatedLanguageCode(code: string): boolean {
+  return Object.values(AUTOMATED_LANGUAGE_MAP).includes(code);
+}
+
+export function getBaseLanguageCode(code: string): string {
+  for (const [base, automated] of Object.entries(AUTOMATED_LANGUAGE_MAP)) {
+    if (automated === code) return base;
+  }
+  return code;
+}
+
+export function getAutomatedLanguageCode(code: string): string {
+  if (isAutomatedLanguageCode(code)) return code; // already automated
+  // eslint-disable-next-line security/detect-object-injection -- code is a known language name from the AUTOMATED_LANGUAGE_MAP keys
+  return AUTOMATED_LANGUAGE_MAP[code] ?? `${code}-automated`;
+}
+
+export function getAutomatedOutputDir(language: string): string | undefined {
+  // eslint-disable-next-line security/detect-object-injection -- language is validated against known locale keys from AUTOMATED_OUTPUT_DIRS
+  return AUTOMATED_OUTPUT_DIRS[language];
+}
+
 // Maximum number of retries for API calls
 export const MAX_RETRIES = 3;
 

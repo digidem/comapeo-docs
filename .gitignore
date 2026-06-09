@@ -113,3 +113,6 @@ telemetry-id
 *.log
 *.skill
 api-server/flaky-test-counts.txt
+
+# Automated translation output (never commit generated translations)
+automated-translations/

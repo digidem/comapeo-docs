@@ -28,6 +28,8 @@
     "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
+    "notion:push-translation": "bun scripts/push-new-translation-to-notion.ts",
+    "notion:translate-test": "bun scripts/run-single-page-translation.ts",
     "api:server": "bun api-server",
     "api:server:dev": "bun --watch api-server",
     "clean:generated": "bun scripts/cleanup-generated-content.ts",

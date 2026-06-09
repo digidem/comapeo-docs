@@ -33,7 +33,7 @@ export async function fetchNotionData(filter) {
 
     // Use DATA_SOURCE_ID with fallback to DATABASE_ID
     // Note: notionClient.ts will warn if DATA_SOURCE_ID is not set
-    const dataSourceId = DATA_SOURCE_ID || DATABASE_ID;
+    const dataSourceId = (DATA_SOURCE_ID || DATABASE_ID) as string;
 
     const response = await enhancedNotion.dataSourcesQuery({
       // v5 API: data_source_id parameter
@@ -336,9 +336,15 @@ export async function sortAndExpandNotionData(
 // const pageId = '16d8004e5f6a42a6981151c22ddada12';
 // await fetchNotionPage(pageId);
 export async function fetchNotionPage() {
+  const blockId = DATABASE_ID ?? DATA_SOURCE_ID;
+  if (!blockId) {
+    throw new Error(
+      "Neither DATABASE_ID nor DATA_SOURCE_ID is set. Cannot fetch Notion page blocks."
+    );
+  }
   try {
     const response = await enhancedNotion.blocksChildrenList({
-      block_id: DATABASE_ID,
+      block_id: blockId,
     });
     console.log("Fetched page content:", response);
     return response;

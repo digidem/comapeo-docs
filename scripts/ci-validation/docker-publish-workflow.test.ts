@@ -44,7 +44,7 @@ describe("Docker Publish Workflow Validation", () => {
   describe("Path Filters Match Dockerfile COPY Instructions", () => {
     const dockerfileCopyPaths = [
       "package.json",
-      "bun.lockb*",
+      "bun.lock*",
       "scripts/**",
       "docusaurus.config.ts",
       "tsconfig.json",
@@ -55,7 +55,7 @@ describe("Docker Publish Workflow Validation", () => {
       "Dockerfile",
       ".dockerignore",
       "package.json",
-      "bun.lockb*",
+      "bun.lock*",
       "scripts/**",
       "tsconfig.json",
       "docusaurus.config.ts",

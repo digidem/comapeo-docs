@@ -13,7 +13,7 @@ import { describe, it, expect, test } from "vitest";
 // Dockerfile COPY instructions (extracted from Dockerfile)
 const DOCKERFILE_COPY_PATTERNS = [
   "package.json", // Line 16, 52
-  "bun.lockb*", // Line 16, 52
+  "bun.lock*", // Line 16, 52
   "scripts/**", // Line 54
   "docusaurus.config.ts", // Line 56
   "tsconfig.json", // Line 57
@@ -141,8 +141,8 @@ describe("Docker Path Filtering Configuration", () => {
       expect(RECOMMENDED_PATH_FILTERS).toContain("package.json");
     });
 
-    it("includes bun.lockb* in path filters", () => {
-      expect(RECOMMENDED_PATH_FILTERS).toContain("bun.lockb*");
+    it("includes bun.lock* in path filters", () => {
+      expect(RECOMMENDED_PATH_FILTERS).toContain("bun.lock*");
     });
 
     it("includes scripts/** in path filters", () => {
@@ -178,7 +178,7 @@ describe("Docker Path Filtering Configuration", () => {
         "Dockerfile",
         ".dockerignore",
         "package.json",
-        "bun.lockb",
+        "bun.lock",
         "scripts/api-server/index.ts",
         "scripts/notion-fetch/index.ts",
         "scripts/constants.ts",
@@ -277,8 +277,8 @@ describe("Docker Path Filtering Configuration", () => {
     });
 
     it("* matches files in current directory only", () => {
-      expect(matchesPathFilter("bun.lockb", ["bun.lockb*"])).toBe(true);
-      expect(matchesPathFilter("bun.lock", ["bun.lockb*"])).toBe(false);
+      expect(matchesPathFilter("bun.lock", ["bun.lock"])).toBe(true);
+      expect(matchesPathFilter("bun.lockb", ["bun.lock"])).toBe(false);
     });
 
     it("patterns match specific extensions", () => {
@@ -360,7 +360,7 @@ describe("Docker Path Filtering Configuration", () => {
   describe("Configuration Files", () => {
     const configFiles = [
       "package.json",
-      "bun.lockb",
+      "bun.lock",
       "tsconfig.json",
       "docusaurus.config.ts",
     ];
@@ -416,7 +416,7 @@ export function generateGitHubActionsPathsFilter(): string[] {
     "Dockerfile",
     ".dockerignore",
     "package.json",
-    "bun.lockb*",
+    "bun.lock*",
     "scripts/**",
     "src/client/**",
     "tsconfig.json",

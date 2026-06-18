@@ -200,7 +200,7 @@ If immediate content fix is needed before Notion sync:
 
 ### Prerequisites
 
-- **Node.js** >= 18.0
+- **Node.js** >= 20.0
 - **Bun** (recommended) or npm
 - **Git**
 - **Gitleaks** (required for secret scanning in pre-commit hooks)

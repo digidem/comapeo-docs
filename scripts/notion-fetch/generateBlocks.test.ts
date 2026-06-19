@@ -1194,61 +1194,17 @@ describe("generateBlocks", () => {
   describe("getPublishedDate", () => {
     let getPublishedDate: (page: any) => string;
     const fixedDate = new Date("2024-01-02T12:00:00Z");
-    let OriginalDate: typeof Date;
 
     beforeAll(async () => {
       ({ getPublishedDate } = await import("./frontmatterBuilder"));
     });
 
     beforeEach(() => {
-      // Mock Date constructor to return fixed date when called without arguments
-      // This is needed because vi.setSystemTime is unavailable in Vitest 4.x
-      OriginalDate = global.Date;
-      global.Date = class extends OriginalDate {
-        constructor(...args: any[]) {
-          if (args.length === 0) {
-            // new Date() without arguments should return fixed date
-            super(fixedDate.getTime());
-          } else if (args.length === 1) {
-            // new Date(value) with single argument
-            super(args[0]);
-          } else if (args.length === 2) {
-            // new Date(year, month)
-            super(args[0], args[1]);
-          } else if (args.length === 3) {
-            // new Date(year, month, day)
-            super(args[0], args[1], args[2]);
-          } else if (args.length === 4) {
-            // new Date(year, month, day, hours)
-            super(args[0], args[1], args[2], args[3]);
-          } else if (args.length === 5) {
-            // new Date(year, month, day, hours, minutes)
-            super(args[0], args[1], args[2], args[3], args[4]);
-          } else if (args.length === 6) {
-            // new Date(year, month, day, hours, minutes, seconds)
-            super(args[0], args[1], args[2], args[3], args[4], args[5]);
-          } else {
-            // new Date(year, month, day, hours, minutes, seconds, milliseconds)
-            super(
-              args[0],
-              args[1],
-              args[2],
-              args[3],
-              args[4],
-              args[5],
-              args[6]
-            );
-          }
-        }
-        static now() {
-          return fixedDate.getTime();
-        }
-      } as any;
+      vi.setSystemTime(fixedDate);
     });
 
     afterEach(() => {
-      // Restore original Date
-      global.Date = OriginalDate;
+      vi.useRealTimers();
     });
 
     it("should use published date when available and valid", () => {

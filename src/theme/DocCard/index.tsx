@@ -1,7 +1,10 @@
 import React, { type ReactNode } from "react";
 import clsx from "clsx";
 import Link from "@docusaurus/Link";
-import { findFirstSidebarItemLink } from "@docusaurus/plugin-content-docs/client";
+import {
+  useDocById,
+  findFirstSidebarItemLink,
+} from "@docusaurus/plugin-content-docs/client";
 import { usePluralForm } from "@docusaurus/theme-common";
 import isInternalUrl from "@docusaurus/isInternalUrl";
 import { translate } from "@docusaurus/Translate";
@@ -101,12 +104,14 @@ function CardCategory({ item }: { item: PropSidebarItemCategory }): ReactNode {
 
 function CardLink({ item }: { item: PropSidebarItemLink }): ReactNode {
   const icon = isInternalUrl(item.href) ? "📄️" : "🔗";
+  const doc = useDocById(item.docId ?? undefined);
   return (
     <CardLayout
       className={item.className}
       href={item.href}
       icon={icon}
       title={item.label}
+      description={item.description ?? doc?.description}
     />
   );
 }

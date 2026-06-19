@@ -23,7 +23,7 @@ function expectTypeExport(pkgDir: string, exportName: string): void {
   const content = fs.readFileSync(typesPath, "utf8");
   expect(
     content.includes(exportName),
-    `@docusaurus/types should export "${exportName}"`
+    `${pkgDir} should export "${exportName}"`
   ).toBe(true);
 }
 

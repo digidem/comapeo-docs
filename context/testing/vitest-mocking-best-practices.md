@@ -231,7 +231,7 @@ describe("Notion Client", () => {
     const client = new Client({ auth: "token" });
 
     // Access nested mocks
-    expect(client.databases.query).toBeDefined();
+    expect(client.dataSources.query).toBeDefined();
     expect(client.pages.retrieve).toBeDefined();
   });
 });
@@ -382,21 +382,21 @@ import { Client } from "@notionhq/client";
 
 vi.mock("@notionhq/client", () => ({
   Client: vi.fn().mockImplementation(() => ({
-    databases: {
+    dataSources: {
       query: vi.fn().mockResolvedValue({ results: [] }),
     },
   })),
 }));
 
 describe("Notion Operations", () => {
-  it("should query database", async () => {
+  it("should query data source", async () => {
     const client = new Client({ auth: "token" });
 
-    vi.mocked(client.databases.query).mockResolvedValue({
+    vi.mocked(client.dataSources.query).mockResolvedValue({
       results: [{ id: "page-1", properties: {} }],
     } as any);
 
-    const result = await client.databases.query({});
+    const result = await client.dataSources.query({});
 
     expect(result.results).toHaveLength(1);
   });

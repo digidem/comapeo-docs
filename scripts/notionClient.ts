@@ -445,19 +445,8 @@ n2m.setCustomTransformer("image", imageTransformer);
 export const DATABASE_ID = resolvedDatabaseId || undefined;
 
 // For v5 API compatibility - export data source ID
-// DATA_SOURCE_ID is required for v5 API. If not set, warn and fall back to DATABASE_ID
-// Note: DATABASE_ID and DATA_SOURCE_ID may be different values in v5!
-if (!rawDataSourceId && !IS_TEST_ENV) {
-  console.warn(
-    chalk.yellow(
-      "⚠️  DATA_SOURCE_ID is not set. Falling back to DATABASE_ID.\n" +
-        "   This may cause queries to target the wrong data source.\n" +
-        "   Please run the migration script to discover the correct DATA_SOURCE_ID:\n" +
-        "   bun scripts/migration/discoverDataSource.ts"
-    )
-  );
-}
-
+// DATA_SOURCE_ID is the primary identifier for v5 API queries.
+// DATABASE_ID is kept as a silent fallback for backward compatibility.
 export const DATA_SOURCE_ID = rawDataSourceId || resolvedDatabaseId;
 
 // Test environment support
@@ -641,34 +630,6 @@ class EnhancedNotionClient {
         ),
       { label: "dataSources.query" }
     );
-  }
-
-  // Legacy method for backward compatibility during migration
-  async databasesQuery(params: Record<string, unknown>) {
-    if (!IS_TEST_ENV) {
-      console.warn(
-        chalk.yellow(
-          "⚠️  databasesQuery is deprecated. Use dataSourcesQuery instead with data_source_id parameter.\n" +
-            "   Note: In v5 API, database_id and data_source_id may be different values!"
-        )
-      );
-    }
-
-    // If params contains database_id, map it to data_source_id
-    // WARNING: This assumes database_id is valid as data_source_id, which may not be true!
-    const { database_id, ...rest } = params as { database_id?: string };
-
-    if (!database_id) {
-      throw new Error(
-        "databasesQuery: database_id parameter is required for backward compatibility"
-      );
-    }
-
-    const mappedParams = {
-      data_source_id: database_id,
-      ...rest,
-    };
-    return this.dataSourcesQuery(mappedParams);
   }
 
   async pagesRetrieve(params: Record<string, unknown>) {

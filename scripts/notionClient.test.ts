@@ -46,6 +46,7 @@ vi.mock("notion-to-md", () => ({
       type: string,
       transformer: unknown
     ) {
+      // eslint-disable-next-line security/detect-object-injection
       this.customTransformers[type] = transformer;
       return this;
     });
@@ -237,20 +238,19 @@ describe("notionClient", () => {
     });
   });
 
-  describe("enhancedNotion.databasesQuery", () => {
+  describe("enhancedNotion.dataSourcesQuery", () => {
     it("should return data on successful request", async () => {
       // Arrange
       const mockData = { results: [], has_more: false };
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
       mockClient.dataSources.query.mockResolvedValue(mockData);
 
       // Act
-      const result = await enhancedNotion.databasesQuery(queryParams);
+      const result = await enhancedNotion.dataSourcesQuery(queryParams);
 
       // Assert
       expect(result).toBe(mockData);
       expect(mockClient.dataSources.query).toHaveBeenCalledTimes(1);
-      // The legacy method maps database_id to data_source_id
       expect(mockClient.dataSources.query).toHaveBeenCalledWith({
         data_source_id: "test-db",
       });
@@ -260,14 +260,14 @@ describe("notionClient", () => {
       // Arrange
       const rateLimitError = createMockError("Rate limited", 429);
       const successData = { results: [], has_more: false };
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
 
       mockClient.dataSources.query
         .mockRejectedValueOnce(rateLimitError)
         .mockResolvedValueOnce(successData);
 
       // Act
-      const result = await enhancedNotion.databasesQuery(queryParams);
+      const result = await enhancedNotion.dataSourcesQuery(queryParams);
 
       // Assert
       expect(result).toBe(successData);
@@ -281,14 +281,14 @@ describe("notionClient", () => {
       // Arrange
       const serverError = createMockError("Internal server error", 500);
       const successData = { results: [], has_more: false };
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
 
       mockClient.dataSources.query
         .mockRejectedValueOnce(serverError)
         .mockResolvedValueOnce(successData);
 
       // Act
-      const result = await enhancedNotion.databasesQuery(queryParams);
+      const result = await enhancedNotion.dataSourcesQuery(queryParams);
 
       // Assert
       expect(result).toBe(successData);
@@ -303,14 +303,14 @@ describe("notionClient", () => {
         "ECONNABORTED"
       );
       const successData = { results: [], has_more: false };
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
 
       mockClient.dataSources.query
         .mockRejectedValueOnce(networkError)
         .mockResolvedValueOnce(successData);
 
       // Act
-      const result = await enhancedNotion.databasesQuery(queryParams);
+      const result = await enhancedNotion.dataSourcesQuery(queryParams);
 
       // Assert
       expect(result).toBe(successData);
@@ -320,14 +320,14 @@ describe("notionClient", () => {
     it("should not retry on client error (400)", async () => {
       // Arrange
       const clientError = createMockError("Bad request", 400);
-      const queryParams = { database_id: "invalid" };
+      const queryParams = { data_source_id: "invalid" };
 
       mockClient.dataSources.query.mockRejectedValue(clientError);
 
       // Act & Assert
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        clientError
-      );
+      await expect(
+        enhancedNotion.dataSourcesQuery(queryParams)
+      ).rejects.toThrow(clientError);
 
       expect(mockClient.dataSources.query).toHaveBeenCalledTimes(1);
       expect(consoleMocks.error).toHaveBeenCalledWith(
@@ -339,14 +339,14 @@ describe("notionClient", () => {
     it("should fail after maximum retry attempts", async () => {
       // Arrange
       const rateLimitError = createMockError("Rate limited", 429);
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
 
       mockClient.dataSources.query.mockRejectedValue(rateLimitError);
 
       // Act & Assert
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        rateLimitError
-      );
+      await expect(
+        enhancedNotion.dataSourcesQuery(queryParams)
+      ).rejects.toThrow(rateLimitError);
 
       expect(mockClient.dataSources.query).toHaveBeenCalledTimes(5); // 1 initial + 4 retries
       expect(consoleMocks.error).toHaveBeenCalledWith(
@@ -357,7 +357,7 @@ describe("notionClient", () => {
     it("should open rate limit circuit after sustained 429 responses", async () => {
       // Arrange
       const rateLimitError = createMockError("Rate limited", 429);
-      const queryParams = { database_id: "test-db" };
+      const queryParams = { data_source_id: "test-db" };
       mockClient.dataSources.query.mockRejectedValue(rateLimitError);
 
       // Act & Assert
@@ -367,29 +367,17 @@ describe("notionClient", () => {
       // So we need 2 requests to accumulate 5+ hits:
 
       // Request 1: Gets 429 four times, adds 4 hits, throws original error
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        "Rate limited"
-      );
+      await expect(
+        enhancedNotion.dataSourcesQuery(queryParams)
+      ).rejects.toThrow("Rate limited");
 
       // Request 2: Gets 429 on first attempt, adds 5th hit, circuit opens
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        /Rate limit circuit opened: 5 hits in 5s window/
-      );
+      await expect(
+        enhancedNotion.dataSourcesQuery(queryParams)
+      ).rejects.toThrow(/Rate limit circuit opened: 5 hits in 5s window/);
 
       // Total attempts: 5 from request 1 + 1 from request 2 = 6
       expect(mockClient.dataSources.query).toHaveBeenCalledTimes(6);
-    });
-
-    it("should throw error when database_id is missing", async () => {
-      // Arrange
-      const queryParams = {} as any; // No database_id
-
-      // Act & Assert
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        "databasesQuery: database_id parameter is required for backward compatibility"
-      );
-      // Should not call the underlying API
-      expect(mockClient.dataSources.query).not.toHaveBeenCalled();
     });
   });
 
@@ -560,9 +548,9 @@ describe("notionClient", () => {
       const start = Date.now();
 
       // Act & Assert
-      await expect(enhancedNotion.databasesQuery(queryParams)).rejects.toThrow(
-        rateLimitError
-      );
+      await expect(
+        enhancedNotion.dataSourcesQuery(queryParams)
+      ).rejects.toThrow(rateLimitError);
 
       const duration = Date.now() - start;
 
@@ -587,7 +575,7 @@ describe("notionClient", () => {
       // Act
 
       // Assert
-      expect(typeof enhancedNotion.databasesQuery).toBe("function");
+      expect(typeof enhancedNotion.dataSourcesQuery).toBe("function");
       expect(typeof enhancedNotion.pagesRetrieve).toBe("function");
       expect(typeof enhancedNotion.blocksChildrenList).toBe("function");
       expect(typeof enhancedNotion.blocksChildrenAppend).toBe("function");

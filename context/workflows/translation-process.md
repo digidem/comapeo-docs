@@ -237,33 +237,25 @@ export const LANGUAGES: TranslationConfig[] = [
    gh workflow run translate-docs.yml
    ```
 
-**Deprecation Timeline**:
+**Migration Status**: Complete (2026-06)
 
-- **Current Phase** (2026-02): Migration and discovery phase
-  - Both `DATA_SOURCE_ID` and `DATABASE_ID` accepted
-  - Scripts prefer `DATA_SOURCE_ID` with fallback to `DATABASE_ID`
-  - Warnings logged when `DATA_SOURCE_ID` is missing
-
-- **Next Phase** (TBD): Hard requirement phase
-  - `DATA_SOURCE_ID` becomes required
-  - `DATABASE_ID` fallback removed
-  - Migration deadline communicated in advance
-
-- **Final Phase** (TBD): Deprecation phase
-  - `DATABASE_ID` fully removed from codebase
-  - All references updated to `DATA_SOURCE_ID`
+- `databasesQuery()` deprecated method removed from `EnhancedNotionClient`
+- `dataSourcesQuery()` is the sole query method for v5 API
+- `DATA_SOURCE_ID` is the primary identifier; `DATABASE_ID` retained as silent fallback
+- No runtime warning emitted when `DATA_SOURCE_ID` is missing (silent fallback)
+- All tests updated to exercise `dataSourcesQuery` directly
 
 **Compatibility Notes**:
 
 - In Notion API v5, `DATABASE_ID` and `DATA_SOURCE_ID` may be **different values**
 - Always run the discovery script to find the correct `DATA_SOURCE_ID`
 - Do not assume `DATA_SOURCE_ID === DATABASE_ID`
-- The fallback pattern (`DATA_SOURCE_ID || DATABASE_ID`) ensures smooth migration
+- The fallback pattern (`DATA_SOURCE_ID || DATABASE_ID`) ensures backward compatibility
 
 **See Also**:
 
 - Migration script: `scripts/migration/discoverDataSource.ts`
-- Notion Client implementation: `scripts/notionClient.ts` (lines 437-455)
+- Notion Client implementation: `scripts/notionClient.ts`
 - Translation workflow: `.github/workflows/translate-docs.yml`
 
 ## Content Synchronization

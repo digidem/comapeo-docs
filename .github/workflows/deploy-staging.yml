@@ -14,7 +14,6 @@ on:
       - "package.json"
       - "docs/**"
       - "i18n/**"
-      - "static/images/**"
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -73,7 +72,7 @@ jobs:
                   REASON="main push without deploy-relevant code/config changes."
                 fi
               elif [ "$BRANCH_NAME" = "content" ]; then
-                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(docs/|i18n/|static/images/)'; then
+                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(docs/|i18n/|static/img/)'; then
                   SHOULD_DEPLOY="true"
                   REASON="content push includes generated content paths."
                 else
@@ -122,7 +121,7 @@ jobs:
           git fetch origin content
 
           echo "📂 Checking out content files..."
-          git checkout origin/content -- docs/ i18n/ static/images/
+          git checkout origin/content -- docs/ i18n/ static/img/
 
           # Validate content exists
           echo "🔍 Validating content..."
@@ -158,8 +157,8 @@ jobs:
             echo "   Docusaurus build may fail if default locale has no content"
           fi
 
-          if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
-            echo "⚠️  Warning: static/images/ directory is empty or missing"
+          if [ ! -d "static/img" ] || [ -z "$(ls -A static/img 2>/dev/null)" ]; then
+            echo "⚠️  Warning: static/img/ directory is empty or missing"
             echo "Build will proceed but images may be unavailable"
           fi
 
@@ -168,7 +167,7 @@ jobs:
           echo "  - English docs: $DOCS_COUNT"
           echo "  - Localized docs: $I18N_COUNT"
           echo "  - Total docs: $TOTAL_CONTENT"
-          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
+          find static/img -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun
         if: steps.detect.outputs.should_deploy == 'true'

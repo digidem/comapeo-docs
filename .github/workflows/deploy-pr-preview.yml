@@ -174,7 +174,7 @@ jobs:
               echo "✅ Content branch fetched successfully"
 
               # Try to checkout content branch files
-              if git checkout origin/content -- docs/ i18n/ static/images/ 2>&1; then
+              if git checkout origin/content -- docs/ i18n/ static/img/ 2>&1; then
                 echo "✅ Content branch checkout successful"
                 CONTENT_BRANCH_SUCCESS="true"
               else
@@ -327,8 +327,8 @@ jobs:
             echo "⚠️  Note: No localized content (i18n/ is empty)"
           fi
 
-          if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
-            echo "⚠️  Warning: static/images/ directory is empty or missing"
+          if [ ! -d "static/img" ] || [ -z "$(ls -A static/img 2>/dev/null)" ]; then
+            echo "⚠️  Warning: static/img/ directory is empty or missing"
           fi
 
           echo "✅ Content validated successfully"
@@ -336,7 +336,7 @@ jobs:
           echo "  - English docs: $DOCS_COUNT"
           echo "  - Localized docs: $I18N_COUNT"
           echo "  - Total docs: $TOTAL_CONTENT"
-          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
+          find static/img -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Build documentation
         # IS_PRODUCTION not set - generates noindex meta tags and disallow robots.txt

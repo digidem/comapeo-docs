@@ -26,7 +26,7 @@ jobs:
           git fetch origin content
 
           echo "📂 Checking out content files..."
-          git checkout origin/content -- docs/ i18n/ static/images/
+          git checkout origin/content -- docs/ i18n/ static/img/
 
           # Validate content exists
           echo "🔍 Validating content..."
@@ -62,8 +62,8 @@ jobs:
             echo "   Docusaurus build may fail if default locale has no content"
           fi
 
-          if [ ! -d "static/images" ] || [ -z "$(ls -A static/images 2>/dev/null)" ]; then
-            echo "⚠️  Warning: static/images/ directory is empty or missing"
+          if [ ! -d "static/img" ] || [ -z "$(ls -A static/img 2>/dev/null)" ]; then
+            echo "⚠️  Warning: static/img/ directory is empty or missing"
             echo "Build will proceed but images may be unavailable"
           fi
 
@@ -72,7 +72,7 @@ jobs:
           echo "  - English docs: $DOCS_COUNT"
           echo "  - Localized docs: $I18N_COUNT"
           echo "  - Total docs: $TOTAL_CONTENT"
-          find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
+          find static/img -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

@@ -1,0 +1,13 @@
+{
+  "label": "Visão Geral",
+  "position": 1,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Visão Geral"
+  },
+  "customProps": {
+    "title": "Visão Geral"
+  }
+}

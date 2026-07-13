@@ -1,0 +1,13 @@
+{
+  "label": "Sem Categoria",
+  "position": 9,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Sem Categoria"
+  },
+  "customProps": {
+    "title": "Sem Categoria"
+  }
+}

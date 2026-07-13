@@ -1,0 +1,13 @@
+{
+  "label": "Customizing CoMapeo",
+  "position": 2,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Customizing CoMapeo"
+  },
+  "customProps": {
+    "title": "Customizing CoMapeo"
+  }
+}

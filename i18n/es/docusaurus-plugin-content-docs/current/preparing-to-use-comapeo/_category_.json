@@ -1,0 +1,13 @@
+{
+  "label": "Introducción - Conceptos básicos",
+  "position": 2,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Introducción - Conceptos básicos"
+  },
+  "customProps": {
+    "title": "Introducción - Conceptos básicos"
+  }
+}

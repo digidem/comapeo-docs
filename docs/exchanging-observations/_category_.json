@@ -1,0 +1,13 @@
+{
+  "label": "Exchanging Observations",
+  "position": 7,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Exchanging Observations"
+  },
+  "customProps": {
+    "title": "Exchanging Observations"
+  }
+}

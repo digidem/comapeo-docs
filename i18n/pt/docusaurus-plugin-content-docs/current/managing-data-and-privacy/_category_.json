@@ -1,0 +1,13 @@
+{
+  "label": "Gestão de Privacidade de Dados e Segurança",
+  "position": 5,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Gestão de Privacidade de Dados e Segurança"
+  },
+  "customProps": {
+    "title": "Gestão de Privacidade de Dados e Segurança"
+  }
+}

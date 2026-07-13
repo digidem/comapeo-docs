@@ -1,0 +1,13 @@
+{
+  "label": "Revisando Observações",
+  "position": 4,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Revisando Observações"
+  },
+  "customProps": {
+    "title": "Revisando Observações"
+  }
+}

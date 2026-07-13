@@ -1,0 +1,13 @@
+{
+  "label": "Gathering Observations & Tracks",
+  "position": 3,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Gathering Observations & Tracks"
+  },
+  "customProps": {
+    "title": "Gathering Observations & Tracks"
+  }
+}

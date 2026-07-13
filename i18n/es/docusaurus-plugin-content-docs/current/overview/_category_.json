@@ -1,0 +1,13 @@
+{
+  "label": "Vista General",
+  "position": 1,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Vista General"
+  },
+  "customProps": {
+    "title": "Vista General"
+  }
+}

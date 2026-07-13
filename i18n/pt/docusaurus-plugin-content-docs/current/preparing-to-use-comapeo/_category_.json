@@ -1,0 +1,13 @@
+{
+  "label": "Introdução - Noções básicas",
+  "position": 2,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Introdução - Noções básicas"
+  },
+  "customProps": {
+    "title": "Introdução - Noções básicas"
+  }
+}

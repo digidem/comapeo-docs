@@ -1,0 +1,13 @@
+{
+  "label": "Sin Categoría",
+  "position": 8,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Sin Categoría"
+  },
+  "customProps": {
+    "title": "Sin Categoría"
+  }
+}

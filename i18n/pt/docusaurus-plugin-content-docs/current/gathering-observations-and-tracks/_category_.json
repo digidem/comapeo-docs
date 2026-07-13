@@ -1,0 +1,13 @@
+{
+  "label": "Coletando Observações e Trilhas",
+  "position": 3,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Coletando Observações e Trilhas"
+  },
+  "customProps": {
+    "title": "Coletando Observações e Trilhas"
+  }
+}

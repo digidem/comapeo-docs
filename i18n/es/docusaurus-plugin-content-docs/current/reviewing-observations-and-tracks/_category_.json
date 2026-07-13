@@ -1,0 +1,13 @@
+{
+  "label": "Revisa Observaciones",
+  "position": 4,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Revisa Observaciones"
+  },
+  "customProps": {
+    "title": "Revisa Observaciones"
+  }
+}

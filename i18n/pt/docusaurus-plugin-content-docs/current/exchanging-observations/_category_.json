@@ -1,0 +1,13 @@
+{
+  "label": "Trocando Observações",
+  "position": 7,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Trocando Observações"
+  },
+  "customProps": {
+    "title": "Trocando Observações"
+  }
+}

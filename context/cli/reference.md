@@ -1,6 +1,6 @@
 # CLI Reference
 
-The CoMapeo Documentation project provides command-line interface (CLI) tools for managing Notion content, translations, and the API server. All commands are run using Bun.
+The CoMapeo Documentation project provides command-line interface (CLI) tools for managing Notion content and translations. All commands are run using Bun.
 
 ## Prerequisites
 
@@ -243,35 +243,6 @@ bun run notion:gen-placeholders
 bun run notion:gen-placeholders
 ```
 
-## API Server Commands
-
-### Start API Server
-
-Start the API server for programmatic access.
-
-```bash
-bun run api:server
-```
-
-**Environment Variables:**
-
-- `API_HOST` - Server hostname (default: `localhost`)
-- `API_PORT` - Server port (default: `3001`)
-- `API_KEY_*` - API keys for authentication (optional)
-
-**Examples:**
-
-```bash
-# Start with default settings
-bun run api:server
-
-# Start with custom port
-API_PORT=8080 bun run api:server
-
-# Start with API key
-API_KEY_ADMIN=secret123 bun run api:server
-```
-
 ## Development Commands
 
 ### Start Development Server
@@ -359,21 +330,6 @@ bun run test:watch
 ```bash
 # Watch tests
 bun run test:watch
-```
-
-### Run API Server Tests
-
-Run tests specifically for the API server.
-
-```bash
-bun run test:api-server
-```
-
-**Examples:**
-
-```bash
-# Test API server
-bun run test:api-server
 ```
 
 ### Run Notion Fetch Tests
@@ -488,12 +444,6 @@ bun run clean:generated
 
 ### Optional
 
-#### API Server
-
-- `API_HOST` - Server hostname (default: `localhost`)
-- `API_PORT` - Server port (default: `3001`)
-- `API_KEY_*` - API keys for authentication
-
 #### Development
 
 - `DEFAULT_DOCS_PAGE` - Default documentation page
@@ -524,14 +474,6 @@ Make sure you have installed dependencies:
 
 ```bash
 bun install
-```
-
-### Port already in use
-
-If the API server port is already in use, specify a different port:
-
-```bash
-API_PORT=3002 bun run api:server
 ```
 
 ## See Also

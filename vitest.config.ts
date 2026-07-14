@@ -4,17 +4,12 @@ import path from "path";
 export default defineConfig({
   test: {
     // Test file patterns
-    include: [
-      "scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
-      "api-server/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}",
-    ],
+    include: ["scripts/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
       "**/build/**",
       "**/.{idea,git,cache,output,temp}/**",
-      // HTTP integration tests require Bun runtime (bun:test), run with: bun test
-      "**/http-integration.test.ts",
     ],
 
     // Environment configuration

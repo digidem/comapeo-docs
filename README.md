@@ -6,7 +6,6 @@ Documentation site and content pipeline for CoMapeo, built with Docusaurus v3 an
 
 - Docusaurus site code (`src/`, config, scripts)
 - Notion sync and translation tooling (`scripts/`)
-- API service for content automation (`api-server/`)
 
 ## Branch Model
 
@@ -86,14 +85,6 @@ bun run notion:fetch
 bun run notion:translate
 ```
 
-### Run the API service
-
-The repo includes a small API for content automation jobs.
-
-```bash
-bun run api:server
-```
-
 ## Configuration
 
 Copy and edit env vars:
@@ -108,11 +99,6 @@ Common required variables:
 - `DATA_SOURCE_ID` (preferred) or `DATABASE_ID` (fallback)
 - `OPENAI_API_KEY` (for translation workflows)
 - `DEFAULT_DOCS_PAGE`
-
-For API server and mutating content jobs, also configure:
-
-- `GITHUB_REPO_URL`
-- `GITHUB_TOKEN`
 
 See `.env.example` for the complete list and notes.
 
@@ -143,10 +129,7 @@ bun run typecheck --noEmit
 
 - Contribution guide: `CONTRIBUTING.md`
 - Security policy: `SECURITY.md`
-- Setup/API service notes: `SETUP.md`
 - Repository guidelines: `context/repository-guidelines.md`
-- API reference: `context/api-server/reference.md`
-- API deployment workflow: `context/workflows/api-service-deployment.md`
 - Production deployment workflow: `context/workflows/PRODUCTION_DEPLOYMENT.md`
 - Content lifecycle: `context/workflows/content-lifecycle.md`
 - Notion architecture: `NOTION_FETCH_ARCHITECTURE.md`

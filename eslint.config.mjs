@@ -32,7 +32,7 @@ const eslintConfig = [
   // Docusaurus specific configurations
   {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
-    ignores: ["scripts/**", "api-server/**"], // Ignore scripts and api-server directories for docusaurus rules
+    ignores: ["scripts/**"], // Ignore scripts directory for docusaurus rules
     plugins: {
       "@docusaurus": docusaurusPlugin,
       react: pluginReact,
@@ -72,9 +72,9 @@ const eslintConfig = [
     },
   },
 
-  // Scripts and API server specific configurations
+  // Scripts specific configurations
   {
-    files: ["scripts/**/*.{js,mjs,cjs,ts}", "api-server/**/*.{js,mjs,cjs,ts}"],
+    files: ["scripts/**/*.{js,mjs,cjs,ts}"],
     plugins: {
       import: importPlugin,
       promise: promisePlugin,
@@ -102,14 +102,6 @@ const eslintConfig = [
       "scripts/notion-fetch/generateBlocks.ts",
       "scripts/notion-translate/**/*.ts",
     ],
-    rules: {
-      "security/detect-object-injection": "off",
-    },
-  },
-
-  // content-repo.ts uses const whitelist for env keys
-  {
-    files: ["api-server/content-repo.ts"],
     rules: {
       "security/detect-object-injection": "off",
     },

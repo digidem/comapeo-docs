@@ -109,6 +109,62 @@ const assertNoUntranslatedMessages = (
   }
 };
 
+const assertNoEmptyMessages = (
+  translations: TranslationCodeJson,
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, entry] of Object.entries(translations)) {
+    if (
+      typeof entry.message !== "string" ||
+      entry.message.trim().length === 0
+    ) {
+      violations.push(`  "${key}"`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} empty or missing message(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
+// Docusaurus theme default English strings that are common leak points: a key
+// whose identifier differs from its message (e.g. "theme.TOC.title") slips past
+// assertNoUntranslatedMessages if the message is left as the English default.
+const KNOWN_ENGLISH_THEME_DEFAULTS: Record<string, string> = {
+  "theme.TOC.title": "On this page",
+  "theme.TOCCollapsible.toggleButtonLabel": "On this page",
+  "theme.common.editThisPage": "Edit this page",
+  "theme.docs.paginator.next": "Next",
+  "theme.docs.paginator.previous": "Previous",
+  "theme.CodeBlock.copy": "Copy",
+  "theme.CodeBlock.copied": "Copied",
+  "theme.NotFound.title": "Page Not Found",
+  "theme.BackToTopButton.buttonAriaLabel": "Scroll back to top",
+};
+
+const assertNoKnownEnglishDefaults = (
+  translations: TranslationCodeJson,
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, expectedEnglish] of Object.entries(
+    KNOWN_ENGLISH_THEME_DEFAULTS
+  )) {
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the hardcoded KNOWN_ENGLISH_THEME_DEFAULTS map, never external input
+    const entry = translations[key];
+    if (entry && entry.message.trim() === expectedEnglish) {
+      violations.push(`  "${key}": still English ("${expectedEnglish}")`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} untranslated known theme string(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
 const NAVBAR_EXPECTED_KEYS = [
   "item.label.Documentation",
   "item.label.GitHub",
@@ -230,6 +286,8 @@ describe("Locale Output Verification", () => {
         "es/code.json"
       );
       assertNoUntranslatedMessages(codeJson, "es/code.json");
+      assertNoEmptyMessages(codeJson, "es/code.json");
+      assertNoKnownEnglishDefaults(codeJson, "es/code.json");
     });
 
     it("has valid structure with message and optional description", async () => {
@@ -258,6 +316,8 @@ describe("Locale Output Verification", () => {
         "pt/code.json"
       );
       assertNoUntranslatedMessages(codeJson, "pt/code.json");
+      assertNoEmptyMessages(codeJson, "pt/code.json");
+      assertNoKnownEnglishDefaults(codeJson, "pt/code.json");
     });
 
     it("has valid structure with message and optional description", async () => {

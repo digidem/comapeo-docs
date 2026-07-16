@@ -132,6 +132,8 @@ const LANGUAGE_NAME_TO_LOCALE: Record<string, string> = {
   English: "en",
   Spanish: "es",
   Portuguese: "pt",
+  "PT - automated": "pt",
+  "ES - automated": "es",
 };
 
 const FALLBACK_TITLE_PREFIX = "untitled";

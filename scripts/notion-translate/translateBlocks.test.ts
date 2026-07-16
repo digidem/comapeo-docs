@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Client } from "@notionhq/client";
 
 const mockBlocksChildrenList = vi.fn();
 const mockTranslateText = vi.fn();
@@ -15,6 +16,22 @@ vi.mock("./translateFrontMatter.js", () => ({
 
 function blocksResponse(results: object[]) {
   return { results, has_more: false, next_cursor: null };
+}
+
+function createMockNotionClient() {
+  return {
+    pages: {
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    blocks: {
+      children: {
+        list: vi.fn(),
+        append: vi.fn(),
+      },
+      delete: vi.fn(),
+    },
+  } as unknown as Client;
 }
 
 describe("translateNotionBlocksDirectly", () => {
@@ -286,5 +303,120 @@ describe("translateNotionBlocksDirectly", () => {
     expect(block.parent).toBeUndefined();
     expect(block.archived).toBeUndefined();
     expect(block.type).toBe("paragraph");
+  });
+
+  it("reuses the same created page on retry when append fails once", async () => {
+    const notion = createMockNotionClient();
+    const mockPageId = "page-created-once";
+
+    vi.mocked(notion.pages.create).mockResolvedValue({
+      id: mockPageId,
+    } as never);
+    vi.mocked(notion.pages.update).mockResolvedValue({} as never);
+    vi.mocked(notion.blocks.children.list).mockResolvedValueOnce(
+      blocksResponse([
+        {
+          id: "stale-block-id",
+        },
+      ]) as never
+    );
+    vi.mocked(notion.blocks.children.append)
+      .mockRejectedValueOnce(new Error("append failed once"))
+      .mockResolvedValueOnce({} as never);
+    vi.mocked(notion.blocks.delete).mockResolvedValue({} as never);
+
+    const { createNotionPageWithBlocks } = await import("./translateBlocks");
+    const pageId = await createNotionPageWithBlocks(
+      notion,
+      "parent-page-id",
+      "database-id",
+      "Translated page",
+      [
+        {
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Block content" },
+              },
+            ],
+          },
+        },
+      ],
+      {},
+      "pt-BR",
+      undefined,
+      true
+    );
+
+    expect(pageId).toBe(mockPageId);
+    expect(notion.pages.create).toHaveBeenCalledTimes(1);
+    expect(notion.pages.update).toHaveBeenCalledTimes(1);
+    expect(notion.pages.update).toHaveBeenCalledWith({
+      page_id: mockPageId,
+      properties: expect.objectContaining({
+        "Content elements": {
+          title: [{ text: { content: "Translated page" } }],
+        },
+      }),
+    });
+    expect(notion.blocks.children.list).toHaveBeenCalledTimes(1);
+    expect(notion.blocks.delete).toHaveBeenCalledTimes(1);
+    expect(notion.blocks.delete).toHaveBeenCalledWith({
+      block_id: "stale-block-id",
+    });
+    expect(notion.blocks.children.append).toHaveBeenCalledTimes(2);
+    expect(notion.blocks.children.append).toHaveBeenNthCalledWith(1, {
+      block_id: mockPageId,
+      children: expect.any(Array),
+    });
+    expect(notion.blocks.children.append).toHaveBeenNthCalledWith(2, {
+      block_id: mockPageId,
+      children: expect.any(Array),
+    });
+  });
+
+  it("still creates a new page when forceCreate is true even if existingPageId is provided", async () => {
+    const notion = createMockNotionClient();
+
+    vi.mocked(notion.pages.create).mockResolvedValue({
+      id: "new-force-created-page",
+    } as never);
+    vi.mocked(notion.blocks.children.append).mockResolvedValue({} as never);
+
+    const { createNotionPageWithBlocks } = await import("./translateBlocks");
+    const pageId = await createNotionPageWithBlocks(
+      notion,
+      "parent-page-id",
+      "database-id",
+      "Translated page",
+      [
+        {
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Block content" },
+              },
+            ],
+          },
+        },
+      ],
+      {},
+      "pt-BR",
+      "existing-page-id",
+      true
+    );
+
+    expect(pageId).toBe("new-force-created-page");
+    expect(notion.pages.create).toHaveBeenCalledTimes(1);
+    expect(notion.pages.update).not.toHaveBeenCalled();
+    expect(notion.blocks.children.list).not.toHaveBeenCalled();
+    expect(notion.blocks.children.append).toHaveBeenCalledWith({
+      block_id: "new-force-created-page",
+      children: expect.any(Array),
+    });
   });
 });

@@ -191,6 +191,7 @@ jobs:
           export PROCESSED_LANGS="0"
           export NEW_TRANSLATIONS="0"
           export UPDATED_TRANSLATIONS="0"
+          export AUTOMATED_TRANSLATIONS="0"
           export SKIPPED_TRANSLATIONS="0"
           export FAILED_TRANSLATIONS="0"
           export CODE_JSON_FAILURES="0"
@@ -205,6 +206,7 @@ jobs:
             PROCESSED_LANGS=$(jq -r '.processedLanguages // 0' translation-summary.json)
             NEW_TRANSLATIONS=$(jq -r '.newTranslations // 0' translation-summary.json)
             UPDATED_TRANSLATIONS=$(jq -r '.updatedTranslations // 0' translation-summary.json)
+            AUTOMATED_TRANSLATIONS=$(jq -r '.automatedTranslations // 0' translation-summary.json)
             SKIPPED_TRANSLATIONS=$(jq -r '.skippedTranslations // 0' translation-summary.json)
             FAILED_TRANSLATIONS=$(jq -r '.failedTranslations // 0' translation-summary.json)
             CODE_JSON_FAILURES=$(jq -r '.codeJsonFailures // 0' translation-summary.json)
@@ -230,6 +232,7 @@ jobs:
               PROCESSED_LANGS=$(echo "$JSON_PART" | jq -r '.processedLanguages // "0"' 2>/dev/null || echo "0")
               NEW_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.newTranslations // "0"' 2>/dev/null || echo "0")
               UPDATED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.updatedTranslations // "0"' 2>/dev/null || echo "0")
+              AUTOMATED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.automatedTranslations // "0"' 2>/dev/null || echo "0")
               SKIPPED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.skippedTranslations // "0"' 2>/dev/null || echo "0")
               FAILED_TRANSLATIONS=$(echo "$JSON_PART" | jq -r '.failedTranslations // "0"' 2>/dev/null || echo "0")
               CODE_JSON_FAILURES=$(echo "$JSON_PART" | jq -r '.codeJsonFailures // "0"' 2>/dev/null || echo "0")
@@ -249,6 +252,7 @@ jobs:
             echo "processed_langs=$PROCESSED_LANGS"
             echo "new_translations=$NEW_TRANSLATIONS"
             echo "updated_translations=$UPDATED_TRANSLATIONS"
+            echo "automated_translations=$AUTOMATED_TRANSLATIONS"
             echo "skipped_translations=$SKIPPED_TRANSLATIONS"
             echo "failed_translations=$FAILED_TRANSLATIONS"
             echo "code_json_failures=$CODE_JSON_FAILURES"
@@ -262,6 +266,7 @@ jobs:
           echo "  Processed languages: $PROCESSED_LANGS"
           echo "  New translations: $NEW_TRANSLATIONS"
           echo "  Updated translations: $UPDATED_TRANSLATIONS"
+          echo "  Automated translations: $AUTOMATED_TRANSLATIONS"
           echo "  Skipped translations: $SKIPPED_TRANSLATIONS"
           echo "  Failed translations: $FAILED_TRANSLATIONS"
           echo "  Code.json failures: $CODE_JSON_FAILURES"
@@ -269,7 +274,7 @@ jobs:
           echo "  Has failures: $HAS_FAILURES"
 
       - name: Update Notion Status → Auto Translation Generated
-        if: success() && (steps.parse_summary.outputs.new_translations != '0' || steps.parse_summary.outputs.updated_translations != '0')
+        if: success() && (steps.parse_summary.outputs.new_translations != '0' || steps.parse_summary.outputs.updated_translations != '0' || steps.parse_summary.outputs.automated_translations != '0')
         run: |
           # Use test database if test mode is enabled
           if [ -n "${{ secrets.TEST_DATA_SOURCE_ID }}" ] || [ -n "${{ secrets.TEST_DATABASE_ID }}" ] || [ "${{ secrets.TEST_MODE }}" = "true" ]; then

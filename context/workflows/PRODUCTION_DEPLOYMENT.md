@@ -157,3 +157,4 @@ Remediation: re-trigger this workflow via workflow_dispatch to update the lock.
 - Content lifecycle: `context/workflows/content-lifecycle.md`
 - Notion sync: `scripts/notion-workflow-guide.md`
 - Rollback procedures: `context/workflows/ROLLBACK.md`
+- **Generating the content that gets promoted here**: [`digidem/comapeo-content-pipeline`'s `DEPLOYMENT.md`](https://github.com/digidem/comapeo-content-pipeline/blob/main/DEPLOYMENT.md) — the full path from a Notion edit through to a `content_sha` ready for the CLI trigger above, including two footguns (an unanchored `assets/` `.gitignore` rule that silently drops per-section image folders, and `content` branch tip diverging from the locked live SHA).

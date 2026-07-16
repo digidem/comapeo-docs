@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules
+package-lock.json
 
 # Production
 /build
@@ -107,4 +108,6 @@ telemetry-id
 # Log and skill files (development artifacts)
 *.log
 *.skill
-api-server/flaky-test-counts.txt
+
+# Automated translation output (never commit generated translations)
+automated-translations/

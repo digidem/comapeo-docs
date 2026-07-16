@@ -28,8 +28,8 @@
     "notion:export": "bun scripts/notion-fetch/exportDatabase.ts",
     "notion:gen-placeholders": "bun scripts/notion-placeholders",
     "notion:fetch-all": "bun scripts/notion-fetch-all",
-    "api:server": "bun api-server",
-    "api:server:dev": "bun --watch api-server",
+    "notion:push-translation": "bun scripts/push-new-translation-to-notion.ts",
+    "notion:translate-test": "bun scripts/run-single-page-translation.ts",
     "clean:generated": "bun scripts/cleanup-generated-content.ts",
     "scaffold:test": "bun run scripts/test-scaffold/index.ts",
     "scaffold:test:all": "bun run scripts/test-scaffold/index.ts --all",
@@ -46,7 +46,6 @@
     "test:scripts:watch": "vitest scripts/ --watch",
     "test:notion-fetch": "vitest --run scripts/notion-fetch/__tests__/",
     "test:notion-cli": "vitest --run scripts/notion-fetch-all/__tests__/",
-    "test:api-server": "vitest --run api-server/",
     "test:notion-pipeline": "vitest --run \"scripts/notion-fetch/__tests__/runFetchPipeline.test.ts\"",
     "test:jsx-integration": "vitest run scripts/eval/jsx-preservation.integration.test.ts",
     "test:notion-image": "vitest --run \"scripts/notion-fetch/__tests__/downloadImage.test.ts\"",
@@ -62,14 +61,13 @@
     "test:locale-parity": "vitest --run scripts/locale-parity.test.ts"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^8.4.3",
-    "@docusaurus/core": "^3.9.2",
-    "@docusaurus/plugin-client-redirects": "^3.9.2",
-    "@docusaurus/plugin-google-gtag": "^3.9.2",
-    "@docusaurus/plugin-ideal-image": "^3.9.2",
-    "@docusaurus/plugin-pwa": "^3.9.2",
-    "@docusaurus/plugin-sitemap": "^3.9.2",
-    "@docusaurus/preset-classic": "^3.9.2",
+    "@docusaurus/core": "^3.10.1",
+    "@docusaurus/plugin-client-redirects": "^3.10.1",
+    "@docusaurus/plugin-google-gtag": "^3.10.1",
+    "@docusaurus/plugin-ideal-image": "^3.10.1",
+    "@docusaurus/plugin-pwa": "^3.10.1",
+    "@docusaurus/plugin-sitemap": "^3.10.1",
+    "@docusaurus/preset-classic": "^3.10.1",
     "@mdx-js/react": "^3.1.1",
     "clsx": "^2.1.1",
     "openai": "^6.27.0",
@@ -80,13 +78,12 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@docusaurus/eslint-plugin": "^3.9.2",
-    "@docusaurus/module-type-aliases": "^3.9.2",
-    "@docusaurus/tsconfig": "^3.9.2",
-    "@docusaurus/types": "^3.9.2",
-    "@eslint/js": "^10.0.1",
+    "@docusaurus/eslint-plugin": "^3.10.1",
+    "@docusaurus/module-type-aliases": "^3.10.1",
+    "@docusaurus/tsconfig": "^3.10.1",
+    "@docusaurus/types": "^3.10.1",
+    "@eslint/js": "9.39.4",
     "@notionhq/client": "^5.12.0",
-    "@types/glob": "^9.0.0",
     "@types/node": "^25.4.0",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
@@ -96,7 +93,7 @@
     "commander": "^14.0.3",
     "docusaurus-prince-pdf": "^1.2.1",
     "dotenv": "^17.3.1",
-    "eslint": "^10.0.3",
+    "eslint": "9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
@@ -133,6 +130,6 @@
     ]
   },
   "engines": {
-    "node": ">=18.0"
+    "node": ">=20.0"
   }
 }

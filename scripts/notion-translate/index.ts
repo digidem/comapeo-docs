@@ -1,3 +1,4 @@
+import type { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
 import { pathToFileURL } from "url";
 import dotenv from "dotenv";
 import ora from "ora";
@@ -43,6 +44,8 @@ import {
   NOTION_PROPERTIES,
   NotionPage,
   TranslationConfig,
+  getAutomatedLanguageCode,
+  getAutomatedOutputDir,
 } from "../constants.js";
 
 const LEGACY_SECTION_PROPERTY = "Section";
@@ -57,8 +60,15 @@ type NotionSelectProperty = {
 type NotionNumberProperty = { number: number };
 type NotionMultiSelectProperty = { multi_select: Array<{ name: string }> };
 type NotionRelationProperty = { relation: Array<{ id: string }> };
+type NotionDatabaseSelectSchemaProperty = {
+  type?: "select";
+  select?: {
+    options?: Array<{ name?: string }>;
+  };
+};
 
 const FRONTMATTER_BLOCK_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+let automatedLanguageOptionsValidated = false;
 
 // Type for Notion page parent (API hierarchy structure)
 interface NotionPageParent {
@@ -321,6 +331,7 @@ type LanguageTranslationSummary = {
   updatedTranslations: number;
   skippedTranslations: number;
   failedTranslations: number;
+  automatedTranslations: number;
   failures: TranslationFailure[];
 };
 
@@ -331,6 +342,7 @@ type TranslationRunSummary = {
   updatedTranslations: number;
   skippedTranslations: number;
   failedTranslations: number;
+  automatedTranslations: number;
   codeJsonFailures: number;
   codeJsonSourceFileMissing: boolean; // Indicates source file was missing/malformed (soft-fail)
   themeFailures: number;
@@ -346,11 +358,15 @@ export interface TranslationUpdateResult {
   needsUpdate: boolean;
   reason?: string;
   blockCount?: number;
+  updateKind?:
+    | "newer-english"
+    | "empty-translation"
+    | "no-translation"
+    | "verification-error";
 }
 
 const getElementTypeProperty = (page: NotionPage) =>
   page.properties?.[NOTION_PROPERTIES.ELEMENT_TYPE] ??
-  // eslint-disable-next-line security/detect-object-injection -- legacy property fallback is static and controlled
   (page.properties as Record<string, any>)?.[LEGACY_SECTION_PROPERTY];
 
 const getTitle = (page: NotionPage): string =>
@@ -366,7 +382,7 @@ const getOrder = (page: NotionPage): number | undefined =>
     ?.number;
 
 const getParentRelationId = (page: NotionPage): string | undefined => {
-  const parentRelation = page.properties["Parent item"] as
+  const parentRelation = page.properties[PARENT_ITEM_PROPERTY] as
     | NotionRelationProperty
     | undefined;
   return parentRelation?.relation?.[0]?.id;
@@ -376,7 +392,6 @@ const isValidNotionPageId = (pageId: string): boolean =>
   /^[0-9a-f]{32}$/i.test(pageId);
 
 const getSelectedPropertyName = (page: NotionPage, propertyName: string) => {
-  // eslint-disable-next-line security/detect-object-injection -- propertyName is a trusted Notion property constant at each call site
   const property = page.properties?.[propertyName];
   if (!isSelectProperty(property)) {
     return undefined;
@@ -434,7 +449,6 @@ dotenv.config({ override: true, quiet: true });
 function validateRequiredEnvironment(): void {
   const requiredVariables = ["NOTION_API_KEY", "OPENAI_API_KEY"];
   const missingVariables = requiredVariables.filter(
-    // eslint-disable-next-line security/detect-object-injection -- keys come from trusted static array
     (name) => !process.env[name]
   );
   // DATA_SOURCE_ID is the primary variable for Notion API v5 (2025-09-03)
@@ -449,6 +463,57 @@ function validateRequiredEnvironment(): void {
       `Missing required environment variables: ${missingVariables.join(", ")}`
     );
   }
+}
+
+async function validateAutomatedLanguageOptions(): Promise<void> {
+  if (automatedLanguageOptionsValidated) {
+    return;
+  }
+
+  if (!DATABASE_ID && !DATA_SOURCE_ID) {
+    console.warn(
+      "Cannot verify automated language select options without DATABASE_ID or DATA_SOURCE_ID — ensure they exist in Notion"
+    );
+    automatedLanguageOptionsValidated = true;
+    return;
+  }
+
+  const useActiveDataSource = DATA_SOURCE_ID && DATA_SOURCE_ID !== DATABASE_ID;
+  const source = useActiveDataSource
+    ? ((await notion.dataSources.retrieve({
+        data_source_id: DATA_SOURCE_ID,
+      })) as {
+        properties?: Record<string, unknown>;
+      })
+    : ((await notion.databases.retrieve({
+        database_id: DATABASE_ID,
+      })) as {
+        properties?: Record<string, unknown>;
+      });
+  const languageProperty = source.properties?.[NOTION_PROPERTIES.LANGUAGE] as
+    | NotionDatabaseSelectSchemaProperty
+    | undefined;
+  const optionNames = new Set(
+    languageProperty?.select?.options
+      ?.map((option) => option.name)
+      .filter((name): name is string => Boolean(name)) ?? []
+  );
+  const requiredAutomatedOptions = LANGUAGES.map((lang) =>
+    getAutomatedLanguageCode(lang.notionLangCode)
+  );
+  const missingOptions = requiredAutomatedOptions.filter(
+    (optionName) => !optionNames.has(optionName)
+  );
+
+  if (missingOptions.length > 0) {
+    throw new TranslationError(
+      `Missing automated language select options in Notion: ${missingOptions.join(", ")}`,
+      "schema_invalid",
+      true
+    );
+  }
+
+  automatedLanguageOptionsValidated = true;
 }
 
 /**
@@ -505,7 +570,9 @@ export async function fetchPublishedEnglishPages(
     return englishSourcePages;
   } catch (error) {
     spinner.fail(
-      chalk.red(`Failed to fetch published English pages: ${error.message}`)
+      chalk.red(
+        `Failed to fetch published English pages: ${error instanceof Error ? error.message : String(error)}`
+      )
     );
     throw error;
   }
@@ -697,6 +764,7 @@ export async function needsTranslationUpdate(
       needsUpdate: true,
       reason: "No translation exists",
       blockCount: 0,
+      updateKind: "no-translation",
     };
   }
 
@@ -709,6 +777,7 @@ export async function needsTranslationUpdate(
     return {
       needsUpdate: true,
       reason: "English page has newer edits",
+      updateKind: "newer-english",
     };
   }
 
@@ -725,6 +794,7 @@ export async function needsTranslationUpdate(
       needsUpdate,
       reason,
       blockCount,
+      ...(needsUpdate ? { updateKind: "empty-translation" as const } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -736,6 +806,7 @@ export async function needsTranslationUpdate(
     return {
       needsUpdate: true,
       reason: "Unable to verify translation content",
+      updateKind: "verification-error",
     };
   }
 }
@@ -989,6 +1060,142 @@ export async function saveTranslatedContentToDisk(
   }
 }
 
+export async function saveAutomatedTranslationToDisk(
+  englishPage: NotionPage,
+  translatedContent: string,
+  translatedTitle: string,
+  automatedOutputDir: string,
+  datetimeSuffix?: string,
+  translatedBlocks?: BlockObjectRequest[],
+  parentId?: string,
+  properties?: Record<string, unknown>
+): Promise<string> {
+  try {
+    const elementType = getElementTypeProperty(englishPage);
+    const sectionType = elementType?.select?.name?.toLowerCase();
+    if (sectionType === "toggle") {
+      console.warn(
+        chalk.yellow(
+          `Skipping toggle page \"${getTitle(englishPage)}\" for automated translation output`
+        )
+      );
+      return "";
+    }
+
+    const generatedDatetimeSuffix = (() => {
+      if (datetimeSuffix) {
+        return datetimeSuffix;
+      }
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const seconds = String(now.getSeconds()).padStart(2, "0");
+      const ms = String(now.getMilliseconds()).padStart(3, "0");
+      return `${year}-${month}-${day}T${hours}${minutes}${seconds}${ms}`;
+    })();
+
+    const canonicalRelativePath = resolveCanonicalDocsRelativePath(
+      englishPage.id
+    );
+
+    const filename = canonicalRelativePath
+      ? `${canonicalRelativePath.replace(/\.md$/i, "")}-${generatedDatetimeSuffix}.md`
+      : `${generateSafeFilename(translatedTitle, englishPage.id)}-${generatedDatetimeSuffix}.md`;
+
+    const outputPath = path.join(automatedOutputDir, filename);
+
+    await fs.mkdir(automatedOutputDir, { recursive: true });
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+    const localizedContent = await ensureTranslatedFrontmatter(
+      englishPage,
+      decodeLocaleImagePlaceholderPaths(translatedContent),
+      translatedTitle,
+      canonicalRelativePath
+    );
+
+    await fs.writeFile(outputPath, localizedContent, "utf8");
+
+    if (translatedBlocks) {
+      const sidecarPath = outputPath.endsWith(".md")
+        ? outputPath.replace(/\.md$/i, ".notion.json")
+        : `${outputPath}.notion.json`;
+      const sidecarData: {
+        parentId?: string;
+        blocks: BlockObjectRequest[];
+        sourceProperties?: Record<string, unknown>;
+      } = {
+        blocks: translatedBlocks,
+      };
+      if (parentId) {
+        sidecarData.parentId = parentId;
+      }
+      if (properties) {
+        const { Language: _lang, ...metadataProps } = properties;
+        const normalized: Record<string, unknown> = {};
+        if (NOTION_PROPERTIES.ELEMENT_TYPE in metadataProps) {
+          normalized[NOTION_PROPERTIES.ELEMENT_TYPE] =
+            metadataProps[NOTION_PROPERTIES.ELEMENT_TYPE];
+        } else if (LEGACY_SECTION_PROPERTY in metadataProps) {
+          normalized[NOTION_PROPERTIES.ELEMENT_TYPE] =
+            metadataProps[LEGACY_SECTION_PROPERTY];
+        }
+        for (const key of [
+          NOTION_PROPERTIES.ORDER,
+          NOTION_PROPERTIES.TAGS,
+        ] as const) {
+          if (key in metadataProps) {
+            normalized[key] = metadataProps[key];
+          }
+        }
+        if (Object.keys(normalized).length > 0) {
+          sidecarData.sourceProperties = normalized;
+        }
+      }
+      await fs.writeFile(
+        sidecarPath,
+        JSON.stringify(sidecarData, null, 2),
+        "utf8"
+      );
+    }
+
+    return outputPath;
+  } catch (error) {
+    console.error(
+      `Error saving automated translated content for ${englishPage.id}:`,
+      error
+    );
+    throw error;
+  }
+}
+
+export function getTranslatedBlocksForDisk({
+  localOnly,
+  skipNotionPageCreation,
+  translatedBlocks,
+  parentId,
+}: {
+  localOnly: boolean;
+  skipNotionPageCreation: boolean;
+  translatedBlocks: BlockObjectRequest[] | undefined;
+  parentId?: string;
+}): BlockObjectRequest[] | undefined {
+  if (
+    localOnly ||
+    skipNotionPageCreation ||
+    !parentId ||
+    !Array.isArray(translatedBlocks) ||
+    translatedBlocks.length === 0
+  ) {
+    return undefined;
+  }
+
+  return translatedBlocks;
+}
+
 /**
  * Translate code.json for all languages except English.
  */
@@ -1155,6 +1362,7 @@ async function processLanguageTranslations(
   let updatedTranslations = 0;
   let skippedTranslations = 0;
   let failedTranslations = 0;
+  let automatedTranslations = 0;
   const failures: TranslationFailure[] = [];
 
   const pagesToProcess = pageId
@@ -1171,13 +1379,12 @@ async function processLanguageTranslations(
     console.log(chalk.blue(`Processing: ${originalTitle}`));
 
     // Pre-flight validation: Check for required Parent item relation
-    /* eslint-disable security/detect-object-injection -- PARENT_ITEM_PROPERTY is a constant */
+
     const parentRelation = (
       englishPage.properties[PARENT_ITEM_PROPERTY] as
         | NotionRelationProperty
         | undefined
     )?.relation?.[0]?.id;
-    /* eslint-enable security/detect-object-injection */
 
     if (!parentRelation && !pageId && !localOnly) {
       console.warn(
@@ -1206,6 +1413,8 @@ async function processLanguageTranslations(
     }
 
     let translationPage: NotionPage | null = null;
+    let automatedPathNeeded = false;
+
     if (!localOnly) {
       translationPage = await findTranslationPage(
         englishPage,
@@ -1229,6 +1438,93 @@ async function processLanguageTranslations(
         skippedTranslations++;
         continue;
       }
+
+      // Route to automated path when translation exists and English is newer
+      if (
+        translationPage !== null &&
+        (updateCheck.updateKind === "newer-english" ||
+          updateCheck.updateKind === "verification-error")
+      ) {
+        automatedPathNeeded = true;
+      }
+    } else {
+      // LOCAL-ONLY: check filesystem for existing translation
+      const canonicalPath = resolveCanonicalDocsRelativePath(englishPage.id);
+      const pathsToCheck: string[] = [];
+      if (canonicalPath) {
+        pathsToCheck.push(path.join(config.outputDir, canonicalPath));
+      } else {
+        const deterministicName = generateSafeFilename(
+          originalTitle,
+          englishPage.id
+        );
+        pathsToCheck.push(
+          path.join(config.outputDir, `${deterministicName}.md`)
+        );
+        console.warn(
+          chalk.yellow(
+            `No canonical path cache for ${englishPage.id}, falling back to deterministic filename probe`
+          )
+        );
+      }
+      for (const existingI18nPath of pathsToCheck) {
+        try {
+          await fs.access(existingI18nPath);
+          automatedPathNeeded = true;
+          console.log(
+            chalk.yellow(
+              `Existing translation found at ${existingI18nPath}, routing to automated path`
+            )
+          );
+          break;
+        } catch {
+          // File doesn't exist → proceed with normal creation
+        }
+      }
+    }
+
+    if (automatedPathNeeded) {
+      const elementType = getElementTypeProperty(englishPage);
+      if (elementType?.select?.name?.toLowerCase() === "toggle") {
+        console.log(
+          chalk.gray(
+            `Skipping toggle page "${originalTitle}" — automated path does not handle toggles`
+          )
+        );
+        skippedTranslations++;
+        continue;
+      }
+
+      try {
+        await processAutomatedTranslation({
+          englishPage,
+          config,
+          existingTranslationPage: translationPage,
+          pageId,
+          localOnly,
+          stabilizedMarkdownCache,
+          relationParentId:
+            parentRelation ?? (pageId ? englishPage.id : undefined),
+          onNew: () => automatedTranslations++,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof CanonicalPathError) {
+          throw error;
+        }
+        console.error(
+          chalk.red(`Error in automated path for ${originalTitle}:`, message)
+        );
+        failedTranslations++;
+        failures.push({
+          language: config.language,
+          title: originalTitle,
+          pageId: englishPage.id,
+          error: message,
+          isCritical: error instanceof TranslationError && error.isCritical,
+        });
+      }
+      continue;
     }
 
     try {
@@ -1265,6 +1561,9 @@ async function processLanguageTranslations(
   console.log(chalk.green(`\n✅ ${config.language} translation summary:`));
   console.log(chalk.green(`  - New translations: ${newTranslations}`));
   console.log(chalk.green(`  - Updated translations: ${updatedTranslations}`));
+  console.log(
+    chalk.cyan(`  - Automated (no-overwrite): ${automatedTranslations}`)
+  );
   console.log(chalk.gray(`  - Skipped: ${skippedTranslations}`));
   console.log(chalk.red(`  - Failed: ${failedTranslations}`));
 
@@ -1274,8 +1573,217 @@ async function processLanguageTranslations(
     updatedTranslations,
     skippedTranslations,
     failedTranslations,
+    automatedTranslations,
     failures,
   };
+}
+
+/**
+ * Process automated translation — creates a new versioned page/file instead of
+ * overwriting the existing human-reviewed translation.
+ */
+async function processAutomatedTranslation({
+  englishPage,
+  config,
+  existingTranslationPage,
+  pageId,
+  localOnly,
+  stabilizedMarkdownCache,
+  relationParentId,
+  onNew,
+}: {
+  englishPage: NotionPage;
+  config: TranslationConfig;
+  existingTranslationPage: NotionPage | null;
+  pageId?: string;
+  localOnly: boolean;
+  stabilizedMarkdownCache?: Map<string, string>;
+  relationParentId?: string;
+  onNew: () => void;
+}): Promise<void> {
+  const originalTitle = getTitle(englishPage);
+
+  if (!localOnly) {
+    await validateAutomatedLanguageOptions();
+  }
+
+  const elementType = getElementTypeProperty(englishPage);
+  const sectionType = elementType?.select?.name?.toLowerCase();
+
+  // Get automated language code (exactly once — prevents double-apply)
+  const automatedLangCode = getAutomatedLanguageCode(config.notionLangCode);
+
+  // Get automated output directory
+  const automatedOutputDir = getAutomatedOutputDir(config.language);
+  if (!automatedOutputDir) {
+    throw new Error(
+      `No automated output dir configured for language: ${config.language}`
+    );
+  }
+
+  // Translate content for disk
+  const isTitlePage = sectionType === "title";
+  let translatedContent: string;
+  let translatedTitle: string;
+
+  if (isTitlePage) {
+    translatedContent = `# ${originalTitle}`;
+    translatedTitle = originalTitle;
+  } else {
+    let markdownContent = stabilizedMarkdownCache?.get(englishPage.id);
+    if (markdownContent === undefined) {
+      markdownContent = await getSourceMarkdownForTranslation(englishPage);
+      stabilizedMarkdownCache?.set(englishPage.id, markdownContent);
+    }
+    const translated = await translateText(
+      markdownContent,
+      originalTitle,
+      config.language
+    );
+    translatedContent = translated.markdown;
+    translatedTitle = translated.title;
+
+    const decodedTranslatedContent = decodeRemoteImagePlaceholderPaths(
+      decodeLocaleImagePlaceholderPaths(translatedContent)
+    );
+    const { count, samples } = collectRawNotionS3Matches(
+      decodedTranslatedContent
+    );
+    if (count > 0) {
+      throw new Error(
+        `Automated translation for "${originalTitle}" still contains ${count} Notion/S3 URLs. Offending URLs (redacted): ${formatRedactedS3Urls(samples)}`
+      );
+    }
+  }
+
+  // Translate Notion blocks (only when not local-only)
+  let translatedBlocks: any[] | undefined;
+  let skipNotionPageCreation = false;
+  if (!localOnly) {
+    try {
+      if (!isTitlePage) {
+        translatedBlocks = await translateNotionBlocksDirectly(
+          englishPage.id,
+          config.language
+        );
+      } else {
+        translatedBlocks = [
+          {
+            object: "block",
+            type: "heading_1",
+            heading_1: {
+              rich_text: [{ type: "text", text: { content: translatedTitle } }],
+            },
+          },
+        ];
+      }
+    } catch (err) {
+      skipNotionPageCreation = true;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        chalk.yellow(
+          `Could not translate Notion blocks for "${originalTitle}": ${msg} — skipping Notion page creation to avoid an empty page`
+        )
+      );
+    }
+
+    if (
+      !isTitlePage &&
+      (!Array.isArray(translatedBlocks) || translatedBlocks.length === 0)
+    ) {
+      skipNotionPageCreation = true;
+      console.warn(
+        chalk.yellow(
+          `Translated Notion blocks for "${originalTitle}" were empty — skipping Notion page creation to avoid an empty page`
+        )
+      );
+    }
+  }
+
+  // Build properties (Language → automated code, plus Order/Tags/ElementType from English)
+  const properties: Record<string, unknown> = {
+    Language: { select: { name: automatedLangCode } },
+  };
+  const orderProp = englishPage.properties[NOTION_PROPERTIES.ORDER] as
+    | { number?: number }
+    | undefined;
+  if (typeof orderProp?.number === "number") {
+    properties[NOTION_PROPERTIES.ORDER] = { number: orderProp.number };
+  }
+  const tagsProp = englishPage.properties[NOTION_PROPERTIES.TAGS] as
+    | { multi_select?: Array<{ name: string }> }
+    | undefined;
+  if (tagsProp?.multi_select) {
+    properties[NOTION_PROPERTIES.TAGS] = {
+      multi_select: tagsProp.multi_select.map((tag) => ({ name: tag.name })),
+    };
+  }
+  if (elementType?.select?.name) {
+    properties[NOTION_PROPERTIES.ELEMENT_TYPE] = {
+      select: { name: elementType.select.name },
+    };
+  }
+
+  // Get parent relation (fallback chain)
+  const parentId =
+    relationParentId ??
+    (
+      existingTranslationPage?.properties[PARENT_ITEM_PROPERTY] as
+        | { relation?: Array<{ id: string }> }
+        | undefined
+    )?.relation?.[0]?.id ??
+    (
+      englishPage.properties[PARENT_ITEM_PROPERTY] as
+        | { relation?: Array<{ id: string }> }
+        | undefined
+    )?.relation?.[0]?.id;
+
+  // Notion write (only when not local-only)
+  if (!localOnly && !skipNotionPageCreation) {
+    if (parentId) {
+      await createNotionPageWithBlocks(
+        notion,
+        parentId,
+        DATA_SOURCE_ID || DATABASE_ID,
+        translatedTitle,
+        translatedBlocks ?? [],
+        properties,
+        automatedLangCode,
+        undefined, // no existingPageId — always create new
+        true // forceCreate — skip DB search entirely
+      );
+    } else {
+      skipNotionPageCreation = true;
+      console.warn(
+        chalk.yellow(
+          `Cannot determine parent relation for "${originalTitle}" (${englishPage.id}) — skipping Notion write`
+        )
+      );
+    }
+  }
+
+  const translatedBlocksForDisk = getTranslatedBlocksForDisk({
+    localOnly,
+    skipNotionPageCreation,
+    translatedBlocks,
+    parentId,
+  });
+
+  // Disk write
+  const writtenPath = await saveAutomatedTranslationToDisk(
+    englishPage,
+    translatedContent,
+    translatedTitle,
+    automatedOutputDir,
+    undefined, // generate datetime suffix
+    translatedBlocksForDisk,
+    translatedBlocksForDisk ? parentId : undefined,
+    properties
+  );
+
+  if (writtenPath) {
+    onNew();
+  }
 }
 
 /**
@@ -1331,8 +1839,9 @@ async function processSinglePageTranslation({
     translatedContent = translated.markdown;
     translatedTitle = translated.title;
 
-    const decodedTranslatedContent =
-      decodeRemoteImagePlaceholderPaths(translatedContent);
+    const decodedTranslatedContent = decodeRemoteImagePlaceholderPaths(
+      decodeLocaleImagePlaceholderPaths(translatedContent)
+    );
     const { count: totalS3Matches, samples: detectedS3Urls } =
       collectRawNotionS3Matches(decodedTranslatedContent);
 
@@ -1358,7 +1867,7 @@ async function processSinglePageTranslation({
   const orderProp = englishPage.properties[NOTION_PROPERTIES.ORDER] as
     | NotionNumberProperty
     | undefined;
-  if (orderProp && orderProp.number) {
+  if (typeof orderProp?.number === "number") {
     properties[NOTION_PROPERTIES.ORDER] = {
       number: orderProp.number,
     };
@@ -1385,7 +1894,7 @@ async function processSinglePageTranslation({
     const parentInfo =
       relationParentId ??
       (
-        englishPage.properties["Parent item"] as
+        englishPage.properties[PARENT_ITEM_PROPERTY] as
           | NotionRelationProperty
           | undefined
       )?.relation?.[0]?.id;
@@ -1458,7 +1967,6 @@ export function parseCliOptions(args: string[]): CliOptions {
   const options: CliOptions = {};
 
   for (let i = 0; i < args.length; i++) {
-    // eslint-disable-next-line security/detect-object-injection -- iterating over trusted CLI args array
     const arg = args[i];
     if (arg === "--page-id") {
       const value = args[i + 1];
@@ -1500,6 +2008,7 @@ export function parseCliOptions(args: string[]): CliOptions {
 }
 
 export async function main(options: CliOptions = {}) {
+  automatedLanguageOptionsValidated = false;
   console.log(chalk.bold.cyan("🚀 Starting Notion translation workflow\n"));
 
   // Log which ID type is being used (v5 API validation)
@@ -1521,6 +2030,7 @@ export async function main(options: CliOptions = {}) {
     updatedTranslations: 0,
     skippedTranslations: 0,
     failedTranslations: 0,
+    automatedTranslations: 0,
     codeJsonFailures: 0,
     codeJsonSourceFileMissing: false,
     themeFailures: 0,
@@ -1662,6 +2172,7 @@ export async function main(options: CliOptions = {}) {
       summary.updatedTranslations += languageSummary.updatedTranslations;
       summary.skippedTranslations += languageSummary.skippedTranslations;
       summary.failedTranslations += languageSummary.failedTranslations;
+      summary.automatedTranslations += languageSummary.automatedTranslations;
       failures.push(...languageSummary.failures);
     }
 

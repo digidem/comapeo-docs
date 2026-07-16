@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   MAIN_LANGUAGE,
   NOTION_PROPERTIES,
@@ -22,6 +22,14 @@ import {
   getTestDatabaseId,
   isSafeTestBranch,
   getModelParams,
+  getModelContextLimit,
+  getMaxChunkChars,
+  AUTOMATED_OUTPUT_DIRS,
+  AUTOMATED_LANGUAGE_MAP,
+  isAutomatedLanguageCode,
+  getBaseLanguageCode,
+  getAutomatedLanguageCode,
+  getAutomatedOutputDir,
   type TranslationConfig,
   type NotionPage,
 } from "./constants";
@@ -48,13 +56,11 @@ describe("constants", () => {
     it("should have correct max retries value", () => {
       // Arrange & Act & Assert
       expect(MAX_RETRIES).toBe(3);
-      expect(typeof MAX_RETRIES).toBe("number");
     });
 
     it("should have correct Notion API chunk size", () => {
       // Arrange & Act & Assert
       expect(NOTION_API_CHUNK_SIZE).toBe(50);
-      expect(typeof NOTION_API_CHUNK_SIZE).toBe("number");
     });
   });
 
@@ -89,7 +95,8 @@ describe("constants", () => {
   describe("LANGUAGES configuration", () => {
     it("should contain Portuguese and Spanish configurations", () => {
       // Arrange & Act & Assert
-      expect(LANGUAGES).toHaveLength(2);
+      // Use >= 2 so adding more languages in future doesn't break this test
+      expect(LANGUAGES.length).toBeGreaterThanOrEqual(2);
 
       const portuguese = LANGUAGES.find((lang) => lang.language === "pt-BR");
       const spanish = LANGUAGES.find((lang) => lang.language === "es");
@@ -151,41 +158,25 @@ describe("constants", () => {
       expect(PNG_QUALITY_RANGE[1]).toBe(0.8);
       expect(PNG_QUALITY_RANGE[0]).toBeLessThan(PNG_QUALITY_RANGE[1]);
     });
-
-    it("should have reasonable image processing values", () => {
-      // Arrange & Act & Assert
-      expect(IMAGE_MAX_WIDTH).toBeGreaterThan(0);
-      expect(JPEG_QUALITY).toBeGreaterThan(0);
-      expect(JPEG_QUALITY).toBeLessThanOrEqual(100);
-      expect(PNG_COMPRESSION_LEVEL).toBeGreaterThanOrEqual(0);
-      expect(PNG_COMPRESSION_LEVEL).toBeLessThanOrEqual(9);
-      expect(WEBP_QUALITY).toBeGreaterThan(0);
-      expect(WEBP_QUALITY).toBeLessThanOrEqual(100);
-    });
   });
 
   describe("OpenAI constants", () => {
-    it("should use environment variable for model when available", () => {
-      // Test that the constant exists - actual env var testing is complex in ES modules
+    // NOTE: DEFAULT_OPENAI_MODEL is a top-level const resolved at import time
+    // (process.env.OPENAI_MODEL || "gpt-5-mini"). Its value cannot be changed
+    // by modifying process.env after the module is loaded; env-var override
+    // tests would be false positives. Test the constant's value/format only.
+    it("should have a valid model name string", () => {
       expect(DEFAULT_OPENAI_MODEL).toBeDefined();
       expect(typeof DEFAULT_OPENAI_MODEL).toBe("string");
       expect(DEFAULT_OPENAI_MODEL.length).toBeGreaterThan(0);
-    });
-
-    it("should use default model when environment variable is not set", () => {
-      // Test that we have a reasonable default
-      expect(DEFAULT_OPENAI_MODEL).toBeDefined();
-      expect(typeof DEFAULT_OPENAI_MODEL).toBe("string");
-      // Should be a valid OpenAI model name format
-      expect(DEFAULT_OPENAI_MODEL).toMatch(/gpt|claude/i);
+      // Should be a valid model name format
+      expect(DEFAULT_OPENAI_MODEL).toMatch(/gpt|claude|deepseek/i);
     });
 
     it("should have correct default OpenAI values", () => {
       // Arrange & Act & Assert
       expect(DEFAULT_OPENAI_TEMPERATURE).toBe(0.3);
       expect(DEFAULT_OPENAI_MAX_TOKENS).toBe(4096);
-      expect(typeof DEFAULT_OPENAI_TEMPERATURE).toBe("number");
-      expect(typeof DEFAULT_OPENAI_MAX_TOKENS).toBe("number");
     });
 
     it("should have reasonable OpenAI parameter ranges", () => {
@@ -223,253 +214,341 @@ describe("constants", () => {
           reasoning_effort: "none",
         });
       });
+
+      it("should return DEFAULT_OPENAI_TEMPERATURE for gpt-5.2 without useReasoningNone", () => {
+        // gpt-5.2 without the reasoning flag falls through to the default temperature path
+        expect(getModelParams("gpt-5.2")).toEqual({
+          temperature: DEFAULT_OPENAI_TEMPERATURE,
+        });
+      });
+
+      it("should be case-insensitive for model names", () => {
+        // Arrange & Act & Assert
+        expect(getModelParams("GPT-5-NANO")).toEqual({ temperature: 1 });
+        expect(getModelParams("gpt-5")).toEqual({ temperature: 1 });
+        expect(getModelParams(" gpt-5-nano ")).toEqual({ temperature: 1 });
+        expect(getModelParams("gpt-5-nano")).toEqual({ temperature: 1 });
+      });
+
+      it("should handle GPT-5 variants correctly", () => {
+        // Arrange & Act & Assert - ensure exact match and prefix match work
+        expect(getModelParams("gpt-5")).toEqual({ temperature: 1 });
+        expect(getModelParams("gpt-5-nano")).toEqual({ temperature: 1 });
+        expect(getModelParams("gpt-5-mini")).toEqual({ temperature: 1 });
+        // GPT-5-chat-latest may support temperature with reasoning_effort=none
+        expect(getModelParams("gpt-5-chat-latest")).toEqual({ temperature: 1 });
+      });
     });
-    it("should be case-insensitive for model names", () => {
+  });
+
+  describe("getModelContextLimit", () => {
+    it("should return correct token limit for an exact model key", () => {
+      // gpt-4o is a known entry with 128000 tokens
+      expect(getModelContextLimit("gpt-4o")).toBe(128000);
+    });
+
+    it("should return the same limit for a versioned variant via prefix match", () => {
+      // "gpt-5-mini-2025-01-01" starts with "gpt-5-mini" which maps to 272000
+      expect(getModelContextLimit("gpt-5-mini-2025-01-01")).toBe(272000);
+    });
+
+    it("should return the conservative default (128000) for unknown models", () => {
+      expect(getModelContextLimit("unknown-model-xyz")).toBe(128000);
+    });
+
+    it("should normalize case and whitespace before matching", () => {
+      expect(getModelContextLimit("  GPT-4O  ")).toBe(128000);
+      expect(getModelContextLimit("GPT-5-MINI")).toBe(272000);
+    });
+  });
+
+  describe("getMaxChunkChars", () => {
+    it("should return floor((contextLimit * 3.5) / 1.5) for a known model", () => {
+      // gpt-4o has contextLimit = 128000
+      // expected = floor(128000 * 3.5 / 1.5) = floor(298666.66...) = 298666
+      const expected = Math.floor((128000 * 3.5) / 1.5);
+      expect(getMaxChunkChars("gpt-4o")).toBe(expected);
+    });
+
+    it("should apply formula correctly for a high-context model", () => {
+      // gpt-5-mini has contextLimit = 272000
+      const expected = Math.floor((272000 * 3.5) / 1.5);
+      expect(getMaxChunkChars("gpt-5-mini")).toBe(expected);
+    });
+  });
+
+  describe("automated language helpers", () => {
+    it("AUTOMATED_OUTPUT_DIRS has entries for pt-BR and es", () => {
+      expect(AUTOMATED_OUTPUT_DIRS).toHaveProperty("pt-BR");
+      expect(AUTOMATED_OUTPUT_DIRS).toHaveProperty("es");
+      expect(typeof AUTOMATED_OUTPUT_DIRS["pt-BR"]).toBe("string");
+      expect(typeof AUTOMATED_OUTPUT_DIRS["es"]).toBe("string");
+    });
+
+    it("AUTOMATED_LANGUAGE_MAP maps Portuguese and Spanish to automated codes", () => {
+      expect(AUTOMATED_LANGUAGE_MAP["Portuguese"]).toBe("PT - automated");
+      expect(AUTOMATED_LANGUAGE_MAP["Spanish"]).toBe("ES - automated");
+    });
+
+    describe("isAutomatedLanguageCode", () => {
+      it("returns true for a known automated code", () => {
+        expect(isAutomatedLanguageCode("PT - automated")).toBe(true);
+      });
+
+      it("returns false for a base language name", () => {
+        expect(isAutomatedLanguageCode("Portuguese")).toBe(false);
+      });
+    });
+
+    describe("getBaseLanguageCode", () => {
+      it("returns the base language name for a known automated code", () => {
+        expect(getBaseLanguageCode("PT - automated")).toBe("Portuguese");
+      });
+
+      it("passes through an unknown code unchanged", () => {
+        expect(getBaseLanguageCode("French")).toBe("French");
+      });
+    });
+
+    describe("getAutomatedLanguageCode", () => {
+      it("returns the automated code for a known base language", () => {
+        expect(getAutomatedLanguageCode("Portuguese")).toBe("PT - automated");
+      });
+
+      it("passes through a code that is already automated", () => {
+        expect(getAutomatedLanguageCode("PT - automated")).toBe(
+          "PT - automated"
+        );
+      });
+
+      it("returns a fallback template string for an unknown language", () => {
+        expect(getAutomatedLanguageCode("French")).toBe("French-automated");
+      });
+    });
+
+    describe("getAutomatedOutputDir", () => {
+      it("returns the expected path for pt-BR", () => {
+        expect(getAutomatedOutputDir("pt-BR")).toBe(
+          "./automated-translations/pt"
+        );
+      });
+
+      it("returns undefined for an unsupported locale", () => {
+        expect(getAutomatedOutputDir("fr")).toBeUndefined();
+      });
+    });
+  });
+
+  describe("safety messages", () => {
+    it("should have correct English modification error message", () => {
       // Arrange & Act & Assert
-      expect(getModelParams("GPT-5-NANO")).toEqual({ temperature: 1 });
-      expect(getModelParams("gpt-5")).toEqual({ temperature: 1 });
-      expect(getModelParams(" gpt-5-nano ")).toEqual({ temperature: 1 });
-      expect(getModelParams("gpt-5-nano")).toEqual({ temperature: 1 });
+      expect(ENGLISH_MODIFICATION_ERROR).toBe(
+        "SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss."
+      );
+      expect(typeof ENGLISH_MODIFICATION_ERROR).toBe("string");
     });
 
-    it("should handle GPT-5 variants correctly", () => {
-      // Arrange & Act & Assert - ensure exact match and prefix match work
-      expect(getModelParams("gpt-5")).toEqual({ temperature: 1 });
-      expect(getModelParams("gpt-5-nano")).toEqual({ temperature: 1 });
-      expect(getModelParams("gpt-5-mini")).toEqual({ temperature: 1 });
-      // GPT-5-chat-latest may support temperature with reasoning_effort=none
-      expect(getModelParams("gpt-5-chat-latest")).toEqual({ temperature: 1 });
+    it("should have correct English directory save error message", () => {
+      // Arrange & Act & Assert
+      expect(ENGLISH_DIR_SAVE_ERROR).toBe(
+        "Safety check failed: Cannot save translated content to English docs directory"
+      );
+      expect(typeof ENGLISH_DIR_SAVE_ERROR).toBe("string");
     });
   });
-});
 
-describe("safety messages", () => {
-  it("should have correct English modification error message", () => {
-    // Arrange & Act & Assert
-    expect(ENGLISH_MODIFICATION_ERROR).toBe(
-      "SAFETY ERROR: Cannot create or update English pages. This is a critical safety measure to prevent data loss."
-    );
-    expect(typeof ENGLISH_MODIFICATION_ERROR).toBe("string");
-  });
-
-  it("should have correct English directory save error message", () => {
-    // Arrange & Act & Assert
-    expect(ENGLISH_DIR_SAVE_ERROR).toBe(
-      "Safety check failed: Cannot save translated content to English docs directory"
-    );
-    expect(typeof ENGLISH_DIR_SAVE_ERROR).toBe("string");
-  });
-
-  it("should have non-empty safety messages", () => {
-    // Arrange & Act & Assert
-    expect(ENGLISH_MODIFICATION_ERROR.length).toBeGreaterThan(0);
-    expect(ENGLISH_DIR_SAVE_ERROR.length).toBeGreaterThan(0);
-  });
-});
-
-describe("TypeScript interfaces", () => {
-  it("should accept valid TranslationConfig objects", () => {
-    // Arrange
-    const validConfig: TranslationConfig = {
-      language: "fr",
-      notionLangCode: "French",
-      outputDir: "./i18n/fr/docs",
-    };
-
-    // Act & Assert
-    expect(validConfig.language).toBe("fr");
-    expect(validConfig.notionLangCode).toBe("French");
-    expect(validConfig.outputDir).toBe("./i18n/fr/docs");
-  });
-
-  it("should accept valid NotionPage objects", () => {
-    // Arrange
-    const validPage: NotionPage = {
-      id: "test-id",
-      last_edited_time: "2024-01-01T00:00:00.000Z",
-      properties: {
-        Title: { title: [{ plain_text: "Test" }] },
-      },
-      parent: { type: "database_id", database_id: "db-id" },
-    };
-
-    // Act & Assert
-    expect(validPage.id).toBe("test-id");
-    expect(validPage.last_edited_time).toBe("2024-01-01T00:00:00.000Z");
-    expect(validPage.properties).toBeDefined();
-    expect(typeof validPage.properties).toBe("object");
-  });
-});
-
-describe("test environment configuration", () => {
-  it("should have defined safe branch patterns", () => {
-    // Arrange & Act & Assert
-    expect(SAFE_BRANCH_PATTERNS).toBeDefined();
-    expect(Array.isArray(SAFE_BRANCH_PATTERNS)).toBe(true);
-    expect(SAFE_BRANCH_PATTERNS.length).toBeGreaterThan(0);
-  });
-
-  it("should include expected safe branch patterns", () => {
-    // Arrange & Act & Assert
-    expect(SAFE_BRANCH_PATTERNS).toContain("test/*");
-    expect(SAFE_BRANCH_PATTERNS).toContain("fix/*");
-    expect(SAFE_BRANCH_PATTERNS).toContain("feat/*");
-    expect(SAFE_BRANCH_PATTERNS).toContain("chore/*");
-    expect(SAFE_BRANCH_PATTERNS).toContain("refactor/*");
-  });
-
-  it("should have defined protected branches", () => {
-    // Arrange & Act & Assert
-    expect(PROTECTED_BRANCHES).toBeDefined();
-    expect(Array.isArray(PROTECTED_BRANCHES)).toBe(true);
-    expect(PROTECTED_BRANCHES.length).toBeGreaterThan(0);
-  });
-
-  it("should include expected protected branches", () => {
-    // Arrange & Act & Assert
-    expect(PROTECTED_BRANCHES).toContain("main");
-    expect(PROTECTED_BRANCHES).toContain("master");
-    expect(PROTECTED_BRANCHES).toContain("content");
-  });
-
-  describe("isTestMode", () => {
-    it("should return false when no test env vars are set", () => {
+  describe("TypeScript interfaces", () => {
+    it("should accept valid TranslationConfig objects", () => {
       // Arrange
-      delete process.env.TEST_MODE;
-      delete process.env.TEST_DATABASE_ID;
-      delete process.env.TEST_DATA_SOURCE_ID;
+      const validConfig: TranslationConfig = {
+        language: "fr",
+        notionLangCode: "French",
+        outputDir: "./i18n/fr/docs",
+      };
 
       // Act & Assert
-      expect(isTestMode()).toBe(false);
+      expect(validConfig.language).toBe("fr");
+      expect(validConfig.notionLangCode).toBe("French");
+      expect(validConfig.outputDir).toBe("./i18n/fr/docs");
     });
 
-    it("should return true when TEST_MODE is 'true'", () => {
+    it("should accept valid NotionPage objects", () => {
       // Arrange
-      process.env.TEST_MODE = "true";
-      delete process.env.TEST_DATABASE_ID;
-      delete process.env.TEST_DATA_SOURCE_ID;
+      const validPage: NotionPage = {
+        id: "test-id",
+        last_edited_time: "2024-01-01T00:00:00.000Z",
+        properties: {
+          Title: { title: [{ plain_text: "Test" }] },
+        },
+        parent: { type: "database_id", database_id: "db-id" },
+      };
 
       // Act & Assert
-      expect(isTestMode()).toBe(true);
-    });
-
-    it("should return true when TEST_DATABASE_ID is set", () => {
-      // Arrange
-      delete process.env.TEST_MODE;
-      process.env.TEST_DATABASE_ID = "test-db-id";
-      delete process.env.TEST_DATA_SOURCE_ID;
-
-      // Act & Assert
-      expect(isTestMode()).toBe(true);
-    });
-
-    it("should return true when TEST_DATA_SOURCE_ID is set", () => {
-      // Arrange
-      delete process.env.TEST_MODE;
-      delete process.env.TEST_DATABASE_ID;
-      process.env.TEST_DATA_SOURCE_ID = "test-data-source-id";
-
-      // Act & Assert
-      expect(isTestMode()).toBe(true);
+      expect(validPage.id).toBe("test-id");
+      expect(validPage.last_edited_time).toBe("2024-01-01T00:00:00.000Z");
+      expect(validPage.properties).toBeDefined();
+      expect(typeof validPage.properties).toBe("object");
     });
   });
 
-  describe("getTestDataSourceId", () => {
-    it("should return undefined when TEST_DATA_SOURCE_ID is not set", () => {
-      // Arrange
-      delete process.env.TEST_DATA_SOURCE_ID;
-
-      // Act & Assert
-      expect(getTestDataSourceId()).toBeUndefined();
+  describe("test environment configuration", () => {
+    it("should have defined safe branch patterns", () => {
+      // Arrange & Act & Assert
+      expect(SAFE_BRANCH_PATTERNS).toBeDefined();
+      expect(Array.isArray(SAFE_BRANCH_PATTERNS)).toBe(true);
+      expect(SAFE_BRANCH_PATTERNS.length).toBeGreaterThan(0);
     });
 
-    it("should return the value when TEST_DATA_SOURCE_ID is set", () => {
-      // Arrange
-      process.env.TEST_DATA_SOURCE_ID = "test-data-source-id";
-
-      // Act & Assert
-      expect(getTestDataSourceId()).toBe("test-data-source-id");
-    });
-  });
-
-  describe("getTestDatabaseId", () => {
-    it("should return undefined when TEST_DATABASE_ID is not set", () => {
-      // Arrange
-      delete process.env.TEST_DATABASE_ID;
-
-      // Act & Assert
-      expect(getTestDatabaseId()).toBeUndefined();
+    it("should include expected safe branch patterns", () => {
+      // Arrange & Act & Assert
+      expect(SAFE_BRANCH_PATTERNS).toContain("test/*");
+      expect(SAFE_BRANCH_PATTERNS).toContain("fix/*");
+      expect(SAFE_BRANCH_PATTERNS).toContain("feat/*");
+      expect(SAFE_BRANCH_PATTERNS).toContain("chore/*");
+      expect(SAFE_BRANCH_PATTERNS).toContain("refactor/*");
     });
 
-    it("should return the value when TEST_DATABASE_ID is set", () => {
-      // Arrange
-      process.env.TEST_DATABASE_ID = "test-db-id";
-
-      // Act & Assert
-      expect(getTestDatabaseId()).toBe("test-db-id");
-    });
-  });
-
-  describe("isSafeTestBranch", () => {
-    beforeEach(() => {
-      // Clear test mode env vars before each test
-      delete process.env.TEST_MODE;
-      delete process.env.TEST_DATABASE_ID;
-      delete process.env.TEST_DATA_SOURCE_ID;
+    it("should have defined protected branches", () => {
+      // Arrange & Act & Assert
+      expect(PROTECTED_BRANCHES).toBeDefined();
+      expect(Array.isArray(PROTECTED_BRANCHES)).toBe(true);
+      expect(PROTECTED_BRANCHES.length).toBeGreaterThan(0);
     });
 
-    it("should return true for any branch when not in test mode", () => {
-      // Arrange - ensure we're NOT in test mode
-      delete process.env.TEST_MODE;
-      delete process.env.TEST_DATABASE_ID;
-      delete process.env.TEST_DATA_SOURCE_ID;
-
-      // Act & Assert
-      expect(isSafeTestBranch("main")).toBe(true);
-      expect(isSafeTestBranch("content")).toBe(true);
-      expect(isSafeTestBranch("any-branch")).toBe(true);
+    it("should include expected protected branches", () => {
+      // Arrange & Act & Assert
+      expect(PROTECTED_BRANCHES).toContain("main");
+      expect(PROTECTED_BRANCHES).toContain("master");
+      expect(PROTECTED_BRANCHES).toContain("content");
     });
 
-    it("should return true for safe pattern branches in test mode", () => {
-      // Arrange - enable test mode
-      process.env.TEST_MODE = "true";
+    describe("isTestMode", () => {
+      it("should return false when no test env vars are set", () => {
+        // Arrange
+        delete process.env.TEST_MODE;
+        delete process.env.TEST_DATABASE_ID;
+        delete process.env.TEST_DATA_SOURCE_ID;
 
-      // Act & Assert
-      expect(isSafeTestBranch("test/translation")).toBe(true);
-      expect(isSafeTestBranch("fix/something")).toBe(true);
-      expect(isSafeTestBranch("feat/new-feature")).toBe(true);
-      expect(isSafeTestBranch("chore/update")).toBe(true);
-      expect(isSafeTestBranch("refactor/cleanup")).toBe(true);
+        // Act & Assert
+        expect(isTestMode()).toBe(false);
+      });
+
+      it("should return true when TEST_MODE is 'true'", () => {
+        // Arrange
+        process.env.TEST_MODE = "true";
+        delete process.env.TEST_DATABASE_ID;
+        delete process.env.TEST_DATA_SOURCE_ID;
+
+        // Act & Assert
+        expect(isTestMode()).toBe(true);
+      });
+
+      it("should return true when TEST_DATABASE_ID is set", () => {
+        // Arrange
+        delete process.env.TEST_MODE;
+        process.env.TEST_DATABASE_ID = "test-db-id";
+        delete process.env.TEST_DATA_SOURCE_ID;
+
+        // Act & Assert
+        expect(isTestMode()).toBe(true);
+      });
+
+      it("should return true when TEST_DATA_SOURCE_ID is set", () => {
+        // Arrange
+        delete process.env.TEST_MODE;
+        delete process.env.TEST_DATABASE_ID;
+        process.env.TEST_DATA_SOURCE_ID = "test-data-source-id";
+
+        // Act & Assert
+        expect(isTestMode()).toBe(true);
+      });
     });
 
-    it("should return true for branches with 'test' in name in test mode", () => {
-      // Arrange - enable test mode
-      process.env.TEST_MODE = "true";
+    describe("getTestDataSourceId", () => {
+      it("should return undefined when TEST_DATA_SOURCE_ID is not set", () => {
+        // Arrange
+        delete process.env.TEST_DATA_SOURCE_ID;
 
-      // Act & Assert
-      expect(isSafeTestBranch("my-test-branch")).toBe(true);
-      expect(isSafeTestBranch("test-translation-fix")).toBe(true);
-      expect(isSafeTestBranch("testing-123")).toBe(true);
+        // Act & Assert
+        expect(getTestDataSourceId()).toBeUndefined();
+      });
+
+      it("should return the value when TEST_DATA_SOURCE_ID is set", () => {
+        // Arrange
+        process.env.TEST_DATA_SOURCE_ID = "test-data-source-id";
+
+        // Act & Assert
+        expect(getTestDataSourceId()).toBe("test-data-source-id");
+      });
     });
 
-    it("should return false for protected branches in test mode", () => {
-      // Arrange - enable test mode
-      process.env.TEST_MODE = "true";
+    describe("getTestDatabaseId", () => {
+      it("should return undefined when TEST_DATABASE_ID is not set", () => {
+        // Arrange
+        delete process.env.TEST_DATABASE_ID;
 
-      // Act & Assert
-      expect(isSafeTestBranch("main")).toBe(false);
-      expect(isSafeTestBranch("master")).toBe(false);
-      expect(isSafeTestBranch("content")).toBe(false);
+        // Act & Assert
+        expect(getTestDatabaseId()).toBeUndefined();
+      });
+
+      it("should return the value when TEST_DATABASE_ID is set", () => {
+        // Arrange
+        process.env.TEST_DATABASE_ID = "test-db-id";
+
+        // Act & Assert
+        expect(getTestDatabaseId()).toBe("test-db-id");
+      });
     });
 
-    it("should return false for non-safe, non-test branches in test mode", () => {
-      // Arrange - enable test mode
-      process.env.TEST_MODE = "true";
+    describe("isSafeTestBranch", () => {
+      it("should return true for any branch when not in test mode", () => {
+        // Act & Assert
+        expect(isSafeTestBranch("main")).toBe(true);
+        expect(isSafeTestBranch("content")).toBe(true);
+        expect(isSafeTestBranch("any-branch")).toBe(true);
+      });
 
-      // Act & Assert
-      expect(isSafeTestBranch("production")).toBe(false);
-      expect(isSafeTestBranch("staging")).toBe(false);
-      expect(isSafeTestBranch("develop")).toBe(false);
+      it("should return true for safe pattern branches in test mode", () => {
+        // Arrange - enable test mode
+        process.env.TEST_MODE = "true";
+
+        // Act & Assert
+        expect(isSafeTestBranch("test/translation")).toBe(true);
+        expect(isSafeTestBranch("fix/something")).toBe(true);
+        expect(isSafeTestBranch("feat/new-feature")).toBe(true);
+        expect(isSafeTestBranch("chore/update")).toBe(true);
+        expect(isSafeTestBranch("refactor/cleanup")).toBe(true);
+      });
+
+      it("should return true for branches with 'test' in name in test mode", () => {
+        // Arrange - enable test mode
+        process.env.TEST_MODE = "true";
+
+        // Act & Assert
+        expect(isSafeTestBranch("my-test-branch")).toBe(true);
+        expect(isSafeTestBranch("test-translation-fix")).toBe(true);
+        expect(isSafeTestBranch("testing-123")).toBe(true);
+      });
+
+      it("should return false for protected branches in test mode", () => {
+        // Arrange - enable test mode
+        process.env.TEST_MODE = "true";
+
+        // Act & Assert
+        expect(isSafeTestBranch("main")).toBe(false);
+        expect(isSafeTestBranch("master")).toBe(false);
+        expect(isSafeTestBranch("content")).toBe(false);
+      });
+
+      it("should return false for non-safe, non-test branches in test mode", () => {
+        // Arrange - enable test mode
+        process.env.TEST_MODE = "true";
+
+        // Act & Assert
+        expect(isSafeTestBranch("production")).toBe(false);
+        expect(isSafeTestBranch("staging")).toBe(false);
+        expect(isSafeTestBranch("develop")).toBe(false);
+      });
     });
   });
 });

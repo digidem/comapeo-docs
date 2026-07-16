@@ -256,9 +256,10 @@ async function translateBlocksTree(
         }
       }
 
-      // Clean up unsupported properties that Notion API rejects on creation
-      if (blockType === "table" && typeObj.table_width !== undefined) {
-        // sometimes table_width is read-only? No, table_width is required.
+      // Clean up unsupported properties that Notion API rejects on block creation.
+      // The Notion API returns these fields when reading but rejects them as null on write.
+      if ("icon" in typeObj && typeObj.icon === null) {
+        delete typeObj.icon;
       }
     }
 
@@ -283,12 +284,16 @@ export async function createNotionPageWithBlocks(
   blocks: BlockObjectRequest[],
   properties: Record<string, unknown> = {},
   language?: string,
-  existingPageId?: string
+  existingPageId?: string,
+  forceCreate?: boolean
 ): Promise<string> {
   const MAX_RETRIES = 3;
   const NOTION_API_CHUNK_SIZE = 100;
   let retryCount = 0;
   let lastError: Error | null = null;
+  let retryPageId: string | null = forceCreate
+    ? null
+    : (existingPageId ?? null);
 
   while (retryCount < MAX_RETRIES) {
     try {
@@ -296,25 +301,33 @@ export async function createNotionPageWithBlocks(
         throw new Error("Cannot modify English pages");
       }
 
-      let pageId: string | null = existingPageId ?? null;
+      let pageId = retryPageId;
+
       const pageRelation = {
         "Parent item": {
           relation: [{ id: parentPageId }],
         },
       };
 
-      if (!existingPageId) {
+      // When forceCreate is set, skip the DB search entirely and always create
+      if (!forceCreate && !pageId) {
         const filter = language
           ? {
               and: [
-                { property: NOTION_PROPERTIES.TITLE, title: { equals: title } },
+                {
+                  property: NOTION_PROPERTIES.TITLE,
+                  title: { equals: title },
+                },
                 {
                   property: NOTION_PROPERTIES.LANGUAGE,
                   select: { equals: language },
                 },
               ],
             }
-          : { property: NOTION_PROPERTIES.TITLE, title: { equals: title } };
+          : {
+              property: NOTION_PROPERTIES.TITLE,
+              title: { equals: title },
+            };
 
         const response = await enhancedNotion.dataSourcesQuery({
           data_source_id: databaseId,
@@ -338,6 +351,7 @@ export async function createNotionPageWithBlocks(
 
         if (nonEnglishResults.length > 0) {
           pageId = nonEnglishResults[0].id;
+          retryPageId = pageId;
         }
       }
 
@@ -386,6 +400,7 @@ export async function createNotionPageWithBlocks(
           properties: pageProperties,
         });
         pageId = newPage.id;
+        retryPageId = pageId;
       }
 
       // Add content blocks in chunks to avoid API limits

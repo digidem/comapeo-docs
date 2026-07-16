@@ -1,10 +1,10 @@
 # Scripts Inventory
 
-Complete inventory of all Notion-related scripts in the comapeo-docs repository, including core entry points, shared utilities, and API server integration.
+Complete inventory of all Notion-related scripts in the comapeo-docs repository, including core entry points and shared utilities.
 
 ## Overview
 
-This document provides a comprehensive inventory of all Bun scripts that interact with Notion API, their relationships, and how they integrate with the API server service.
+This document provides a comprehensive inventory of all Bun scripts that interact with Notion API and their relationships.
 
 ## Core Notion Scripts
 
@@ -30,8 +30,6 @@ This document provides a comprehensive inventory of all Bun scripts that interac
 
 - `NOTION_API_KEY` - Notion API authentication token
 - `DATABASE_ID` / `NOTION_DATABASE_ID` - Notion database ID
-
-**API Server Job Type**: `notion:fetch`
 
 **Output**:
 
@@ -66,8 +64,6 @@ This document provides a comprehensive inventory of all Bun scripts that interac
 - `--include-removed` - Include pages with "Remove" status
 - `--preview-only` - Generate preview only, no file export
 - `--comparison, -c` - Compare with published documentation
-
-**API Server Job Type**: `notion:fetch-all`
 
 **Output**:
 
@@ -107,8 +103,6 @@ This document provides a comprehensive inventory of all Bun scripts that interac
 
 **Command**: `bun run notion:translate`
 
-**API Server Job Type**: `notion:translate`
-
 **Languages Supported**:
 
 - `pt` (Portuguese)
@@ -134,13 +128,6 @@ This document provides a comprehensive inventory of all Bun scripts that interac
 - `publish-production` - Update production publish status
 
 **Command**: `bun run notion:status --workflow <workflow-name>`
-
-**API Server Job Types**:
-
-- `notion:status-translation`
-- `notion:status-draft`
-- `notion:status-publish`
-- `notion:status-publish-production`
 
 ---
 
@@ -269,124 +256,6 @@ This document provides a comprehensive inventory of all Bun scripts that interac
 
 ---
 
-## API Server Integration
-
-### Job Executor
-
-**Path**: `scripts/api-server/job-executor.ts`
-
-**Purpose**: Execute Notion jobs asynchronously with progress tracking.
-
-**Job Types Mapped**:
-
-```typescript
-const JOB_COMMANDS = {
-  "notion:fetch": ["bun", "scripts/notion-fetch"],
-  "notion:fetch-all": ["bun", "scripts/notion-fetch-all"],
-  "notion:translate": ["bun", "scripts/notion-translate"],
-  "notion:status-translation": [
-    "bun",
-    "scripts/notion-status",
-    "--workflow",
-    "translation",
-  ],
-  "notion:status-draft": [
-    "bun",
-    "scripts/notion-status",
-    "--workflow",
-    "draft",
-  ],
-  "notion:status-publish": [
-    "bun",
-    "scripts/notion-status",
-    "--workflow",
-    "publish",
-  ],
-  "notion:status-publish-production": [
-    "bun",
-    "scripts/notion-status",
-    "--workflow",
-    "publish-production",
-  ],
-};
-```
-
-**Features**:
-
-- Process spawning with `node:child_process`
-- Progress parsing from stdout
-- Log capture and persistence
-- GitHub status reporting integration
-
----
-
-### Job Tracker
-
-**Path**: `scripts/api-server/job-tracker.ts`
-
-**Purpose**: In-memory job state management.
-
-**Job States**:
-
-- `pending` - Job queued, not started
-- `running` - Job currently executing
-- `completed` - Job finished successfully
-- `failed` - Job failed with error
-
-**Job Progress Tracking**:
-
-- Current/total progress counters
-- Progress messages
-- Estimated completion time
-
----
-
-### Authentication
-
-**Path**: `scripts/api-server/auth.ts`
-
-**Purpose**: API key authentication for protected endpoints.
-
-**Features**:
-
-- Header-based API key validation (`X-API-Key`)
-- Environment variable configuration (`API_KEYS`)
-- Multiple API key support (comma-separated)
-
----
-
-### Audit Logging
-
-**Path**: `scripts/api-server/audit.ts`
-
-**Purpose**: Request audit logging for compliance and debugging.
-
-**Logged Data**:
-
-- Request ID
-- Timestamp
-- Auth result
-- Endpoint
-- Request body (sanitized)
-- Response status
-- Duration
-
----
-
-### GitHub Status Reporting
-
-**Path**: `scripts/api-server/github-status.ts`
-
-**Purpose**: Report job completion status to GitHub commits.
-
-**Features**:
-
-- Status API integration
-- Idempotent status updates
-- Context-aware reporting (e.g., "notion-fetch", "notion-translate")
-
----
-
 ## Testing Infrastructure
 
 ### Test Utilities
@@ -414,9 +283,6 @@ const JOB_COMMANDS = {
 **Coverage Areas**:
 
 - Unit tests for core utilities
-- Integration tests for API endpoints
-- Job queue behavior tests
-- Auth and audit logging tests
 
 ---
 
@@ -448,13 +314,6 @@ const JOB_COMMANDS = {
 ### Dependency Graph
 
 ```
-api-server/
-├── job-executor.ts → spawns all notion-* scripts
-├── job-tracker.ts → manages job state
-├── auth.ts → validates API keys
-├── audit.ts → logs requests
-└── github-status.ts → reports to GitHub
-
 notion-fetch/
 ├── index.ts (entry point)
 ├── runFetch.ts (pipeline orchestration)
@@ -489,21 +348,10 @@ Most scripts require:
 
 - `DATABASE_ID` / `NOTION_DATABASE_ID` - Notion database ID
 
-API server requires:
-
-- `API_PORT` - Server port (default: 3001)
-- `API_HOST` - Server host (default: localhost)
-- `API_KEYS` - Comma-separated valid API keys
-
-GitHub integration requires:
-
-- `GITHUB_TOKEN` - GitHub personal access token
-
 ### Performance Considerations
 
 - **Image Optimization**: Scripts automatically compress images during fetch
 - **Caching**: `notion-fetch-all` supports caching with `--force` to bypass
-- **Concurrency**: API server limits concurrent jobs (configurable)
 - **Progress Tracking**: Real-time progress reporting for long-running jobs
 
 ### Error Recovery
@@ -511,7 +359,6 @@ GitHub integration requires:
 - **Retry Logic**: Notion client uses exponential backoff for rate limits
 - **Graceful Shutdown**: All scripts support SIGTERM/SIGINT handling
 - **Job Persistence**: Failed jobs preserve error logs and partial output
-- **Status Reporting**: GitHub status updates reflect job outcomes
 
 ---
 
@@ -523,13 +370,6 @@ GitHub integration requires:
 2. **Pure Functions**: Some scripts have side effects that could be isolated
 3. **Shared Types**: Common interfaces could be consolidated
 4. **Test Coverage**: Some utility scripts lack comprehensive tests
-
-### API Server Enhancements
-
-1. **WebSocket Support**: Real-time progress updates
-2. **Job Priorities**: Priority queue for different job types
-3. **Rate Limiting**: Per-API-key rate limiting
-4. **Job History**: Persistent job history beyond current session
 
 ---
 

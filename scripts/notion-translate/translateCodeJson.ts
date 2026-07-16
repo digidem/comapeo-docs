@@ -174,7 +174,7 @@ export function extractTranslatableText(
       nav.items.forEach((item: NavbarItem) => {
         if (item.label) {
           const key = `item.label.${item.label}`;
-          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
+
           result[key] = {
             message: item.label,
             description: `Navbar item with label ${item.label}`,
@@ -190,10 +190,19 @@ export function extractTranslatableText(
       footer.links.forEach((section: FooterSection) => {
         if (section.title) {
           const titleKey = `links.title.${section.title}`;
-          // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
+
           result[titleKey] = {
             message: section.title,
             description: `Footer section title: ${section.title}`,
+          };
+
+          // Docusaurus's own footer i18n key (see @docusaurus/theme-classic
+          // translations.js): required or translations are dropped at runtime.
+          const docusaurusTitleKey = `link.title.${section.title}`;
+
+          result[docusaurusTitleKey] = {
+            message: section.title,
+            description: `The title of the footer links column with title=${section.title} in the footer`,
           };
         }
 
@@ -201,10 +210,19 @@ export function extractTranslatableText(
           section.items.forEach((item: FooterLink) => {
             if (item.label) {
               const labelKey = `links.${section.title}.${item.label}`;
-              // eslint-disable-next-line security/detect-object-injection -- translation keys are generated from controlled config labels
+
               result[labelKey] = {
                 message: item.label,
                 description: `Footer link label: ${item.label}`,
+              };
+
+              // Docusaurus's own footer i18n key (see @docusaurus/theme-classic
+              // translations.js): required or translations are dropped at runtime.
+              const docusaurusLabelKey = `link.item.label.${item.label}`;
+
+              result[docusaurusLabelKey] = {
+                message: item.label,
+                description: `The label of footer link with label=${item.label} linking to ${item.href ?? ""}`,
               };
             }
           });
@@ -312,7 +330,6 @@ export function getLanguageName(langCode: string): string {
     en: "English",
   };
 
-  // eslint-disable-next-line security/detect-object-injection -- dictionary lookup by locale code is expected behavior
   return languageMap[langCode] || langCode;
 }
 

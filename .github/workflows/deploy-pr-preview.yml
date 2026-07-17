@@ -338,6 +338,24 @@ jobs:
           echo "  - Total docs: $TOTAL_CONTENT"
           find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
+      - name: Restore PR-authored i18n changes
+        # The content-provisioning step above may have overlaid i18n/ from the
+        # content branch (or regenerated it from Notion), silently discarding
+        # any i18n/ files this PR itself modified — e.g. theme translation
+        # (navbar.json, footer.json, code.json). Restore this PR's own
+        # versions of any i18n/ path it actually changed so the preview
+        # renders what the PR is proposing, not unrelated content-branch state.
+        run: |
+          set -e
+          PR_I18N_CHANGES=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD" -- i18n/ || true)
+          if [ -n "$PR_I18N_CHANGES" ]; then
+            echo "Restoring PR-authored i18n files over content overlay:"
+            echo "$PR_I18N_CHANGES"
+            echo "$PR_I18N_CHANGES" | xargs -r git checkout HEAD --
+          else
+            echo "No PR-authored i18n/ changes to restore."
+          fi
+
       - name: Build documentation
         # IS_PRODUCTION not set - generates noindex meta tags and disallow robots.txt
         run: bun run build

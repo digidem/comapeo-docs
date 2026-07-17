@@ -30,6 +30,19 @@ jobs:
           if git checkout origin/content -- i18n/; then
             echo "has_i18n=true" >> "$GITHUB_OUTPUT"
             echo "✅ Loaded i18n content from origin/content."
+
+            # The checkout above overlays i18n/ from the content branch,
+            # which would silently discard any i18n/ files this PR itself
+            # modified (e.g. theme translation navbar.json/footer.json/
+            # code.json), letting locale tests pass without ever validating
+            # what the PR is actually proposing. Restore this PR's own
+            # versions of any i18n/ path it actually changed.
+            PR_I18N_CHANGES=$(git diff --name-only "$(git merge-base HEAD origin/main)" HEAD -- i18n/ || true)
+            if [ -n "$PR_I18N_CHANGES" ]; then
+              echo "Restoring PR-authored i18n files over content overlay:"
+              echo "$PR_I18N_CHANGES"
+              echo "$PR_I18N_CHANGES" | xargs -r git checkout HEAD --
+            fi
           else
             echo "has_i18n=false" >> "$GITHUB_OUTPUT"
             echo "⚠️ origin/content checkout failed. Locale-dependent tests will be skipped."

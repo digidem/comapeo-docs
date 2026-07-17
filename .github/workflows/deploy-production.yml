@@ -132,6 +132,16 @@ jobs:
           echo "📂 Checking out content at SHA ${SHA:0:8}..."
           git checkout "$SHA" -- docs/ i18n/ static/images/
 
+          # The checkout above overlays i18n/ from the locked content SHA,
+          # which does not carry this repo's hand-maintained theme
+          # translation files (code.json, docusaurus-theme-classic/*) —
+          # those live only on main. Restore them from main so the theme
+          # chrome translations this repo owns actually reach production
+          # instead of silently falling back to whatever (or nothing) the
+          # content SHA has for those paths.
+          git ls-files -z 'i18n/*/code.json' 'i18n/*/docusaurus-theme-classic/*' \
+            | xargs -0 -r git checkout HEAD --
+
           # Validate content exists
           echo "🔍 Validating content..."
 

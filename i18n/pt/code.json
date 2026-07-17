@@ -159,7 +159,6 @@
   "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
     "message": "Resolução de Problemas: Movendo Observações e Percursos Fora do CoMapeo"
   },
-
   "Installing CoMapeo and Onboarding": {
     "message": "Instalação do CoMapeo e Integração"
   },
@@ -560,5 +559,17 @@
   "theme.tags.tagsPageTitle": {
     "message": "Etiquetas",
     "description": "The title of the tag list page"
+  },
+  "theme.PwaReloadPopup.closeButtonAriaLabel": {
+    "message": "Fechar",
+    "description": "The ARIA label for close button of PWA reload popup"
+  },
+  "theme.PwaReloadPopup.info": {
+    "message": "Nova versão disponível",
+    "description": "The text used in PWA reload popup"
+  },
+  "theme.PwaReloadPopup.refreshButtonText": {
+    "message": "Atualizar",
+    "description": "The text used for PWA reload button"
   }
 }

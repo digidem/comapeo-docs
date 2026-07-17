@@ -147,16 +147,17 @@ const loadDocusaurusBaseEnglishDefaults = async (): Promise<
   const merged: Record<string, string> = {};
   for (const relPath of DOCUSAURUS_BASE_TRANSLATION_FILES) {
     const filePath = path.join(process.cwd(), relPath);
-    try {
-      const content = await fs.readFile(filePath, "utf8");
-      const data = JSON.parse(content) as Record<string, string>;
-      for (const [key, value] of Object.entries(data)) {
-        if (key.endsWith("___DESCRIPTION")) continue;
-        // eslint-disable-next-line security/detect-object-injection -- key comes from a Docusaurus-shipped JSON catalog, never external input
-        merged[key] = value;
-      }
-    } catch {
-      // Translation catalog for a plugin that isn't installed - skip it.
+    // Every file in DOCUSAURUS_BASE_TRANSLATION_FILES corresponds to a
+    // plugin this site has confirmed active in docusaurus.config.ts, so a
+    // read/parse failure here means something is actually broken (missing
+    // dependency, corrupted install) — fail loudly rather than silently
+    // treating the catalog as empty, which would make this check fail-open.
+    const content = await fs.readFile(filePath, "utf8");
+    const data = JSON.parse(content) as Record<string, string>;
+    for (const [key, value] of Object.entries(data)) {
+      if (key.endsWith("___DESCRIPTION")) continue;
+      // eslint-disable-next-line security/detect-object-injection -- key comes from a Docusaurus-shipped JSON catalog, never external input
+      merged[key] = value;
     }
   }
   return merged;
@@ -169,6 +170,21 @@ const ENGLISH_DEFAULT_ALLOWLIST = new Set<string>([
   // "{authorName} - {nPosts}" — just an interpolation pattern, not prose.
   "theme.blog.author.pageTitle",
 ]);
+
+const assertHasAllDocusaurusBaseKeys = (
+  translations: TranslationCodeJson,
+  baseDefaults: Record<string, string>,
+  fileLabel: string
+): void => {
+  const missing = Object.keys(baseDefaults).filter(
+    (key) => !(key in translations)
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `${fileLabel}: missing ${missing.length} Docusaurus base translation key(s) — these silently fall back to English at runtime:\n${missing.map((k) => `  "${k}"`).join("\n")}`
+    );
+  }
+};
 
 const assertNoUntranslatedDocusaurusDefaults = (
   translations: TranslationCodeJson,
@@ -314,6 +330,7 @@ describe("Locale Output Verification", () => {
       assertNoUntranslatedMessages(codeJson, "es/code.json");
       assertNoEmptyMessages(codeJson, "es/code.json");
       const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertHasAllDocusaurusBaseKeys(codeJson, baseDefaults, "es/code.json");
       assertNoUntranslatedDocusaurusDefaults(
         codeJson,
         baseDefaults,
@@ -349,6 +366,7 @@ describe("Locale Output Verification", () => {
       assertNoUntranslatedMessages(codeJson, "pt/code.json");
       assertNoEmptyMessages(codeJson, "pt/code.json");
       const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertHasAllDocusaurusBaseKeys(codeJson, baseDefaults, "pt/code.json");
       assertNoUntranslatedDocusaurusDefaults(
         codeJson,
         baseDefaults,

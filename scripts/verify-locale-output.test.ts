@@ -129,38 +129,64 @@ const assertNoEmptyMessages = (
   }
 };
 
-// Docusaurus theme default English strings that are common leak points: a key
-// whose identifier differs from its message (e.g. "theme.TOC.title") slips past
-// assertNoUntranslatedMessages if the message is left as the English default.
-const KNOWN_ENGLISH_THEME_DEFAULTS: Record<string, string> = {
-  "theme.TOC.title": "On this page",
-  "theme.TOCCollapsible.toggleButtonLabel": "On this page",
-  "theme.common.editThisPage": "Edit this page",
-  "theme.docs.paginator.next": "Next",
-  "theme.docs.paginator.previous": "Previous",
-  "theme.CodeBlock.copy": "Copy",
-  "theme.CodeBlock.copied": "Copied",
-  "theme.NotFound.title": "Page Not Found",
-  "theme.BackToTopButton.buttonAriaLabel": "Scroll back to top",
+// Docusaurus theme default English strings are common leak points: a key
+// whose identifier differs from its message (e.g. "theme.TOC.title") slips
+// past assertNoUntranslatedMessages if the message is left as the English
+// default. Rather than a hand-curated sample, load every base English
+// string Docusaurus itself ships for the plugins this site actually uses
+// (see docusaurus.config.ts) and compare the full set.
+const DOCUSAURUS_BASE_TRANSLATION_FILES = [
+  "node_modules/@docusaurus/theme-translations/locales/base/theme-common.json",
+  "node_modules/@docusaurus/theme-translations/locales/base/plugin-pwa.json",
+  "node_modules/@docusaurus/theme-translations/locales/base/plugin-ideal-image.json",
+];
+
+const loadDocusaurusBaseEnglishDefaults = async (): Promise<
+  Record<string, string>
+> => {
+  const merged: Record<string, string> = {};
+  for (const relPath of DOCUSAURUS_BASE_TRANSLATION_FILES) {
+    const filePath = path.join(process.cwd(), relPath);
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+      const data = JSON.parse(content) as Record<string, string>;
+      for (const [key, value] of Object.entries(data)) {
+        if (key.endsWith("___DESCRIPTION")) continue;
+        // eslint-disable-next-line security/detect-object-injection -- key comes from a Docusaurus-shipped JSON catalog, never external input
+        merged[key] = value;
+      }
+    } catch {
+      // Translation catalog for a plugin that isn't installed - skip it.
+    }
+  }
+  return merged;
 };
 
-const assertNoKnownEnglishDefaults = (
+// Keys whose Docusaurus English default is allowed to remain unchanged in
+// es/pt — e.g. brand names, or pure interpolation templates with no literal
+// English words to translate.
+const ENGLISH_DEFAULT_ALLOWLIST = new Set<string>([
+  // "{authorName} - {nPosts}" — just an interpolation pattern, not prose.
+  "theme.blog.author.pageTitle",
+]);
+
+const assertNoUntranslatedDocusaurusDefaults = (
   translations: TranslationCodeJson,
+  baseDefaults: Record<string, string>,
   fileLabel: string
 ): void => {
   const violations: string[] = [];
-  for (const [key, expectedEnglish] of Object.entries(
-    KNOWN_ENGLISH_THEME_DEFAULTS
-  )) {
-    // eslint-disable-next-line security/detect-object-injection -- key comes from the hardcoded KNOWN_ENGLISH_THEME_DEFAULTS map, never external input
+  for (const [key, expectedEnglish] of Object.entries(baseDefaults)) {
+    if (ENGLISH_DEFAULT_ALLOWLIST.has(key)) continue;
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the Docusaurus base translation catalog, never external input
     const entry = translations[key];
-    if (entry && entry.message.trim() === expectedEnglish) {
+    if (entry && entry.message.trim() === expectedEnglish.trim()) {
       violations.push(`  "${key}": still English ("${expectedEnglish}")`);
     }
   }
   if (violations.length > 0) {
     throw new Error(
-      `${fileLabel}: found ${violations.length} untranslated known theme string(s):\n${violations.join("\n")}`
+      `${fileLabel}: found ${violations.length} untranslated Docusaurus default string(s):\n${violations.join("\n")}`
     );
   }
 };
@@ -287,7 +313,12 @@ describe("Locale Output Verification", () => {
       );
       assertNoUntranslatedMessages(codeJson, "es/code.json");
       assertNoEmptyMessages(codeJson, "es/code.json");
-      assertNoKnownEnglishDefaults(codeJson, "es/code.json");
+      const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertNoUntranslatedDocusaurusDefaults(
+        codeJson,
+        baseDefaults,
+        "es/code.json"
+      );
     });
 
     it("has valid structure with message and optional description", async () => {
@@ -317,7 +348,12 @@ describe("Locale Output Verification", () => {
       );
       assertNoUntranslatedMessages(codeJson, "pt/code.json");
       assertNoEmptyMessages(codeJson, "pt/code.json");
-      assertNoKnownEnglishDefaults(codeJson, "pt/code.json");
+      const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertNoUntranslatedDocusaurusDefaults(
+        codeJson,
+        baseDefaults,
+        "pt/code.json"
+      );
     });
 
     it("has valid structure with message and optional description", async () => {

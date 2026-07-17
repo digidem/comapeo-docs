@@ -153,8 +153,13 @@ interface FooterSection {
   items?: FooterLink[];
 }
 
+interface NavbarLogo {
+  alt?: string;
+}
+
 interface NavbarConfig {
   items?: NavbarItem[];
+  logo?: NavbarLogo;
 }
 
 interface FooterConfig {
@@ -181,6 +186,15 @@ export function extractTranslatableText(
           };
         }
       });
+    }
+
+    // Docusaurus's own navbar i18n key (see @docusaurus/theme-classic
+    // translations.js): required or the logo alt text is dropped at runtime.
+    if (nav.logo?.alt) {
+      result["logo.alt"] = {
+        message: nav.logo.alt,
+        description: "The alt text of navbar logo",
+      };
     }
   }
 

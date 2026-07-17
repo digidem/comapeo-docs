@@ -10,124 +10,124 @@
     "message": "Preparación para el uso de CoMapeo"
   },
   "Understanding CoMapeo's Core Concepts and Functions": {
-    "message": "Nueva Página"
+    "message": "Comprender los Conceptos y Funciones Principales de CoMapeo"
   },
   "Getting Started Essentials": {
-    "message": "Nuevo título de sección"
+    "message": "Elementos Esenciales para Empezar"
   },
   "Gathering the Right Equipment for CoMapeo": {
     "message": "Reunir el Equipo Adecuado para CoMapeo"
   },
   "Device Setup and Maintenance for CoMapeo": {
-    "message": "Nueva Página"
+    "message": "Configuración y Mantenimiento del Dispositivo para CoMapeo"
   },
   "Installing CoMapeo & Onboarding": {
-    "message": "Nueva Página"
+    "message": "Instalación de CoMapeo e Incorporación"
   },
   "Initial Use and CoMapeo Settings": {
-    "message": "Nueva Página"
+    "message": "Uso Inicial y Configuración de CoMapeo"
   },
   "Uninstalling CoMapeo": {
     "message": "Desinstalar CoMapeo"
   },
   "Customizing CoMapeo": {
-    "message": "Nueva Palanca"
+    "message": "Personalización de CoMapeo"
   },
   "Organizing Key Materials for Projects": {
-    "message": "Nueva Página"
+    "message": "Organización de Materiales Clave para Proyectos"
   },
   "Building a Custom Categories Set": {
-    "message": "Nueva Página"
+    "message": "Creación de un Conjunto de Categorías Personalizado"
   },
   "Building Custom Background Maps": {
-    "message": "Nueva Página"
+    "message": "Creación de Mapas de Fondo Personalizados"
   },
   "Observations & Tracks": {
-    "message": "Nuevo título de sección"
+    "message": "Observaciones y Seguimientos"
   },
   "Gathering Observations & Tracks": {
     "message": "Recopilación de observaciones"
   },
   "Creating a New Observation": {
-    "message": "Nueva Página"
+    "message": "Creación de una Nueva Observación"
   },
   "Creating a New Track": {
-    "message": "Nueva Página"
+    "message": "Creación de un Nuevo Seguimiento"
   },
   "Reviewing Observations": {
     "message": "Revisión de observaciones"
   },
   "Exploring the Observations List": {
-    "message": "Nueva Página"
+    "message": "Exploración de la Lista de Observaciones"
   },
   "Reviewing an Observation": {
-    "message": "Nueva Página"
+    "message": "Revisión de una Observación"
   },
   "Editing Observations": {
-    "message": "Nueva Página"
+    "message": "Edición de Observaciones"
   },
   "Data Privacy & Security": {
-    "message": "Nuevo título de sección"
+    "message": "Privacidad y Seguridad de Datos"
   },
   "Encryption and Security": {
-    "message": "Nueva Página"
+    "message": "Cifrado y Seguridad"
   },
   "Managing Data Privacy & Security": {
     "message": "Gestión de datos y privacidad"
   },
   "Using an App Passcode for Security": {
-    "message": "Nueva Página"
+    "message": "Uso de un Código de Acceso para Seguridad"
   },
   "Adjusting Data Sharing and Privacy": {
-    "message": "Nueva Página"
+    "message": "Ajuste de Uso Compartido de Datos y Privacidad"
   },
   "Mapping with Collaborators": {
-    "message": "Nueva Página"
+    "message": "Mapeo con Colaboradores"
   },
   "Managing Projects": {
     "message": "Gestión de proyectos"
   },
   "Understanding Projects": {
-    "message": "Nueva Página"
+    "message": "Comprender los Proyectos"
   },
   "Creating a New Project": {
-    "message": "Nueva Página"
+    "message": "Creación de un Nuevo Proyecto"
   },
   "Changing Categories Set": {
-    "message": "Nueva Página"
+    "message": "Cambio del Conjunto de Categorías"
   },
   "Managing a Team": {
-    "message": "Nueva Página"
+    "message": "Gestión de un Equipo"
   },
   "Inviting Collaborators": {
-    "message": "Nueva Página"
+    "message": "Invitación de Colaboradores"
   },
   "Ending a Project": {
-    "message": "Nueva Página"
+    "message": "Finalización de un Proyecto"
   },
   "Exchanging Project Data": {
     "message": "Intercambio de Datos del Proyecto"
   },
   "Understanding How Exchange Works": {
-    "message": "Nueva Página A"
+    "message": "Comprender Cómo Funciona el Intercambio"
   },
   "Using Exchange Offline": {
-    "message": "Nueva Página"
+    "message": "Uso del Intercambio sin Conexión"
   },
   "Using a Remote Archive": {
-    "message": "Nueva Página"
+    "message": "Uso de un Archivo Remoto"
   },
   "Moving Observations & Tracks Outside of CoMapeo": {
     "message": "Compartir observaciones fuera de CoMapeo"
   },
   "Sharing a Single Observation and Metadata": {
-    "message": "Nueva Página"
+    "message": "Compartir una Observación Individual y sus Metadatos"
   },
   "Exporting all Observations": {
-    "message": "Nueva Página"
+    "message": "Exportación de Todas las Observaciones"
   },
   "Using Observations outside of CoMapeo": {
-    "message": "Nueva Página"
+    "message": "Uso de Observaciones Fuera de CoMapeo"
   },
   "Miscellaneous": {
     "message": "Misceláneas"
@@ -139,49 +139,46 @@
     "message": "Glosario"
   },
   "Troubleshooting": {
-    "message": "Nueva Palanca"
+    "message": "Solución de Problemas"
   },
   "Common Solutions": {
-    "message": "Nueva Página"
+    "message": "Soluciones Comunes"
   },
   "Troubleshooting: Setup and Customization": {
-    "message": "Nueva Página"
+    "message": "Solución de Problemas: Configuración y Personalización"
   },
   "Troubleshooting:  Observations and Tracks": {
-    "message": "Nueva Página"
+    "message": "Solución de Problemas: Observaciones y Seguimientos"
   },
   "Troubleshooting: Data Privacy and Security": {
-    "message": "Nueva Página"
+    "message": "Solución de Problemas: Privacidad y Seguridad de Datos"
   },
   "Troubleshooting: Mapping with Collaborators": {
-    "message": "Nueva Página"
+    "message": "Solución de Problemas: Mapeo con Colaboradores"
   },
   "Troubleshooting: Moving Observations and Tracks outside of CoMapeo": {
-    "message": "Nueva Página"
+    "message": "Solución de Problemas: Compartir Observaciones y Seguimientos Fuera de CoMapeo"
   },
   "Elementos de contenido de prueba": {
-    "message": "Elementos de contenido de prueba"
+    "message": "Elementos de contenido para pruebas"
   },
   "Testing links": {
-    "message": "Nueva Página"
-  },
-  "Understanding CoMapeo's Core Concepts and Functions": {
-    "message": "Nueva Página"
+    "message": "Prueba de Enlaces"
   },
   "Installing CoMapeo and Onboarding": {
-    "message": "Nueva Página"
+    "message": "Instalación de CoMapeo e Incorporación"
   },
   "Planning and Preparing for a Project": {
-    "message": "Nueva Página"
+    "message": "Planificación y Preparación de un Proyecto"
   },
   "Observations and Tracks": {
-    "message": "Nuevo título de sección"
+    "message": "Observaciones y Seguimientos"
   },
   "Gathering Observations and Tracks": {
     "message": "Recopilación de observaciones"
   },
   "Data Privacy and Security": {
-    "message": "Nuevo título de sección"
+    "message": "Privacidad y Seguridad de Datos"
   },
   "Managing Data Privacy and Security": {
     "message": "Gestión de datos y privacidad"

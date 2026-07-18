@@ -53,7 +53,8 @@ jobs:
             # catalog. Merge instead: keep content-only keys, let HEAD win
             # any key this repo also defines.
             git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
-              jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+              jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp"
+              mv "$f.tmp" "$f"
             done
           else
             echo "has_i18n=false" >> "$GITHUB_OUTPUT"

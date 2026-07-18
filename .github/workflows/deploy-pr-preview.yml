@@ -356,7 +356,8 @@ jobs:
             | xargs -0 -r git checkout HEAD --
 
           git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
-            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp"
+            mv "$f.tmp" "$f"
           done
 
       - name: Build documentation

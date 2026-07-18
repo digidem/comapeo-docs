@@ -148,7 +148,8 @@ jobs:
           # Merge instead: keep content-only keys, let HEAD win any key
           # this repo also defines.
           git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
-            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp"
+            mv "$f.tmp" "$f"
           done
 
           # Validate content exists
@@ -239,7 +240,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           echo "${SHA}" > content-lock.sha
           git add content-lock.sha
-          git commit -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
+
+          # Earlier steps in this job overlay content into i18n/ and merge
+          # code.json in the working tree only, without re-staging it — the
+          # index still holds the raw content-branch (unmerged) catalog. A
+          # plain `git commit` here would commit that whole index snapshot,
+          # silently regressing code.json on main. Scope the commit to
+          # content-lock.sha only so any other staged changes are ignored.
+          git commit content-lock.sha -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
           git push origin HEAD:main
           echo "✅ Updated content-lock.sha → ${SHA:0:8}"
 

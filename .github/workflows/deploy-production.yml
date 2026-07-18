@@ -134,13 +134,22 @@ jobs:
 
           # The checkout above overlays i18n/ from the locked content SHA,
           # which does not carry this repo's hand-maintained theme
-          # translation files (code.json, docusaurus-theme-classic/*) —
-          # those live only on main. Restore them from main so the theme
-          # chrome translations this repo owns actually reach production
-          # instead of silently falling back to whatever (or nothing) the
-          # content SHA has for those paths.
-          git ls-files -z 'i18n/*/code.json' 'i18n/*/docusaurus-theme-classic/*' \
+          # translation files (docusaurus-theme-classic/*) — those live
+          # only on main. Restore them from main so the theme chrome
+          # translations this repo owns actually reach production instead
+          # of silently falling back to whatever (or nothing) the content
+          # SHA has for those paths.
+          git ls-files -z 'i18n/*/docusaurus-theme-classic/*' \
             | xargs -0 -r git checkout HEAD --
+
+          # code.json also carries Notion-generated, content-only
+          # translation keys that live only on the content SHA. A blind
+          # `checkout HEAD` here would silently drop those on every build.
+          # Merge instead: keep content-only keys, let HEAD win any key
+          # this repo also defines.
+          git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
+            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+          done
 
           # Validate content exists
           echo "🔍 Validating content..."

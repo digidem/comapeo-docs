@@ -342,13 +342,22 @@ jobs:
         # The content-provisioning step above may have overlaid i18n/ from the
         # content branch (or regenerated it from Notion), silently discarding
         # the hand-maintained theme translation files this repo owns
-        # (code.json, docusaurus-theme-classic/*). Restore them unconditionally
-        # from the checked-out PR ref so the preview renders what the PR is
-        # actually proposing, not unrelated content-branch state.
+        # (docusaurus-theme-classic/*). Restore them unconditionally from the
+        # checked-out PR ref so the preview renders what the PR is actually
+        # proposing, not unrelated content-branch state.
+        #
+        # code.json also carries Notion-generated, content-only translation
+        # keys that live only on the content branch. A blind `checkout HEAD`
+        # here would silently drop those on every build. Merge instead: keep
+        # content-only keys, let HEAD win any key this repo also defines.
         run: |
           set -e
-          git ls-files -z 'i18n/*/code.json' 'i18n/*/docusaurus-theme-classic/*' \
+          git ls-files -z 'i18n/*/docusaurus-theme-classic/*' \
             | xargs -0 -r git checkout HEAD --
+
+          git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
+            jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+          done
 
       - name: Build documentation
         # IS_PRODUCTION not set - generates noindex meta tags and disallow robots.txt

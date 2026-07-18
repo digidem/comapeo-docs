@@ -33,19 +33,28 @@ jobs:
 
             # The checkout above overlays i18n/ from the content branch,
             # which would silently discard the hand-maintained theme
-            # translation files this repo owns (code.json, docusaurus-
-            # theme-classic/*), letting locale tests pass against stale
-            # content-branch data instead of what's actually committed
-            # here. A prior version of this restore only looked at what
-            # the current ref changed relative to its merge-base with
-            # main, which is empty on a push to main itself (HEAD ==
-            # origin/main) and for any PR that doesn't touch i18n/ —
-            # so it silently did nothing on exactly the runs that matter
-            # most. Restore unconditionally instead: these paths are
-            # always supposed to come from the git-tracked ref being
-            # tested, never from content.
-            git ls-files -z 'i18n/*/code.json' 'i18n/*/docusaurus-theme-classic/*' \
+            # translation files this repo owns (docusaurus-theme-classic/*),
+            # letting locale tests pass against stale content-branch data
+            # instead of what's actually committed here. A prior version of
+            # this restore only looked at what the current ref changed
+            # relative to its merge-base with main, which is empty on a push
+            # to main itself (HEAD == origin/main) and for any PR that
+            # doesn't touch i18n/ — so it silently did nothing on exactly
+            # the runs that matter most. Restore unconditionally instead:
+            # these paths are always supposed to come from the git-tracked
+            # ref being tested, never from content.
+            git ls-files -z 'i18n/*/docusaurus-theme-classic/*' \
               | xargs -0 -r git checkout HEAD --
+
+            # code.json also carries Notion-generated, content-only
+            # translation keys that live only on the content branch. A
+            # blind `checkout HEAD` here would silently drop those and let
+            # locale tests validate an unrealistic, content-key-free
+            # catalog. Merge instead: keep content-only keys, let HEAD win
+            # any key this repo also defines.
+            git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
+              jq -s '.[0] + .[1]' "$f" <(git show "HEAD:$f") > "$f.tmp" && mv "$f.tmp" "$f"
+            done
           else
             echo "has_i18n=false" >> "$GITHUB_OUTPUT"
             echo "⚠️ origin/content checkout failed. Locale-dependent tests will be skipped."

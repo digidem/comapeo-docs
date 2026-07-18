@@ -66,7 +66,7 @@ jobs:
 
             if [ "$SHOULD_DEPLOY" != "true" ]; then
               if [ "$BRANCH_NAME" = "main" ]; then
-                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(src/|static/img/|docusaurus\.config\.ts$|sidebars\.ts$|package\.json$)'; then
+                if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(src/|static/img/|docusaurus\.config\.ts$|sidebars\.ts$|package\.json$|docs/|i18n/)'; then
                   SHOULD_DEPLOY="true"
                   REASON="main push includes code/config paths."
                 else

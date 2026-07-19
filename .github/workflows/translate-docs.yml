@@ -58,7 +58,10 @@ jobs:
 
           # Remove the lines that ignore generated content directories and their associated comments
           # This preserves all other .gitignore updates from main while allowing commits to these dirs
-          sed -i '/^# Generated content (synced from content branch)$/d; /^# These directories are populated by checking out from the content branch$/d; /^\/docs\/$/d; /^\/i18n\/$/d; /^\/static\/images\/$/d' .gitignore
+          # The i18n negation block (theme JSON allowlist for es/pt) must also be stripped here,
+          # otherwise its /i18n/* rule keeps everything outside navbar.json/footer.json ignored
+          # on the content branch (e.g. code.json, translated doc pages never get committed).
+          sed -i '/^# Generated content (synced from content branch)$/d; /^# These directories are populated by checking out from the content branch$/d; /^\/docs\/$/d; /^\/i18n\/$/d; /^\/static\/images\/$/d; /^# Generated i18n content/,/^$/d' .gitignore
 
           # Only commit if .gitignore actually changed
           if ! git diff --quiet .gitignore; then

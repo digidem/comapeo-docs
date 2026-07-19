@@ -22,10 +22,7 @@ sidebar_position: 6
 
 ---
 
-:::note 🖼️
-static/images/uninstallingcomapeo2_0.png
-
-:::
+![image](assets/e676d7b5fffbaf3645ed3476918389ec80ef1d4e671739e1e8c40218dd426394.png)
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
@@ -73,10 +70,7 @@ Acesse: 🔗[Gerenciando uma Equipe](https://notion.so/docs/managing-a-team)
 
 Localize o CoMapeo na sua lista de aplicativos ou na tela inicial.
 
-:::note 🖼️
-static/images/uninstallingcomapeo2_1.jpg
-
-:::
+![image](assets/b5aa065fc0f1648f0af250d0bbe3d6915f80aa6d2f41d0c4b556805974b60c7d.jpg)
 
 ---
 
@@ -84,19 +78,13 @@ static/images/uninstallingcomapeo2_1.jpg
 
 Pressionar e segurar o ícone do CoMapeo dará a você essas opções, incluindo desinstalar o CoMapeo.
 
-:::note 🖼️
-static/images/uninstallingcomapeo2_2.jpg
-
-:::
+![image](assets/3b4591ee0d082671fa792d46b65f4e39ddfd11e18c836d1d8e50770e9cba1f1f.jpg)
 
 ---
 
 ***Passo 3*****: Confirmar desinstalação**
 
-:::note 🖼️
-static/images/uninstallingcomapeo2_3.jpg
-
-:::
+![image](assets/d25864defb7daab85887755b2cebd57de85048acf22fe58250e00fa39fcd901e.jpg)
 
 ---
 
@@ -104,10 +92,7 @@ static/images/uninstallingcomapeo2_3.jpg
 
 O CoMapeo não está mais no seu telefone, você não o encontrará na sua lista de aplicativos ou na tela inicial. Todos os dados mantidos no CoMapeo foram excluídos do seu telefone.
 
-:::note 🖼️
-static/images/uninstallingcomapeo2_4.jpg
-
-:::
+![image](assets/f8a1746248f6bf7e0c3167ecc0ab612ae85308b0657f3585786e262b1b5a46f8.jpg)
 
 ::::
 

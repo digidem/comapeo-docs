@@ -1,13 +1,14 @@
 {
-  "label": "Reviewing Observations",
+  "key": "reviewing-observations-and-tracks",
+  "label": "Reviewing Observations & Tracks",
   "position": 4,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Reviewing Observations"
+    "title": "Reviewing Observations & Tracks"
   },
   "customProps": {
-    "title": "Reviewing Observations"
+    "title": null
   }
 }

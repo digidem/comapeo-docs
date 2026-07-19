@@ -1,13 +1,14 @@
 {
-  "label": "Registra Observaciones y Trayectos",
+  "key": "gathering-observations-and-tracks",
+  "label": "Registrando Observaciones y Trayectos",
   "position": 3,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Registra Observaciones y Trayectos"
+    "title": "Registrando Observaciones y Trayectos"
   },
   "customProps": {
-    "title": "Registra Observaciones y Trayectos"
+    "title": null
   }
 }

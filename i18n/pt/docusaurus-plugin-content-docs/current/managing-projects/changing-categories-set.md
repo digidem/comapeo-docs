@@ -47,10 +47,7 @@ O tipo de arquivo **.comapeocat** é propriedade do CoMapeo. Não pode ser abert
 
 ***Passo 1:*** Procure o arquivo na sua pasta de downloads e transfira-o para o dispositivo móvel em que você está usando o CoMapeo. Você pode usar um e-mail, Google Drive, WhatsApp ou a ferramenta que funcionar melhor para você para obter arquivos no seu telefone.
 
-:::note 🖼️
-static/images/changingcategoriesse_0.png
-
-:::
+![image](assets/ee216990c8e0c2a319cc01faa429df0155c69b482d53760e969c4d8c2a15e09d.png)
 
 ***Passo 2:*** Abra o <img src="/images/notion/e67891bb2deee359f763589bf2283850bff9acd6208a5cc1e90171070d897de3.png" alt="comapeo-platform" className="emoji" style={{display:"inline",height:"1.2em",width:"auto",verticalAlign:"text-bottom",margin:"0 0.1em"}} /> CoMapeo e, no menu principal, **selecione o projeto** onde o novo conjunto de categorias é necessário.
 
@@ -63,17 +60,11 @@ Isso não é visível para os Participantes de um projeto
 
 ***Passo 4:*** Selecione **Categorias de Projetos**.
 
-:::note 🖼️
-static/images/changingcategoriesse_1.png
-
-:::
+![image](assets/d247f84d864ecd0d0efc3abda4016216ebfc3502c8cea77b6244098c5843a725.png)
 
 ***Passo 5:*** Toque em **Importar Categorias** para abrir o seletor de arquivos do seu sistema operacional
 
-:::note 🖼️
-static/images/changingcategoriesse_2.png
-
-:::
+![image](assets/7c6abfde990fd3b6b0289d4f48b17047a48237dedce1805039b72c1e725f40c2.png)
 
 ***Passo 6:*** Encontre o arquivo de conjunto de categorias (.comapeocat) e selecione-o. O CoMapeo tentará importar o arquivo selecionado. Se for bem-sucedido, as informações na tela de Categorias serão atualizadas.
 

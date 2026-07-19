@@ -1,13 +1,14 @@
 {
-  "label": "Solução de problemas",
-  "position": 8,
+  "key": "miscellaneous",
+  "label": "Variado",
+  "position": 9,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Solução de problemas"
+    "title": "Variado"
   },
   "customProps": {
-    "title": "Solução de problemas"
+    "title": null
   }
 }

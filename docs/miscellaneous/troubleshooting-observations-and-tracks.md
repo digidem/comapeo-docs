@@ -180,6 +180,3 @@ This line is about what this solution does, and perhaps why it works.
   1. Tapping on “Cancel” will lead you back to the project invite state, from there you can decline the invite
 
 :::
-
----
-

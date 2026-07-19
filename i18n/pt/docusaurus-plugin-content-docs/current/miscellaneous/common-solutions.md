@@ -34,20 +34,11 @@ Esta página oferece soluções rápidas e detalhes adicionais sobre por que ela
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:*** Deslize para cima a partir da parte inferior enquanto o CoMapeo está selecionado, para ver todos os aplicativos abertos no telefone.
-:::note 🖼️
-static/images/commonsolutions2a71b_0.jpg
-
-:::
+![image](assets/de255641f0d2ac94d17d59c570311023c4ace59cfb83deca2c9f03f48c1d210d.jpg)
 ***Passo 2:*** Deslize para cima novamente, centralizando seu dedo no **CoMapeo** para fechá-lo
-:::note 🖼️
-static/images/commonsolutions2a71b_1.jpg
-
-:::
+![image](assets/4b129c2d48fce51bfadaee12e13a7f89c63ae9f3b83e6fd33ed0da9c1f5556a3.jpg)
 ***Passo 3:*** Vá para o ícone do **CoMapeo** na sua tela principal ou no menu da tela de aplicativos e selecione **CoMapeo**
-:::note 🖼️
-static/images/commonsolutions2a71b_2.jpg
-
-:::
+![image](assets/a9fc3c887c089f791c7bf4b96260389a2f4318bdf825b46f00e0266f7c47721a.jpg)
 
 </details>
 
@@ -61,15 +52,9 @@ Existem diferentes cenários em que a falta de espaço disponível no seu dispos
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:*** Vá para a tela de Configuração do Android (⚙️)
-:::note 🖼️
-static/images/commonsolutions2a71b_3.jpg
-
-:::
+![image](assets/b0f225d617c7757aa6b04cd70a68f63581a6f4561a31963f8a57956d4da44527.jpg)
 ***Passo 2:*** Veja o armazenamento disponível. O Android tentará mostrar quais tipos de arquivos estão consumindo mais armazenamento. Assim, por exemplo, se a maior parte do espaço estiver preenchida com vídeos ou imagens, pode-se ir ao Gerenciador de Arquivos do Android (📁) e excluir arquivos para que haja espaço livre para novos dados coletados (do usuário ou trocados com colaboradores).
-:::note 🖼️
-static/images/commonsolutions2a71b_4.jpg
-
-:::
+![image](assets/3278bee02731dda0cfcd2ae5b801bf2f15bec24ec008aea52c32b4c835314d92.jpg)
 👉 O **CoMapeo** tentará ao máximo informar ao usuário que o dispositivo está com pouco armazenamento, permitindo a exclusão de conteúdos no dispositivo e a liberação de espaço para novos dados.
 
 </details>
@@ -82,10 +67,7 @@ Quando os dispositivos ficam ligados por muito tempo (como, meses), eles podem c
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:***Mantenha pressionado o*dispositivo de bloco*botão que geralmente está localizado em um lado do telefone. É bastante comum que os dispositivos tenham três botões: dois botões para diminuir e aumentar o volume, e um botão para bloquear (desligar a tela) o dispositivo.
-:::note 🖼️
-static/images/commonsolutions2a71b_5.jpg
-
-:::
+![image](assets/0ddb33d96883bb0453ce1dcce07d2c7d95c29bdc356e6f344edc5fda9d9a459f.jpg)
 ***Passo 2:***Pressione o**Reiniciar**botão para que o telefone reinicie sozinho
 ***Passo 3:***Aguarde até que o telefone reinicie e reabra**CoMapeo**
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
@@ -114,30 +96,15 @@ Para verificar se você tem as permissões suficientes para o uso correto de**Co
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:***Vá para a tela de Configuração do Android (⚙️)
-:::note 🖼️
-static/images/commonsolutions2a71b_6.jpg
-
-:::
+![image](assets/b0f225d617c7757aa6b04cd70a68f63581a6f4561a31963f8a57956d4da44527.jpg)
 ***Passo 2:***Vá para o menu Aplicativos
-:::note 🖼️
-static/images/commonsolutions2a71b_7.jpg
-
-:::
+![image](assets/97502fb540023907e5fa8372234a4c0ce5079109562fd237bacac88a513d177f.jpg)
 ***Passo 3:***Procure por**CoMapeo**na lista de aplicativos (você tem uma barra de pesquisa para encontrá-lo rapidamente)
-:::note 🖼️
-static/images/commonsolutions2a71b_8.jpg
-
-:::
+![image](assets/ba2a98da433bb977ef63167bb6da28a5eac714087f2ca3dcfed8cce831e80d27.jpg)
 ***Passo 4***Na tela de informações do aplicativo, selecione o**Permissões**item
-:::note 🖼️
-static/images/commonsolutions2a71b_9.jpg
-
-:::
+![image](assets/c29d7a9eb48d6606fe94b8f58bbdf34f8a3ec8c3493a77d1dc44d33295152216.jpg)
 ***Passo 5:***Lá, você verá uma lista de**Permitido**e**Não permitido**permissões. Clicar em um item específico (como Câmera), mostrará o tipo de permissão concedida a esse item e permitirá que o usuário selecione um tipo de permissão diferente
-:::note 🖼️
-static/images/commonsolutions2a71b_10.jpg
-
-:::
+![image](assets/9a6d73106fb7095d1efd9f9a049eaca890f240d8bb076df9fdff33b70f0dd6ea.jpg)
 ***Passo 6:***Corresponder às permissões detalhadas na lista acima pode resolver problemas relacionados a**permissões**
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
@@ -150,17 +117,11 @@ Existem vários problemas que podem ser resolvidos verificando se você está na
 
 - Tentando convidar colaboradores para uma equipe
 
-:::note 🖼️
-static/images/commonsolutions2a71b_11.png
-
-:::
+![image](assets/291bef75ab6289c0c1522f31075df57d51a14ddc986659a2ee7846f10135627b.png)
 
 - Tentando trocar dados coletados
 
-:::note 🖼️
-static/images/commonsolutions2a71b_12.png
-
-:::
+![image](assets/8a16db9dccafde74ad284554b09e89395def01f0e68f1bd42ed7563e808a2b41.png)
 
 ### 🟩  Solução: Verifique se todos os dispositivos estão realmente conectados à rede WiFi
 

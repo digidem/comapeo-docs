@@ -1,13 +1,14 @@
 {
-  "label": "Introdução - Noções básicas",
+  "key": "preparing-to-use-comapeo",
+  "label": "Preparando-se para usar o CoMapeo",
   "position": 2,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Introdução - Noções básicas"
+    "title": "Preparando-se para usar o CoMapeo"
   },
   "customProps": {
-    "title": "Introdução - Noções básicas"
+    "title": null
   }
 }

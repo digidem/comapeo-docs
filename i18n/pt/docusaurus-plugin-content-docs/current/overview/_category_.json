@@ -1,4 +1,5 @@
 {
+  "key": "overview",
   "label": "Visão Geral",
   "position": 1,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Visão Geral"
   },
   "customProps": {
-    "title": "Visão Geral"
+    "title": null
   }
 }

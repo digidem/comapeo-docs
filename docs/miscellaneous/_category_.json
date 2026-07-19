@@ -1,13 +1,14 @@
 {
-  "label": "Troubleshooting",
+  "key": "miscellaneous",
+  "label": "Miscellaneous",
   "position": 9,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Troubleshooting"
+    "title": "Miscellaneous"
   },
   "customProps": {
-    "title": "Troubleshooting"
+    "title": null
   }
 }

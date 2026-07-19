@@ -24,10 +24,7 @@ sidebar_position: 1
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
-:::note 🖼️
-static/images/buildingacustomcateg_0.png
-
-:::
+![image](assets/9a8baf50b704647a5b9fcb8358bb09a80d42710778cc347b346b041f6bfb909e.png)
 
 ## Sobre Categorias no CoMapeo
 

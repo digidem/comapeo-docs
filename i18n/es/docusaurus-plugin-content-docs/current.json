@@ -1,0 +1,102 @@
+{
+  "version.label": {
+    "message": "Latest",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.overview": {
+    "message": "Vista General",
+    "description": "The label for category 'Overview' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.overview.link.generated-index.title": {
+    "message": "Vista General",
+    "description": "The generated-index page title for category 'Overview' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.preparing-to-use-comapeo/getting-started-essentials": {
+    "message": "Introducción - Conceptos básicos",
+    "description": "The label for category 'Getting Started Essentials' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.preparing-to-use-comapeo/getting-started-essentials.link.generated-index.title": {
+    "message": "Introducción - Conceptos básicos",
+    "description": "The generated-index page title for category 'Getting Started Essentials' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.preparing-to-use-comapeo": {
+    "message": "Preparándose para usar CoMapeo",
+    "description": "The label for category 'Preparing to use CoMapeo' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.preparing-to-use-comapeo.link.generated-index.title": {
+    "message": "Preparándose para usar CoMapeo",
+    "description": "The generated-index page title for category 'Preparing to use CoMapeo' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.gathering-observations-and-tracks/gathering-observations-and-tracks": {
+    "message": "Registra Observaciones y Trayectos",
+    "description": "The label for category 'Gathering Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.gathering-observations-and-tracks/gathering-observations-and-tracks.link.generated-index.title": {
+    "message": "Registra Observaciones y Trayectos",
+    "description": "The generated-index page title for category 'Gathering Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.gathering-observations-and-tracks": {
+    "message": "Registrando Observaciones y Trayectos",
+    "description": "The label for category 'Gathering Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.gathering-observations-and-tracks.link.generated-index.title": {
+    "message": "Registrando Observaciones y Trayectos",
+    "description": "The generated-index page title for category 'Gathering Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.reviewing-observations-and-tracks/reviewing-observations": {
+    "message": "Revisa Observaciones",
+    "description": "The label for category 'Reviewing Observations' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.reviewing-observations-and-tracks/reviewing-observations.link.generated-index.title": {
+    "message": "Revisa Observaciones",
+    "description": "The generated-index page title for category 'Reviewing Observations' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.reviewing-observations-and-tracks": {
+    "message": "Revisando Observaciones y Trayectos",
+    "description": "The label for category 'Reviewing Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.reviewing-observations-and-tracks.link.generated-index.title": {
+    "message": "Revisando Observaciones y Trayectos",
+    "description": "The generated-index page title for category 'Reviewing Observations & Tracks' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.managing-data-and-privacy": {
+    "message": "Gestión de Privacidad y Seguridad de Datos",
+    "description": "The label for category 'Managing Data and Privacy' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.managing-data-and-privacy.link.generated-index.title": {
+    "message": "Gestión de Privacidad y Seguridad de Datos",
+    "description": "The generated-index page title for category 'Managing Data and Privacy' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.managing-projects": {
+    "message": "Gestión de Proyectos",
+    "description": "The label for category 'Managing Projects' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.managing-projects.link.generated-index.title": {
+    "message": "Gestión de Proyectos",
+    "description": "The generated-index page title for category 'Managing Projects' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.exchanging-observations": {
+    "message": "Intercambiando Observaciones",
+    "description": "The label for category 'Exchanging Observations' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.exchanging-observations.link.generated-index.title": {
+    "message": "Intercambiando Observaciones",
+    "description": "The generated-index page title for category 'Exchanging Observations' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.sharing-and-exporting-different-data-types": {
+    "message": "Compartir y Exportar Diferentes Tipos de Datos",
+    "description": "The label for category 'Sharing and Exporting different data types' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.sharing-and-exporting-different-data-types.link.generated-index.title": {
+    "message": "Compartir y Exportar Diferentes Tipos de Datos",
+    "description": "The generated-index page title for category 'Sharing and Exporting different data types' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.miscellaneous": {
+    "message": "Misceláneas",
+    "description": "The label for category 'Miscellaneous' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.miscellaneous.link.generated-index.title": {
+    "message": "Misceláneas",
+    "description": "The generated-index page title for category 'Miscellaneous' in sidebar 'docsSidebar'"
+  }
+}

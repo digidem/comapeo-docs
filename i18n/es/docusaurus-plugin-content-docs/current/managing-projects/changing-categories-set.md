@@ -36,7 +36,7 @@ sidebar_position: 21
 
 Cuando se realiza el mapeo por cuenta propia, las herramientas del coordinador se muestran luego de seguir los pasos para **iniciar un nuevo proyecto**.
 
-Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/crea-un-nuevo-proyecto)
+Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/creating-a-new-project)
 
 ### Cargar un nuevo archivo de conjunto de categorías
 

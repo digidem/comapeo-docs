@@ -1,4 +1,5 @@
 {
+  "key": "managing-data-and-privacy",
   "label": "Gestión de Privacidad y Seguridad de Datos",
   "position": 5,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Gestión de Privacidad y Seguridad de Datos"
   },
   "customProps": {
-    "title": "Gestión de Privacidad y Seguridad de Datos"
+    "title": null
   }
 }

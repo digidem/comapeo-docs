@@ -39,7 +39,7 @@ El trabajo es más poderoso cuando se mapea con otros. Cuando las personas recol
 Cuando se recolecta información con CoMapeo, hay varias formas de empezar a colaborar con otros.
 
 - Inicia un Nuevo Proyecto
-Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/crea-un-nuevo-proyecto) para detalles completos
+Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/creating-a-new-project) para detalles completos
 
 - Invita un Colaborador a mi proyecto individual
 

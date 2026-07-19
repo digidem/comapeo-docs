@@ -1,13 +1,14 @@
 {
-  "label": "Revisa Observaciones",
+  "key": "reviewing-observations-and-tracks",
+  "label": "Revisando Observaciones y Trayectos",
   "position": 4,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Revisa Observaciones"
+    "title": "Revisando Observaciones y Trayectos"
   },
   "customProps": {
-    "title": "Revisa Observaciones"
+    "title": null
   }
 }

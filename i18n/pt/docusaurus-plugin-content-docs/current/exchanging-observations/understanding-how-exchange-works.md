@@ -25,10 +25,7 @@ sidebar_position: 1
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
-:::note 🖼️
-static/images/understandinghowexch_0.jpg
-
-:::
+![image](assets/d3a025d51b6769d4763f96739da6ee533a3d7697da007649af8f1da8b5ce46b5.jpg)
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
@@ -44,10 +41,7 @@ static/images/understandinghowexch_0.jpg
 
 **Que tipo de dados são trocados?**
 
-:::note 🖼️
-static/images/understandinghowexch_1.jpg
-
-:::
+![image](assets/dc13a0fed1d8c3853f32be4142dfcd70984035a9b8daaf67bc60122f88df5833.jpg)
 
 - Informação do Projeto
   - Nome e descrição
@@ -133,10 +127,7 @@ A função de Troca no CoMapeo cria uma redundância intencional de informaçõe
 O armazenamento de arquivos de mídia pode ser uma preocupação para pessoas com espaço de armazenamento limitado no dispositivo ou para todos os participantes de projetos em que uma equipe está coletando um grande volume de observações. Nesses casos, manter as configurações da Troca como “apenas visualizações” ajudará a reduzir a quantidade de espaço de armazenamento que o CoMapeo utiliza nos dispositivos individuais.
 
 ::::note 👁️
-:::note 🖼️
-static/images/understandinghowexch_2.jpg
-
-:::
+![image](assets/b1092e2c6ca0a2145d73ff227e74b961292886215e0dae9097741fbe111157eb.png)
 
 ::::
 
@@ -149,17 +140,11 @@ No entanto, em alguns casos, pode ser essencial que alguns dispositivos tenham a
 Miniaturas e visualizações de fotos em observações ainda são trocadas quando esta configuração é selecionada
 
 ::::note 👁️
-:::note 🖼️
-static/images/understandinghowexch_3.jpg
-
-:::
+![image](assets/ebc2f95bab4eaa578dd8aa8b5d22f447a719ac012e9bbfa768b4f418392a0ff3.png)
 
 ::::
 
-:::note 🖼️
-static/images/understandinghowexch_4.jpg
-
-:::
+![image](assets/f0d12558844468a619509f57a62ea1cb71f3a7661a4411d4a704e297287172ff.png)
 
 :::note 👣
 ### Passo a passo
@@ -180,10 +165,7 @@ static/images/understandinghowexch_4.jpg
 
 ## Múltiplos Projetos & Troca
 
-:::note 🖼️
-static/images/understandinghowexch_5.gif
-
-:::
+![image](assets/6fb3b005b18ae94793f7d0f7823487109c53586b4d6d65c169c6ee4e4a7e150c.gif)
 
 **A Troca funciona de forma segura com Múltiplos Projetos.**
 

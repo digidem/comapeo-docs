@@ -1,0 +1,14 @@
+{
+  "key": "preparing-to-use-comapeo/getting-started-essentials",
+  "label": "Getting Started Essentials",
+  "position": 44,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Getting Started Essentials"
+  },
+  "customProps": {
+    "title": null
+  }
+}

@@ -1,13 +1,14 @@
 {
-  "label": "Managing Data Privacy & Security",
+  "key": "managing-data-and-privacy",
+  "label": "Managing Data and Privacy",
   "position": 5,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Managing Data Privacy & Security"
+    "title": "Managing Data and Privacy"
   },
   "customProps": {
-    "title": "Managing Data Privacy & Security"
+    "title": null
   }
 }

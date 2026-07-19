@@ -86,5 +86,3 @@ Go to 🔗 [Welcome to CoMapeo Cateogries Library](https://www.earthdefendersto
 ### Having Problems?
 
 Go to 🔗 [Troubleshooting: Setup and Customization → Custom Categories Set Problems](/docs/troubleshooting-setup-and-customization#custom-category-set-problems) 
-
----

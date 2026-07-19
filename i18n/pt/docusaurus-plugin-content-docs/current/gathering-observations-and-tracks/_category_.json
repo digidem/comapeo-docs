@@ -1,4 +1,5 @@
 {
+  "key": "gathering-observations-and-tracks",
   "label": "Coletando Observações e Trilhas",
   "position": 3,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Coletando Observações e Trilhas"
   },
   "customProps": {
-    "title": "Coletando Observações e Trilhas"
+    "title": null
   }
 }

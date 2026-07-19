@@ -1,13 +1,14 @@
 {
-  "label": "Revisando Observações",
+  "key": "reviewing-observations-and-tracks",
+  "label": "Revisando Observações e Trilhas",
   "position": 4,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Revisando Observações"
+    "title": "Revisando Observações e Trilhas"
   },
   "customProps": {
-    "title": "Revisando Observações"
+    "title": null
   }
 }

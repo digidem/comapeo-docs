@@ -19,10 +19,7 @@ last_update:
   author: Awana Digital
 sidebar_position: 29
 ---
-:::note 🖼️
-static/images/selectingdeviceroles_0.jpg
-
-:::
+![image](assets/4c7f95c4c91283e10d3f977cf46ed156df5fe5b71e650bcf2b18e59ce999656a.jpg)
 
 # Selecionando Funções de Dispositivo & Equipes
 
@@ -55,10 +52,7 @@ Um dos pontos fortes do CoMapeo é permitir que os usuários não apenas coletem
 
 As funções são atribuídas aos dispositivos pelo coordenador que os convida, durante o processo de convite. As funções são visíveis no menu e para todos os membros do projeto na tela da equipe.
 
-:::note 🖼️
-static/images/selectingdeviceroles_1.jpg
-
-:::
+![image](assets/60e490b502fa9ec9081b7ef3580d648b7390630f66d4f6ebc36932fda1eec6db.jpg)
 
 :::note 👉🏽 Observação
 Se uma função foi atribuída incorretamente, cancele o convite, se possível. Se o convite foi aceito, siga as etapas para remover o dispositivo. Em seguida, repita o processo de convite do dispositivo novamente, tomando cuidado para selecionar a função correta.

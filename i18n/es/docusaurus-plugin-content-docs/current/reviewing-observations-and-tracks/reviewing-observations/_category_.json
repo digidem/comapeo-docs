@@ -1,0 +1,14 @@
+{
+  "key": "reviewing-observations-and-tracks/reviewing-observations",
+  "label": "Revisa Observaciones",
+  "position": 1,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Revisa Observaciones"
+  },
+  "customProps": {
+    "title": null
+  }
+}

@@ -1,13 +1,14 @@
 {
-  "label": "Customizing CoMapeo",
+  "key": "preparing-to-use-comapeo",
+  "label": "Preparing to use CoMapeo",
   "position": 2,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Customizing CoMapeo"
+    "title": "Preparing to use CoMapeo"
   },
   "customProps": {
-    "title": "Customizing CoMapeo"
+    "title": null
   }
 }

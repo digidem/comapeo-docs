@@ -1,4 +1,5 @@
 {
+  "key": "exchanging-observations",
   "label": "Exchanging Observations",
   "position": 7,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Exchanging Observations"
   },
   "customProps": {
-    "title": "Exchanging Observations"
+    "title": null
   }
 }

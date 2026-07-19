@@ -1,0 +1,14 @@
+{
+  "key": "sharing-and-exporting-different-data-types",
+  "label": "Compartir y Exportar Diferentes Tipos de Datos",
+  "position": 8,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Compartir y Exportar Diferentes Tipos de Datos"
+  },
+  "customProps": {
+    "title": null
+  }
+}

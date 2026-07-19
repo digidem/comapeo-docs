@@ -105,7 +105,7 @@ Consulta 🔗 [Eliminar un dispositivo de un proyecto](/es/docs/removing-a-devic
 
 ## Contenido relacionado
 
-Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/crea-un-nuevo-proyecto)
+Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/creating-a-new-project)
 
 Ir a 🔗 [Invita Colaboradores](/es/docs/inviting-collaborators) para obtener instrucciones
 

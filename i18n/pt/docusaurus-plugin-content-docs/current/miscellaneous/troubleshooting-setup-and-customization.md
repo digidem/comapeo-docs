@@ -18,6 +18,8 @@ last_update:
   date: 4/22/2026
   author: Awana Digital
 sidebar_position: 39
+sidebar_custom_props:
+  title: "Variado"
 ---
 
 ---
@@ -53,31 +55,16 @@ Os dados do CoMapeo, incluindo personalizações e dados coletados, serão exclu
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:*** Vá para as configurações do Android. Você pode encontrá-las indo para o menu principal do Android e procurar por "Configurações". Geralmente tem um ícone de *engrenagem* (⚙️).
-:::note 🖼️
-static/images/troubleshootingsetup_0.png
-
-:::
+![image](assets/d533364eae3822b9414540ad1ada5fb81648a496d2f30cbf8fc31337b23f90aa.png)
 ***Passo 2:*** Abra-o e, dentro dele, procure pela opção "Apps". Isso exibirá todos os aplicativos instalados no dispositivo. Geralmente, há uma barra de pesquisa onde você pode digitar
-:::note 🖼️
-static/images/troubleshootingsetup_1.png
-
-:::
+![image](assets/550e9251c95938d5bedfef647f3618b7df6de6b9af0ce25ddf79e4e75dbcd93d.png)
 ***Passo 3:*** Digite **CoMapeo** e clique nele
-:::note 🖼️
-static/images/troubleshootingsetup_2.png
-
-:::
+![image](assets/157e609fef07cc8d2b827678382fe734b5826c54c986d2996855e61e22e37e5e.png)
 ***Passo 4:*** Uma vez dentro das *Informações do aplicativo*, selecione *Armazenamento & Cache*
-:::note 🖼️
-static/images/troubleshootingsetup_3.png
-
-:::
+![image](assets/151a891fcbf0d049010cd798bed4d8a41e34b838b73f449014154114a1975273.png)
 ***Passo 5:*** Dentro de *Armazenamento* selecionar *LIMPAR CACHE* que tem um ícone de lixeira (🗑️). Como dito acima, **cuidado nesse passo e selecione apenas** ***LIMPAR CACHE*** **e não** ***LIMPAR ARMAZENAMENTO*** **já que isso excluirá todos os dados, basicamente redefinindo o CoMapeo como se você acabasse de instalá-lo.**
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-:::note 🖼️
-static/images/troubleshootingsetup_4.png
-
-:::
+![image](assets/97ccd4bff2768f14007e8630fe4d25729dc1220c2e9ac6be3144898062b0d23d.png)
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 ***Passo 6:*** Uma vez que os dados do cache são limpos, abra o aplicativo novamente.
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
@@ -139,20 +126,11 @@ Os arquivos de categorias do **CoMapeo** têm uma extensão chamada ***.comapeoc
 <summary>**👣 Instruções passo a passo**</summary>
 
 **Passo 1:** Depois de selecionar o botão *Importar Categorias*, o navegador Android aparecerá para você selecionar o arquivo de categoria pretendido. Mas pode acontecer que o nome do arquivo seja cortado, então você pode não conseguir ver o nome completo.
-:::note 🖼️
-static/images/troubleshootingsetup_5.png
-
-:::
+![image](assets/eb1f315f6d5e994fcc2bd98dba80afce5497724bd17cdeaddb05e57f80b97c2e.png)
 **Passo 2:** Se você quiser ter certeza de que está selecionando o arquivo correto, pode selecionar e segurar o dedo em cima do arquivo desejado, o que mostrará o nome correto e selecionará esse arquivo.
-:::note 🖼️
-static/images/troubleshootingsetup_6.png
-
-:::
+![image](assets/b254e8941aafb52d2082c7688872230825b5a599c04f4ecc98e0e09abf031e23.png)
 **Passo 3:** Se o arquivo selecionado for o desejado, pressione selecionar no canto superior direito
-:::note 🖼️
-static/images/troubleshootingsetup_7.png
-
-:::
+![image](assets/a0529fa91a496a0021999bad9908061c9d074f93703e1f32322129b7bd72abca.png)
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
 </details>
@@ -167,15 +145,9 @@ De outubro a novembro de 2025, lançamos uma versão do CoMapeo (**v7**) que alt
 <summary>**👣 Instruções passo a passo**</summary>
 
 ***Passo 1:*** Abra o **CoMapeo,** e vá para o menu **Configurações do Comapeo** e escolha **Sobre o CoMapeo** no menu.
-:::note 🖼️
-static/images/troubleshootingsetup_8.png
-
-:::
+![image](assets/16ee13a50c5febdcc58782e71742b95006e2e42f230e69723be148ba3a4d7cb8.png)
 ***Passo 2:*** Verifique a **Versão do CoMapeo** e identifique se a versão é maior ou igual a **7.0**
-:::note 🖼️
-static/images/troubleshootingsetup_9.png
-
-:::
+![image](assets/aa21220b9ea0969a861ffc784b3701b1b992fd7e239c23485775cdf86345a351.png)
 ***Passo 3:*** Verifique a data em que o arquivo de categorias foi criado. Isso pode ser feito a partir de um computador desktop verificando as propriedades do arquivo.
 ***Passo 4:*** Se o arquivo foi criado **antes de** Outubro de 2025, então é possível que o arquivo de categorias seja incompatível com sua versão atual do **CoMapeo**
 ***Passo 5:*** Crie um novo arquivo de categorias que seja compatível com a versão atual do **CoMapeo.** Para isso, acesse: [Construindo um Conjunto de Categorias Personalizado](https://notion.so/docs/building-a-custom-categories-set)

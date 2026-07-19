@@ -124,5 +124,3 @@ Visita comapeo.app para información general, suscripción al boletín y acceso 
 :::
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-
----

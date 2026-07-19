@@ -1,4 +1,5 @@
 {
+  "key": "managing-projects",
   "label": "Gerenciando Projetos",
   "position": 6,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Gerenciando Projetos"
   },
   "customProps": {
-    "title": "Gerenciando Projetos"
+    "title": null
   }
 }

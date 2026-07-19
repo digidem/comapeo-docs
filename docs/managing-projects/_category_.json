@@ -1,4 +1,5 @@
 {
+  "key": "managing-projects",
   "label": "Managing Projects",
   "position": 6,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Managing Projects"
   },
   "customProps": {
-    "title": "Managing Projects"
+    "title": null
   }
 }

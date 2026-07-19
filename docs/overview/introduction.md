@@ -46,17 +46,17 @@ The pages have been divided into common stages of using CoMapeo. Each stage may 
 
 [Understanding CoMapeo’s Core Concepts & Functions](/docs/understanding-comapeos-core-concepts-and-functions) helps clarify what to expect and look forward to when using CoMapeo.  
 
-[Getting Started - Essentials](/docs/getting-started-essentials) include practical recommendations and instructions for gearing up to  CoMapeo, based on common technical accompaniment inquiries and training modules.
+[Getting Started - Essentials](/docs/category/getting-started---essentials) include practical recommendations and instructions for gearing up to  CoMapeo, based on common technical accompaniment inquiries and training modules.
 
-[Customizing CoMapeo](/docs/customizing-comapeo) is for teams needing a more customized mapping experience. There are detailed guides that are essential for the technical specialists on the team responsible for creating custom category sets, and bespoke offline maps. 
+[Customizing CoMapeo](/docs/category/customizing-comapeo) is for teams needing a more customized mapping experience. There are detailed guides that are essential for the technical specialists on the team responsible for creating custom category sets, and bespoke offline maps. 
 
 ---
 
 **Observations & Tracks**
 
-[Gathering Observations & Tracks](/docs/gathering-observations-and-tracks)  provides overviews and walkthroughs of all features related to gathering GIS information and add details and media files that can be collected with CoMapeo.
+[Gathering Observations & Tracks](/docs/category/gathering-observations--tracks)  provides overviews and walkthroughs of all features related to gathering GIS information and add details and media files that can be collected with CoMapeo.
 
-[Reviewing Observations](/docs/reviewing-observations) explains in detail ways to review and edit Observations and Tracks.
+[Reviewing Observations](/docs/category/reviewing-observations) explains in detail ways to review and edit Observations and Tracks.
 
 ---
 
@@ -64,15 +64,15 @@ The pages have been divided into common stages of using CoMapeo. Each stage may 
 
 [Encryption & Security](/docs/encryption-and-security)  addresses common data security concerns people have when considering use of new application.
 
-[Managing Data Privacy & Security](/docs/managing-data-privacy-and-security) details the features available in CoMapeo to control data privacy and app access for security considerations.
+[Managing Data Privacy & Security](/docs/category/managing-data-privacy--security) details the features available in CoMapeo to control data privacy and app access for security considerations.
 
 ---
 
 **Mapping with Collaborators**
 
-[Managing Projects](/docs/managing-projects) covers a broad set of considerations and options and instructions for giving a mapping project the shape and functionality most suitable for the team, context and purpose.
+[Managing Projects](/docs/category/managing-projects) covers a broad set of considerations and options and instructions for giving a mapping project the shape and functionality most suitable for the team, context and purpose.
 
-[Exchanging Observations](/docs/exchanging-project-data) is for people working in a team . The details about this signature feature and and step by step instructions help makeollaborative work easy and effective
+[Exchanging Observations](/docs/category/exchanging-observations) is for people working in a team . The details about this signature feature and and step by step instructions help makeollaborative work easy and effective
 
 ---
 
@@ -88,13 +88,13 @@ The pages have been divided into common stages of using CoMapeo. Each stage may 
 
 **Miscellaneous** 
 
-[FAQ](/docs/faq), [lossary](/docs/glossary), [Troubleshooting](/docs/troubleshooting) provide easy to browse information to get to answers and solutions quickly.
+[FAQ](/docs/faq), [lossary](/docs/glossary), [Troubleshooting](/docs/category/troubleshooting) provide easy to browse information to get to answers and solutions quickly.
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
 ### Having Problems?
 
-🔗 Go to [Troubleshooting](/docs/troubleshooting)  to see available solutions to known problems.
+🔗 Go to [Troubleshooting](/docs/category/troubleshooting/)  to see available solutions to known problems.
 
 📩 Email [help@comapeo.app](mailto:help@comapeo.app) to get further support from the Awana Digital team.
 

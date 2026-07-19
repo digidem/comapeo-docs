@@ -1,4 +1,5 @@
 {
+  "key": "sharing-and-exporting-different-data-types",
   "label": "Sharing and Exporting different data types",
   "position": 8,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Sharing and Exporting different data types"
   },
   "customProps": {
-    "title": "Sharing and Exporting different data types"
+    "title": null
   }
 }

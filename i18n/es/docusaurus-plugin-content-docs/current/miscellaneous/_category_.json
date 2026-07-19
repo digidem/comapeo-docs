@@ -1,0 +1,14 @@
+{
+  "key": "miscellaneous",
+  "label": "Misceláneas",
+  "position": 9,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Misceláneas"
+  },
+  "customProps": {
+    "title": null
+  }
+}

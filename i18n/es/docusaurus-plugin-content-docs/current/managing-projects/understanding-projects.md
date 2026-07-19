@@ -87,7 +87,7 @@ Ir a 🔗 [Planificación y Preparación para un Proyecto](/docs/planificacion-y
 
 Ir a 🔗 [Selección de roles y equipos de dispositivos](/docs/seleccion-de-roles-y-equipos-de-dispositivos) para aprender a hacer que tu proyecto sea colaborativo
 
-Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/crea-un-nuevo-proyecto)
+Ir a 🔗 [Crea un Nuevo Proyecto](/es/docs/creating-a-new-project)
 
 ### ¿Tienes problemas?
 

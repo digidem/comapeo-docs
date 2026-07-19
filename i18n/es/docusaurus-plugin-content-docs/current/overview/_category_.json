@@ -1,4 +1,5 @@
 {
+  "key": "overview",
   "label": "Vista General",
   "position": 1,
   "collapsible": true,
@@ -8,6 +9,6 @@
     "title": "Vista General"
   },
   "customProps": {
-    "title": "Vista General"
+    "title": null
   }
 }

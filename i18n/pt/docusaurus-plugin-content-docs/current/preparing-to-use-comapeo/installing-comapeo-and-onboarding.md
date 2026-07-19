@@ -24,10 +24,7 @@ sidebar_position: 5
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
-:::note 🖼️
-static/images/installingcomapeoonb_0.png
-
-:::
+![image](assets/f08f73711f5f932ffdcd57e3240c4286defe0d69135cdff7ae80259e112f4069.png)
 
 # Instalando o CoMapeo e Integração
 
@@ -63,22 +60,13 @@ A instalação desta forma é recomendada porque a Google Playstore facilita as 
 
 ***Passo 2:*** Selecionar Instalação
 
-:::note 🖼️
-static/images/installingcomapeoonb_1.jpg
+![image](assets/9130f03c1510527225ef5272af027f42d5f4cc0bd4f2dd9e8fd31f57c6eb5d87.jpg)
 
-:::
-
-:::note 🖼️
-static/images/installingcomapeoonb_2.jpg
-
-:::
+![image](assets/0922e21e1bac00957e1cba96e1810f2283b4867cd9038fee2abf9bb70f0107e8.jpg)
 
 ***Passo 3:***Aguarde o download do CoMapeo Mobile e, em seguida, instale.
 
-:::note 🖼️
-static/images/installingcomapeoonb_3.jpg
-
-:::
+![image](assets/7344d2095ba7e69ccdec4c070bdfeba7d8f64d5bf21edd3fdfc17add35779e4b.jpg)
 
 📼[PASSEIO EM VÍDEO](https://drive.google.com/file/d/1QWKYMfgGk2Qh8jGez_ZrwWhck8n_gn26/view?usp=drive_link)
 
@@ -99,18 +87,12 @@ Procure pelo ícone do CoMapeo onde quer que os aplicativos baixados fiquem no s
 
 CoMapeo Mobile, como todos os novos aplicativos, aparecerá no final da tela de aplicativos de <img src="/images/notion/182d654c7a9e6c2b35788275066f1447fff4ca24cd0f70a34f4b06e0c4326154.png" alt="android" className="emoji" style={{display:"inline",height:"1.2em",width:"auto",verticalAlign:"text-bottom",margin:"0 0.1em"}} />Dispositivos Android
 
-:::note 🖼️
-static/images/installingcomapeoonb_4.png
-
-:::
+![image](assets/e67891bb2deee359f763589bf2283850bff9acd6208a5cc1e90171070d897de3.png)
 
 ::::note 💡 Dica
 O CoMapeo pode ser aberto diretamente da Play Store após a conclusão da instalação
 
-:::note 🖼️
-static/images/installingcomapeoonb_5.jpg
-
-:::
+![image](assets/1ede89dd95c868d986f9c2f71fc4e142fa16a87e6589a7fa934f5c1be7e10cc9.jpg)
 
 ::::
 
@@ -118,10 +100,7 @@ static/images/installingcomapeoonb_5.jpg
 
 ## Integração
 
-:::note 🖼️
-static/images/installingcomapeoonb_6.png
-
-:::
+![image](assets/a823b55fe241270ce61e5389a84e5412848cc2d6cb8fa291f568be2677947fdb.png)
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
@@ -155,10 +134,7 @@ Você deve inserir um nome para o dispositivo. Este é o nome que outros disposi
 ***Passo 1:*** **Conceder permissão para o CoMapeo tirar fotos.**
 A câmera do CoMapeo é um dos principais recursos do aplicativo. Sem essa permissão, a câmera exibirá apenas uma tela preta. Outras partes do aplicativo continuarão funcionando.
 
-:::note 🖼️
-static/images/installingcomapeoonb_7.jpg
-
-:::
+![image](assets/1d700520e39d82bef5c9d5a1d25150c63b7fbcfac7de12c1af6bb6746af726ff.png)
 
 ---
 
@@ -168,19 +144,13 @@ O CoMapeo precisa acessar a localização de um dispositivo para coletar coorden
 
 Versões mais recentes do Android oferecem uma opção de dados de localização precisos ou aproximados. **Escolha com precisão** para os resultados de coleta de dados mais precisos.
 
-:::note 🖼️
-static/images/installingcomapeoonb_8.jpg
-
-:::
+![image](assets/cf7ca8a64594837187c88fd4525b859c608e77c393432dea07f12b2adae7dfed.png)
 
 ---
 
 ***Passo 3:*** Selecionar **Começar** na tela de boas-vindas do CoMapeo
 
-:::note 🖼️
-static/images/installingcomapeoonb_9.jpg
-
-:::
+![image](assets/7dbd03b8ea5f151dad8daf862ee694deebeb28741b2d4e6f4ef5323fd89059de.jpg)
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 
@@ -196,19 +166,13 @@ Aqui você também pode escolher para **optar** ou **optar por não participar**
 
 Vá para 🔗[CoMapeo Dados e Privacidade](https://digidem.notion.site/CoMapeo-Data-Privacy-d8f413bbbf374a2092655b89b9ceb2b0)para revisar a Política de Privacidade em inglês
 
-:::note 🖼️
-static/images/installingcomapeoonb_10.jpg
-
-:::
+![image](assets/08c4c6b98ac1ecd720369396c5deab8af604c2b0de2e9d00aaf2b0ad76453558.jpg)
 
 ---
 
 ***Passo 5*****: Nomeie seu dispositivo**
 
-:::note 🖼️
-static/images/installingcomapeoonb_11.jpg
-
-:::
+![image](assets/9cb740bf9961e9017e017fca1db5c3e0be6f2e5a69335d3ebd381facb3460072.jpg)
 
 - Nomes são necessários para todos os dispositivos no CoMapeo.
 
@@ -238,15 +202,9 @@ Vá para 🔗[Convidando Colaboradores](/pt/docs/inviting-collaborators)para ins
 
 :::
 
-:::note 🖼️
-static/images/installingcomapeoonb_12.jpg
+![image](assets/c339fc7662efd69b3c0f2b893e51850e4851d8cbe3dec1711f3ffe37fa41b9e4.jpg)
 
-:::
-
-:::note 🖼️
-static/images/installingcomapeoonb_13.jpg
-
-:::
+![image](assets/cf685616ec60f6485c9defe2671cfa02bcea2359b9987d9776db378a0b75d918.jpg)
 
 Na próxima vez que o CoMapeo for iniciado, ele estará no <img src="/images/notion/c3a90bf1bbc7f33b79ebc8060e2591c37c754808d7c30e3f9b9c27848ae5c11a.png" alt="app-icon-map" className="emoji" style={{display:"inline",height:"1.2em",width:"auto",verticalAlign:"text-bottom",margin:"0 0.1em"}} />
 
@@ -262,20 +220,14 @@ As versões mais recentes do CoMapeo estão disponíveis no [Site do CoMapeo](ht
 
 O  Play Store exibirá um botão de atualização quando uma nova versão estiver disponível com correções de bugs e, às vezes, novos recursos.
 
-:::note 🖼️
-static/images/installingcomapeoonb_14.jpg
-
-:::
+![image](assets/d231a8cf613cd146a73bb0b82fac799bdd7f88439786eb65542e1db6a86fdd08.jpg)
 
 Vá para 🔗[Obtenha o CoMapeo](https://comapeo.app/download)
 
 ::::note 💡 Dica
 O CoMapeo Mobile pode ser configurado para atualizar automaticamente nas opções disponíveis no aplicativo da Play Store.
 
-:::note 🖼️
-static/images/installingcomapeoonb_15.jpg
-
-:::
+![image](assets/15995a5fbe4c95ee39c7ec965d5ff5dac80416d1b4472003d459098be19bb177.jpg)
 
 ::::
 

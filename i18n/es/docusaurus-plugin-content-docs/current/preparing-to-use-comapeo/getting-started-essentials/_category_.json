@@ -1,0 +1,14 @@
+{
+  "key": "preparing-to-use-comapeo/getting-started-essentials",
+  "label": "Introducción - Conceptos básicos",
+  "position": 44,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Introducción - Conceptos básicos"
+  },
+  "customProps": {
+    "title": null
+  }
+}

@@ -33,16 +33,10 @@ Para fazer a Troca de Informações são necessárias 5 coisas:
 - Dois ou mais dispositivos com o aplicativo <img src="/images/notion/3a40065bd081188fd54f3a2eea142a94ef06d828f89e0980a51391cb7aa347c9.png" alt="comapeo_logo_circle" className="emoji" style={{display:"inline",height:"1.2em",width:"auto",verticalAlign:"text-bottom",margin:"0 0.1em"}} /> CoMapeo instalado,
 
 - Os dispositivos devem estar conectados **à mesma rede WiFi,**
-:::note 🖼️
-static/images/usingexchangeoffline_0.jpg
-
-:::
+![image](assets/354eb0bef48a502daeceb19d72b01061730fda8b4f38ca53f190058beac544ec.jpg)
 
 - Os dispositivos devem fazer parte **do mesmo projeto,**
-:::note 🖼️
-static/images/usingexchangeoffline_1.jpg
-
-:::
+![image](assets/bddf3a64f196a66e952e962e08d7b7d439112ffcf5654ff037c2ac5a6252821a.jpg)
 
 - Ter coletado novas observações ou trilhas,
 
@@ -96,10 +90,7 @@ Acesse: 🔗[Solução de Problemas: Mapeamento com Colaboradores -> Problemas d
 
 Problemas comuns com a troca estão relacionados a conectar-se à mesma WiFi ao mesmo tempo, especialmente se o roteador ou ponto de acesso móvel não estiver conectado à internet. Muitas vezes, os dispositivos se desconectarão de uma fonte de WiFi para favorecer uma que tenha internet ou que esteja salva nas memórias do dispositivo. Estas são configurações que você pode verificar para reduzir problemas relacionados a conexões WiFi.
 
-:::note 🖼️
-static/images/usingexchangeoffline_2.jpg
-
-:::
+![image](assets/0aada1c3c94d7f710777afbc822491a3b9cd8291753a151c62271eaaf159e325.jpg)
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
 

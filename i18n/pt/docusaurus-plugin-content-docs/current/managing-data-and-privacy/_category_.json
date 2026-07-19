@@ -1,13 +1,14 @@
 {
-  "label": "Gestão de Privacidade de Dados e Segurança",
+  "key": "managing-data-and-privacy",
+  "label": "Gestão de Privacidade e Segurança de Dados",
   "position": 5,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Gestão de Privacidade de Dados e Segurança"
+    "title": "Gestão de Privacidade e Segurança de Dados"
   },
   "customProps": {
-    "title": "Gestão de Privacidade de Dados e Segurança"
+    "title": null
   }
 }

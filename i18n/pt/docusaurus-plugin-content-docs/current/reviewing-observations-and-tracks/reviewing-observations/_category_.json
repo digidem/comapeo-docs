@@ -1,0 +1,14 @@
+{
+  "key": "reviewing-observations-and-tracks/reviewing-observations",
+  "label": "Revisando Observações",
+  "position": 1,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Revisando Observações"
+  },
+  "customProps": {
+    "title": null
+  }
+}

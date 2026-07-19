@@ -17,7 +17,7 @@ tags: [comapeo]
 last_update:
   date: 4/27/2026
   author: Awana Digital
-sidebar_position: 14
+sidebar_position: 23
 ---
 ![image](assets/16df7f2d42ca2ef5b638610479c8663c5362ef7f84502664301b2e8d39aff1e0.jpg)
 

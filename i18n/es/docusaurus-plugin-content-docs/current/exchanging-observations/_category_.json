@@ -1,13 +1,14 @@
 {
-  "label": "Intercambia Observaciones",
+  "key": "exchanging-observations",
+  "label": "Intercambiando Observaciones",
   "position": 7,
   "collapsible": true,
   "collapsed": true,
   "link": {
     "type": "generated-index",
-    "title": "Intercambia Observaciones"
+    "title": "Intercambiando Observaciones"
   },
   "customProps": {
-    "title": "Intercambia Observaciones"
+    "title": null
   }
 }

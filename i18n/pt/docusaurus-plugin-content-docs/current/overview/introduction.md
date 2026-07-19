@@ -127,5 +127,3 @@ Visite [comapeo.app](http://comapeo.app/) para informações gerais, inscrição
 :::
 
 <div class="notion-spacer" aria-hidden="true" role="presentation"></div>
-
----

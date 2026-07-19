@@ -114,4 +114,88 @@ describe("notion-translate translateCodeJson", () => {
     expect(request?.response_format?.type).toBe("json_object");
     expect(request?.max_tokens).toBe(DEFAULT_OPENAI_MAX_TOKENS);
   });
+
+  describe("extractTranslatableText", () => {
+    it("extracts navbar item labels and logo.alt", async () => {
+      const { extractTranslatableText } = await importTranslateCodeJson();
+
+      const result = extractTranslatableText(
+        {
+          logo: { alt: "CoMapeo" },
+          items: [
+            { label: "Documentation", type: "docSidebar" },
+            { label: "GitHub", href: "https://github.com/example" },
+          ],
+        },
+        "navbar"
+      );
+
+      expect(result).toEqual({
+        "item.label.Documentation": {
+          message: "Documentation",
+          description: "Navbar item with label Documentation",
+        },
+        "item.label.GitHub": {
+          message: "GitHub",
+          description: "Navbar item with label GitHub",
+        },
+        "logo.alt": {
+          message: "CoMapeo",
+          description: "The alt text of navbar logo",
+        },
+      });
+    });
+
+    it("omits logo.alt when navbar config has no logo", async () => {
+      const { extractTranslatableText } = await importTranslateCodeJson();
+
+      const result = extractTranslatableText(
+        { items: [{ label: "Documentation" }] },
+        "navbar"
+      );
+
+      expect(result).not.toHaveProperty("logo.alt");
+      expect(result["item.label.Documentation"]).toBeDefined();
+    });
+
+    it("extracts footer section titles and item labels in both the legacy and Docusaurus runtime key formats", async () => {
+      const { extractTranslatableText } = await importTranslateCodeJson();
+
+      const result = extractTranslatableText(
+        {
+          links: [
+            {
+              title: "CoMapeo",
+              items: [{ label: "Website", href: "https://comapeo.app" }],
+            },
+          ],
+          copyright: "Made with love",
+        },
+        "footer"
+      );
+
+      expect(result["links.title.CoMapeo"]).toEqual({
+        message: "CoMapeo",
+        description: "Footer section title: CoMapeo",
+      });
+      expect(result["link.title.CoMapeo"]).toEqual({
+        message: "CoMapeo",
+        description:
+          "The title of the footer links column with title=CoMapeo in the footer",
+      });
+      expect(result["links.CoMapeo.Website"]).toEqual({
+        message: "Website",
+        description: "Footer link label: Website",
+      });
+      expect(result["link.item.label.Website"]).toEqual({
+        message: "Website",
+        description:
+          "The label of footer link with label=Website linking to https://comapeo.app",
+      });
+      expect(result.copyright).toEqual({
+        message: "Made with love",
+        description: "Footer copyright text",
+      });
+    });
+  });
 });

@@ -59,8 +59,22 @@ assets/
 # Generated content (synced from content branch)
 # These directories are populated by checking out from the content branch
 /docs/
-/i18n/
 /static/images/
+
+# Generated i18n content — selectively un-ignore theme JSON for es/pt
+/i18n/*
+!/i18n/es/
+/i18n/es/*
+!/i18n/es/docusaurus-theme-classic/
+/i18n/es/docusaurus-theme-classic/*
+!/i18n/es/docusaurus-theme-classic/navbar.json
+!/i18n/es/docusaurus-theme-classic/footer.json
+!/i18n/pt/
+/i18n/pt/*
+!/i18n/pt/docusaurus-theme-classic/
+/i18n/pt/docusaurus-theme-classic/*
+!/i18n/pt/docusaurus-theme-classic/navbar.json
+!/i18n/pt/docusaurus-theme-classic/footer.json
 
 # Generated robots.txt (created at build time based on IS_PRODUCTION env var)
 /static/robots.txt

@@ -9,134 +9,342 @@ interface TranslationEntry {
 
 type TranslationCodeJson = Record<string, TranslationEntry>;
 
+const PLACEHOLDER_PATTERNS_ES = [
+  /^Nueva P[aá]gina( A)?$/u,
+  /^Nuevo t[ií]tulo de secci[oó]n$/u,
+  /^Nueva Palanca$/u,
+];
+
+const PLACEHOLDER_PATTERNS_PT = [
+  /^Nova P[aá]gina( A)?$/u,
+  /^Novo t[ií]tulo da se[cç][aã]o$/u,
+  /^Novo Alternar$/u,
+];
+
 const parseTranslationCodeJson = (content: string): TranslationCodeJson =>
   JSON.parse(content) as TranslationCodeJson;
 
-/**
- * Verification tests for locale output correctness
- *
- * These tests verify that:
- * 1. Locale files contain translated content (not English)
- * 2. No unintended English writes occurred in non-English locales
- * 3. Locale files have the expected structure
- * 4. Translation keys match between source and target locales
- */
+const readJsonFile = async (filePath: string): Promise<unknown> => {
+  const content = await fs.readFile(filePath, "utf8");
+  return JSON.parse(content);
+};
+
+const readTranslationCodeJson = async (
+  filePath: string
+): Promise<TranslationCodeJson> => {
+  const content = await fs.readFile(filePath, "utf8");
+  return parseTranslationCodeJson(content);
+};
+
+const assertFileExists = async (filePath: string): Promise<void> => {
+  try {
+    await fs.access(filePath);
+  } catch {
+    throw new Error(
+      `Required file not found: ${path.relative(process.cwd(), filePath)}`
+    );
+  }
+};
+
+const assertTranslationFileHasExpectedKeys = (
+  translations: TranslationCodeJson,
+  expectedKeys: string[],
+  fileLabel: string
+): void => {
+  for (const key of expectedKeys) {
+    if (!(key in translations)) {
+      throw new Error(`${fileLabel}: missing required key "${key}"`);
+    }
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the hardcoded expectedKeys param, never external input
+    const entry = translations[key];
+    if (
+      !entry ||
+      typeof entry.message !== "string" ||
+      entry.message.trim().length === 0
+    ) {
+      throw new Error(
+        `${fileLabel}: key "${key}" has empty or missing message`
+      );
+    }
+  }
+};
+
+const assertNoPlaceholderMessages = (
+  translations: TranslationCodeJson,
+  patterns: RegExp[],
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, entry] of Object.entries(translations)) {
+    if (!entry.message) continue;
+    for (const pattern of patterns) {
+      if (pattern.test(entry.message.trim())) {
+        violations.push(`  "${key}": "${entry.message}"`);
+        break;
+      }
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} placeholder message(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
+const assertNoUntranslatedMessages = (
+  translations: TranslationCodeJson,
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, entry] of Object.entries(translations)) {
+    if (!entry.message) continue;
+    if (entry.message === key) {
+      violations.push(`  "${key}": message identical to key (untranslated)`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} untranslated message(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
+const assertNoEmptyMessages = (
+  translations: TranslationCodeJson,
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, entry] of Object.entries(translations)) {
+    if (
+      typeof entry.message !== "string" ||
+      entry.message.trim().length === 0
+    ) {
+      violations.push(`  "${key}"`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} empty or missing message(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
+// Docusaurus theme default English strings are common leak points: a key
+// whose identifier differs from its message (e.g. "theme.TOC.title") slips
+// past assertNoUntranslatedMessages if the message is left as the English
+// default. Rather than a hand-curated sample, load every base English
+// string Docusaurus itself ships for the plugins this site actually uses
+// (see docusaurus.config.ts) and compare the full set.
+const DOCUSAURUS_BASE_TRANSLATION_FILES = [
+  "node_modules/@docusaurus/theme-translations/locales/base/theme-common.json",
+  "node_modules/@docusaurus/theme-translations/locales/base/plugin-pwa.json",
+  "node_modules/@docusaurus/theme-translations/locales/base/plugin-ideal-image.json",
+];
+
+const loadDocusaurusBaseEnglishDefaults = async (): Promise<
+  Record<string, string>
+> => {
+  const merged: Record<string, string> = {};
+  for (const relPath of DOCUSAURUS_BASE_TRANSLATION_FILES) {
+    const filePath = path.join(process.cwd(), relPath);
+    // Every file in DOCUSAURUS_BASE_TRANSLATION_FILES corresponds to a
+    // plugin this site has confirmed active in docusaurus.config.ts, so a
+    // read/parse failure here means something is actually broken (missing
+    // dependency, corrupted install) — fail loudly rather than silently
+    // treating the catalog as empty, which would make this check fail-open.
+    const content = await fs.readFile(filePath, "utf8");
+    const data = JSON.parse(content) as Record<string, string>;
+    for (const [key, value] of Object.entries(data)) {
+      if (key.endsWith("___DESCRIPTION")) continue;
+      // eslint-disable-next-line security/detect-object-injection -- key comes from a Docusaurus-shipped JSON catalog, never external input
+      merged[key] = value;
+    }
+  }
+  return merged;
+};
+
+// Keys whose Docusaurus English default is allowed to remain unchanged in
+// es/pt — e.g. brand names, or pure interpolation templates with no literal
+// English words to translate.
+const ENGLISH_DEFAULT_ALLOWLIST = new Set<string>([
+  // "{authorName} - {nPosts}" — just an interpolation pattern, not prose.
+  "theme.blog.author.pageTitle",
+]);
+
+const assertHasAllDocusaurusBaseKeys = (
+  translations: TranslationCodeJson,
+  baseDefaults: Record<string, string>,
+  fileLabel: string
+): void => {
+  const missing = Object.keys(baseDefaults).filter(
+    (key) => !(key in translations)
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `${fileLabel}: missing ${missing.length} Docusaurus base translation key(s) — these silently fall back to English at runtime:\n${missing.map((k) => `  "${k}"`).join("\n")}`
+    );
+  }
+};
+
+const assertNoUntranslatedDocusaurusDefaults = (
+  translations: TranslationCodeJson,
+  baseDefaults: Record<string, string>,
+  fileLabel: string
+): void => {
+  const violations: string[] = [];
+  for (const [key, expectedEnglish] of Object.entries(baseDefaults)) {
+    if (ENGLISH_DEFAULT_ALLOWLIST.has(key)) continue;
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the Docusaurus base translation catalog, never external input
+    const entry = translations[key];
+    if (entry && entry.message.trim() === expectedEnglish.trim()) {
+      violations.push(`  "${key}": still English ("${expectedEnglish}")`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${fileLabel}: found ${violations.length} untranslated Docusaurus default string(s):\n${violations.join("\n")}`
+    );
+  }
+};
+
+const NAVBAR_EXPECTED_KEYS = [
+  "item.label.Documentation",
+  "item.label.GitHub",
+  "logo.alt",
+];
+
+const FOOTER_EXPECTED_KEYS = [
+  "links.title.Awana Digital",
+  "links.Awana Digital.Website",
+  "links.Awana Digital.Discord",
+  "links.Awana Digital.Bluesky",
+  "links.Awana Digital.Blog",
+  "links.title.CoMapeo",
+  "links.CoMapeo.Website",
+  "links.CoMapeo.CoMapeo Mobile GitHub",
+  "links.CoMapeo.CoMapeo Desktop GitHub",
+  "links.title.More",
+  "links.More.PlayStore",
+  "links.More.GitHub",
+  "links.More.Earth Defenders Toolkit",
+  "copyright",
+  "link.title.More",
+  "link.item.label.Website",
+  "link.item.label.CoMapeo Mobile GitHub",
+  "link.item.label.CoMapeo Desktop GitHub",
+];
+
+const GENERIC_TRANSLATABLE_LABELS = [
+  {
+    locale: "es",
+    key: "item.label.Documentation",
+    english: "Documentation",
+    hint: "Documentación",
+  },
+  {
+    locale: "pt",
+    key: "item.label.Documentation",
+    english: "Documentation",
+    hint: "Documentação",
+  },
+  {
+    locale: "es",
+    key: "links.Awana Digital.Website",
+    english: "Website",
+    hint: "Sitio web",
+  },
+  {
+    locale: "pt",
+    key: "links.Awana Digital.Website",
+    english: "Website",
+    hint: "Site",
+  },
+  {
+    locale: "es",
+    key: "links.CoMapeo.Website",
+    english: "Website",
+    hint: "Sitio web",
+  },
+  {
+    locale: "pt",
+    key: "links.CoMapeo.Website",
+    english: "Website",
+    hint: "Site",
+  },
+  { locale: "es", key: "links.title.More", english: "More", hint: "Más" },
+  { locale: "pt", key: "links.title.More", english: "More", hint: "Mais" },
+  { locale: "es", key: "link.title.More", english: "More", hint: "Más" },
+  { locale: "pt", key: "link.title.More", english: "More", hint: "Mais" },
+  {
+    locale: "es",
+    key: "link.item.label.Website",
+    english: "Website",
+    hint: "Sitio web",
+  },
+  {
+    locale: "pt",
+    key: "link.item.label.Website",
+    english: "Website",
+    hint: "Site",
+  },
+  {
+    locale: "es",
+    key: "link.item.label.CoMapeo Mobile GitHub",
+    english: "CoMapeo Mobile GitHub",
+    hint: "GitHub de CoMapeo Mobile",
+  },
+  {
+    locale: "pt",
+    key: "link.item.label.CoMapeo Mobile GitHub",
+    english: "CoMapeo Mobile GitHub",
+    hint: "GitHub do CoMapeo Mobile",
+  },
+  {
+    locale: "es",
+    key: "link.item.label.CoMapeo Desktop GitHub",
+    english: "CoMapeo Desktop GitHub",
+    hint: "GitHub de CoMapeo Desktop",
+  },
+  {
+    locale: "pt",
+    key: "link.item.label.CoMapeo Desktop GitHub",
+    english: "CoMapeo Desktop GitHub",
+    hint: "GitHub do CoMapeo Desktop",
+  },
+];
+
 describe("Locale Output Verification", () => {
   const i18nDir = path.join(process.cwd(), "i18n");
 
   describe("Spanish locale (es)", () => {
-    it("has code.json with Spanish translations", async () => {
+    it("has code.json with no placeholder or untranslated messages", async () => {
       const codeJsonPath = path.join(i18nDir, "es", "code.json");
+      const codeJson = await readTranslationCodeJson(codeJsonPath);
 
-      // Read and parse the file
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
-
-      // Verify it has translations
       expect(Object.keys(codeJson).length).toBeGreaterThan(0);
-
-      // Sample a few keys to verify they're in Spanish (not English)
-      const sampleKeys = Object.keys(codeJson).slice(0, 5);
-
-      for (const key of sampleKeys) {
-        // eslint-disable-next-line security/detect-object-injection -- test code with controlled JSON data
-        const entry = codeJson[key];
-        if (entry.message) {
-          // Check that it's not English by looking for common English words
-          const message = entry.message.toLowerCase();
-
-          // Skip "Nova Página" and "Nuevo título" which are placeholder translations
-          if (
-            message.includes("nova página") ||
-            message.includes("nuevo título")
-          ) {
-            continue;
-          }
-
-          // Verify it's not English by checking for Spanish indicators
-          const hasSpanishIndicators =
-            message.includes(" en ") ||
-            message.includes(" de ") ||
-            message.includes(" para ") ||
-            message.includes(" el ") ||
-            message.includes(" la ") ||
-            message.includes("ón") ||
-            message.includes("ción") ||
-            message.includes(" esta ") ||
-            message.includes("nueva") ||
-            message.includes("página") ||
-            message.includes("introducción");
-
-          // If it doesn't have Spanish indicators, it might be a proper noun or short text
-          // We'll just verify it's a valid string for now
-          expect(typeof entry.message).toBe("string");
-          expect(entry.message.length).toBeGreaterThan(0);
-        }
-      }
-    });
-
-    it("does not contain unintended English content in code.json", async () => {
-      const codeJsonPath = path.join(i18nDir, "es", "code.json");
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
-
-      // Check that common English words are not present in messages
-      // (except for proper nouns or technical terms)
-      const englishOnlyPatterns = [
-        /\bthe\b/i,
-        /\bis\b/i,
-        /\band\b/i,
-        /\bfor\b/i,
-        /\bwith\b/i,
-        /\bgetting started\b/i,
-        /\bdevice setup\b/i,
-      ];
-
-      let hasUnintendedEnglish = false;
-      const unintendedEnglishEntries: string[] = [];
-
-      for (const [key, entry] of Object.entries(codeJson)) {
-        if (entry.message) {
-          const message = entry.message.toLowerCase();
-
-          // Skip placeholder translations
-          if (
-            message.includes("nova página") ||
-            message.includes("nuevo título")
-          ) {
-            continue;
-          }
-
-          // Check for multiple English-only patterns (suggesting untranslated content)
-          const matchCount = englishOnlyPatterns.filter((pattern) =>
-            pattern.test(message)
-          ).length;
-
-          if (matchCount >= 3) {
-            // If 3+ English patterns match, likely untranslated
-            hasUnintendedEnglish = true;
-            unintendedEnglishEntries.push(`${key}: ${entry.message}`);
-          }
-        }
-      }
-
-      expect(
-        hasUnintendedEnglish,
-        `Found potential untranslated English content in es/code.json:\n${unintendedEnglishEntries.join("\n")}`
-      ).toBe(false);
+      assertNoPlaceholderMessages(
+        codeJson,
+        PLACEHOLDER_PATTERNS_ES,
+        "es/code.json"
+      );
+      assertNoUntranslatedMessages(codeJson, "es/code.json");
+      assertNoEmptyMessages(codeJson, "es/code.json");
+      const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertHasAllDocusaurusBaseKeys(codeJson, baseDefaults, "es/code.json");
+      assertNoUntranslatedDocusaurusDefaults(
+        codeJson,
+        baseDefaults,
+        "es/code.json"
+      );
     });
 
     it("has valid structure with message and optional description", async () => {
       const codeJsonPath = path.join(i18nDir, "es", "code.json");
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
+      const codeJson = await readTranslationCodeJson(codeJsonPath);
 
       for (const [key, entry] of Object.entries(codeJson)) {
-        // Every entry must have a message
         expect(entry).toHaveProperty("message");
         expect(typeof entry.message).toBe("string");
-
-        // Description is optional but must be string if present
         if (entry.description) {
           expect(typeof entry.description).toBe("string");
         }
@@ -145,93 +353,34 @@ describe("Locale Output Verification", () => {
   });
 
   describe("Portuguese locale (pt)", () => {
-    it("has code.json with Portuguese translations", async () => {
+    it("has code.json with no placeholder or untranslated messages", async () => {
       const codeJsonPath = path.join(i18nDir, "pt", "code.json");
-
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
+      const codeJson = await readTranslationCodeJson(codeJsonPath);
 
       expect(Object.keys(codeJson).length).toBeGreaterThan(0);
-
-      const sampleKeys = Object.keys(codeJson).slice(0, 5);
-
-      for (const key of sampleKeys) {
-        // eslint-disable-next-line security/detect-object-injection -- test code with controlled JSON data
-        const entry = codeJson[key];
-        if (entry.message) {
-          const message = entry.message.toLowerCase();
-
-          // Skip placeholder translations
-          if (
-            message.includes("nova página") ||
-            message.includes("novo título")
-          ) {
-            continue;
-          }
-
-          // Verify it's a valid string
-          expect(typeof entry.message).toBe("string");
-          expect(entry.message.length).toBeGreaterThan(0);
-        }
-      }
-    });
-
-    it("does not contain unintended English content in code.json", async () => {
-      const codeJsonPath = path.join(i18nDir, "pt", "code.json");
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
-
-      const englishOnlyPatterns = [
-        /\bthe\b/i,
-        /\bis\b/i,
-        /\band\b/i,
-        /\bfor\b/i,
-        /\bwith\b/i,
-        /\bgetting started\b/i,
-        /\bdevice setup\b/i,
-      ];
-
-      let hasUnintendedEnglish = false;
-      const unintendedEnglishEntries: string[] = [];
-
-      for (const [key, entry] of Object.entries(codeJson)) {
-        if (entry.message) {
-          const message = entry.message.toLowerCase();
-
-          // Skip placeholder translations
-          if (
-            message.includes("nova página") ||
-            message.includes("novo título")
-          ) {
-            continue;
-          }
-
-          const matchCount = englishOnlyPatterns.filter((pattern) =>
-            pattern.test(message)
-          ).length;
-
-          if (matchCount >= 3) {
-            hasUnintendedEnglish = true;
-            unintendedEnglishEntries.push(`${key}: ${entry.message}`);
-          }
-        }
-      }
-
-      expect(
-        hasUnintendedEnglish,
-        `Found potential untranslated English content in pt/code.json:\n${unintendedEnglishEntries.join("\n")}`
-      ).toBe(false);
+      assertNoPlaceholderMessages(
+        codeJson,
+        PLACEHOLDER_PATTERNS_PT,
+        "pt/code.json"
+      );
+      assertNoUntranslatedMessages(codeJson, "pt/code.json");
+      assertNoEmptyMessages(codeJson, "pt/code.json");
+      const baseDefaults = await loadDocusaurusBaseEnglishDefaults();
+      assertHasAllDocusaurusBaseKeys(codeJson, baseDefaults, "pt/code.json");
+      assertNoUntranslatedDocusaurusDefaults(
+        codeJson,
+        baseDefaults,
+        "pt/code.json"
+      );
     });
 
     it("has valid structure with message and optional description", async () => {
       const codeJsonPath = path.join(i18nDir, "pt", "code.json");
-      const content = await fs.readFile(codeJsonPath, "utf8");
-      const codeJson = parseTranslationCodeJson(content);
+      const codeJson = await readTranslationCodeJson(codeJsonPath);
 
       for (const [key, entry] of Object.entries(codeJson)) {
         expect(entry).toHaveProperty("message");
         expect(typeof entry.message).toBe("string");
-
         if (entry.description) {
           expect(typeof entry.description).toBe("string");
         }
@@ -244,34 +393,18 @@ describe("Locale Output Verification", () => {
       const esCodeJsonPath = path.join(i18nDir, "es", "code.json");
       const ptCodeJsonPath = path.join(i18nDir, "pt", "code.json");
 
-      const esContent = await fs.readFile(esCodeJsonPath, "utf8");
-      const ptContent = await fs.readFile(ptCodeJsonPath, "utf8");
-
-      const esCodeJson = parseTranslationCodeJson(esContent);
-      const ptCodeJson = parseTranslationCodeJson(ptContent);
+      const esCodeJson = await readTranslationCodeJson(esCodeJsonPath);
+      const ptCodeJson = await readTranslationCodeJson(ptCodeJsonPath);
 
       const esKeys = Object.keys(esCodeJson).sort();
       const ptKeys = Object.keys(ptCodeJson).sort();
 
-      // Should have the same number of keys
       expect(esKeys.length).toBe(ptKeys.length);
 
-      // Check for keys that differ (may indicate data quality issues)
       const diff = esKeys
         .filter((k) => !ptKeys.includes(k))
         .concat(ptKeys.filter((k) => !esKeys.includes(k)));
 
-      if (diff.length > 0) {
-        console.warn(
-          "Warning: Translation keys differ between es and pt locales:",
-          diff
-        );
-        console.warn(
-          "This may indicate a data quality issue - translation keys should be based on English source"
-        );
-      }
-
-      // Allow up to 10% difference in keys, with minimum of 3 to handle small datasets
       const maxAllowedDiff = Math.max(3, Math.ceil(esKeys.length * 0.1));
       expect(
         diff.length,
@@ -288,55 +421,41 @@ describe("Locale Output Verification", () => {
           "docusaurus-plugin-content-docs",
           "current"
         );
+
+        const findCategoryFiles = async (dir: string): Promise<string[]> => {
+          const results: string[] = [];
+          let entries;
+          try {
+            entries = await fs.readdir(dir, { withFileTypes: true });
+          } catch {
+            return results;
+          }
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              results.push(...(await findCategoryFiles(fullPath)));
+            } else if (entry.name === "_category_.json") {
+              results.push(fullPath);
+            }
+          }
+          return results;
+        };
+
         let categoryFiles: string[];
         try {
-          // Recursively find all _category_.json files under the locale docs dir
-          const findCategoryFiles = async (dir: string): Promise<string[]> => {
-            const results: string[] = [];
-            let entries;
-            try {
-              entries = await fs.readdir(dir, { withFileTypes: true });
-            } catch {
-              return results;
-            }
-            for (const entry of entries) {
-              const fullPath = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                results.push(...(await findCategoryFiles(fullPath)));
-              } else if (entry.name === "_category_.json") {
-                results.push(fullPath);
-              }
-            }
-            return results;
-          };
           categoryFiles = await findCategoryFiles(localeDocsDir);
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            "code" in error &&
-            (error as NodeJS.ErrnoException).code === "ENOENT"
-          ) {
-            console.log(
-              `${locale} locale docs directory not found - content branch may not have toggle pages`
-            );
-            continue;
-          }
-          throw error;
-        }
-
-        if (categoryFiles.length === 0) {
-          console.log(
-            `No _category_.json files found for locale ${locale} - may not have toggle pages`
-          );
+        } catch {
           continue;
         }
+
+        if (categoryFiles.length === 0) continue;
 
         for (const filePath of categoryFiles) {
           const content = await fs.readFile(filePath, "utf8");
           const category = JSON.parse(content);
           expect(
             category.label,
-            `_category_.json at ${filePath} has empty label`
+            `_category_.json at ${path.relative(process.cwd(), filePath)} has empty label`
           ).toBeTruthy();
           expect(typeof category.label).toBe("string");
           expect(category.label.trim().length).toBeGreaterThan(0);
@@ -344,160 +463,88 @@ describe("Locale Output Verification", () => {
       }
     });
 
-    it("does not have English locale directory (en/)", async () => {
+    it("does not have English locale directory (en/) with code.json", async () => {
       const enDir = path.join(i18nDir, "en");
-
-      // English source files should NOT be in i18n/en/
-      // They should be in the root or handled separately
       try {
         await fs.access(enDir);
-        // If we get here, the directory exists - this might be a problem
-        // Check if it has code.json
         const enCodeJsonPath = path.join(enDir, "code.json");
         try {
           await fs.access(enCodeJsonPath);
-          // English code.json exists in i18n/en/ - this could cause issues
-          // Log a warning but don't fail (it might be intentional for source)
-          console.warn(
-            "Warning: i18n/en/code.json exists. This should only contain source English strings."
-          );
+          console.warn("Warning: i18n/en/code.json exists.");
         } catch {
-          // Directory exists but no code.json - that's fine
+          // no code.json - fine
         }
       } catch {
-        // Directory doesn't exist - that's expected
+        // directory doesn't exist - expected
       }
     });
   });
 
   describe("Theme translations", () => {
-    it("has navbar.json for Spanish", async () => {
-      const navbarPath = path.join(
+    const verifyThemeFile = async (
+      locale: string,
+      fileName: string,
+      expectedKeys: string[]
+    ): Promise<void> => {
+      const filePath = path.join(
         i18nDir,
-        "es",
+        locale,
         "docusaurus-theme-classic",
-        "navbar.json"
+        fileName
       );
 
-      try {
-        const content = await fs.readFile(navbarPath, "utf8");
-        const navbar = JSON.parse(content);
+      await assertFileExists(filePath);
 
-        expect(Object.keys(navbar).length).toBeGreaterThan(0);
+      const data = (await readJsonFile(filePath)) as TranslationCodeJson;
+      assertTranslationFileHasExpectedKeys(
+        data,
+        expectedKeys,
+        `${locale}/docusaurus-theme-classic/${fileName}`
+      );
+    };
 
-        // Verify entries have messages
-        for (const [key, entry] of Object.entries(navbar)) {
-          expect(entry).toHaveProperty("message");
-        }
-      } catch (error) {
-        // Only catch ENOENT (file not found) - let other errors propagate
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT"
-        ) {
-          console.log(
-            "Spanish navbar.json not found - may need to run translation"
-          );
-          return; // Exit gracefully for missing file only
-        }
-        throw error; // Re-throw all other errors (including assertion failures)
-      }
+    it("has navbar.json for Spanish with expected keys", async () => {
+      await verifyThemeFile("es", "navbar.json", NAVBAR_EXPECTED_KEYS);
     });
 
-    it("has footer.json for Spanish", async () => {
-      const footerPath = path.join(
-        i18nDir,
-        "es",
-        "docusaurus-theme-classic",
-        "footer.json"
-      );
-
-      try {
-        const content = await fs.readFile(footerPath, "utf8");
-        const footer = JSON.parse(content);
-
-        expect(Object.keys(footer).length).toBeGreaterThan(0);
-
-        for (const [key, entry] of Object.entries(footer)) {
-          expect(entry).toHaveProperty("message");
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT"
-        ) {
-          console.log(
-            "Spanish footer.json not found - may need to run translation"
-          );
-          return;
-        }
-        throw error;
-      }
+    it("has footer.json for Spanish with expected keys", async () => {
+      await verifyThemeFile("es", "footer.json", FOOTER_EXPECTED_KEYS);
     });
 
-    it("has navbar.json for Portuguese", async () => {
-      const navbarPath = path.join(
-        i18nDir,
-        "pt",
-        "docusaurus-theme-classic",
-        "navbar.json"
-      );
-
-      try {
-        const content = await fs.readFile(navbarPath, "utf8");
-        const navbar = JSON.parse(content);
-
-        expect(Object.keys(navbar).length).toBeGreaterThan(0);
-
-        for (const [key, entry] of Object.entries(navbar)) {
-          expect(entry).toHaveProperty("message");
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT"
-        ) {
-          console.log(
-            "Portuguese navbar.json not found - may need to run translation"
-          );
-          return;
-        }
-        throw error;
-      }
+    it("has navbar.json for Portuguese with expected keys", async () => {
+      await verifyThemeFile("pt", "navbar.json", NAVBAR_EXPECTED_KEYS);
     });
 
-    it("has footer.json for Portuguese", async () => {
-      const footerPath = path.join(
-        i18nDir,
-        "pt",
-        "docusaurus-theme-classic",
-        "footer.json"
-      );
+    it("has footer.json for Portuguese with expected keys", async () => {
+      await verifyThemeFile("pt", "footer.json", FOOTER_EXPECTED_KEYS);
+    });
 
-      try {
-        const content = await fs.readFile(footerPath, "utf8");
-        const footer = JSON.parse(content);
-
-        expect(Object.keys(footer).length).toBeGreaterThan(0);
-
-        for (const [key, entry] of Object.entries(footer)) {
-          expect(entry).toHaveProperty("message");
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT"
-        ) {
-          console.log(
-            "Portuguese footer.json not found - may need to run translation"
-          );
-          return;
-        }
-        throw error;
+    it("localizes generic translatable UI labels", async () => {
+      for (const {
+        locale,
+        key,
+        english,
+        hint,
+      } of GENERIC_TRANSLATABLE_LABELS) {
+        const filePath = path.join(
+          i18nDir,
+          locale,
+          "docusaurus-theme-classic",
+          key.startsWith("item.label.") ? "navbar.json" : "footer.json"
+        );
+        const data = (await readJsonFile(filePath)) as TranslationCodeJson;
+        // eslint-disable-next-line security/detect-object-injection -- key comes from the hardcoded GENERIC_TRANSLATABLE_LABELS constant, never external input
+        const entry = data[key];
+        expect(
+          entry,
+          `${locale} ${filePath.split("/").pop()}: missing key "${key}"`
+        ).toBeTruthy();
+        expect(typeof entry.message).toBe("string");
+        expect(entry.message.trim().length).toBeGreaterThan(0);
+        expect(
+          entry.message,
+          `${locale}: "${key}" appears untranslated (message="${entry.message}", expected something like "${hint}")`
+        ).not.toBe(english);
       }
     });
   });

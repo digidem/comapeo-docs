@@ -1160,4 +1160,101 @@ Título
       });
     });
   });
+
+  describe("Real project structural parity", () => {
+    it("has no empty translations in existing localized files", async () => {
+      const projectRoot = process.cwd();
+      let issues: ParityIssue[];
+
+      try {
+        issues = await collectParityIssues(projectRoot);
+      } catch (error) {
+        if (isMissingDirectoryError(error)) {
+          return;
+        }
+        throw error;
+      }
+
+      const emptyIssues = issues.filter(
+        (issue) => issue.type === "empty-translation"
+      );
+
+      if (emptyIssues.length > 0) {
+        const lines = emptyIssues.map(
+          (i) => `  ${i.key} (${i.locale}): ${i.type}`
+        );
+        console.warn(`Real project empty translations:\n${lines.join("\n")}`);
+      }
+
+      expect(
+        emptyIssues.length,
+        `Found ${emptyIssues.length} empty translations in real locale files`
+      ).toBe(0);
+    });
+
+    it("has no frontmatter mismatches when validation is enabled", async () => {
+      if (!shouldValidateFrontmatter()) {
+        return;
+      }
+
+      const projectRoot = process.cwd();
+      const issues = await collectParityIssues(projectRoot);
+
+      const frontmatterIssues = issues.filter(
+        (issue) => issue.type === "frontmatter-mismatch"
+      );
+
+      expect(
+        frontmatterIssues,
+        `Found ${frontmatterIssues.length} frontmatter mismatches`
+      ).toEqual([]);
+    });
+
+    it("has non-empty labels in real locale _category_.json files", async () => {
+      const locales = ["pt", "es"] as const;
+      for (const locale of locales) {
+        const localeRoot = getLocaleRoot(process.cwd(), locale);
+        let entries;
+        try {
+          entries = await fs.readdir(localeRoot, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+
+        const findCategoryFiles = async (dir: string): Promise<string[]> => {
+          const results: string[] = [];
+          let dirEntries;
+          try {
+            dirEntries = await fs.readdir(dir, { withFileTypes: true });
+          } catch {
+            return results;
+          }
+          for (const entry of dirEntries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              results.push(...(await findCategoryFiles(fullPath)));
+            } else if (entry.name === "_category_.json") {
+              results.push(fullPath);
+            }
+          }
+          return results;
+        };
+
+        const categoryFiles = await findCategoryFiles(localeRoot);
+
+        for (const filePath of categoryFiles) {
+          const content = await fs.readFile(filePath, "utf8");
+          const category = JSON.parse(content);
+          expect(
+            typeof category.label,
+            `${locale} ${filePath}: label missing`
+          ).toBe("string");
+          expect(
+            category.label.trim().length,
+            `${locale} ${filePath}: label is empty`
+          ).toBeGreaterThan(0);
+        }
+      }
+    });
+  });
 });

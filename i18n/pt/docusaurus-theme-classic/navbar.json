@@ -1,0 +1,14 @@
+{
+  "item.label.Documentation": {
+    "message": "Documentação",
+    "description": "Navbar item with label Documentation"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  },
+  "logo.alt": {
+    "message": "CoMapeo",
+    "description": "The alt text of navbar logo"
+  }
+}

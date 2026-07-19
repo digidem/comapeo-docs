@@ -132,6 +132,50 @@ jobs:
           echo "📂 Checking out content at SHA ${SHA:0:8}..."
           git checkout "$SHA" -- docs/ i18n/ static/images/
 
+          # The checkout above overlays i18n/ from the locked content SHA,
+          # which does not carry this repo's hand-maintained theme
+          # translation files (docusaurus-theme-classic/*) — those live
+          # only on main. Restore them from main so the theme chrome
+          # translations this repo owns actually reach production instead
+          # of silently falling back to whatever (or nothing) the content
+          # SHA has for those paths.
+          git ls-files -z 'i18n/*/docusaurus-theme-classic/*' \
+            | xargs -0 -r git checkout HEAD --
+
+          # code.json also carries Notion-generated, content-only
+          # translation keys that live only on the content SHA. A blind
+          # `checkout HEAD` here would silently drop those on every build.
+          # Merge instead: keep content-only keys, let HEAD win any key
+          # this repo also defines.
+          #
+          # `jq -s` slurps every JSON document across BOTH input files into
+          # one flat array and blindly indexes [0]/[1] — it does not verify
+          # each file actually contributed exactly one object. An empty or
+          # `null` content file silently falls back to HEAD alone; a content
+          # file with two concatenated JSON documents silently drops HEAD
+          # entirely. Validate each side is exactly one JSON object before
+          # merging so malformed input fails the step instead of shipping a
+          # silently wrong catalog.
+          validate_single_json_object() {
+            local file="$1" label="$2" count
+            count=$(jq -s 'length' "$file" 2>/dev/null) || { echo "::error::$label: not valid JSON" >&2; return 1; }
+            if [ "$count" != "1" ]; then
+              echo "::error::$label: expected exactly 1 JSON document, found $count" >&2
+              return 1
+            fi
+            jq -e 'type == "object"' "$file" >/dev/null 2>&1 || { echo "::error::$label: root value is not a JSON object" >&2; return 1; }
+          }
+
+          git ls-files -z 'i18n/*/code.json' | while IFS= read -r -d '' f; do
+            head_tmp=$(mktemp)
+            git show "HEAD:$f" > "$head_tmp"
+            validate_single_json_object "$f" "$f (content overlay)"
+            validate_single_json_object "$head_tmp" "HEAD:$f"
+            jq -s '.[0] + .[1]' "$f" "$head_tmp" > "$f.tmp"
+            mv "$f.tmp" "$f"
+            rm -f "$head_tmp"
+          done
+
           # Validate content exists
           echo "🔍 Validating content..."
 
@@ -220,7 +264,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           echo "${SHA}" > content-lock.sha
           git add content-lock.sha
-          git commit -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
+
+          # Earlier steps in this job overlay content into i18n/ and merge
+          # code.json in the working tree only, without re-staging it — the
+          # index still holds the raw content-branch (unmerged) catalog. A
+          # plain `git commit` here would commit that whole index snapshot,
+          # silently regressing code.json on main. Scope the commit to
+          # content-lock.sha only so any other staged changes are ignored.
+          git commit content-lock.sha -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
           git push origin HEAD:main
           echo "✅ Updated content-lock.sha → ${SHA:0:8}"
 

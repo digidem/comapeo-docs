@@ -239,7 +239,7 @@ async function performStatusUpdate(
 /**
  * Predefined workflow configurations
  */
-const WORKFLOWS = {
+export const WORKFLOWS = {
   "ready-for-translation": {
     from: "No Status",
     to: "Ready for translation",
@@ -262,7 +262,7 @@ const WORKFLOWS = {
     setPublishedDate: true, // Set the published date when publishing
   },
   "publish-production": {
-    from: "Staging",
+    from: "Adding to staging site",
     to: "Published",
     setPublishedDate: true, // Set the published date when publishing
   },

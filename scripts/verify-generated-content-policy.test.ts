@@ -149,6 +149,24 @@ describe("verify-generated-content-policy", () => {
       ).toBe(false);
     });
 
+    it("should reject theme files for locales outside the es/pt exception", () => {
+      // The exception is pinned to the es/pt locales this repo actually
+      // hand-maintains; a force-added theme file for another locale must
+      // still be flagged as a policy violation.
+      expect(
+        isAllowedFile(
+          "i18n/fr/docusaurus-theme-classic/navbar.json",
+          i18nPatterns
+        )
+      ).toBe(false);
+      expect(
+        isAllowedFile(
+          "i18n/de/docusaurus-theme-classic/footer.json",
+          i18nPatterns
+        )
+      ).toBe(false);
+    });
+
     it("should still allow code.json alongside the theme exceptions", () => {
       expect(isAllowedFile("i18n/es/code.json", i18nPatterns)).toBe(true);
     });

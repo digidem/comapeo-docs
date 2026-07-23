@@ -45,7 +45,11 @@ export const GENERATED_DIRECTORIES = [
     allowedPatterns: [
       /\.gitkeep$/,
       /\/code\.json$/, // UI translation strings are allowed
-      /^i18n\/[^/]+\/docusaurus-theme-classic\/(navbar|footer)\.json$/, // Hand-maintained theme chrome translations
+      // Hand-maintained theme chrome translations — exactly the es/pt
+      // navbar/footer files. The locale is pinned to es|pt (not a wildcard)
+      // so a force-added theme file for another locale (e.g. i18n/fr/...) is
+      // still flagged as a policy violation.
+      /^i18n\/(?:es|pt)\/docusaurus-theme-classic\/(navbar|footer)\.json$/,
     ],
   },
   {

@@ -30,8 +30,20 @@ on:
       - "**.md"
       - "docs/**"
 
+# Serialize deploys so overlapping runs can't race and clobber each other's
+# Cloudflare Pages output. The group is scoped by environment so a long-running
+# `environment: test` deploy cannot queue/block an urgent production deploy
+# (and vice-versa); runs of the same environment serialize among themselves.
+# `cancel-in-progress: false` means an in-flight deploy is never killed mid-push.
+#
+# We intentionally keep GitHub's default single pending slot (no `queue: max`):
+# for production content deploys the desired semantic is latest-wins — if several
+# deploys are dispatched back-to-back, only the newest queued one runs after the
+# in-flight one finishes. A dropped intermediate deploy is superseded anyway (its
+# content SHA and Notion status update are both overtaken by the newer run), so
+# `queue: max` would only burn time deploying stale intermediate content.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:

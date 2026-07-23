@@ -52,6 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Needed to promote content-lock.sha via an auto-merged PR (see the
+      # "Persist promoted content lock SHA" step) — a direct push to main is
+      # blocked by the branch-protection ruleset's required `test` check.
+      pull-requests: write
 
     steps:
       - name: Checkout code (main branch)
@@ -272,12 +276,33 @@ jobs:
 
       - name: Persist promoted content lock SHA
         if: github.event_name == 'workflow_dispatch' && inputs.environment != 'test' && steps.requested-content.outputs.sha != '' && steps.requested-content.outputs.current != steps.requested-content.outputs.sha
+        env:
+          # A fine-grained PAT, NOT the default GITHUB_TOKEN: events caused by
+          # GITHUB_TOKEN do not create new workflow runs, so a PR opened with it
+          # would never get a `test` check and auto-merge would stall forever.
+          # The PAT's PR/push events DO trigger test.yml, letting the promotion
+          # PR satisfy main's required `test` status check the normal way.
+          GH_TOKEN: ${{ secrets.CONTENT_LOCK_BOT_TOKEN }}
         run: |
           set -e
 
           SHA="${{ steps.requested-content.outputs.sha }}"
+          BRANCH="content-lock-promotion-${SHA:0:12}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Promote content-lock.sha via an auto-merged PR rather than a direct
+          # `git push origin HEAD:main`. main is protected by a ruleset that
+          # requires the `test` status check, which a direct [skip ci] push can
+          # never satisfy (no check runs on it) — it would be rejected, leaving
+          # production deployed but content-lock.sha un-promoted. A PR runs
+          # `test` and auto-merges once green, satisfying the check normally.
+          #
+          # The branch commit deliberately has NO [skip ci] so the PR's `test`
+          # run is not suppressed; only the final squash-merge commit that lands
+          # on main carries [skip ci], so it does not re-trigger this deploy
+          # workflow (which listens on push-to-main).
+          git checkout -b "$BRANCH"
           echo "${SHA}" > content-lock.sha
           git add content-lock.sha
 
@@ -287,9 +312,27 @@ jobs:
           # plain `git commit` here would commit that whole index snapshot,
           # silently regressing code.json on main. Scope the commit to
           # content-lock.sha only so any other staged changes are ignored.
-          git commit content-lock.sha -m "chore(content): promote content ${SHA:0:8} to production [skip ci]"
-          git push origin HEAD:main
-          echo "✅ Updated content-lock.sha → ${SHA:0:8}"
+          git commit content-lock.sha -m "chore(content): promote content ${SHA:0:8} to production"
+
+          # Push with the PAT identity (the checkout persists GITHUB_TOKEN
+          # credentials) so the branch push and the PR opened from it are
+          # attributed to a real actor whose events trigger test.yml.
+          git remote set-url origin "https://x-access-token:${{ secrets.CONTENT_LOCK_BOT_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push -f origin "$BRANCH"
+
+          # Open the promotion PR if one doesn't already exist for this branch
+          # (idempotent across re-runs of the same deploy), then enable
+          # auto-merge so it lands as soon as the required `test` check passes.
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number')
+          if [ -z "$PR_NUMBER" ]; then
+            PR_URL=$(gh pr create --base main --head "$BRANCH" \
+              --title "chore(content): promote content ${SHA:0:8} to production" \
+              --body "Automated content-lock.sha promotion from deploy run ${{ github.run_id }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Auto-merges once \`test\` passes.")
+            PR_NUMBER="${PR_URL##*/}"
+          fi
+          gh pr merge "$PR_NUMBER" --auto --squash \
+            --subject "chore(content): promote content ${SHA:0:8} to production [skip ci]"
+          echo "✅ Opened PR #$PR_NUMBER to promote content-lock.sha → ${SHA:0:8} (auto-merge enabled)"
 
       - name: Update Notion status to Published
         if: inputs.environment != 'test'

@@ -54,7 +54,6 @@ bg.png
 favicon.ico
 favicon.svg
 /assets/
-assets/
 
 
 # Generated robots.txt (created at build time based on IS_PRODUCTION env var)

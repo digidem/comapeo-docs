@@ -8,7 +8,7 @@ custom_edit_url: "https://www.notion.so/3131b08162d580109984c74fd82d275b"
 source: notion
 notion_page_id: "3131b081-62d5-8010-9984-c74fd82d275b"
 notion_last_edited_time: "2026-04-22T03:58:00.000Z"
-content_hash: "sha256:b8f65f8fa5f06e5ab998f3d7842e97a55714bee7ea5d182b72d31d3a750b8238"
+content_hash: "sha256:3f7e6762c027b942b4cbc711c27e7aaecd0a58965735720ecc3270c947aedded"
 status: draft
 locale: pt
 section: "30-Reviewing Observations & Tracks"
@@ -23,10 +23,6 @@ sidebar_position: 20
 ---
 
 ---
-
-[image]
-
-# Explorando a Lista de Observações
 
 Para CoMapeo Mobile v8
 

@@ -23,6 +23,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Verify generated-content policy
+        run: bun scripts/verify-generated-content-policy.ts
+
       - name: Checkout i18n content from content branch
         id: i18n_content
         shell: bash

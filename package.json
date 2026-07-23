@@ -58,7 +58,9 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "gen-pdf": "docusaurus-prince-pdf -u http://localhost:3000/docs",
     "typecheck": "tsc",
-    "test:locale-parity": "vitest --run scripts/locale-parity.test.ts"
+    "test:locale-parity": "vitest --run scripts/locale-parity.test.ts",
+    "test:content-policy": "vitest --run scripts/verify-generated-content-policy.test.ts",
+    "verify:generated-content-policy": "bun scripts/verify-generated-content-policy.ts"
   },
   "dependencies": {
     "@docusaurus/core": "^3.10.1",

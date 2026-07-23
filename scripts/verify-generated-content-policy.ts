@@ -16,7 +16,6 @@
 //
 // Exits with code 1 if policy violations are found.
 
-// eslint-disable-next-line import/no-unresolved
 import { $ } from "bun";
 import path from "node:path";
 
@@ -31,7 +30,7 @@ interface PolicyCheckResult {
   violations: PolicyViolation[];
 }
 
-const GENERATED_DIRECTORIES = [
+export const GENERATED_DIRECTORIES = [
   {
     path: "docs",
     description: "Generated documentation files",
@@ -46,6 +45,7 @@ const GENERATED_DIRECTORIES = [
     allowedPatterns: [
       /\.gitkeep$/,
       /\/code\.json$/, // UI translation strings are allowed
+      /^i18n\/[^/]+\/docusaurus-theme-classic\/(navbar|footer)\.json$/, // Hand-maintained theme chrome translations
     ],
   },
   {
@@ -57,7 +57,8 @@ const GENERATED_DIRECTORIES = [
 
 async function getTrackedFilesInDirectory(dirPath: string): Promise<string[]> {
   try {
-    const result = await $`git ls-files ${dirPath}`.quiet();
+    const result =
+      await $`git ls-tree -r --name-only HEAD -- ${dirPath}`.quiet();
     if (result.exitCode !== 0) {
       return [];
     }
@@ -67,7 +68,10 @@ async function getTrackedFilesInDirectory(dirPath: string): Promise<string[]> {
   }
 }
 
-function isAllowedFile(filePath: string, allowedPatterns: RegExp[]): boolean {
+export function isAllowedFile(
+  filePath: string,
+  allowedPatterns: RegExp[]
+): boolean {
   return allowedPatterns.some((pattern) => pattern.test(filePath));
 }
 

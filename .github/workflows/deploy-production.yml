@@ -282,14 +282,20 @@ jobs:
           # would never get a `test` check and auto-merge would stall forever.
           # The PAT's PR/push events DO trigger test.yml, letting the promotion
           # PR satisfy main's required `test` status check the normal way.
-          GH_TOKEN: ${{ secrets.CONTENT_LOCK_BOT_TOKEN }}
+          # Prefers the dedicated CONTENT_LOCK_BOT_TOKEN; falls back to the
+          # pre-existing CONTENT_REPO_TOKEN until that token is configured.
+          GH_TOKEN: ${{ secrets.CONTENT_LOCK_BOT_TOKEN || secrets.CONTENT_REPO_TOKEN }}
         run: |
           set -e
 
           SHA="${{ steps.requested-content.outputs.sha }}"
-          BRANCH="content-lock-promotion-${SHA:0:12}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BOT_TOKEN="${{ secrets.CONTENT_LOCK_BOT_TOKEN || secrets.CONTENT_REPO_TOKEN }}"
+          BRANCH="content-lock-promotion"
+
+          if [ -z "$BOT_TOKEN" ]; then
+            echo "::error::Neither CONTENT_LOCK_BOT_TOKEN nor CONTENT_REPO_TOKEN is set; cannot promote content-lock.sha via PR."
+            exit 1
+          fi
 
           # Promote content-lock.sha via an auto-merged PR rather than a direct
           # `git push origin HEAD:main`. main is protected by a ruleset that
@@ -298,41 +304,53 @@ jobs:
           # production deployed but content-lock.sha un-promoted. A PR runs
           # `test` and auto-merges once green, satisfying the check normally.
           #
+          # The promotion runs in a throwaway worktree at origin/main so it is
+          # isolated from this job's dirty working tree (the content overlay and
+          # merged code.json from earlier steps), and uses a single FIXED branch
+          # that is force-pushed. At most one promotion PR is therefore ever in
+          # flight and it always carries the newest SHA based on the latest main,
+          # so two back-to-back deploys cannot leave two pending PRs that conflict
+          # on the same single-line file.
+          #
           # The branch commit deliberately has NO [skip ci] so the PR's `test`
           # run is not suppressed; only the final squash-merge commit that lands
           # on main carries [skip ci], so it does not re-trigger this deploy
           # workflow (which listens on push-to-main).
-          git checkout -b "$BRANCH"
+          git fetch origin main
+          PROMOTE_WT="$(mktemp -d)"
+          git worktree add --detach "$PROMOTE_WT" origin/main
+          cd "$PROMOTE_WT"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
           echo "${SHA}" > content-lock.sha
           git add content-lock.sha
-
-          # Earlier steps in this job overlay content into i18n/ and merge
-          # code.json in the working tree only, without re-staging it — the
-          # index still holds the raw content-branch (unmerged) catalog. A
-          # plain `git commit` here would commit that whole index snapshot,
-          # silently regressing code.json on main. Scope the commit to
-          # content-lock.sha only so any other staged changes are ignored.
-          git commit content-lock.sha -m "chore(content): promote content ${SHA:0:8} to production"
-
+          git commit -m "chore(content): promote content ${SHA:0:8} to production"
           # Push with the PAT identity (the checkout persists GITHUB_TOKEN
           # credentials) so the branch push and the PR opened from it are
           # attributed to a real actor whose events trigger test.yml.
-          git remote set-url origin "https://x-access-token:${{ secrets.CONTENT_LOCK_BOT_TOKEN }}@github.com/${{ github.repository }}.git"
+          git remote set-url origin "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git"
           git push -f origin "$BRANCH"
+          cd -
+          git worktree remove --force "$PROMOTE_WT"
 
-          # Open the promotion PR if one doesn't already exist for this branch
-          # (idempotent across re-runs of the same deploy), then enable
+          # Reuse an open promotion PR if one exists, else open one (`// empty`
+          # so an empty result yields "" rather than "null"). Then enable
           # auto-merge so it lands as soon as the required `test` check passes.
-          PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number')
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
           if [ -z "$PR_NUMBER" ]; then
             PR_URL=$(gh pr create --base main --head "$BRANCH" \
               --title "chore(content): promote content ${SHA:0:8} to production" \
               --body "Automated content-lock.sha promotion from deploy run ${{ github.run_id }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Auto-merges once \`test\` passes.")
             PR_NUMBER="${PR_URL##*/}"
           fi
+          # Auto-merge may already be enabled (re-run on the same PR) or the PR
+          # may not be mergeable this instant; don't fail the deploy for that —
+          # the PR stays open and auto-merges once `test` passes.
           gh pr merge "$PR_NUMBER" --auto --squash \
-            --subject "chore(content): promote content ${SHA:0:8} to production [skip ci]"
-          echo "✅ Opened PR #$PR_NUMBER to promote content-lock.sha → ${SHA:0:8} (auto-merge enabled)"
+            --subject "chore(content): promote content ${SHA:0:8} to production [skip ci]" \
+            || echo "::notice::auto-merge not (re)enabled for PR #$PR_NUMBER — it will merge once 'test' passes if already enabled."
+          echo "✅ Promotion PR #$PR_NUMBER carries content-lock.sha → ${SHA:0:8} (auto-merge enabled)"
 
       - name: Update Notion status to Published
         if: inputs.environment != 'test'

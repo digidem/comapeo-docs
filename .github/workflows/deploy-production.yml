@@ -344,13 +344,27 @@ jobs:
               --body "Automated content-lock.sha promotion from deploy run ${{ github.run_id }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Auto-merges once \`test\` passes.")
             PR_NUMBER="${PR_URL##*/}"
           fi
-          # Auto-merge may already be enabled (re-run on the same PR) or the PR
-          # may not be mergeable this instant; don't fail the deploy for that —
-          # the PR stays open and auto-merges once `test` passes.
-          gh pr merge "$PR_NUMBER" --auto --squash \
-            --subject "chore(content): promote content ${SHA:0:8} to production [skip ci]" \
-            || echo "::notice::auto-merge not (re)enabled for PR #$PR_NUMBER — it will merge once 'test' passes if already enabled."
-          echo "✅ Promotion PR #$PR_NUMBER carries content-lock.sha → ${SHA:0:8} (auto-merge enabled)"
+          # Enable auto-merge so the PR lands as soon as the required `test`
+          # check passes. GitHub computes a freshly-created/pushed PR's
+          # mergeability asynchronously, and `gh pr merge --auto` errors until
+          # it is ready — so retry briefly instead of either failing the deploy
+          # or silently leaving auto-merge disabled (which would strand the lock
+          # under branch protection).
+          auto_merge_enabled=false
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge "$PR_NUMBER" --auto --squash \
+                --subject "chore(content): promote content ${SHA:0:8} to production [skip ci]" 2>/tmp/automerge.err; then
+              auto_merge_enabled=true
+              break
+            fi
+            echo "::notice::auto-merge not ready for PR #$PR_NUMBER (attempt $attempt): $(head -1 /tmp/automerge.err 2>/dev/null)"
+            sleep 10
+          done
+          if [ "$auto_merge_enabled" = "true" ]; then
+            echo "✅ Promotion PR #$PR_NUMBER carries content-lock.sha → ${SHA:0:8} (auto-merge enabled)"
+          else
+            echo "::warning::Could not enable auto-merge for PR #$PR_NUMBER after retries — merge it manually once 'test' passes to promote content-lock.sha → ${SHA:0:8}."
+          fi
 
       - name: Update Notion status to Published
         if: inputs.environment != 'test'

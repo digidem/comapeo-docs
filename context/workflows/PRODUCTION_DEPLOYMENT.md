@@ -36,7 +36,7 @@ Production deployment
 1. **Open Actions** → "Deploy to Production"
 2. Click **Run workflow**
 3. Leave **Content SHA** blank to use current content branch HEAD, or paste a specific SHA
-4. Click **Run workflow** → the workflow updates `content-lock.sha`, commits it to `main`, and deploys
+4. Click **Run workflow** → the workflow deploys the content and promotes `content-lock.sha` to `main` via an auto-merged PR (a direct push is no longer possible — `main` requires the `test` status check, which the promotion PR satisfies before merging)
 
 ### Option 2: CLI
 
@@ -48,7 +48,7 @@ gh workflow run deploy-production.yml
 gh workflow run deploy-production.yml -f content_sha=<sha>
 ```
 
-No PR required — `content-lock.sha` is updated automatically as part of the deploy.
+`content-lock.sha` is promoted automatically as part of the deploy — but via a short-lived **auto-merged PR** (`content-lock-promotion` branch), not a direct push: `main` is protected by a ruleset that requires the `test` status check, which a direct push cannot satisfy. The PR runs `test`, then auto-merges (with `[skip ci]` so it doesn't re-trigger this deploy), so the lock lands a minute or so after the Cloudflare deploy completes rather than instantly.
 
 ## Deployment Flow
 
@@ -57,7 +57,7 @@ When `deploy-production.yml` runs:
 1. **[`workflow_dispatch` only] Promote content lock SHA**:
    - Resolves SHA (from input or current `origin/content` HEAD)
    - Validates format and existence
-   - If different from current lock: commits updated `content-lock.sha` to `main` with `[skip ci]`
+   - If different from current lock: force-pushes the new `content-lock.sha` to a single `content-lock-promotion` branch (in a clean worktree off latest `main`) and opens/reuses an **auto-merged PR** for it. The PR runs `test` and auto-merges (squash, `[skip ci]` subject) once green. A direct push is not used — `main`'s required-`test` ruleset would reject it.
 
 2. **Resolve locked SHA**:
    - Read `content-lock.sha` from `main` (just updated if `workflow_dispatch`)

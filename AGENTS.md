@@ -21,7 +21,7 @@ For full repository guidelines, see `./context/repository-guidelines.md`.
 - do not add heavy dependencies without approval
 - do not commit secrets or modify CI without approval
 - do not place images outside `static/images` or hotlink external assets
-- do not commit content files in `./static` and `./docs` folders - these are generated from Notion
+- do not commit content files in `./static` and `./docs` folders - these are generated from Notion by the external pipeline in `../comapeo-content-pipeline/`
 - do not create new files in `./docs/` - this folder is reserved for Notion-generated content only
 
 ### Commands
@@ -31,18 +31,23 @@ For full repository guidelines, see `./context/repository-guidelines.md`.
 # use the GitHub CLI (`gh`) for PRs, issues, and other GitHub operations
 
 # lint a single file
+
 bunx eslint path/to/file.{ts,tsx,js} --fix
 
 # format a single file
+
 bunx prettier --write path/to/file.{ts,tsx,js,md,mdx}
 
 # unit test a single file (or folder)
+
 bunx vitest run path/to/file.test.ts
 
 # typecheck project (tsc is project-wide)
+
 bun run typecheck --noEmit
 
 # full site build or dev only when requested
+
 bun run build
 bun run dev
 
@@ -51,10 +56,12 @@ Note: Always lint, format, and run relevant tests for updated files. Prefer targ
 ### Safety and Permissions
 
 Allowed without prompt:
+
 - read/list files, search (`rg`), preview diffs
 - run `eslint`, `prettier`, and `vitest` on specific files
 
 Ask first:
+
 - installing/removing packages; changing `package.json`
 - deleting or moving many files; chmod
 - running `bun run build` or `bun run notion:*` commands
@@ -63,46 +70,20 @@ Ask first:
 ### PR Preview Deployments
 
 Every PR automatically gets a staging deployment on Cloudflare Pages:
+
 - **Preview URL**: `https://pr-{number}.comapeo-docs.pages.dev`
 - **Automatic**: Deployed on PR open/update, cleaned up on close
 - **Comment**: Bot comments on PR with preview link
 - **Triggers**: Pushes to PR branch (except Markdown-only changes)
 - **Security**: Only works for PRs from the main repository (not forks)
 
-#### Smart Content Generation Strategy
+#### Content Source
 
-The preview workflow automatically chooses the optimal content generation strategy:
+Previews always build from the `content` branch — same source as staging and production. No Notion fetching in PR previews. If preview content looks stale or the build fails on missing content, run the sync in `../comapeo-content-pipeline/` (its push updates `content`), then re-run the preview workflow.
 
-**When Notion fetch scripts ARE modified:**
-- Regenerates content from Notion API to validate script changes
-- Default: Fetches 5 pages (provides reliable validation coverage)
-- Takes ~90s
-- Script paths monitored: `scripts/notion-fetch/`, `scripts/notion-fetch-all/`, `scripts/fetchNotionData.ts`, `scripts/notionClient.ts`, `scripts/notionPageUtils.ts`, `scripts/constants.ts`
+### Content Architecture & External Pipeline
 
-**When Notion fetch scripts are NOT modified:**
-- Uses content from `content` branch (fast, ~30s)
-- Falls back to regenerating 5 pages if content branch is empty
-- No API calls needed (unless fallback triggered)
-
-**Override via PR labels** (forces regeneration regardless of script changes):
-
-| Label             | Pages Fetched             | Est. Time | When to Use                                |
-| ----------------- | ------------------------- | --------- | ------------------------------------------ |
-| (no label)        | Content branch or 5 pages | ~30-90s   | Default - fast for frontend, tests scripts |
-| `fetch-10-pages`  | 10 pages                  | ~2min     | Test pagination, multiple content types    |
-| `fetch-all-pages` | All (~50-100)             | ~8min     | Major refactoring, full validation         |
-
-**How to use labels:**
-```bash
-# Add label to force regeneration with more pages
-gh pr edit <PR#> --add-label "fetch-10-pages"
-
-# Or add when creating PR
-gh pr create --label "fetch-all-pages" --title "..." --body "..."
-
-# Remove label to go back to default behavior
-gh pr edit <PR#> --remove-label "fetch-10-pages"
-```
+`../comapeo-content-pipeline/` is the canonical content generator: it fetches from Notion and pushes generated `docs/`, `i18n/`, and `static/images/` content directly to this repo's `content` branch. comapeo-docs is a consumer: every build site (PR preview, staging, production) checks out content from the `content` branch instead of running Notion fetch itself. Do not add Notion fetching back to this repo's build workflows; to change what content gets generated, work in `../comapeo-content-pipeline/`.
 
 ### Project Structure Hints
 
@@ -160,6 +141,7 @@ See `context/workflows/PRODUCTION_DEPLOYMENT.md` for complete workflow.
 - Quick Lookups: `./context/quick-ref/` (mappings, status, examples)
 
 ## Approach
+
 - Think before acting. Read existing files before writing code.
 - Be concise in output but thorough in reasoning.
 - Prefer editing over rewriting whole files.

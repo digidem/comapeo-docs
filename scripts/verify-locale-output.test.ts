@@ -210,11 +210,14 @@ const assertNoUntranslatedDocusaurusDefaults = (
 // es and pt code.json must ship the exact same key set: a key present in
 // only one locale silently falls back to English (or renders nothing) in
 // the other. KEY_PARITY_ALLOWLIST buys time for known, deliberate gaps;
-// every entry must still point at a key that actually diverges between the
-// two files today — an entry whose key no longer diverges is stale and
-// fails the suite until removed.
-const KEY_PARITY_ALLOWLIST = new Set<string>([
-  // "some.key" — reason + tracking issue
+// mapping: key -> allowed direction ("es-only" or "pt-only").
+// Every entry must still point at a key that actually diverges in that exact
+// direction today — an entry whose key no longer diverges or has reversed
+// direction is stale and fails the suite until updated or removed.
+type ParityDirection = "es-only" | "pt-only";
+
+const KEY_PARITY_ALLOWLIST = new Map<string, ParityDirection>([
+  // ["some.key", "es-only"], // reason + tracking issue
 ]);
 
 const formatKeyList = (keys: string[]): string =>
@@ -233,10 +236,10 @@ const assertExactKeyParity = (
   const ptOnly = [...ptKeys].filter((key) => !esKeys.has(key));
 
   const unallowlistedEsOnly = esOnly.filter(
-    (key) => !KEY_PARITY_ALLOWLIST.has(key)
+    (key) => KEY_PARITY_ALLOWLIST.get(key) !== "es-only"
   );
   const unallowlistedPtOnly = ptOnly.filter(
-    (key) => !KEY_PARITY_ALLOWLIST.has(key)
+    (key) => KEY_PARITY_ALLOWLIST.get(key) !== "pt-only"
   );
 
   const problems: string[] = [];
@@ -252,19 +255,25 @@ const assertExactKeyParity = (
         `  pt-only (${unallowlistedPtOnly.length}):\n${formatKeyList(
           unallowlistedPtOnly
         )}\n` +
-        `Deliberate, temporary gaps go in KEY_PARITY_ALLOWLIST with a reason.`
+        `Deliberate, temporary gaps go in KEY_PARITY_ALLOWLIST with allowed direction and reason.`
     );
   }
 
-  const staleEntries = [...KEY_PARITY_ALLOWLIST].filter(
-    (key) => !esOnly.includes(key) && !ptOnly.includes(key)
+  const staleEntries = [...KEY_PARITY_ALLOWLIST.entries()].filter(
+    ([key, direction]) => {
+      if (direction === "es-only") return !esOnly.includes(key);
+      if (direction === "pt-only") return !ptOnly.includes(key);
+      return true;
+    }
   );
   if (staleEntries.length > 0) {
     problems.push(
       `KEY_PARITY_ALLOWLIST has ${staleEntries.length} stale entr${
         staleEntries.length === 1 ? "y" : "ies"
-      } — key(s) no longer differ between es and pt; remove them:\n` +
-        staleEntries.map((key) => `  "${key}"`).join("\n")
+      } — key(s) no longer diverge in the specified direction; remove or update them:\n` +
+        staleEntries
+          .map(([key, direction]) => `  "${key}" (expected: ${direction})`)
+          .join("\n")
     );
   }
 

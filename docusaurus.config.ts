@@ -200,6 +200,29 @@ const config: Config = {
   // Only production (IS_PRODUCTION=true) should be indexed
   noIndex: !isProduction,
 
+  // Plausible analytics — production only, so dev/staging/preview traffic
+  // does not pollute stats
+  scripts: isProduction
+    ? [
+        {
+          src: "https://pls.comapeo.app/script.file-downloads.hash.outbound-links.tagged-events.js",
+          defer: true,
+          "data-domain": "docs.comapeo.app",
+          "data-api": "https://pls.comapeo.app/event",
+        },
+      ]
+    : [],
+  headTags: isProduction
+    ? [
+        {
+          tagName: "script",
+          attributes: {},
+          innerHTML:
+            "window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }",
+        },
+      ]
+    : [],
+
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".

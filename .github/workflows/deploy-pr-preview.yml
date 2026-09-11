@@ -147,10 +147,12 @@ jobs:
 
       - name: Comment PR with preview URL
         uses: actions/github-script@v8
+        env:
+          DEPLOYMENT_ALIAS_URL: ${{ steps.deploy.outputs.deployment-alias-url }}
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const previewUrl = `https://pr-${prNumber}.comapeo-docs.pages.dev`;
+            const previewUrl = process.env.DEPLOYMENT_ALIAS_URL || `https://pr-${prNumber}.comapeo-docs.pages.dev`;
             const contentInfo = '📦 **Content:** from `content` branch (same source as staging/production)';
 
             const commentBody = `## 🚀 Preview Deployment
@@ -198,13 +200,15 @@ jobs:
             }
 
       - name: Deployment summary
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.deployment-alias-url }}
         run: |
           {
             echo "🚀 **PR Preview Deployment Complete!**"
             echo ""
             echo "- ✅ Documentation built successfully"
             echo "- ✅ Deployed to Cloudflare Pages"
-            echo "- 🌐 Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev"
+            echo "- 🌐 Preview URL: ${PREVIEW_URL:-https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev}"
             echo ""
             echo "- 📦 Content from content branch"
             echo ""
@@ -227,7 +231,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Preview URL: https://pr-${{ github.event.pull_request.number }}.comapeo-docs.pages.dev\nCommit: `${{ github.event.pull_request.head.sha }}`"
+                  text: "Preview URL: ${{ steps.deploy.outputs.deployment-alias-url || format('https://pr-{0}.comapeo-docs.pages.dev', github.event.pull_request.number) }}\nCommit: `${{ github.event.pull_request.head.sha }}`"
               - type: "section"
                 text:
                   type: "mrkdwn"

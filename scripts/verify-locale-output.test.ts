@@ -207,6 +207,72 @@ const assertNoUntranslatedDocusaurusDefaults = (
   }
 };
 
+// es and pt code.json must ship the exact same key set: a key present in
+// only one locale silently falls back to English (or renders nothing) in
+// the other. KEY_PARITY_ALLOWLIST buys time for known, deliberate gaps;
+// every entry must still point at a key that actually diverges between the
+// two files today — an entry whose key no longer diverges is stale and
+// fails the suite until removed.
+const KEY_PARITY_ALLOWLIST = new Set<string>([
+  // "some.key" — reason + tracking issue
+]);
+
+const formatKeyList = (keys: string[]): string =>
+  keys.length === 0
+    ? "    (none)"
+    : keys.map((key) => `    "${key}"`).join("\n");
+
+const assertExactKeyParity = (
+  esTranslations: TranslationCodeJson,
+  ptTranslations: TranslationCodeJson
+): void => {
+  const esKeys = new Set(Object.keys(esTranslations));
+  const ptKeys = new Set(Object.keys(ptTranslations));
+
+  const esOnly = [...esKeys].filter((key) => !ptKeys.has(key));
+  const ptOnly = [...ptKeys].filter((key) => !esKeys.has(key));
+
+  const unallowlistedEsOnly = esOnly.filter(
+    (key) => !KEY_PARITY_ALLOWLIST.has(key)
+  );
+  const unallowlistedPtOnly = ptOnly.filter(
+    (key) => !KEY_PARITY_ALLOWLIST.has(key)
+  );
+
+  const problems: string[] = [];
+
+  if (unallowlistedEsOnly.length > 0 || unallowlistedPtOnly.length > 0) {
+    problems.push(
+      `es/pt code.json key sets differ by ${
+        unallowlistedEsOnly.length + unallowlistedPtOnly.length
+      } key(s) — a key missing from one locale silently falls back to English at runtime:\n` +
+        `  es-only (${unallowlistedEsOnly.length}):\n${formatKeyList(
+          unallowlistedEsOnly
+        )}\n` +
+        `  pt-only (${unallowlistedPtOnly.length}):\n${formatKeyList(
+          unallowlistedPtOnly
+        )}\n` +
+        `Deliberate, temporary gaps go in KEY_PARITY_ALLOWLIST with a reason.`
+    );
+  }
+
+  const staleEntries = [...KEY_PARITY_ALLOWLIST].filter(
+    (key) => !esOnly.includes(key) && !ptOnly.includes(key)
+  );
+  if (staleEntries.length > 0) {
+    problems.push(
+      `KEY_PARITY_ALLOWLIST has ${staleEntries.length} stale entr${
+        staleEntries.length === 1 ? "y" : "ies"
+      } — key(s) no longer differ between es and pt; remove them:\n` +
+        staleEntries.map((key) => `  "${key}"`).join("\n")
+    );
+  }
+
+  if (problems.length > 0) {
+    throw new Error(problems.join("\n\n"));
+  }
+};
+
 const NAVBAR_EXPECTED_KEYS = [
   "item.label.Documentation",
   "item.label.GitHub",
@@ -389,27 +455,14 @@ describe("Locale Output Verification", () => {
   });
 
   describe("Locale consistency", () => {
-    it("has same number of translation keys in es and pt locales", async () => {
+    it("has identical translation key sets in es and pt locales", async () => {
       const esCodeJsonPath = path.join(i18nDir, "es", "code.json");
       const ptCodeJsonPath = path.join(i18nDir, "pt", "code.json");
 
       const esCodeJson = await readTranslationCodeJson(esCodeJsonPath);
       const ptCodeJson = await readTranslationCodeJson(ptCodeJsonPath);
 
-      const esKeys = Object.keys(esCodeJson).sort();
-      const ptKeys = Object.keys(ptCodeJson).sort();
-
-      expect(esKeys.length).toBe(ptKeys.length);
-
-      const diff = esKeys
-        .filter((k) => !ptKeys.includes(k))
-        .concat(ptKeys.filter((k) => !esKeys.includes(k)));
-
-      const maxAllowedDiff = Math.max(3, Math.ceil(esKeys.length * 0.1));
-      expect(
-        diff.length,
-        `Found ${diff.length} differing keys: ${diff.join(", ")}`
-      ).toBeLessThanOrEqual(maxAllowedDiff);
+      assertExactKeyParity(esCodeJson, ptCodeJson);
     });
 
     it("has non-empty label in translated toggle _category_.json files", async () => {

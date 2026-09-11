@@ -86,12 +86,12 @@ jobs:
           find static/images -type f 2>/dev/null | wc -l | xargs echo "  - Images:"
 
       - name: Restore hand-maintained i18n files
-        # The content-provisioning step above may have overlaid i18n/ from the
-        # content branch (or regenerated it from Notion), silently discarding
-        # the hand-maintained theme translation files this repo owns
-        # (docusaurus-theme-classic/*). Restore them unconditionally from the
-        # checked-out PR ref so the preview renders what the PR is actually
-        # proposing, not unrelated content-branch state.
+        # The content-provisioning step above overlaid i18n/ from the
+        # content branch, silently discarding the hand-maintained theme
+        # translation files this repo owns (docusaurus-theme-classic/*).
+        # Restore them unconditionally from the checked-out PR ref so the
+        # preview renders what the PR is actually proposing, not unrelated
+        # content-branch state.
         #
         # code.json also carries Notion-generated, content-only translation
         # keys that live only on the content branch. A blind `checkout HEAD`
@@ -148,7 +148,7 @@ jobs:
       - name: Comment PR with preview URL
         uses: actions/github-script@v8
         env:
-          DEPLOYMENT_ALIAS_URL: ${{ steps.deploy.outputs.deployment-alias-url }}
+          DEPLOYMENT_ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -201,7 +201,7 @@ jobs:
 
       - name: Deployment summary
         env:
-          PREVIEW_URL: ${{ steps.deploy.outputs.deployment-alias-url }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
         run: |
           {
             echo "🚀 **PR Preview Deployment Complete!**"
@@ -231,7 +231,7 @@ jobs:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: "Preview URL: ${{ steps.deploy.outputs.deployment-alias-url || format('https://pr-{0}.comapeo-docs.pages.dev', github.event.pull_request.number) }}\nCommit: `${{ github.event.pull_request.head.sha }}`"
+                  text: "Preview URL: ${{ steps.deploy.outputs.pages-deployment-alias-url || format('https://pr-{0}.comapeo-docs.pages.dev', github.event.pull_request.number) }}\nCommit: `${{ github.event.pull_request.head.sha }}`"
               - type: "section"
                 text:
                   type: "mrkdwn"

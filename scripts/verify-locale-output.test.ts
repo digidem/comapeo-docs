@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs/promises";
 import path from "path";
+import { formatCopyright } from "../src/theme/Footer/Copyright/formatCopyright";
 
 interface TranslationEntry {
   message: string;
@@ -608,6 +609,45 @@ describe("Locale Output Verification", () => {
           `${locale}: "${key}" appears untranslated (message="${entry.message}", expected something like "${hint}")`
         ).not.toBe(english);
       }
+    });
+
+    describe("formatCopyright", () => {
+      it("replaces stale years with the target year", () => {
+        expect(
+          formatCopyright("Made with ❤️ by Awana Digital - 2024", "2026")
+        ).toBe("Made with ❤️ by Awana Digital - 2026");
+        expect(
+          formatCopyright("Made with ❤️ by Awana Digital - 2023", "2027")
+        ).toBe("Made with ❤️ by Awana Digital - 2027");
+      });
+
+      it("preserves range start years while updating trailing year", () => {
+        expect(formatCopyright("© 2020-2024 Awana Digital", "2026")).toBe(
+          "© 2020-2026 Awana Digital"
+        );
+      });
+
+      it("replaces years in localized es/pt footer strings", () => {
+        expect(
+          formatCopyright("Hecho con ❤️ por Awana Digital - 2026", "2027")
+        ).toBe("Hecho con ❤️ por Awana Digital - 2027");
+        expect(
+          formatCopyright("Feito com ❤️ por Awana Digital - 2026", "2027")
+        ).toBe("Feito com ❤️ por Awana Digital - 2027");
+      });
+
+      it("defaults to the current year", () => {
+        const currentYear = new Date().getFullYear().toString();
+        expect(formatCopyright("Made with ❤️ by Awana Digital - 2024")).toBe(
+          `Made with ❤️ by Awana Digital - ${currentYear}`
+        );
+      });
+
+      it("handles undefined and empty copyright gracefully", () => {
+        expect(formatCopyright(undefined)).toBeUndefined();
+        expect(formatCopyright(undefined, "2026")).toBeUndefined();
+        expect(formatCopyright("")).toBe("");
+      });
     });
   });
 });

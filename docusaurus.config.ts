@@ -179,6 +179,7 @@ const config: Config = {
 
   // Custom fields to pass environment variables to client-side code
   customFields: {
+    currentYear: new Date().getFullYear().toString(),
     defaultDocsPage: DEFAULT_DOCS_PAGE,
     localizedDocKeysByLocale: LOCALIZED_DOC_KEYS_BY_LOCALE,
   },

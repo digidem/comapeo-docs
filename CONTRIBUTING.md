@@ -122,15 +122,11 @@ git checkout origin/content -- docs/ i18n/ static/images/
 bun dev
 ```
 
-**Option 2: Generate from Notion** (Requires API access)
+**Option 2: Generate via Content Pipeline** (External pipeline)
 
 ```bash
-# Setup .env with Notion credentials
-cp .env.example .env
-# Add NOTION_API_KEY and DATABASE_ID
-
-# Generate content
-bun notion:fetch
+# Generated via ../comapeo-content-pipeline/
+# See that repo's DEPLOYMENT.md for details
 bun dev
 ```
 
@@ -308,7 +304,6 @@ bun test
 
 # Run specific test suite
 bun test:scripts
-bun test:notion-fetch
 
 # Run tests in watch mode
 bun test:watch
@@ -459,7 +454,7 @@ Before submitting PR:
 ### File Naming
 
 - **React components**: `PascalCase.tsx` (e.g., `HomepageFeatures.tsx`)
-- **Scripts**: `kebab-case.ts` (e.g., `notion-fetch.ts`)
+- **Scripts**: `kebab-case.ts` (e.g., `generate-robots-txt.ts`)
 - **Documentation**: `kebab-case.md` (e.g., `contributing-guidelines.md`)
 - **Utilities**: `camelCase.ts` (e.g., `imageProcessor.ts`)
 

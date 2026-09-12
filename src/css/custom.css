@@ -15,6 +15,7 @@
   --ifm-color-primary-lightest: #07149b;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --doc-breadcrumbs-height: 45px;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -471,8 +472,11 @@ article {
  *
  * Docusaurus' default .anchor scroll-margin-top only clears the navbar.
  * Our sticky breadcrumbs bar (.theme-doc-breadcrumbs) sits below navbar
- * (top: navbar + 2px, ~45px tall), causing H2/H3 anchors and footnote jumps
- * to land hidden behind it.
+ * (top: navbar + 2px), causing H2/H3 anchors and footnote jumps to land
+ * hidden behind it.
+ *
+ * The height of the breadcrumb bar is dynamically tracked by ResizeObserver
+ * into --doc-breadcrumbs-height (falling back to 45px before measurement).
  *
  * Scoped to doc markdown (:is(.theme-doc-markdown, .markdown)). Both :target
  * and .anchor are targeted so headings and footnote ref/backrefs clear the
@@ -481,7 +485,8 @@ article {
 :is(.theme-doc-markdown, .markdown) :target,
 :is(.theme-doc-markdown, .markdown) .anchor {
   scroll-margin-top: calc(
-    var(--ifm-navbar-height, 60px) + 2px + 45px + 0.75rem
+    var(--ifm-navbar-height, 60px) + 2px + var(--doc-breadcrumbs-height, 45px) +
+      0.75rem
   );
 }
 

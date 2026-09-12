@@ -88,12 +88,79 @@ function clearHandlerMarkers(): void {
   }
 }
 
+let breadcrumbResizeObserver: ResizeObserver | null = null;
+
+/**
+ * Dynamically measures breadcrumb height and updates CSS custom property
+ * --doc-breadcrumbs-height to handle wrapped or multi-line breadcrumbs cleanly.
+ */
+function updateBreadcrumbHeight(): void {
+  const breadcrumbs = document.querySelector<HTMLElement>(
+    ".theme-doc-breadcrumbs"
+  );
+
+  if (breadcrumbResizeObserver) {
+    breadcrumbResizeObserver.disconnect();
+    breadcrumbResizeObserver = null;
+  }
+
+  if (!breadcrumbs) {
+    document.documentElement.style.setProperty(
+      "--doc-breadcrumbs-height",
+      "0px"
+    );
+    return;
+  }
+
+  const setHeight = (height: number) => {
+    document.documentElement.style.setProperty(
+      "--doc-breadcrumbs-height",
+      `${Math.round(height)}px`
+    );
+  };
+
+  const initialHeight = breadcrumbs.getBoundingClientRect().height;
+  if (initialHeight > 0) {
+    setHeight(initialHeight);
+    if (window.location.hash) {
+      try {
+        const id = decodeURIComponent(window.location.hash.slice(1));
+        const target = document.getElementById(id);
+        if (target) {
+          target.scrollIntoView();
+        }
+      } catch {
+        // Ignore invalid selector in hash
+      }
+    }
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    breadcrumbResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const borderBox = entry.borderBoxSize?.[0];
+        const height =
+          borderBox !== undefined
+            ? borderBox.blockSize
+            : (entry.target as HTMLElement).getBoundingClientRect().height;
+        if (height > 0) {
+          setHeight(height);
+        }
+      }
+    });
+    breadcrumbResizeObserver.observe(breadcrumbs);
+  }
+}
+
 const clientModule: ClientModule = {
   onRouteDidUpdate() {
     // Clear markers since React may have replaced elements
     clearHandlerMarkers();
     // Wait for React to finish rendering
-    requestAnimationFrame(attachScrollHandlers);
+    requestAnimationFrame(() => {
+      attachScrollHandlers();
+      updateBreadcrumbHeight();
+    });
   },
 };
 

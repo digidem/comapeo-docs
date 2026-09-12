@@ -97,7 +97,7 @@ If a secret is exposed:
    # 3. Click "Show" then "Regenerate" API key
    # 4. Update GitHub Secret: NOTION_API_KEY
    # 5. Update local .env file
-   # 6. Test: bun run notion:fetch
+   # 6. Test: bun run notion:version
    ```
 
 3. **For OpenAI API Keys:**
@@ -108,7 +108,7 @@ If a secret is exposed:
    # 3. Create new key
    # 4. Update GitHub Secret: OPENAI_API_KEY
    # 5. Update local .env file
-   # 6. Test: bun run notion:translate
+   # 6. Test: bun scripts/translate-theme/index.ts
    ```
 
 4. **Document Incident:**

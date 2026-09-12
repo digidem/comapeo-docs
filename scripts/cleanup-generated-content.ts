@@ -187,7 +187,9 @@ async function main() {
       chalk.yellow("⚠️  This will remove all generated content from Notion.")
     );
     console.log(
-      chalk.yellow("   You can regenerate it using: bun run notion:fetch-all\n")
+      chalk.yellow(
+        "   Fresh content can be checked out from the content branch or generated via comapeo-content-pipeline.\n"
+      )
     );
 
     // Simple confirmation for non-interactive environments
@@ -232,7 +234,7 @@ async function main() {
     );
     console.log(
       chalk.blue(
-        "\n🚀 Ready for fresh content generation with: bun run notion:fetch-all"
+        "\n🚀 Content cleaned. Fresh content is loaded from the content branch."
       )
     );
     process.exit(0);

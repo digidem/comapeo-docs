@@ -231,33 +231,174 @@ div[class*="admonition"][class*="caution"] {
 
 /* Icon colors - match border colors */
 .admonition-note .admonition-icon svg,
-div[class*="admonition"][class*="note"] svg {
+div[class*="admonition"][class*="note"] .admonition-icon svg,
+div[class*="admonition"][class*="note"] span[class*="admonitionIcon"] svg {
   fill: #e5e4e2 !important;
 }
 
 .admonition-tip .admonition-icon svg,
-div[class*="admonition"][class*="tip"] svg {
+div[class*="admonition"][class*="tip"] .admonition-icon svg,
+div[class*="admonition"][class*="tip"] span[class*="admonitionIcon"] svg {
   fill: #22c55e !important;
 }
 
 .admonition-info .admonition-icon svg,
-div[class*="admonition"][class*="info"] svg {
+div[class*="admonition"][class*="info"] .admonition-icon svg,
+div[class*="admonition"][class*="info"] span[class*="admonitionIcon"] svg {
   fill: #3b82f6 !important;
 }
 
 .admonition-warning .admonition-icon svg,
-div[class*="admonition"][class*="warning"] svg {
+div[class*="admonition"][class*="warning"] .admonition-icon svg,
+div[class*="admonition"][class*="warning"] span[class*="admonitionIcon"] svg {
   fill: #f59e0b !important;
 }
 
 .admonition-danger .admonition-icon svg,
-div[class*="admonition"][class*="danger"] svg {
+div[class*="admonition"][class*="danger"] .admonition-icon svg,
+div[class*="admonition"][class*="danger"] span[class*="admonitionIcon"] svg {
   fill: #ef4444 !important;
 }
 
 .admonition-caution .admonition-icon svg,
-div[class*="admonition"][class*="caution"] svg {
+div[class*="admonition"][class*="caution"] .admonition-icon svg,
+div[class*="admonition"][class*="caution"] span[class*="admonitionIcon"] svg {
   fill: #f97316 !important;
+}
+
+/* Emoji icon spacing for callouts (Issue #119) */
+.admonition-emoji-icon {
+  margin-right: 0.4em;
+  font-size: 1.1em;
+  line-height: 1;
+  vertical-align: -0.1em;
+  display: inline-block;
+}
+
+span[class*="admonitionIcon"]:empty,
+.admonition-icon:empty {
+  display: none !important;
+  margin: 0 !important;
+}
+
+/* Dark mode admonitions (Issue #17) */
+[data-theme="dark"] .admonition--note,
+[data-theme="dark"] .admonition-note,
+[data-theme="dark"] .alert--secondary,
+[data-theme="dark"] div[class*="admonition"][class*="note"] {
+  background-color: rgba(229, 228, 226, 0.08) !important;
+  border-left-color: #a1a1aa !important;
+  border-color: #a1a1aa !important;
+}
+
+[data-theme="dark"] .admonition--tip,
+[data-theme="dark"] .admonition-tip,
+[data-theme="dark"] div[class*="admonition"][class*="tip"] {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+  border-left-color: #4ade80 !important;
+  border-color: #4ade80 !important;
+}
+
+[data-theme="dark"] .admonition--info,
+[data-theme="dark"] .admonition-info,
+[data-theme="dark"] div[class*="admonition"][class*="info"] {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-left-color: #60a5fa !important;
+  border-color: #60a5fa !important;
+}
+
+[data-theme="dark"] .admonition--warning,
+[data-theme="dark"] .admonition-warning,
+[data-theme="dark"] div[class*="admonition"][class*="warning"] {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-left-color: #fbbf24 !important;
+  border-color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .admonition--danger,
+[data-theme="dark"] .admonition-danger,
+[data-theme="dark"] div[class*="admonition"][class*="danger"] {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  border-left-color: #f87171 !important;
+  border-color: #f87171 !important;
+}
+
+[data-theme="dark"] .admonition--caution,
+[data-theme="dark"] .admonition-caution,
+[data-theme="dark"] div[class*="admonition"][class*="caution"] {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+  border-left-color: #fb923c !important;
+  border-color: #fb923c !important;
+}
+
+/* Dark mode icon colors */
+[data-theme="dark"] .admonition-note .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="note"]
+  .admonition-icon
+  svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="note"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #a1a1aa !important;
+}
+
+[data-theme="dark"] .admonition-tip .admonition-icon svg,
+[data-theme="dark"] div[class*="admonition"][class*="tip"] .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="tip"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #4ade80 !important;
+}
+
+[data-theme="dark"] .admonition-info .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="info"]
+  .admonition-icon
+  svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="info"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #60a5fa !important;
+}
+
+[data-theme="dark"] .admonition-warning .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="warning"]
+  .admonition-icon
+  svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="warning"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #fbbf24 !important;
+}
+
+[data-theme="dark"] .admonition-danger .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="danger"]
+  .admonition-icon
+  svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="danger"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #f87171 !important;
+}
+
+[data-theme="dark"] .admonition-caution .admonition-icon svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="caution"]
+  .admonition-icon
+  svg,
+[data-theme="dark"]
+  div[class*="admonition"][class*="caution"]
+  span[class*="admonitionIcon"]
+  svg {
+  fill: #fb923c !important;
 }
 
 /*

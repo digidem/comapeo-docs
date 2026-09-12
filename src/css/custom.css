@@ -467,6 +467,25 @@ article {
 }
 
 /*
+ * Issue #121: hash-link scroll offset for sticky breadcrumbs
+ *
+ * Docusaurus' default .anchor scroll-margin-top only clears the navbar.
+ * Our sticky breadcrumbs bar (.theme-doc-breadcrumbs) sits below navbar
+ * (top: navbar + 2px, ~45px tall), causing H2/H3 anchors and footnote jumps
+ * to land hidden behind it.
+ *
+ * Scoped to doc markdown (:is(.theme-doc-markdown, .markdown)). Both :target
+ * and .anchor are targeted so headings and footnote ref/backrefs clear the
+ * sticky breadcrumbs bar cleanly with breathing room.
+ */
+:is(.theme-doc-markdown, .markdown) :target,
+:is(.theme-doc-markdown, .markdown) .anchor {
+  scroll-margin-top: calc(
+    var(--ifm-navbar-height, 60px) + 2px + 45px + 0.75rem
+  );
+}
+
+/*
  * Table of Contents Styling Enhancement
  * Active item with royal blue background and sliding animation
  */

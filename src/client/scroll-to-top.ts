@@ -88,12 +88,93 @@ function clearHandlerMarkers(): void {
   }
 }
 
+let breadcrumbResizeObserver: ResizeObserver | null = null;
+let hasAlignedInitialHash = false;
+
+/**
+ * Dynamically measures breadcrumb height and updates CSS custom property
+ * --doc-breadcrumbs-height to handle wrapped or multi-line breadcrumbs cleanly.
+ */
+function updateBreadcrumbHeight(): void {
+  const breadcrumbs = document.querySelector<HTMLElement>(
+    ".theme-doc-breadcrumbs"
+  );
+
+  if (breadcrumbResizeObserver) {
+    breadcrumbResizeObserver.disconnect();
+    breadcrumbResizeObserver = null;
+  }
+
+  if (!breadcrumbs) {
+    document.documentElement.style.setProperty(
+      "--doc-breadcrumbs-height",
+      "0px"
+    );
+    return;
+  }
+
+  const realignHashTarget = () => {
+    if (!window.location.hash) return;
+    try {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView();
+      }
+    } catch {
+      // Ignore invalid selector in hash
+    }
+  };
+
+  let lastHeight = 0;
+  const setHeight = (height: number) => {
+    const rounded = Math.round(height);
+    if (rounded <= 0 || rounded === lastHeight) return;
+    lastHeight = rounded;
+    document.documentElement.style.setProperty(
+      "--doc-breadcrumbs-height",
+      `${rounded}px`
+    );
+    // Only re-align once on initial navigation/measurement if deep-linked to a hash.
+    // Avoid overriding user's manual scroll position on subsequent resizes.
+    if (!hasAlignedInitialHash && window.location.hash) {
+      hasAlignedInitialHash = true;
+      realignHashTarget();
+    }
+  };
+
+  const initialHeight = breadcrumbs.getBoundingClientRect().height;
+  if (initialHeight > 0) {
+    setHeight(initialHeight);
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    breadcrumbResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const borderBox = entry.borderBoxSize?.[0];
+        const height =
+          borderBox !== undefined
+            ? borderBox.blockSize
+            : (entry.target as HTMLElement).getBoundingClientRect().height;
+        if (height > 0) {
+          setHeight(height);
+        }
+      }
+    });
+    breadcrumbResizeObserver.observe(breadcrumbs);
+  }
+}
+
 const clientModule: ClientModule = {
   onRouteDidUpdate() {
+    hasAlignedInitialHash = false;
     // Clear markers since React may have replaced elements
     clearHandlerMarkers();
     // Wait for React to finish rendering
-    requestAnimationFrame(attachScrollHandlers);
+    requestAnimationFrame(() => {
+      attachScrollHandlers();
+      updateBreadcrumbHeight();
+    });
   },
 };
 

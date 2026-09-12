@@ -16,11 +16,16 @@ export default function CopyrightWrapper(props: Props): ReactNode {
   const [year, setYear] = useState(buildYear);
 
   useEffect(() => {
-    const currentYear = new Date().getFullYear().toString();
-    if (currentYear !== buildYear) {
-      setYear(currentYear);
-    }
-  }, [buildYear]);
+    const updateYear = () => {
+      const currentYear = new Date().getFullYear().toString();
+      setYear((prev) => (prev !== currentYear ? currentYear : prev));
+    };
+
+    updateYear();
+    // Re-check periodically (hourly) so tabs left open across midnight roll over
+    const interval = setInterval(updateYear, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <Copyright {...props} copyright={formatCopyright(props.copyright, year)} />

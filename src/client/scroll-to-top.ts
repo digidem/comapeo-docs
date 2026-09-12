@@ -112,27 +112,35 @@ function updateBreadcrumbHeight(): void {
     return;
   }
 
+  const realignHashTarget = () => {
+    if (!window.location.hash) return;
+    try {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView();
+      }
+    } catch {
+      // Ignore invalid selector in hash
+    }
+  };
+
+  let lastHeight = 0;
   const setHeight = (height: number) => {
+    const rounded = Math.round(height);
+    if (rounded <= 0 || rounded === lastHeight) return;
+    lastHeight = rounded;
     document.documentElement.style.setProperty(
       "--doc-breadcrumbs-height",
-      `${Math.round(height)}px`
+      `${rounded}px`
     );
+    // Re-align hash target when breadcrumbs render or resize
+    realignHashTarget();
   };
 
   const initialHeight = breadcrumbs.getBoundingClientRect().height;
   if (initialHeight > 0) {
     setHeight(initialHeight);
-    if (window.location.hash) {
-      try {
-        const id = decodeURIComponent(window.location.hash.slice(1));
-        const target = document.getElementById(id);
-        if (target) {
-          target.scrollIntoView();
-        }
-      } catch {
-        // Ignore invalid selector in hash
-      }
-    }
   }
 
   if (typeof ResizeObserver !== "undefined") {

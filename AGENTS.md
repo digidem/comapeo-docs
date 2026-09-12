@@ -20,7 +20,7 @@ For full repository guidelines, see `./context/repository-guidelines.md`.
 - do not hardcode UI strings; do not bypass `@docusaurus/Translate`
 - do not add heavy dependencies without approval
 - do not commit secrets or modify CI without approval
-- do not place images outside `static/images` or hotlink external assets
+- do not place images outside `static/images` or hotlink external assets (first-party services under comapeo.app like pls.comapeo.app analytics are permitted)
 - do not commit content files in `./static` and `./docs` folders - these are generated from Notion by the external pipeline in `../comapeo-content-pipeline/`
 - do not create new files in `./docs/` - this folder is reserved for Notion-generated content only
 

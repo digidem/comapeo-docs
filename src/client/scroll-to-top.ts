@@ -89,6 +89,7 @@ function clearHandlerMarkers(): void {
 }
 
 let breadcrumbResizeObserver: ResizeObserver | null = null;
+let hasAlignedInitialHash = false;
 
 /**
  * Dynamically measures breadcrumb height and updates CSS custom property
@@ -134,8 +135,12 @@ function updateBreadcrumbHeight(): void {
       "--doc-breadcrumbs-height",
       `${rounded}px`
     );
-    // Re-align hash target when breadcrumbs render or resize
-    realignHashTarget();
+    // Only re-align once on initial navigation/measurement if deep-linked to a hash.
+    // Avoid overriding user's manual scroll position on subsequent resizes.
+    if (!hasAlignedInitialHash && window.location.hash) {
+      hasAlignedInitialHash = true;
+      realignHashTarget();
+    }
   };
 
   const initialHeight = breadcrumbs.getBoundingClientRect().height;
@@ -162,6 +167,7 @@ function updateBreadcrumbHeight(): void {
 
 const clientModule: ClientModule = {
   onRouteDidUpdate() {
+    hasAlignedInitialHash = false;
     // Clear markers since React may have replaced elements
     clearHandlerMarkers();
     // Wait for React to finish rendering

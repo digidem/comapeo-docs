@@ -14,6 +14,10 @@ import {
 } from "../notionClient";
 import { translateText, TranslationError } from "./translateFrontMatter.js";
 import {
+  translateThemeConfig,
+  type TranslationFailure,
+} from "../translate-theme/index.js";
+import {
   translateJson,
   extractTranslatableText,
   getLanguageName,
@@ -317,13 +321,6 @@ export async function findSiblingTranslations(
 
   return null;
 }
-type TranslationFailure = {
-  language: string;
-  title: string;
-  pageId?: string;
-  error: string;
-  isCritical: boolean;
-};
 
 type LanguageTranslationSummary = {
   language: string;
@@ -1242,104 +1239,6 @@ async function translateAllCodeJsons(englishCodeJson: string) {
 }
 
 /**
- * Translate navbar and footer from docusaurus.config.ts for all languages except English.
- */
-async function translateThemeConfig() {
-  const failures: TranslationFailure[] = [];
-  // Import docusaurus config
-  const configPath = path.join(process.cwd(), "docusaurus.config.ts");
-  const configModule = await import(configPath);
-  const config = configModule.default;
-
-  // Extract navbar and footer configs
-  const navbarConfig = config.themeConfig.navbar;
-  const footerConfig = config.themeConfig.footer;
-
-  // Convert to i18n format
-  const navbarTranslations = extractTranslatableText(navbarConfig, "navbar");
-  const footerTranslations = extractTranslatableText(footerConfig, "footer");
-
-  // Get language directories
-  const i18nDir = path.join(process.cwd(), "i18n");
-  const langDirs = await fs.readdir(i18nDir);
-
-  for (const langDir of langDirs) {
-    if (langDir === "en") continue; // Skip English
-
-    const langPath = path.join(i18nDir, langDir);
-    const langStat = await fs.stat(langPath);
-
-    if (!langStat.isDirectory()) continue;
-
-    const themeClassicDir = path.join(langPath, "docusaurus-theme-classic");
-    await fs.mkdir(themeClassicDir, { recursive: true });
-
-    const languageName = getLanguageName(langDir);
-
-    // Translate and save navbar
-    if (Object.keys(navbarTranslations).length > 0) {
-      try {
-        const translatedNavbar = await translateJson(
-          JSON.stringify(navbarTranslations, null, 2),
-          languageName
-        );
-        const navbarPath = path.join(themeClassicDir, "navbar.json");
-        await fs.writeFile(navbarPath, translatedNavbar, "utf8");
-        console.log(
-          chalk.green(
-            `✓ Successfully saved translated navbar.json for ${languageName}`
-          )
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(
-          chalk.red(
-            `✗ Error translating navbar for ${languageName}: ${message}`
-          )
-        );
-        failures.push({
-          language: langDir,
-          title: "navbar.json",
-          error: message,
-          isCritical: error instanceof TranslationError && error.isCritical,
-        });
-      }
-    }
-
-    // Translate and save footer
-    if (Object.keys(footerTranslations).length > 0) {
-      try {
-        const translatedFooter = await translateJson(
-          JSON.stringify(footerTranslations, null, 2),
-          languageName
-        );
-        const footerPath = path.join(themeClassicDir, "footer.json");
-        await fs.writeFile(footerPath, translatedFooter, "utf8");
-        console.log(
-          chalk.green(
-            `✓ Successfully saved translated footer.json for ${languageName}`
-          )
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(
-          chalk.red(
-            `✗ Error translating footer for ${languageName}: ${message}`
-          )
-        );
-        failures.push({
-          language: langDir,
-          title: "footer.json",
-          error: message,
-          isCritical: error instanceof TranslationError && error.isCritical,
-        });
-      }
-    }
-  }
-
-  return failures;
-}
-/**
  * Process all translations for a single language.
  */
 async function processLanguageTranslations(
@@ -2153,7 +2052,11 @@ export async function main(options: CliOptions = {}) {
     }
 
     // Translate theme config (navbar and footer)
-    const themeFailures = await translateThemeConfig();
+    const themeFailures = await translateThemeConfig({
+      extractTranslatableTextFn: extractTranslatableText,
+      getLanguageNameFn: getLanguageName,
+      translateJsonFn: translateJson,
+    });
     failures.push(...themeFailures);
     summary.themeFailures = themeFailures.length;
 

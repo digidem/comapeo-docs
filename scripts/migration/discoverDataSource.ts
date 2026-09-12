@@ -128,7 +128,7 @@ async function discoverDataSourceId() {
     console.log(chalk.cyan(`   DATA_SOURCE_ID=${actualDataSourceId}`));
 
     console.log(chalk.white("\n2. Verify the change works:"));
-    console.log(chalk.gray("   bun notion:fetch --dry-run"));
+    console.log(chalk.gray("   bun run notionStatus:ready-for-translation"));
 
     console.log(chalk.white("\n3. Update your scripts to use DATA_SOURCE_ID:"));
     console.log(

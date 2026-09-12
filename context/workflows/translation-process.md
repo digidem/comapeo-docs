@@ -1,5 +1,10 @@
 # Translation Process
 
+> [!NOTE]
+> Notion page content translation is now managed by `../comapeo-content-pipeline/` (which generates translated docs directly onto the `content` branch).
+> In-repo theme chrome translation is managed by `scripts/translate-theme/`.
+> The legacy `bun run notion:translate` script and `translate-docs.yml` workflow have been retired.
+
 i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 
 ## Translation Architecture
@@ -31,7 +36,8 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 
 ### 2. Translation Generation
 
-**Command**: `bun run notion:translate`
+**Pipeline**: Page translation is executed via `../comapeo-content-pipeline/` (e.g. `bun run translations:generate`).
+In-repo theme-chrome translation is executed via `bun scripts/translate-theme/index.ts`.
 
 **Process**:
 
@@ -40,79 +46,15 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 3. **Translate Navigation**: Update navbar/footer strings from `docusaurus.config.ts`
 4. **Generate Markdown**: Save translated content to locale directories
 
+_(Note: The failure contract and TRANSLATION_SUMMARY schema below describe the original translation system design now implemented in `../comapeo-content-pipeline/`)_
+
 **Fail-safe contract**:
 
-- The command exits non-zero when any doc/content translation fails.
-- The command exits non-zero when no English pages are in `Ready for translation`.
-- The command exits non-zero when any theme (navbar/footer) translation fails.
-- The command **continues** when `code.json` (UI strings) is missing or malformed (soft-fail).
-- Every run emits a machine-readable `TRANSLATION_SUMMARY ...` log line.
-
-**TRANSLATION_SUMMARY schema**:
-
-```typescript
-type TranslationRunSummary = {
-  totalEnglishPages: number; // Total English pages found for translation
-  processedLanguages: number; // Number of target languages processed
-  newTranslations: number; // Newly created translation pages
-  updatedTranslations: number; // Existing pages that were updated
-  skippedTranslations: number; // Pages skipped (already up-to-date)
-  failedTranslations: number; // Failed doc translations
-  codeJsonFailures: number; // Failed code.json (UI string) translations
-  codeJsonSourceFileMissing: boolean; // Source code.json was missing/malformed (soft-fail)
-  themeFailures: number; // Failed theme (navbar/footer) translations
-  failures: TranslationFailure[]; // Detailed failure entries
-};
-
-type TranslationFailure = {
-  language: string; // Target language (e.g., "pt-BR", "es")
-  title: string; // Page title or file that failed
-  pageId?: string; // Notion page ID if applicable
-  error: string; // Error message
-  isCritical: boolean; // Whether failure prevents further processing
-};
-```
-
-**Example output**:
-
-```
-TRANSLATION_SUMMARY {"totalEnglishPages":42,"processedLanguages":2,"newTranslations":5,"updatedTranslations":12,"skippedTranslations":23,"failedTranslations":1,"codeJsonFailures":0,"codeJsonSourceFileMissing":false,"themeFailures":0,"failures":[...]}
-```
-
-### Soft-fail policy for code.json
-
-**Rationale**: Doc translation is the primary value, while `code.json` (UI strings) and theme translations are secondary. Hard-failing on secondary values would block all primary work.
-
-**Behavior**:
-
-- If `i18n/en/code.json` is missing or contains invalid JSON:
-  - A warning is logged to the console
-  - A non-critical failure entry is added to the summary
-  - Doc translation continues normally
-  - The summary's `codeJsonFailures` count is incremented
-  - The command exit status reflects the overall result (including doc failures)
-
-**Example output**:
-
-```
-⚠ English code.json not found. Skipping UI string translation (continuing with doc translation).
-```
-
-**Summary categorization**:
-
-```json
-{
-  "failures": [
-    {
-      "language": "en",
-      "title": "code.json (source file)",
-      "error": "Source file not found - UI string translation skipped",
-      "isCritical": false
-    }
-  ],
-  "codeJsonFailures": 1
-}
-```
+- The pipeline exits non-zero when doc/content translation fails.
+- The pipeline exits non-zero when no English pages are in `Ready for translation`.
+- Theme (navbar/footer) translation in this repo exits non-zero on failure.
+- Translation continues when `code.json` (UI strings) is missing or malformed (soft-fail).
+- Every pipeline run emits a machine-readable summary.
 
 ### 3. Auto Translation Complete
 
@@ -124,10 +66,10 @@ TRANSLATION_SUMMARY {"totalEnglishPages":42,"processedLanguages":2,"newTranslati
 2. Translation pages ready for human review
 3. Run via `bun run notionStatus:translation` or GitHub Action
 
-**Workflow dispatch**:
+**Workflow execution**:
 
-- `.github/workflows/translate-docs.yml` accepts `target_branch` input.
-- Status update and commit steps are gated by `if: success()`.
+- Managed by `../comapeo-content-pipeline/` which writes translated docs to the `content` branch.
+- Status updates and commit steps are managed by the pipeline.
 
 ### 4. Translation Review
 
@@ -146,7 +88,7 @@ TRANSLATION_SUMMARY {"totalEnglishPages":42,"processedLanguages":2,"newTranslati
 
 **Process**:
 
-1. Include in `notion:fetch-all` processing
+1. Included in automated content sync via `comapeo-content-pipeline` to the `content` branch
 2. Generate localized site structure
 3. Deploy with main content updates
 
@@ -230,11 +172,8 @@ export const LANGUAGES: TranslationConfig[] = [
 4. **Verify the migration**:
 
    ```bash
-   # Test locally
-   bun run notion:translate
-
-   # Test via workflow (use dry-run label first)
-   gh workflow run translate-docs.yml
+   # Test status script with new credentials
+   bun run notionStatus:ready-for-translation
    ```
 
 **Deprecation Timeline**:
@@ -263,8 +202,8 @@ export const LANGUAGES: TranslationConfig[] = [
 **See Also**:
 
 - Migration script: `scripts/migration/discoverDataSource.ts`
-- Notion Client implementation: `scripts/notionClient.ts` (lines 437-455)
-- Translation workflow: `.github/workflows/translate-docs.yml`
+- External content pipeline: `../comapeo-content-pipeline/`
+- Theme translation: `scripts/translate-theme/`
 
 ## Content Synchronization
 

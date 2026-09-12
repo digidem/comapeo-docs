@@ -136,7 +136,6 @@ See `context/workflows/PRODUCTION_DEPLOYMENT.md` for complete workflow.
 
 - Database info: `./context/database/` (overview, schema, block-types, patterns)
 - Script info: `./context/development/` (constants, architecture, testing, roadmap)
-- Architecture & Lessons: `./NOTION_FETCH_ARCHITECTURE.md`
 - Workflows: `./context/workflows/` (commands, lifecycle, translations, production deployment)
 - Quick Lookups: `./context/quick-ref/` (mappings, status, examples)
 

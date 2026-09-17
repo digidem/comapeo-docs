@@ -17,7 +17,7 @@
 - Serve build: `bun run serve`.
 - Lint: `bun run lint` (auto-fix: `bun run lint:fix`).
 - Tests (Vitest): `bun run test`, coverage: `bun run test:coverage`.
-- Notion sync: `bun run notion:fetch` (see `.env.example`).
+- Notion sync: content generation is managed by `../comapeo-content-pipeline/` which pushes generated docs to the `content` branch (see `AGENTS.md`).
 
 ## Coding Style & Naming Conventions
 
@@ -42,12 +42,9 @@
 ## Documentation Workflow
 
 - Author in Notion (English is source). Use the provided template: set `Element Type` (Heading/Toggle/Page), `Order`, `Tags`, and relate child pages via `Sub-item`.
-- Draft → translation: set Status to `Ready for translation`, then run `bun run notion:translate` to:
-  - Create/update translation pages in Notion for languages in `LANGUAGES`.
-  - Update `i18n/*/code.json` and translate navbar/footer strings from `docusaurus.config.ts`.
-  - Save translated Markdown under `i18n/<lang>/docusaurus-plugin-content-docs/current/`.
+- Draft → translation: set Status to `Ready for translation`. Page translation is generated via `../comapeo-content-pipeline/`. In-repo theme-chrome translation runs via `bun scripts/translate-theme/index.ts`.
 - Review → publish: when content is reviewed, set Status to `Ready to publish`.
-- Build docs from Notion: run `bun run notion:fetch` to pull publish-ready items, generate frontmatter, optimize images to `static/images/` and rewrite Markdown links to `/images/...`, and create section folders with `_category_.json` when needed.
+- Content generation: `../comapeo-content-pipeline/` pulls publish-ready items, generates frontmatter and images under `static/images/notion/`, and pushes to the `content` branch.
 - Preview: `bun run dev` (or `bun run build && bun run serve`).
 - Status utilities: move batches with `bun run notionStatus:translation`, `notionStatus:draft`, `notionStatus:publish`.
 - Redirects: keep `.env DEFAULT_DOCS_PAGE` aligned with the intended landing doc.

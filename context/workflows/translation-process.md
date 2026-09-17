@@ -36,7 +36,7 @@ i18n workflow for CoMapeo documentation using Notion and Docusaurus.
 
 ### 2. Translation Generation
 
-**Pipeline**: Page translation is executed via `../comapeo-content-pipeline/` (e.g. `bun run translations:generate`).
+**Pipeline**: Page translation is executed via `../comapeo-content-pipeline/` (e.g. `pnpm pipeline sync:full`).
 In-repo theme-chrome translation is executed via `bun scripts/translate-theme/index.ts`.
 
 **Process**:

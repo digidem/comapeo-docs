@@ -21,94 +21,18 @@ cp .env.example .env
 
 ## Available Commands
 
-### Notion Content Commands
+### Content Pipeline (External)
 
-#### Fetch Pages from Notion
+Notion content fetching, markdown generation, and page translation are owned by `../comapeo-content-pipeline/`. See that repository's documentation for CLI commands (`pnpm pipeline sync:full`, `pnpm pipeline docs:pull`, etc.).
 
-Fetch pages from Notion database.
+### Theme Translation Commands
 
-```bash
-bun run notion:fetch
-```
+#### Translate Theme Chrome
 
-**Options:**
-
-- `--max-pages <number>` - Limit number of pages to fetch
-- `--status <status>` - Filter by page status
-- `--force` - Force re-fetch even if already cached
-
-**Examples:**
+Translate UI strings and theme chrome (`navbar`, `footer`, `code.json`) for configured locales (Portuguese and Spanish):
 
 ```bash
-# Fetch all pages
-bun run notion:fetch
-
-# Fetch only 10 pages
-bun run notion:fetch --max-pages 10
-
-# Fetch only pages with specific status
-bun run notion:fetch --status "In Progress"
-
-# Force re-fetch all pages
-bun run notion:fetch --force
-```
-
-#### Fetch Single Page
-
-Fetch a specific page from Notion by ID.
-
-```bash
-bun run notion:fetch-one <page-id>
-```
-
-**Examples:**
-
-```bash
-# Fetch specific page by name (fuzzy matching)
-bun run notion:fetch-one "understanding how exchange works"
-bun run notion:fetch-one "exchange"
-```
-
-#### Fetch All Pages
-
-Fetch all pages from Notion database.
-
-```bash
-bun run notion:fetch-all
-```
-
-**Options:**
-
-- `--max-pages <number>` - Limit number of pages to fetch
-- `--force` - Force re-fetch even if already cached
-
-**Examples:**
-
-```bash
-# Fetch all pages
-bun run notion:fetch-all
-
-# Fetch with limit
-bun run notion:fetch-all --max-pages 20
-```
-
-### Translation Commands
-
-#### Translate Content
-
-Translate content to supported languages.
-
-```bash
-bun run notion:translate
-```
-
-This command processes all translatable content and generates translations for configured languages (Portuguese and Spanish).
-
-**Examples:**
-
-```bash
-# Translate all content
-bun run notion:translate
+bun scripts/translate-theme/index.ts
 ```
 
 ### Status Management Commands

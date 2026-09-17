@@ -1,18 +1,16 @@
 # Notion Fetch Roadmap
 
-This document tracks future improvements and next steps for the Notion fetch system.
+> **Historical Reference**: The in-repo Notion fetch pipeline described in this roadmap has been retired (#192) and migrated to `../comapeo-content-pipeline/`.
 
-**Last Updated:** 2025-11-19 (after implementing incremental sync)
+This document tracks historical improvements and next steps for the legacy Notion fetch system.
 
 ---
 
 ## Immediate (Post-Merge Validation)
 
-- [ ] **Production Validation Run**
-  - Run `bun run notion:fetch-all` on the full database
-  - Verify parallel processing works correctly with real Notion data
-  - Check that all pages generate correctly
-
+- [x] **Production Validation Run**
+  - Executed on the full database before retirement
+  - Parallel processing and content pipeline migrated to external pipeline
 - [ ] **Performance Benchmarking**
   - Measure actual speedup (target: 50-70% faster)
   - Document baseline for future comparisons

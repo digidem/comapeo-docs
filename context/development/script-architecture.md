@@ -1,6 +1,8 @@
 # Three-Script Architecture
 
-Design overview for the comprehensive Notion integration pipeline.
+> **Historical Reference**: The three-script Notion pipeline described below has been retired (#192) and migrated to `../comapeo-content-pipeline/`.
+
+Design overview for the legacy Notion integration pipeline.
 
 ## Architecture Overview
 

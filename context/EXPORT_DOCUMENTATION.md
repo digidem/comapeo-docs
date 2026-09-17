@@ -1,8 +1,8 @@
 # Enhanced Notion Export Command Documentation
 
-## Overview
+> **Historical Reference**: The `notion:export` script and related in-repo export tools have been retired (#192) and migrated to `../comapeo-content-pipeline/`.
 
-The `notion:export` command has been significantly enhanced to provide comprehensive block-level content analysis and export capabilities. This tool exports complete Notion database content with detailed analysis for documentation planning, content gap identification, and translation management.
+## Overview
 
 ## Command Usage
 

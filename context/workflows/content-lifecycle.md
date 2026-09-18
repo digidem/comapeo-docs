@@ -36,11 +36,8 @@ Documentation content workflow from creation to publication.
 **Process**:
 
 1. Content review and editing complete
-2. Run `bun run notion:translate` to:
-   - Create translation pages in Notion
-   - Update `i18n/*/code.json` files
-   - Translate navbar/footer strings
-   - Generate translated markdown
+2. Page translations generated via `../comapeo-content-pipeline/`
+3. Theme chrome translated in-repo via `bun scripts/translate-theme/index.ts`
 
 ### 4. Ready for Publication
 
@@ -61,12 +58,8 @@ Documentation content workflow from creation to publication.
 
 **Process**:
 
-1. Run `bun run notion:fetch` to:
-   - Pull published content
-   - Generate frontmatter
-   - Optimize images
-   - Create navigation structure
-2. Content synced to `content` branch (staging workspace)
+1. Content generated and pushed to `content` branch via `../comapeo-content-pipeline/`
+2. Previews and staging sites build directly from the `content` branch
 3. Review content on staging site (PR previews or staging deploy)
 4. When approved, trigger "Deploy to Production" workflow (Actions → workflow_dispatch):
    - Automatically updates `content-lock.sha` on `main`
@@ -96,29 +89,13 @@ Documentation content workflow from creation to publication.
 2. Excluded from all processing
 3. Can be safely deleted
 
-## Automated Workflows
+## Content Synchronization
 
-### Placeholder Generation
+Content synchronization is handled end-to-end by `../comapeo-content-pipeline/`:
 
-```bash
-# Generate placeholders for empty English pages
-bun run notion:gen-placeholders
-```
-
-- Targets "No Status" pages
-- Creates contextual placeholder content
-- Maintains content structure
-
-### Complete Content Sync
-
-```bash
-# Fetch all non-removed content
-bun run notion:fetch-all
-```
-
-- Processes all active content
-- Generates complete site structure
-- Handles multiple languages
+- Notion is the editorial source of truth.
+- The external pipeline processes pages, generates frontmatter, optimizes images to `static/images/notion/`, and commits directly to `content`.
+- Production deployment promotes `content-lock.sha` on `main` pointing to the approved content revision (see [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md)).
 
 ## Quality Gates
 

@@ -1,6 +1,8 @@
 # Script Targeting Reference
 
-Specific targeting criteria for the three-script Notion integration architecture.
+> **Historical Reference**: The three-script Notion integration architecture described below has been retired (#192) and migrated to `../comapeo-content-pipeline/`.
+
+Specific targeting criteria for the legacy three-script Notion integration architecture.
 
 ## Script Overview
 

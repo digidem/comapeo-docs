@@ -38,18 +38,26 @@ function generateDefaultTemplate(
   if (hasNotionImport) {
     mockSection += `
 // Mock external dependencies
-vi.mock('../notionClient', () => ({
-  default: {
+vi.mock('@notionhq/client', () => ({
+  Client: vi.fn().mockImplementation(() => ({
     pages: {
       retrieve: vi.fn(),
-      update: vi.fn()
+      update: vi.fn(),
+      create: vi.fn()
     },
     blocks: {
       children: {
         list: vi.fn()
       }
+    },
+    databases: {
+      retrieve: vi.fn(),
+      update: vi.fn()
+    },
+    dataSources: {
+      query: vi.fn()
     }
-  }
+  }))
 }));
 `;
   }

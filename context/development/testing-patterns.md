@@ -1,8 +1,8 @@
-# Testing Patterns for Notion Scripts
+# Testing Patterns & Best Practices
 
-TDD patterns and testing structure for the three-script architecture.
+> **Historical Reference**: The Notion fetch and export scripts tested in earlier iterations of this guide have been retired (#192) and migrated to `../comapeo-content-pipeline/`.
 
-## Testing Framework
+Comprehensive guide to testing patterns and best practices for the comapeo-docs codebase.
 
 **Stack**: Vitest with Node environment
 
@@ -96,7 +96,7 @@ const createMockPage = (overrides = {}) => ({
 });
 ```
 
-## Test Categories by Script
+## Historical Test Categories by Script (Retired)
 
 ### `notion:gen-placeholders`
 

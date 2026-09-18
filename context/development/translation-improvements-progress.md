@@ -1,8 +1,8 @@
 # Translation Improvements Progress Tracker
 
-Date started: 2026-02-19  
-Branch: `feat/translation-parity-improvements`  
-Worktree: `.worktrees/translation-parity-improvements`
+> **Historical Reference**: The translation improvements tracked in this document have been superseded by the dedicated AI translation pipeline in `../comapeo-content-pipeline/`. In-repo translation scripts have been retired (#192).
+
+Date started: 2026-02-19
 
 ## Goal
 
@@ -58,13 +58,15 @@ The translation pipeline is considered fixed only when all criteria pass:
 Targeted family:
 
 ```bash
-bun run notion:fetch-auto-translation-children -- --page-id <root_page_id>
+# Legacy command (retired in #192):
+# bun run notion:fetch-auto-translation-children -- --page-id <root_page_id>
 ```
 
 Batch mode:
 
 ```bash
-bun run notion:fetch-auto-translation-children
+# Legacy command (retired in #192):
+# bun run notion:fetch-auto-translation-children
 ```
 
 This writes:

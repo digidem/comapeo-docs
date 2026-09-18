@@ -1,8 +1,8 @@
 # CoMapeo Documentation Content Pipeline
 
-## Overview
+> **Historical Architecture Reference**: The in-repo content pipeline described in this document (`scripts/fetchNotionData.ts`, `scripts/notion-fetch/`) has been retired. Canonical content generation and Notion sync have migrated to `../comapeo-content-pipeline/`. See that repository for current pipeline architecture, and see [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md) for deployment procedures.
 
-The CoMapeo documentation content pipeline automatically fetches content from Notion and generates a Docusaurus website. This document describes the enhanced pipeline that ensures **all pages with "Ready to publish" status appear in the sidebar**, regardless of content length.
+## Overview
 
 ## Pipeline Architecture
 
@@ -201,40 +201,14 @@ Comprehensive test coverage in `scripts/notion-fetch/generateBlocks.test.ts`:
 
 ### Integration Testing
 
-Run the full pipeline with:
+### Current Pipeline Workflow
+
+Content generation and verification are executed in `../comapeo-content-pipeline/`:
 
 ```bash
-npm run notion:fetch
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Pages not appearing in sidebar**
-   - Check Notion page status is "Ready to publish"
-   - Verify page has "Content elements" title
-   - Check logs for processing confirmation
-
-2. **Duplicate route warnings**
-   - Multiple pages with same slug
-   - Review page titles and sanitization
-
-3. **Image processing errors**
-   - Network timeouts or compression failures
-   - Images fallback to originals gracefully
-
-### Quick Fixes
-
-```bash
-# Re-fetch all content
-npm run notion:fetch
-
-# Build and check for issues
-npm run build
-
-# Run tests
-npm test scripts/notion-fetch/generateBlocks.test.ts
+# In ../comapeo-content-pipeline:
+pnpm pipeline sync:full
+pnpm test
 ```
 
 ## Future Enhancements

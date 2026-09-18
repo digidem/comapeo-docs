@@ -69,8 +69,8 @@ When `deploy-production.yml` runs:
    - `git checkout <locked-sha> -- docs/ i18n/ static/images/`
    - All existing validation (markdown count, image checks) unchanged
 
-3. **Deploy with locked SHA**:
-4. **Deploy**:
+4. **Deploy with locked SHA**:
+5. **Deploy**:
    - Build Docusaurus
    - Deploy to Cloudflare Pages
    - Update Notion status (production flow only)
@@ -81,11 +81,13 @@ When `deploy-production.yml` runs:
 If production content needs to be rolled back:
 
 1. **Find previous approved SHA**:
+
    ```bash
    git log --oneline content-lock.sha | head -5
    ```
 
 2. **Update lock file**:
+
    ```bash
    git checkout <old-sha>:content-lock.sha > content-lock.sha
    git add content-lock.sha
@@ -101,6 +103,7 @@ If production content needs to be rolled back:
 ### Staging Deploys
 
 Staging (`deploy-staging.yml`) **always** uses current `content` branch HEAD:
+
 - No lock file involvement
 - Uses `paths: [docs/**, i18n/**, ...]` trigger
 - Fast feedback for content review
@@ -108,6 +111,7 @@ Staging (`deploy-staging.yml`) **always** uses current `content` branch HEAD:
 ### Production Deploys
 
 Production (`deploy-production.yml`) **always** uses locked SHA:
+
 - Must update lock file to promote content
 - Requires PR to `main` (approval gate)
 - Includes SHA validation and error reporting
@@ -115,6 +119,7 @@ Production (`deploy-production.yml`) **always** uses locked SHA:
 ## Backward Compatibility
 
 First time `content-lock.sha` is added to a repo:
+
 - If missing: falls back to `origin/content` HEAD with **warning**
 - If empty: **error** (developer must fix)
 - After first merge: lock file is present and required
@@ -122,28 +127,36 @@ First time `content-lock.sha` is added to a repo:
 ## Error Cases
 
 ### Empty lock file
+
 ```
 ::error::content-lock.sha is empty. Update content-lock.sha with a valid 40-char content SHA.
 ```
+
 **Fix**: `git rev-parse origin/content > content-lock.sha` and commit
 
 ### Invalid SHA format
+
 ```
 ::error::content-lock.sha contains an invalid SHA: 'xxx'. Expected 40-character lowercase hex.
 ```
+
 **Fix**: Use `git rev-parse origin/content` and commit the output
 
 ### SHA not in repository (force-push)
+
 ```
 ::error::SHA <sha> does not exist in repository. This may happen after force-push.
 Remediation: re-trigger this workflow via workflow_dispatch to update the lock.
 ```
+
 **Fix**: Re-trigger `deploy-production.yml` via `workflow_dispatch` — it will resolve and lock a new SHA
 
 ### SHA not ancestor of content HEAD (rebase)
+
 ```
 ::warning::Locked SHA <sha> is not an ancestor of origin/content HEAD. Content branch may have been rebased.
 ```
+
 **Action**: Review if rebasing was intentional. If needed, promote a new SHA post-rebase.
 
 ## CI/CD Integration
@@ -155,6 +168,6 @@ Remediation: re-trigger this workflow via workflow_dispatch to update the lock.
 ## Related Documentation
 
 - Content lifecycle: `context/workflows/content-lifecycle.md`
-- Notion sync: `scripts/notion-workflow-guide.md`
+- Notion sync & status tooling: `context/workflows/notion-commands.md`
 - Rollback procedures: `context/workflows/ROLLBACK.md`
 - **Generating the content that gets promoted here**: [`digidem/comapeo-content-pipeline`'s `DEPLOYMENT.md`](https://github.com/digidem/comapeo-content-pipeline/blob/main/DEPLOYMENT.md) — the full path from a Notion edit through to a `content_sha` ready for the CLI trigger above, including two footguns (an unanchored `assets/` `.gitignore` rule that silently drops per-section image folders, and `content` branch tip diverging from the locked live SHA).

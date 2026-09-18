@@ -1,145 +1,52 @@
 # Notion Commands Reference
 
-Command reference for the Notion integration workflow.
+Command reference for Notion-related workflows in `comapeo-docs`.
 
-## Core Commands
+> **Note**: Content fetching and markdown generation commands (`notion:fetch`, `notion:fetch-all`, `notion:gen-placeholders`, `notion:translate`) have retired as part of #192 and migrated to `../comapeo-content-pipeline/`. See that repository for content generation CLI tools.
 
-### `notion:gen-placeholders`
+## Surviving In-Repo Commands
 
-Generate meaningful placeholder content for empty pages in Notion.
+### Status Management Workflows
 
-**Basic Usage**:
-
-```bash
-bun run notion:gen-placeholders
-```
-
-**Options**:
+Update the status of Notion documentation pages for different stages of the editorial and publishing pipeline:
 
 ```bash
-# Dry run to preview changes
-bun run notion:gen-placeholders -- --dry-run
+# Move pages to translation stage
+bun run notionStatus:translation
 
-# Verbose output with detailed progress
-bun run notion:gen-placeholders -- --verbose
+# Move pages to draft published stage
+bun run notionStatus:draft
 
-# Generate longer content
-bun run notion:gen-placeholders -- --content-length long
+# Move pages to publish stage
+bun run notionStatus:publish
 
-# Process only specific status
-bun run notion:gen-placeholders -- --filter-status "Draft"
+# Publish production workflow
+bun run notionStatus:publish-production
 
-# Limit number of pages processed
-bun run notion:gen-placeholders -- --max-pages 10
-
-# Force update even if page has some content
-bun run notion:gen-placeholders -- --force
-
-# Skip backup creation
-bun run notion:gen-placeholders -- --no-backup
-
-# Include pages with "Remove" status
-bun run notion:gen-placeholders -- --include-removed
+# Mark pages ready for translation
+bun run notionStatus:ready-for-translation
 ```
 
-### `notion:fetch-all`
+### Content Template Creation
 
-Comprehensive content fetching and markdown conversion for all non-removed pages.
-
-**Basic Usage**:
+Create a new Notion page template:
 
 ```bash
-bun run notion:fetch-all
+bun run notion:create-template "Page Title"
 ```
 
-**Options**:
+### Version Tagging
+
+Update documentation release version metadata in Notion:
 
 ```bash
-# Dry run mode
-bun run notion:fetch-all -- --dry-run
-
-# Process specific language only
-bun run notion:fetch-all -- --language English
-
-# Include specific status pages
-bun run notion:fetch-all -- --status "Ready to publish"
-
-# Skip image processing
-bun run notion:fetch-all -- --no-images
-
-# Verbose logging
-bun run notion:fetch-all -- --verbose
+bun run notion:version
 ```
 
-### `notion:export`
+### Theme Chrome Translation
 
-Complete database export in JSON format for analysis.
-
-**Basic Usage**:
+Translate theme UI chrome (`navbar`, `footer`, `code.json`) for configured locales (Portuguese and Spanish):
 
 ```bash
-bun run notion:export
+bun scripts/translate-theme/index.ts
 ```
-
-**Options**:
-
-```bash
-# Custom output file
-bun run notion:export -- --output custom-export.json
-
-# Include detailed block analysis
-bun run notion:export -- --include-blocks
-
-# Compress output
-bun run notion:export -- --compress
-```
-
-## Legacy Commands
-
-### `notion:fetch`
-
-Current implementation for fetching ready-to-publish content.
-
-```bash
-bun run notion:fetch
-```
-
-### `notion:translate`
-
-Translation workflow (may be integrated into fetch-all).
-
-```bash
-bun run notion:translate
-```
-
-## Command Safety
-
-**Destructive Operations**:
-
-- `notion:gen-placeholders` (modifies Notion pages)
-- Require confirmation or `--force` flag
-
-**Read-Only Operations**:
-
-- `notion:fetch-all`
-- `notion:export`
-- Safe to run multiple times
-
-## Environment Setup
-
-Required environment variables:
-
-```bash
-NOTION_API_KEY=your_notion_api_key
-NOTION_DATABASE_ID=your_database_id
-OPENAI_API_KEY=your_openai_key  # For placeholder generation
-```
-
-## Error Handling
-
-Common error patterns:
-
-- **Rate limiting**: Commands automatically retry with backoff
-- **API errors**: Detailed error messages with retry suggestions
-- **Permission errors**: Clear instructions for access requirements
-- **Validation errors**: Specific feedback on data issues

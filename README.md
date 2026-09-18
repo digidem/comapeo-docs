@@ -4,8 +4,7 @@ Documentation site and content pipeline for CoMapeo, built with Docusaurus v3 an
 
 ## What This Repo Includes
 
-- Docusaurus site code (`src/`, config, scripts)
-- Notion sync and translation tooling (`scripts/`)
+- Docusaurus site code and customization (`src/`, config, scripts)
 
 ## Branch Model
 
@@ -71,20 +70,6 @@ bun run build
 bun run serve
 ```
 
-### Regenerate docs from Notion
-
-Requires `.env` values (see Configuration):
-
-```bash
-bun run notion:fetch
-```
-
-### Run translation workflow
-
-```bash
-bun run notion:translate
-```
-
 ## Configuration
 
 Copy and edit env vars:
@@ -93,11 +78,10 @@ Copy and edit env vars:
 cp .env.example .env
 ```
 
-Common required variables:
+Common variables:
 
-- `NOTION_API_KEY`
-- `DATA_SOURCE_ID` (preferred) or `DATABASE_ID` (fallback)
-- `OPENAI_API_KEY` (for translation workflows)
+- `NOTION_API_KEY` and `DATABASE_ID` (for Notion status/version workflows)
+- `OPENAI_API_KEY` (for theme-chrome translation via `scripts/translate-theme/`)
 - `DEFAULT_DOCS_PAGE`
 
 See `.env.example` for the complete list and notes.
@@ -132,7 +116,6 @@ bun run typecheck --noEmit
 - Repository guidelines: `context/repository-guidelines.md`
 - Production deployment workflow: `context/workflows/PRODUCTION_DEPLOYMENT.md`
 - Content lifecycle: `context/workflows/content-lifecycle.md`
-- Notion architecture: `NOTION_FETCH_ARCHITECTURE.md`
 
 ## License
 

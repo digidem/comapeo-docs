@@ -74,11 +74,13 @@ _Note: Portuguese leads likely due to active translation efforts_
 
 ## Development Implications
 
-### Script Targeting
+### Historical Script Targeting (Retired)
 
-1. **notion:gen-placeholders**: Focus on 139 "No Status" pages
-2. **notion:fetch-all**: Process 190 non-"Remove" pages
-3. **notion:export**: All 193 pages for analysis
+In the legacy in-repo pipeline (retired #192), scripts targeted subsets of content:
+
+1. **Placeholder generator**: Focused on 139 "No Status" pages
+2. **Full fetch**: Processed 190 non-"Remove" pages
+3. **Export**: Exported pages for analysis
 
 ### Content Quality
 

@@ -53,7 +53,7 @@ This repository runs [Trivy](https://trivy.dev/) in CI to detect vulnerabilities
 - **Filesystem & Dependency Scanning:** Scans repository lockfiles (`bun.lock`) for high and critical vulnerabilities.
 - **Misconfiguration Scanning:** Checks configuration and IaC files for security issues.
 - **Unfixed Filtering:** Filters out unfixable upstream issues (`ignore-unfixed: true`) to maintain high signal.
-- **Suppression Tuning:** Known transitive upstream build-tooling CVEs that cannot be bumped independently are documented in `.trivyignore` and reviewed quarterly.
+- **Suppression Tuning:** Known transitive upstream build-tooling CVEs that cannot be bumped independently are documented in `.trivyignore` with explicit quarterly expiration dates (`exp:YYYY-MM-DD`) and reviewed quarterly.
 - **Reporting:** Generates SARIF reports uploaded to the GitHub Security code scanning tab.
 - **Cadence:** Runs on every pull request, push to `main`, and on a weekly schedule.
 
@@ -252,8 +252,8 @@ This project follows:
 
 This security policy is reviewed quarterly and updated as needed.
 
-**Last Updated:** 2026-02-11
-**Next Review:** 2026-05-11
+**Last Updated:** 2026-09-23
+**Next Review:** 2026-12-31
 
 ## Contact
 

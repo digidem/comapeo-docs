@@ -1,0 +1,19 @@
+# trivy.yaml - Trivy security scanner configuration
+# Enforces vulnerability and misconfiguration scanning for comapeo-docs.
+# See SECURITY.md for security policy details.
+
+scan:
+  scanners:
+    - vuln
+    - misconfig
+  skip-dirs:
+    - node_modules
+    - .worktrees
+    - scratch
+
+severity:
+  - HIGH
+  - CRITICAL
+
+vulnerability:
+  ignore-unfixed: true

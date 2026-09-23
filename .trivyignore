@@ -1,0 +1,68 @@
+# Known upstream transitive vulnerabilities in Docusaurus v3 build tooling.
+# Maintained to avoid blocking docs CI on unpatchable third-party sub-dependencies.
+# Reviewed quarterly alongside SECURITY.md.
+
+# @babel/plugin-transform-modules-systemjs
+CVE-2026-44728 exp:2026-12-31
+
+# brace-expansion (via micromatch / glob)
+CVE-2026-13149 exp:2026-12-31
+CVE-2026-14257 exp:2026-12-31
+CVE-2026-69152 exp:2026-12-31
+
+# browserslist (via @babel/preset-env)
+CVE-2026-73088 exp:2026-12-31
+CVE-2026-73089 exp:2026-12-31
+
+# js-yaml (via @docusaurus/core / frontmatter parser)
+CVE-2026-59869 exp:2026-12-31
+CVE-2026-84375 exp:2026-12-31
+GHSA-5p4m-2wfm-xmqj exp:2026-12-31
+
+# lodash (via @docusaurus/core)
+CVE-2026-4800 exp:2026-12-31
+
+# nanoid (via postcss / webpack)
+CVE-2026-67213 exp:2026-12-31
+CVE-2026-67214 exp:2026-12-31
+CVE-2026-73086 exp:2026-12-31
+
+# node-forge (via webpack-dev-server / self-signed certs)
+CVE-2025-12816 exp:2026-12-31
+CVE-2025-66031 exp:2026-12-31
+CVE-2026-33891 exp:2026-12-31
+CVE-2026-33894 exp:2026-12-31
+CVE-2026-33895 exp:2026-12-31
+CVE-2026-33896 exp:2026-12-31
+
+# picomatch (via micromatch / globby)
+CVE-2026-33671 exp:2026-12-31
+
+# postcss (via @docusaurus/core)
+CVE-2026-45623 exp:2026-12-31
+CVE-2026-73646 exp:2026-12-31
+
+# rollup (via vite / vitest tooling)
+CVE-2026-27606 exp:2026-12-31
+
+# serialize-javascript (via terser-webpack-plugin)
+GHSA-5c6j-r48x-rmvq exp:2026-12-31
+
+# sharp (via @docusaurus/plugin-ideal-image)
+GHSA-f88m-g3jw-g9cj exp:2026-12-31
+GHSA-rgj7-g3m4-5g8c exp:2026-12-31
+
+# shell-quote (via @docusaurus/core)
+CVE-2026-13311 exp:2026-12-31
+CVE-2026-9277 exp:2026-12-31
+
+# svgo (via @docusaurus/plugin-svgr)
+CVE-2026-29074 exp:2026-12-31
+CVE-2026-73650 exp:2026-12-31
+CVE-2026-84370 exp:2026-12-31
+
+# websocket-driver (via webpack-dev-server / faye-websocket)
+CVE-2026-54466 exp:2026-12-31
+
+# ws (via webpack-dev-server)
+CVE-2026-48779 exp:2026-12-31

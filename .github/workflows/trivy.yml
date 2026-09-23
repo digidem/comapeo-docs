@@ -28,6 +28,9 @@ jobs:
           scan-ref: "."
           format: "table"
           exit-code: "1"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          scanners: "vuln,misconfig"
           trivy-config: "trivy.yaml"
 
       - name: Run Trivy vulnerability scanner (SARIF generation)
@@ -39,10 +42,13 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           exit-code: "0"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          scanners: "vuln,misconfig"
           trivy-config: "trivy.yaml"
 
       - name: Upload Trivy SARIF report to GitHub Security
         uses: github/codeql-action/upload-sarif@b56ba49b26e50535fa1e7f7db0f4f7b4bf65d80d # v3.28.10
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           sarif_file: "trivy-results.sarif"

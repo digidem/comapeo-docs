@@ -331,18 +331,20 @@ jobs:
           fi
 
       - name: Checkout content pipeline
+        id: checkout-pipeline
         if: inputs.environment != 'test'
+        continue-on-error: true
         uses: actions/checkout@v6
         with:
           repository: digidem/comapeo-content-pipeline
           path: .pipeline
 
       - name: Update Notion status to Published
-        if: inputs.environment != 'test'
+        id: mark-published
+        if: inputs.environment != 'test' && steps.checkout-pipeline.outcome == 'success'
+        continue-on-error: true
         run: |
-          bun .pipeline/src/cli/index.ts sync:mark-published --from "Draft published" --to "Published" --live || {
-            echo "::warning::sync:mark-published encountered non-blocking errors during Notion status write-back."
-          }
+          bun .pipeline/src/cli/index.ts sync:mark-published --from "Draft published" --to "Published" --live
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_API_KEY }}
@@ -371,8 +373,12 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Notion status updated: Draft published → Published" >> $GITHUB_STEP_SUMMARY
-            echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.mark-published.outcome }}" = "success" ]; then
+              echo "- ✅ Notion status updated: Draft published → Published" >> $GITHUB_STEP_SUMMARY
+              echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ Notion status update was skipped or encountered non-blocking errors" >> $GITHUB_STEP_SUMMARY
+            fi
             echo "- 📌 Content SHA: \`${CONTENT_SHORT}\` (source: ${CONTENT_SOURCE})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "🌐 Site available at: https://docs.comapeo.app" >> $GITHUB_STEP_SUMMARY

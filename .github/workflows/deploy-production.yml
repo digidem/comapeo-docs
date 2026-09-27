@@ -330,13 +330,26 @@ jobs:
             echo "::warning::Could not enable auto-merge for PR #$PR_NUMBER after retries — merge it manually once 'test' passes to promote content-lock.sha → ${SHA:0:8}."
           fi
 
+      - name: Checkout content pipeline
+        if: inputs.environment != 'test'
+        uses: actions/checkout@v6
+        with:
+          repository: digidem/comapeo-content-pipeline
+          path: .pipeline
+
       - name: Update Notion status to Published
         if: inputs.environment != 'test'
-        run: bun run notionStatus:publish-production
+        run: |
+          bun .pipeline/src/cli/index.ts sync:mark-published --from "Draft published" --to "Published" --live || {
+            echo "::warning::sync:mark-published encountered non-blocking errors during Notion status write-back."
+          }
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_API_KEY }}
           DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
           DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.DATA_SOURCE_ID }}
+          NOTION_DATABASE_ID: ${{ secrets.DATABASE_ID }}
 
       - name: Deployment summary
         run: |
@@ -358,7 +371,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
             echo "- ✅ Deployed to Cloudflare Pages" >> $GITHUB_STEP_SUMMARY
-            echo "- ✅ Notion status updated: Staging → Published" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Notion status updated: Draft published → Published" >> $GITHUB_STEP_SUMMARY
             echo "- 📅 Published date set to $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
             echo "- 📌 Content SHA: \`${CONTENT_SHORT}\` (source: ${CONTENT_SOURCE})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY

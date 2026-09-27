@@ -337,6 +337,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: digidem/comapeo-content-pipeline
+          ref: 81e536fb5fb100099a9236e69f7323fce6008cca # feat(cli): direct query fallback in sync:mark-published
           path: .pipeline
 
       - name: Update Notion status to Published
